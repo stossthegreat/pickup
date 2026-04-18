@@ -1,0 +1,30 @@
+import 'dart:typed_data';
+import 'package:go_router/go_router.dart';
+import '../models/face_geometry.dart';
+import '../screens/scan/scan_screen.dart';
+import '../screens/report/report_screen.dart';
+import '../screens/splash/splash_screen.dart';
+
+final appRouter = GoRouter(
+  initialLocation: '/',
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (_, __) => const SplashScreen(),
+    ),
+    GoRoute(
+      path: '/scan',
+      builder: (_, __) => const ScanScreen(),
+    ),
+    GoRoute(
+      path: '/report',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>;
+        return ReportScreen(
+          imageBytes: extra['imageBytes'] as Uint8List,
+          geometry:   extra['geometry']   as FaceGeometry,
+        );
+      },
+    ),
+  ],
+);
