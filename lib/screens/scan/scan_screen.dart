@@ -381,9 +381,9 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     HapticFeedback.mediumImpact();
     bool lockFired = false;
     _measureTimer?.cancel();
-    // Side angles get a faster measure (~1.8s) vs front (~3s) — sides are
-    // visual only. Front is the data capture.
-    final increment = _angleIdx == 0 ? 0.013 : 0.022;
+    // Front = ~5s deliberate cinematic reveal (the moment users record).
+    // Sides = ~2.2s each — brisker since front already carries the drama.
+    final increment = _angleIdx == 0 ? 0.008 : 0.018;
     _measureTimer = Timer.periodic(40.ms, (t) {
       if (!mounted) { t.cancel(); return; }
       final np = _progress + increment;

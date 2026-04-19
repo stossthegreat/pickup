@@ -86,19 +86,21 @@ class GeometryOverlayPainter extends CustomPainter {
 
       case ScanPhase.measuring:
         if (mesh != null && mesh!.isValid) {
+          _drawFaceSilhouetteGlow(canvas, size);      // glowing gold oval
           _drawMeshDots(canvas, size, alphaScale: 0.55);
           _drawMeshTriangleWash(canvas, size);
           _drawBoneStructure(canvas, size, dramatic: true);
+          _drawMeasurementArcs(canvas, size);         // jaw / canthal / FWHR arcs
+          _drawConstellation(canvas, size);           // twinkling anchor stars
           _drawFeatureBeam(canvas, size);             // sweeping feature scan
           _drawDigitalRain(canvas, size);             // numbers streaming
           _drawMeasurementCallouts(canvas, size);
           _drawFloatingMeasurements(canvas, size);
           _drawRadarRings(canvas, size);
           _drawFaceLockBrackets(canvas, size, intensity: 1.0);
-          // Signature LOCK STRIKE at the climax of measuring — full-screen
-          // vignette flash + ring shockwave + "LOCK" label pulse. This is
-          // THE moment that lands on TikTok.
-          if (progress >= 0.90) _drawLockStrike(canvas, size);
+          // Signature LOCK STRIKE at the climax of measuring — holds longer
+          // now (0.85 → 1.0, up from 0.90) so users actually see it.
+          if (progress >= 0.85) _drawLockStrike(canvas, size);
         }
         _drawTopTicker(canvas, size,
           progress >= 0.90
@@ -462,9 +464,10 @@ class GeometryOverlayPainter extends CustomPainter {
       return Offset(p.dx * size.width, p.dy * size.height);
     }
 
-    // Width multiplier — dramatic mode thickens everything by 2x+
-    final wMul = dramatic ? 2.2 : 1.0;
-    final glowMul = dramatic ? 4.8 : 3.5;
+    // Width multiplier — dramatic mode thickens everything by ~3x, with a
+    // massive glow halo. This is the "undeniable" weight the overlay needs.
+    final wMul = dramatic ? 3.0 : 1.0;
+    final glowMul = dramatic ? 6.5 : 3.5;
 
     final xrayPulse = pulseBoost
       ? (math.sin(animT * 4) * 0.12 + 0.88)
@@ -495,23 +498,23 @@ class GeometryOverlayPainter extends CustomPainter {
                     a.dy + (b.dy - a.dy) * partial);
       }
 
-      // 1. Outer soft halo (huge blur, low alpha)
+      // 1. Outer MASSIVE halo (huge blur, enhances weight)
       if (dramatic) {
         canvas.drawPath(path, Paint()
-          ..color = c.withValues(alpha: alpha * 0.25 * xrayPulse)
-          ..strokeWidth = w * glowMul * 1.3
+          ..color = c.withValues(alpha: alpha * 0.32 * xrayPulse)
+          ..strokeWidth = w * glowMul * 1.6
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14));
       }
 
       // 2. Medium blur halo
       canvas.drawPath(path, Paint()
-        ..color = c.withValues(alpha: alpha * 0.55 * xrayPulse)
+        ..color = c.withValues(alpha: alpha * 0.65 * xrayPulse)
         ..strokeWidth = w * glowMul
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, dramatic ? 5 : 3));
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, dramatic ? 7 : 3));
 
       // 3. Main gold line (crisp)
       canvas.drawPath(path, Paint()
@@ -632,6 +635,251 @@ class GeometryOverlayPainter extends CustomPainter {
           canvas.drawCircle(p, dramatic ? 3 : 2, anchorPaint);
         }
       }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Face silhouette glow — traces the outer face oval with a huge gold
+  //  halo, making the entire face read as highlighted. This is the heaviest
+  //  weight layer in the overlay — it's what makes the whole thing feel
+  //  like an X-ray of the user, not a surface effect.
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawFaceSilhouetteGlow(Canvas canvas, Size size) {
+    final points = mesh!.points;
+    if (points.length < 200) return;
+
+    // Face-oval indices (MediaPipe 468 mesh face boundary, clockwise).
+    const faceOvalIdx = [
+      10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
+      397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
+      172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
+    ];
+
+    final reveal = phase == ScanPhase.measuring
+        ? (progress.clamp(0.0, 1.0))
+        : 1.0;
+    if (reveal < 0.02) return;
+
+    final pts = faceOvalIdx.map((i) {
+      if (i >= points.length) return null;
+      final p = points[i];
+      return Offset(p.dx * size.width, p.dy * size.height);
+    }).whereType<Offset>().toList();
+    if (pts.length < 8) return;
+
+    final path = Path()..moveTo(pts[0].dx, pts[0].dy);
+    for (var i = 1; i < pts.length; i++) {
+      path.lineTo(pts[i].dx, pts[i].dy);
+    }
+    path.close();
+
+    final pulse = (math.sin(animT * 1.8) * 0.12 + 0.88);
+
+    // 1. Massive outer halo
+    canvas.drawPath(path, Paint()
+      ..color = _cGold.withValues(alpha: 0.32 * reveal * pulse)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 32
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20));
+
+    // 2. Medium halo
+    canvas.drawPath(path, Paint()
+      ..color = _cGold.withValues(alpha: 0.55 * reveal * pulse)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 14
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
+
+    // 3. Crisp edge line
+    canvas.drawPath(path, Paint()
+      ..color = _cGoldHi.withValues(alpha: 0.9 * reveal)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round);
+
+    // 4. Bright white core (razor thin — makes edge feel incandescent)
+    canvas.drawPath(path, Paint()
+      ..color = _cWhite.withValues(alpha: 0.7 * reveal)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.7
+      ..strokeCap = StrokeCap.round);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Constellation — bright twinkling stars at key anchor landmarks. Gives
+  //  the face a living, starlit quality. Stars twinkle out of phase so the
+  //  whole mesh shimmers.
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawConstellation(Canvas canvas, Size size) {
+    final points = mesh!.points;
+    if (points.length < 200) return;
+
+    final reveal = ((progress - 0.25) / 0.6).clamp(0.0, 1.0);
+    if (reveal <= 0) return;
+
+    const anchors = [
+      1, 4, 6, 10, 33, 133, 152, 168, 197, 263, 362,
+      234, 454, 175, 18, 199, 200, 0, 13, 14, 17, 61, 291,
+      78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308,
+    ];
+
+    for (final i in anchors) {
+      if (i >= points.length) continue;
+      final p = points[i];
+      final x = p.dx * size.width;
+      final y = p.dy * size.height;
+
+      // Each anchor twinkles on its own phase
+      final phaseOff = i * 0.37;
+      final tw = (math.sin(animT * 3.2 + phaseOff) + 1) / 2;
+      final alpha = reveal * (0.45 + tw * 0.5);
+      final size2 = 1.6 + tw * 2.2;
+
+      // Core white
+      canvas.drawCircle(Offset(x, y), size2 * 0.6, Paint()
+        ..color = _cWhite.withValues(alpha: alpha));
+      // Gold bloom
+      canvas.drawCircle(Offset(x, y), size2 * 2.6, Paint()
+        ..color = _cGold.withValues(alpha: alpha * 0.55)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+
+      // Cross-flare for brightest stars (every 4th anchor)
+      if (i % 4 == 0 && tw > 0.75) {
+        final flareLen = size2 * 5;
+        final flarePaint = Paint()
+          ..color = _cGoldHi.withValues(alpha: alpha * 0.7)
+          ..strokeWidth = 0.8;
+        canvas.drawLine(
+          Offset(x - flareLen, y), Offset(x + flareLen, y), flarePaint);
+        canvas.drawLine(
+          Offset(x, y - flareLen), Offset(x, y + flareLen), flarePaint);
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Measurement arcs — visualise specific measurements as arcs / brackets
+  //  drawn over the face. Canthal tilt as a curved line above each eye, FWHR
+  //  as bracket ticks across cheekbones, jaw angle as an arc at the gonion.
+  //  This makes the "we measured you" feel VISIBLE, not just numerical.
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawMeasurementArcs(Canvas canvas, Size size) {
+    final points = mesh!.points;
+    if (points.length < 200) return;
+
+    final reveal = ((progress - 0.40) / 0.50).clamp(0.0, 1.0);
+    if (reveal <= 0) return;
+
+    Offset? px(int i) {
+      if (i >= points.length) return null;
+      final p = points[i];
+      return Offset(p.dx * size.width, p.dy * size.height);
+    }
+
+    final paint = Paint()
+      ..color = _cGoldHi.withValues(alpha: 0.85 * reveal)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
+    final glow = Paint()
+      ..color = _cGold.withValues(alpha: 0.6 * reveal)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+
+    // 1. FWHR bracket — between cheekbones, horizontal bracket with ticks
+    final cheekL = px(234);
+    final cheekR = px(454);
+    if (cheekL != null && cheekR != null && reveal > 0.1) {
+      final yMid = (cheekL.dy + cheekR.dy) / 2;
+      final localFwhr = ((reveal - 0.1) / 0.3).clamp(0.0, 1.0);
+      final drawnCheekR = Offset(
+        cheekL.dx + (cheekR.dx - cheekL.dx) * localFwhr,
+        yMid,
+      );
+      canvas.drawLine(Offset(cheekL.dx, yMid), drawnCheekR, glow);
+      canvas.drawLine(Offset(cheekL.dx, yMid), drawnCheekR, paint);
+      // End ticks
+      canvas.drawLine(
+        Offset(cheekL.dx, yMid - 8), Offset(cheekL.dx, yMid + 8), paint);
+      if (localFwhr >= 1.0) {
+        canvas.drawLine(
+          Offset(cheekR.dx, yMid - 8), Offset(cheekR.dx, yMid + 8), paint);
+      }
+    }
+
+    // 2. Jaw angle arc — at left jaw gonion, small arc showing the angle
+    final jawL    = px(172);
+    final chin    = px(152);
+    final jawBack = px(58);
+    if (jawL != null && chin != null && jawBack != null && reveal > 0.35) {
+      final arcProg = ((reveal - 0.35) / 0.3).clamp(0.0, 1.0);
+      _drawArcAtCorner(canvas, jawL, chin, jawBack,
+        r: 24, sweepProg: arcProg,
+        paint: paint, glow: glow);
+    }
+    // Right jaw arc
+    final jawR     = px(397);
+    final jawBackR = px(288);
+    if (jawR != null && chin != null && jawBackR != null && reveal > 0.45) {
+      final arcProg = ((reveal - 0.45) / 0.3).clamp(0.0, 1.0);
+      _drawArcAtCorner(canvas, jawR, chin, jawBackR,
+        r: 24, sweepProg: arcProg,
+        paint: paint, glow: glow);
+    }
+
+    // 3. Canthal tilt mini-arcs at outer eye corners
+    final leftOuter  = px(33);
+    final leftInner  = px(133);
+    final rightOuter = px(263);
+    final rightInner = px(362);
+    if (leftOuter != null && leftInner != null && reveal > 0.55) {
+      _drawShortArcBetween(canvas, leftOuter, leftInner,
+        offsetAbove: 8, paint: paint, glow: glow,
+        progress: ((reveal - 0.55) / 0.25).clamp(0.0, 1.0));
+    }
+    if (rightOuter != null && rightInner != null && reveal > 0.65) {
+      _drawShortArcBetween(canvas, rightInner, rightOuter,
+        offsetAbove: 8, paint: paint, glow: glow,
+        progress: ((reveal - 0.65) / 0.25).clamp(0.0, 1.0));
+    }
+  }
+
+  void _drawArcAtCorner(Canvas canvas, Offset corner, Offset armA, Offset armB, {
+    required double r,
+    required double sweepProg,
+    required Paint paint,
+    required Paint glow,
+  }) {
+    if (sweepProg <= 0) return;
+    final a1 = math.atan2(armA.dy - corner.dy, armA.dx - corner.dx);
+    final a2 = math.atan2(armB.dy - corner.dy, armB.dx - corner.dx);
+    var sweep = a2 - a1;
+    // Normalize to shortest direction
+    while (sweep > math.pi) { sweep -= 2 * math.pi; }
+    while (sweep < -math.pi) { sweep += 2 * math.pi; }
+    final rect = Rect.fromCircle(center: corner, radius: r);
+    canvas.drawArc(rect, a1, sweep * sweepProg, false, glow);
+    canvas.drawArc(rect, a1, sweep * sweepProg, false, paint);
+  }
+
+  void _drawShortArcBetween(Canvas canvas, Offset a, Offset b, {
+    required double offsetAbove,
+    required Paint paint,
+    required Paint glow,
+    required double progress,
+  }) {
+    if (progress <= 0) return;
+    final mid = Offset((a.dx + b.dx) / 2, (a.dy + b.dy) / 2 - offsetAbove);
+    final path = Path()
+      ..moveTo(a.dx, a.dy)
+      ..quadraticBezierTo(mid.dx, mid.dy, b.dx, b.dy);
+    // Draw a fraction of the path via PathMetrics for animated reveal
+    for (final m in path.computeMetrics()) {
+      final partial = m.extractPath(0, m.length * progress);
+      canvas.drawPath(partial, glow);
+      canvas.drawPath(partial, paint);
     }
   }
 
@@ -961,8 +1209,10 @@ class GeometryOverlayPainter extends CustomPainter {
   //  This is the beat that lands on a 10-second TikTok. Don't skip.
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawLockStrike(Canvas canvas, Size size) {
-    // Strike intensity — peaks right at progress=0.9 then fades.
-    final strikeT = ((progress - 0.90) / 0.10).clamp(0.0, 1.0);
+    // Strike now spans 0.85–1.0 (was 0.90–1.0). With the slower measuring
+    // timer this means the lock moment lasts ~1s on screen — long enough
+    // to register on camera, still punchy.
+    final strikeT = ((progress - 0.85) / 0.15).clamp(0.0, 1.0);
     // Ease-out envelope — sharp in, slow fade
     final envelope = 1 - math.pow(1 - strikeT, 2).toDouble();
 
