@@ -69,7 +69,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _advisorTab() {
     if (_latest == null) return const _NoScanYet(forTab: 'Advisor');
-    return ChatScreen(geometry: _latest!.geometry);
+    return ChatScreen(
+      geometry:  _latest!.geometry,
+      imagePath: _latest!.capturedImagePath,
+      embedded:  true,
+    );
   }
 }
 
@@ -196,32 +200,29 @@ class _CheckInCard extends StatelessWidget {
   (String, String, Color) _state(DateTime now) {
     if (latest == null) {
       return (
-        'BEGIN',
-        'Run your first scan. We start from your measurements, never from a guess.',
+        'START HERE',
+        'Scan once. Real measurements — not a guess, not a rating.',
         AppColors.gold,
       );
     }
     final daysSince = now.difference(latest!.takenAt).inDays;
     if (daysSince >= 7) {
       return (
-        'WEEKLY RESCAN · OVERDUE',
-        'It\'s been $daysSince days. Rescan to see which axes shifted — '
-        'the delta is where retention compounds.',
+        'RESCAN · $daysSince DAYS',
+        'Jawline, skin, body comp — something\'s shifted. See what.',
         AppColors.signalAmber,
       );
     }
     if (daysSince >= 3) {
       return (
         'CHECK-IN',
-        'Your last scan was $daysSince days ago. Ask the advisor one thing '
-        'you\'ve been thinking about.',
+        'Ask the advisor one thing you\'ve been wondering about your face.',
         AppColors.accent,
       );
     }
     return (
       'ACTIVE',
-      'Latest scan locked. Score ${latest!.score} · ${latest!.tierLabel} · '
-      '${latest!.archetypeName}.',
+      '${latest!.score}/100 · ${latest!.tierLabel} · ${latest!.archetypeName}.',
       AppColors.signalGreen,
     );
   }

@@ -15,6 +15,10 @@ class FaceGeometryService {
     final noseBridge      = contours[FaceContourType.noseBridge]?.points ?? [];
     final noseBottom      = contours[FaceContourType.noseBottom]?.points ?? [];
     final leftEyebrow     = contours[FaceContourType.leftEyebrowTop]?.points ?? [];
+    final upperLipTop     = contours[FaceContourType.upperLipTop]?.points ?? [];
+    final upperLipBottom  = contours[FaceContourType.upperLipBottom]?.points ?? [];
+    final lowerLipTop     = contours[FaceContourType.lowerLipTop]?.points ?? [];
+    final lowerLipBottom  = contours[FaceContourType.lowerLipBottom]?.points ?? [];
 
     final hasData = leftEyeContour.length >= 4 &&
         rightEyeContour.length >= 4 &&
@@ -148,6 +152,67 @@ class FaceGeometryService {
         ? (faceBottom - noseTipY) / faceHeight
         : 0.0;
 
+    // ── Face length / head shape ──────────────────────────────────────────
+    final faceLengthRatio = faceWidth > 0 ? faceHeight / faceWidth : 1.3;
+    final String headShape;
+    if (faceLengthRatio >= 1.45) {
+      headShape = 'long';
+    } else if (faceLengthRatio <= 1.15) {
+      headShape = 'broad';
+    } else if (fwhr >= 2.0 && jawAngle <= 120) {
+      headShape = 'square';
+    } else if (faceLengthRatio >= 1.25 && faceLengthRatio <= 1.38) {
+      headShape = 'oval';
+    } else {
+      headShape = 'round';
+    }
+
+    // ── Nose length ratio (nose / mid-third height) ──────────────────────
+    final noseTopY   = noseBridge.isNotEmpty
+        ? noseBridge.map((p) => p.y.toDouble()).reduce(math.min)
+        : browY + faceHeight * 0.02;
+    final midThirdHeight = (noseBaseY - browY).abs();
+    final noseLengthRatio = midThirdHeight > 0
+        ? (noseTipY - noseTopY).abs() / midThirdHeight
+        : 0.3;
+
+    // ── Lip fullness (total lip area / face width) ───────────────────────
+    double lipFullness = 0.5;
+    if (upperLipTop.isNotEmpty && lowerLipBottom.isNotEmpty) {
+      final lipTop    = upperLipTop.map((p) => p.y.toDouble()).reduce(math.min);
+      final lipBottom = lowerLipBottom.map((p) => p.y.toDouble()).reduce(math.max);
+      final lipH      = (lipBottom - lipTop).abs();
+      lipFullness = faceHeight > 0 ? (lipH / faceHeight * 10).clamp(0.0, 1.0) : 0.5;
+    }
+
+    // ── Brow-to-eye gap (vertical) ───────────────────────────────────────
+    double brow2EyeGap = 0.04;
+    if (leftEyebrow.isNotEmpty) {
+      final browBottomY = leftEyebrow.map((p) => p.y.toDouble()).reduce(math.max);
+      brow2EyeGap = faceHeight > 0
+          ? ((leftEyeCY - browBottomY).abs() / faceHeight).clamp(0.0, 0.2)
+          : 0.04;
+    }
+
+    // ── Philtrum ratio (nose base → upper lip top / lower third) ─────────
+    double philtrumRatio = 0.35;
+    if (upperLipTop.isNotEmpty) {
+      final lipTop = upperLipTop.map((p) => p.y.toDouble()).reduce(math.min);
+      final lowerThirdH = (chin - noseBaseY).abs();
+      philtrumRatio = lowerThirdH > 0
+          ? ((lipTop - noseBaseY).abs() / lowerThirdH).clamp(0.0, 1.0)
+          : 0.35;
+    }
+
+    // ── Interpupillary ratio ─────────────────────────────────────────────
+    final interpupillaryRatio = faceWidth > 0
+        ? ((rightEyeCX - leftEyeCX).abs() / faceWidth).clamp(0.15, 0.8)
+        : 0.46;
+
+    // Touch intermediate contours so Dart doesn't warn — reserved for
+    // future metrics (philtrum detail, lip corner angle, etc.).
+    upperLipBottom.length + lowerLipTop.length;
+
     return FaceGeometry(
       canthalTilt: canthalTilt.clamp(-10.0, 10.0),
       symmetryScore: symmetryScore.clamp(0.0, 100.0),
@@ -158,6 +223,13 @@ class FaceGeometryService {
       eyeSpacingRatio: eyeSpacingRatio.clamp(0.2, 0.8),
       jawAngle: jawAngle.clamp(80.0, 180.0),
       chinProjection: chinProjection.clamp(0.0, 0.5),
+      faceLengthRatio:     faceLengthRatio.clamp(0.8, 2.0),
+      noseLengthRatio:     noseLengthRatio.clamp(0.1, 1.0),
+      lipFullness:         lipFullness,
+      brow2EyeGap:         brow2EyeGap,
+      philtrumRatio:       philtrumRatio,
+      interpupillaryRatio: interpupillaryRatio,
+      headShape:           headShape,
       hasReliableData: true,
     );
   }

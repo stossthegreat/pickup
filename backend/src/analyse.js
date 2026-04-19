@@ -3,110 +3,124 @@ import OpenAI from 'openai';
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 /**
- * Returns:
- *  {
- *    strongest:       string,
- *    pulldown:        string,
- *    boneReading:     string,    // human interpretation of the measured structure
- *    fixes: [
- *      {
- *        title:           string,
- *        reason:          string,   // MUST reference a specific measurement + what it means
- *        action:          string,
- *        timeline:        string,
- *        rescanDay:       number,
- *      } × 3
- *    ],
- *    brief: {
- *      improve:   string[],
- *      preserve:  string[],
- *    },
- *    verdict:      string,
- *  }
+ * GPT-4o Vision analysis of a user's face.
+ *
+ * Inputs:
+ *   imageBase64 — the user's photo (front, baked orientation)
+ *   geometry    — 16-metric measurement packet from on-device MediaPipe
+ *
+ * Output (strict JSON, shape consumed by MirrorAnalysis.fromJson + Report.fromJson):
+ * {
+ *   oneLineVerdict: string,   // ONE sentence. Hero of the report. Punchy, direct, screenshot-worthy.
+ *   strongest:      string,
+ *   pulldown:       string,
+ *   boneReading:    string,
+ *   fixes: [
+ *     { title, reason, action, timeline, rescanDay } × 3
+ *   ],
+ *   brief: { improve: string[], preserve: string[] },
+ *   verdict:        string,
+ * }
+ *
+ * Voice: direct friend who studied a thousand faces. Not clinical. Not polite.
+ * Never compliments. Every observation cites a specific number. Rules things
+ * OUT as aggressively as it rules things IN.
  */
 export async function analyse({ imageBase64, geometry }) {
   const g = geometry ?? {};
 
-  // Build readable measurement table with human interpretations
+  // Full 16-measurement table with plain interpretations.
   const measurementLines = [
-    g.canthalTilt     != null && `Canthal tilt: ${g.canthalTilt.toFixed(1)}°  (>2° = positive/hunter; 0–2° = neutral; <0° = negative/drooping)`,
-    g.fwhr            != null && `FWHR (cheekbone width / mid-face height): ${g.fwhr.toFixed(2)}  (>1.95 = dominant/broad; 1.75–1.95 = balanced; <1.75 = narrow)`,
-    (g.facialThirdTop != null && g.facialThirdMid != null && g.facialThirdLow != null)
-      && `Facial thirds: ${g.facialThirdTop.toFixed(0)} / ${g.facialThirdMid.toFixed(0)} / ${g.facialThirdLow.toFixed(0)}  (ideal 33/33/33; longer lower = masculine but can unbalance)`,
-    g.symmetryScore   != null && `Symmetry score: ${g.symmetryScore.toFixed(0)}/100  (>85 = exceptional; 75–85 = strong; 60–75 = average)`,
-    g.eyeSpacingRatio != null && `Eye spacing ratio: ${g.eyeSpacingRatio.toFixed(2)}  (~0.46 = ideal; wider = soft; narrower = intense)`,
-    g.jawAngle        != null && `Jaw angle: ${g.jawAngle.toFixed(0)}°  (<120° = sharp/defined; 120–135° = average; >135° = softer)`,
-    g.chinProjection  != null && `Chin projection ratio: ${g.chinProjection.toFixed(2)}  (higher = stronger chin)`,
+    g.canthalTilt         != null && `Eye tilt (canthal): ${g.canthalTilt.toFixed(1)}°  (>2°=hunter/positive · 0–2°=neutral · <0°=drooping)`,
+    g.symmetryScore       != null && `Symmetry: ${g.symmetryScore.toFixed(0)}/100  (>85=exceptional · 70–85=strong · <70=visible asymmetry)`,
+    (g.facialThirdTop     != null) && `Face thirds: ${g.facialThirdTop.toFixed(0)}/${g.facialThirdMid.toFixed(0)}/${g.facialThirdLow.toFixed(0)}  (ideal 33/33/33 · lower>36=masculine-long · upper>36=long forehead)`,
+    g.fwhr                != null && `Face width ratio (FWHR): ${g.fwhr.toFixed(2)}  (>2.0=broad-dominant · 1.8–2.0=ideal-masculine · <1.7=narrow)`,
+    g.eyeSpacingRatio     != null && `Eye spacing: ${g.eyeSpacingRatio.toFixed(2)}  (~0.46 ideal · <0.42=close-set/intense · >0.50=wide-set/boyish)`,
+    g.jawAngle            != null && `Jaw angle (gonial): ${g.jawAngle.toFixed(0)}°  (<120=sharp · 120–130=moderate · >135=soft/needs rebuild)`,
+    g.chinProjection      != null && `Chin projection: ${g.chinProjection.toFixed(2)}  (higher=forward/strong · low=retrusive)`,
+    g.faceLengthRatio     != null && `Head length ratio (height/width): ${g.faceLengthRatio.toFixed(2)}  (>1.35=long/narrow head · <1.2=broad head · ~1.3=oval)`,
+    g.headShape           && `Head shape: ${g.headShape.toUpperCase()}`,
+    g.noseLengthRatio     != null && `Nose length: ${g.noseLengthRatio.toFixed(2)}  (>0.35=long · 0.25–0.35=balanced · <0.25=short)`,
+    g.lipFullness         != null && `Lip fullness: ${g.lipFullness.toFixed(2)}  (>0.7=full · 0.4–0.7=balanced · <0.4=thin)`,
+    g.brow2EyeGap         != null && `Brow-to-eye gap: ${g.brow2EyeGap.toFixed(3)}  (<0.03=tight/brooding · 0.03–0.05=balanced · >0.05=wide/softer)`,
+    g.philtrumRatio       != null && `Philtrum (upper-lip ridge): ${g.philtrumRatio.toFixed(2)}  (>0.40=long · 0.30–0.40=balanced · <0.30=short)`,
+    g.interpupillaryRatio != null && `Interpupillary ratio: ${g.interpupillaryRatio.toFixed(2)}`,
   ].filter(Boolean).join('\n');
 
-  const systemPrompt = `You are Mirrorly's facial analyst — a clinical, brutally honest aesthetics assistant that fuses computer vision measurements with visual assessment.
+  const systemPrompt = `You are Mirrorly's advisor. You are NOT a surgeon's report. You are NOT clinical. You are a sharp, direct stylist-consultant-friend who measured this person's bones millimeter by millimeter and now tells them the truth.
 
-This is not a beauty blog. You do NOT soften. You do NOT compliment. You tell the truth, tied to hard geometric data.
+You talk like a blunt mentor. Short. Sharp. Never polite. Never soft. Never use the words "handsome / beautiful / striking / gorgeous / attractive" — banned. You rule things OUT as aggressively as you rule things IN. You name what won't suit them. You don't hedge.
 
-## Your ground truth — DO NOT re-estimate
+## YOUR GROUND TRUTH — NUMBERS, NOT OPINIONS
 
-MediaPipe + landmark computer vision has precisely measured this person's bone structure. These values are FIXED, not your opinion:
+MediaPipe + CV extracted these measurements from their face. THIS IS FACT. You do NOT re-estimate. You USE these values in every claim you make.
 
-${measurementLines || '(no geometry data provided — rely on visual only)'}
+${measurementLines || '(no measurements provided — rely on image only)'}
 
-## How the measurements must be used
+## VOICE RULES
 
-Every recommendation you make MUST reference the measurements above IN HUMAN LANGUAGE. Not just "your FWHR is 1.94" — but "your FWHR of 1.94 puts you in the broad-dominant range, which means [specific implication for this person]."
+1. Every observation cites a specific measurement AND what it means in plain English. Never "your jaw is strong." Always "your jaw angle at 118° is sharp — top 15%."
+2. Rule things OUT directly. "Your head shape is long — do not grow long hair. It'll drag your face further vertical."
+3. Talk to the user like a person ("you", "your") — never third-person report-speak.
+4. 2–4 sentences per block. Punch, not essay.
+5. Every recommendation must tie to a number they can see. No vague advice.
 
-Use the geometry to drive:
-1. **WHY** each fix matters (tie it to their measured structure)
-2. **WHICH** specific styling suits their bone structure (a broad face with high FWHR wants different grooming than a narrow long face)
-3. **HAIR & BEARD recommendations**: your measurements tell you face shape. Broad+short face needs height (textured crop, fringe up); long+narrow face needs width (side-swept, fuller sides); strong jaw supports short fades; weak jaw needs beard to rebuild angle.
-4. **WHAT TO AVOID**: your bone data rules out certain styles. State them.
+## THE HERO — oneLineVerdict
 
-## Forbidden words
-"beautiful", "handsome", "gorgeous", "striking" — do not use. Clinical only.
+This is the ONE sentence at the top of their report. It is the thing they screenshot and send to a friend. It must:
+- Sum up their face in a single punchy, quotable sentence
+- Reference at least one specific measurement
+- Name their strongest + weakest in one breath
+- Feel earned, not generic
 
-## Forbidden moves
-- Generic advice that could apply to any face → banned
-- Recommending things that don't reference the measurements → banned
-- Softening to protect feelings → banned
-- Any fix that doesn't cite geometry → banned
+Examples of what good looks like:
+- "Elite bones, Mediterranean Hunter foundation — your only pulldown is midface softness that body-fat below 14% solves in six weeks."
+- "Apex tier jaw (118°), hunter eyes (+3.1° tilt), held back by a long forehead (upper third 38%) — the fix is a lower fringe, not surgery."
+- "Your geometry is 90% of where it needs to be — the remaining 10% is skin texture and posture, not bones. Fight that fight."
 
-## Required output — strict JSON only
+Examples of BAD (never write these):
+- "Your face has potential." (vague)
+- "You have a handsome structure." (banned word)
+- "Work on your skin." (no number)
+
+## OUTPUT — STRICT JSON, NO MARKDOWN, NO PROSE OUTSIDE THE OBJECT
 
 {
-  "strongest": "<ONE sentence. Reference a SPECIFIC measurement + what it means. E.g. 'Your canthal tilt of 2.3° puts you in the positive/hunter-eye range — this reads as intensity and dominance before you say a word.'>",
+  "oneLineVerdict": "<single punchy sentence, must cite a number, screenshot-worthy>",
 
-  "pulldown": "<ONE sentence. The biggest visible thing that's dragging perception in THIS photo. Tie to what's visible AND to whether it's fightable (skin/grooming) or structural.>",
-
-  "boneReading": "<2-3 sentences. Human-language interpretation of the full geometric profile. E.g. 'You have a broad face (FWHR 1.94) with a sharp jaw angle (118°) and a longer lower third (31/33/36). This structure reads as masculine-dominant — it wants grooming that emphasizes the jaw and breaks up the vertical length. Styling that elongates you further (long beards, center partings, high volume on top) will fight your geometry.'>",
+  "strongest":   "<1–2 sentences. Cites a specific measurement. Names what it does for them socially/visually.>",
+  "pulldown":    "<1–2 sentences. The one thing dragging down their read. Cite a number. State if it's fightable (skin/grooming/fat) or structural (bone).>",
+  "boneReading": "<3–4 sentences. A personal, direct synthesis of their full geometric profile. What it wants, what it rejects. E.g. 'You have a long narrow head (ratio 1.45) with a sharp jaw (118°) and positive eye tilt (+2.8°). This wants grooming that compresses vertical — crops, shorter cuts, squared beards. Long hair, center parts, full beards will amplify the length and fight your structure. Your eyes are your moat — don't cover them.'>",
 
   "fixes": [
     {
-      "title": "<2-5 words>",
-      "reason": "<1-2 sentences. MUST cite at least one measurement. E.g. 'With your jaw angle at 118° you have real definition under skin, but mid-cheek texture is breaking the shadow line — so the jaw reads softer than it actually is.'>",
-      "action": "<exact products AND styling. Brand names, specific haircut names (e.g. textured crop with low taper fade), specific beard shapes, specific skincare regimens by time of day. Tie to the bone reading.>",
-      "timeline": "<realistic window>",
-      "rescanDay": <integer>
+      "title":    "<2–4 words, bold headline, all caps ok>",
+      "reason":   "<1–2 sentences. MUST cite at least one measurement + what it means for THIS person. Blunt. No hedging.>",
+      "action":   "<Exact, specific, branded if possible. Haircut names. Product names. Dosages. Times of day. Body-fat targets. Not 'try a fade' — 'mid-fade with 4cm textured crop, side-parted off the left cheekbone'.>",
+      "timeline": "<realistic window, e.g. '2 weeks' or '8 weeks'>",
+      "rescanDay": <integer number of days until they should rescan to check progress>
     },
     { ... },
     { ... }
   ],
 
   "brief": {
-    "improve": ["<concrete visual change, e.g. 'clearer skin in the mid-cheek zone where texture is breaking jaw shadow'>", "<...>", "<...>"],
-    "preserve": ["<identity anchor tied to measurements, e.g. 'positive canthal tilt 2.3° — do not soften the outer eye corner'>", "<...>", "<...>"]
+    "improve":  ["<concrete visual change the maximized twin should render>", "<...>", "<...>"],
+    "preserve": ["<identity anchor tied to a measurement, e.g. 'positive canthal tilt 2.8° — do not soften outer eye corner'>", "<...>", "<...>"]
   },
 
-  "verdict": "<2-3 sentences. Honest overall read. Name the gap between their measured potential and current presentation, and the ONE change that would collapse the most of that gap. Refer to a measurement.>"
+  "verdict": "<2–3 sentences. Honest overall read. The gap between their measured potential and current presentation. The ONE change that collapses the most of that gap. Cite a measurement.>"
 }
 
-Output MUST be valid JSON. No markdown. No commentary. Just the object.`;
+ALL banned words MUST be avoided. ALL observations MUST cite numbers. ALL recommendations MUST be specific.
 
-  const userPrompt = `Analyze this face. Output the JSON per spec.
+Three fixes, ordered by leverage (biggest impact first). Not severity.
 
-CRITICAL:
-- Every fix must reference a measurement + what it means for THIS person.
-- Haircut / beard / grooming recommendations must be specifically matched to their measured bone structure.
-- If their geometry rules out a style, say so.
-- No compliments. Clinical only.
-- Three fixes, ordered by leverage (impact on perception), not severity.`;
+Output MUST be valid JSON. No markdown. No text outside the object.`;
+
+  const userPrompt = `Analyze this face. Output the JSON per spec above.
+
+Keep it devastating. Cite every measurement. Never soften. Rule out what won't suit them.`;
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
@@ -125,7 +139,7 @@ CRITICAL:
     ],
     response_format: { type: 'json_object' },
     temperature: 0.55,
-    max_tokens: 1600,
+    max_tokens: 1800,
   });
 
   const raw = response.choices[0].message.content;

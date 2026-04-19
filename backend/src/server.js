@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { analyse } from './analyse.js';
 import { maximize } from './maximize.js';
 import { tryOn } from './tryon.js';
+import { chat } from './chat.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -62,6 +63,21 @@ app.post('/scan', async (req, res) => {
     res.json({ report, maximized: maxed });
   } catch (err) {
     console.error('[/scan] error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Chat: face-aware advisor. Text reply + optional inline tryon render.
+app.post('/chat', async (req, res) => {
+  try {
+    const { messages, face } = req.body;
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages[] required' });
+    }
+    const result = await chat({ messages, face: face ?? {} });
+    res.json(result);
+  } catch (err) {
+    console.error('[/chat] error:', err);
     res.status(500).json({ error: err.message });
   }
 });

@@ -14,11 +14,11 @@ class PaywallScreen extends StatelessWidget {
   const PaywallScreen({super.key});
 
   static const _bullets = [
-    ('Measurement engine',   '9 geometric axes · 468-landmark mesh · real bone-structure analysis'),
-    ('Maximized Twin',       'Flux Kontext identity-locked render of your optimized self'),
-    ('AI Advisor',           'Answers every question against YOUR measurements, not a generic face'),
-    ('Protocol system',      '60-day programs tuned to your pulldown. Weekly rescans. Progress charts.'),
-    ('Generation vault',     'Every haircut / beard / skin / glasses render, saved and revisitable'),
+    ('Know your face',       'Sixteen measurements. Jawline, eyes, bones, lips, symmetry. The real numbers.'),
+    ('See you, maximized',   'Flux Kontext renders you — identical person, at your best. Not a filter.'),
+    ('Advisor that sees you','Ask anything. "What haircut?" "Big glasses?" Answered using your actual bones.'),
+    ('Sixty-day protocol',   'A real plan for your weakest axis. Daily check-ins. Rescans. Progress charts.'),
+    ('Every render, saved',  'Every haircut, beard, glasses try-on lives in your vault. Scroll your looks.'),
   ];
 
   @override
@@ -54,14 +54,14 @@ class PaywallScreen extends StatelessWidget {
 
                   const SizedBox(height: Sp.xl),
 
-                  Text('The face,\nmaximized.',
+                  Text('Your face.\nDown to the mm.',
                     style: AppTypography.h1.copyWith(
                       fontSize: 44, letterSpacing: -1.5, height: 1.08))
                     .animate().fadeIn(delay: 200.ms, duration: 500.ms),
                   const SizedBox(height: Sp.sm),
-                  Text('A private aesthetic advisor that sees your bones.',
+                  Text('Your own stylist. Sees your bones. Shows you the version of you they\'d build.',
                     style: AppTypography.h1Italic.copyWith(
-                      fontSize: 17, color: AppColors.textSecondary, height: 1.4))
+                      fontSize: 16, color: AppColors.textSecondary, height: 1.4))
                     .animate().fadeIn(delay: 320.ms, duration: 500.ms),
 
                   const SizedBox(height: Sp.xxl),

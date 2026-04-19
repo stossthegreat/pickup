@@ -2,7 +2,15 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../services/face_mesh_service.dart';
 
-enum ScanPhase { searching, scanning, measuring, capturing, analysing }
+/// Single-angle scan — spectacle over theatre. Five phases, ~8s total. The
+/// moat is visual density on ONE angle, not copying the multi-angle gimmick.
+enum ScanPhase {
+  searching,
+  scanning,
+  measuring,
+  capturing,
+  analysing,
+}
 
 /// The scan-screen render stack, engineered to feel like an Iron-Man / Blade
 /// Runner / face-ID moment — not a demo app.
@@ -69,22 +77,21 @@ class GeometryOverlayPainter extends CustomPainter {
           _drawFaceLockBrackets(canvas, size, intensity: 0.6);
         }
         _drawTopTicker(canvas, size,
-          '▸ MAPPING ${_visibleCount().toString().padLeft(3, '0')} / 468  ·  '
-          'NEURAL TOPOLOGY RESOLVING');
+          '▸ MAPPING ${_visibleCount().toString().padLeft(3, '0')} / 468 POINTS ON YOUR FACE');
         _drawBottomMeasurementStream(canvas, size);
         break;
 
       case ScanPhase.measuring:
         if (mesh != null && mesh!.isValid) {
-          _drawMeshDots(canvas, size, alphaScale: 0.7);
+          _drawMeshDots(canvas, size, alphaScale: 0.55);
           _drawMeshTriangleWash(canvas, size);
-          _drawBoneStructure(canvas, size);
+          _drawBoneStructure(canvas, size, dramatic: true);
           _drawMeasurementCallouts(canvas, size);
           _drawRadarRings(canvas, size);
           _drawFaceLockBrackets(canvas, size, intensity: 1.0);
         }
         _drawTopTicker(canvas, size,
-          '◉ GEOMETRY RESOLVED  ·  STRUCTURAL ARCHETYPE LOCKING');
+          '◉ YOUR BONES, READ  ·  LOCKING YOUR ARCHETYPE');
         _drawBottomMeasurementStream(canvas, size);
         break;
 
@@ -382,13 +389,20 @@ class GeometryOverlayPainter extends CustomPainter {
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  LAYER 6  —  Bone structure (X-ray reveal, gold)
+  //  `dramatic`: 2.5x stroke, triple-blur glow halo, white core overlay
+  //  `holdFull`: stay at full reveal (for rotate-prompt / post-measure)
+  //  `profile`:  adds side-view-specific vectors (chin projection, malar line)
+  //  `pulseBoost`: fast pulse for capture/analysing
   // ═══════════════════════════════════════════════════════════════════════════
-  void _drawBoneStructure(Canvas canvas, Size size, {bool pulseBoost = false}) {
+  void _drawBoneStructure(Canvas canvas, Size size, {
+    bool pulseBoost = false,
+    bool dramatic   = false,
+  }) {
     final points = mesh!.points;
     if (points.length < 200) return;
 
     final reveal = phase == ScanPhase.measuring
-        ? ((progress - 0.1) / 0.7).clamp(0.0, 1.0)
+        ? ((progress - 0.05) / 0.8).clamp(0.0, 1.0)
         : 1.0;
     if (reveal <= 0) return;
 
@@ -398,12 +412,16 @@ class GeometryOverlayPainter extends CustomPainter {
       return Offset(p.dx * size.width, p.dy * size.height);
     }
 
+    // Width multiplier — dramatic mode thickens everything by 2x+
+    final wMul = dramatic ? 2.2 : 1.0;
+    final glowMul = dramatic ? 4.8 : 3.5;
+
     final xrayPulse = pulseBoost
-      ? (math.sin(animT * 4) * 0.15 + 0.85)
-      : (math.sin(animT * 1.8) * 0.10 + 0.90);
+      ? (math.sin(animT * 4) * 0.12 + 0.88)
+      : (math.sin(animT * 1.8) * 0.08 + 0.92);
 
     void chain(List<int> indices, double phaseStart, double phaseEnd,
-        {double width = 1.4, double alpha = 0.9, Color? color}) {
+        {double width = 2.2, double alpha = 1.0, Color? color}) {
       final local = ((reveal - phaseStart) / (phaseEnd - phaseStart)).clamp(0.0, 1.0);
       if (local <= 0) return;
       final pts = indices.map(px).whereType<Offset>().toList();
@@ -412,23 +430,9 @@ class GeometryOverlayPainter extends CustomPainter {
       final totalSegs = pts.length - 1;
       final drawSegs  = (totalSegs * local).floor();
       final partial   = (totalSegs * local) - drawSegs;
+      final w = width * wMul;
 
       final c = color ?? _cGold;
-      // Main line
-      final paint = Paint()
-        ..color = c.withValues(alpha: alpha * xrayPulse)
-        ..strokeWidth = width
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
-
-      // Soft glow underlay
-      final glow = Paint()
-        ..color = c.withValues(alpha: alpha * 0.35 * xrayPulse)
-        ..strokeWidth = width * 3.5
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
 
       final path = Path()..moveTo(pts[0].dx, pts[0].dy);
       for (var i = 1; i <= drawSegs; i++) {
@@ -440,8 +444,41 @@ class GeometryOverlayPainter extends CustomPainter {
         path.lineTo(a.dx + (b.dx - a.dx) * partial,
                     a.dy + (b.dy - a.dy) * partial);
       }
-      canvas.drawPath(path, glow);
-      canvas.drawPath(path, paint);
+
+      // 1. Outer soft halo (huge blur, low alpha)
+      if (dramatic) {
+        canvas.drawPath(path, Paint()
+          ..color = c.withValues(alpha: alpha * 0.25 * xrayPulse)
+          ..strokeWidth = w * glowMul * 1.3
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
+      }
+
+      // 2. Medium blur halo
+      canvas.drawPath(path, Paint()
+        ..color = c.withValues(alpha: alpha * 0.55 * xrayPulse)
+        ..strokeWidth = w * glowMul
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, dramatic ? 5 : 3));
+
+      // 3. Main gold line (crisp)
+      canvas.drawPath(path, Paint()
+        ..color = c.withValues(alpha: alpha * xrayPulse)
+        ..strokeWidth = w
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round);
+
+      // 4. Bright white core (only if dramatic, makes lines feel neon)
+      if (dramatic) {
+        canvas.drawPath(path, Paint()
+          ..color = _cWhite.withValues(alpha: alpha * 0.55)
+          ..strokeWidth = w * 0.35
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round);
+      }
 
       // Leading tip flare — bright white at the drawing edge
       if (drawSegs < totalSegs && partial > 0 && partial < 0.95) {
@@ -450,66 +487,81 @@ class GeometryOverlayPainter extends CustomPainter {
         final tip = Offset(
           a.dx + (b.dx - a.dx) * partial,
           a.dy + (b.dy - a.dy) * partial);
-        canvas.drawCircle(tip, 3.5, Paint()
-          ..color = _cWhite.withValues(alpha: 0.95));
-        canvas.drawCircle(tip, 7, Paint()
-          ..color = c.withValues(alpha: 0.55)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+        canvas.drawCircle(tip, dramatic ? 6 : 3.5,
+          Paint()..color = _cWhite);
+        canvas.drawCircle(tip, dramatic ? 14 : 7, Paint()
+          ..color = c.withValues(alpha: 0.7)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+        // Outer radiant ring — gives the "moment of contact" feel
+        if (dramatic) {
+          canvas.drawCircle(tip, 22, Paint()
+            ..color = c.withValues(alpha: 0.3)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
+        }
       }
 
-      // Joint pips
+      // Joint pips — thicker in dramatic mode
+      final pipRadius = dramatic ? 2.8 : 1.8;
+      final pipGlowR  = dramatic ? 6.5 : 3.5;
       final pipPaint = Paint()
         ..color = c.withValues(alpha: 0.95 * xrayPulse)
         ..style = PaintingStyle.fill;
+      final pipGlow = Paint()
+        ..color = c.withValues(alpha: 0.4 * xrayPulse)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3)
+        ..style = PaintingStyle.fill;
       for (var i = 0; i < drawSegs + 1 && i < pts.length; i++) {
-        canvas.drawCircle(pts[i], 1.8, pipPaint);
+        canvas.drawCircle(pts[i], pipGlowR, pipGlow);
+        canvas.drawCircle(pts[i], pipRadius, pipPaint);
       }
     }
 
-    // Mandible — defining bone
+    // Mandible — defining bone. First, thickest, widest.
     chain(const [
       234, 93, 132, 58, 172, 136, 150, 149, 176, 148, 152,
       377, 400, 378, 379, 365, 397, 288, 361, 323, 454,
-    ], 0.00, 0.30, width: 1.8);
+    ], 0.00, 0.28, width: 2.8);
 
     // Zygomatic L/R
-    chain(const [234, 227, 116, 123, 117, 118, 101], 0.25, 0.50);
-    chain(const [454, 447, 345, 352, 346, 347, 330], 0.25, 0.50);
+    chain(const [234, 227, 116, 123, 117, 118, 101], 0.20, 0.45, width: 2.0);
+    chain(const [454, 447, 345, 352, 346, 347, 330], 0.20, 0.45, width: 2.0);
 
     // Orbital frame L
     chain(const [
       33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7, 33,
-    ], 0.40, 0.65, width: 1.1, alpha: 0.75);
+    ], 0.35, 0.60, width: 1.6, alpha: 0.85);
     // Orbital frame R
     chain(const [
       263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249, 263,
-    ], 0.40, 0.65, width: 1.1, alpha: 0.75);
+    ], 0.35, 0.60, width: 1.6, alpha: 0.85);
 
     // Frontal bone sweep
     chain(const [70, 63, 105, 66, 107, 9, 336, 296, 334, 293, 300],
-        0.55, 0.78, width: 1.2);
+        0.50, 0.72, width: 1.8);
 
     // Nose bridge
-    chain(const [168, 6, 197, 195, 5, 4, 1], 0.60, 0.82, width: 1.2);
+    chain(const [168, 6, 197, 195, 5, 4, 1], 0.55, 0.78, width: 1.9);
 
     // Chin vector
-    chain(const [152, 175, 199, 200, 18], 0.70, 0.90, width: 1.4);
+    chain(const [152, 175, 199, 200, 18], 0.65, 0.85, width: 2.2);
 
     // Hairline pips — final lockup
-    if (reveal > 0.85) {
-      final anchorAlpha = ((reveal - 0.85) / 0.15).clamp(0.0, 1.0);
+    if (reveal > 0.82) {
+      final anchorAlpha = ((reveal - 0.82) / 0.18).clamp(0.0, 1.0);
       final anchorPaint = Paint()
-        ..color = _cGoldHi.withValues(alpha: 0.85 * anchorAlpha * xrayPulse)
+        ..color = _cGoldHi.withValues(alpha: 0.9 * anchorAlpha * xrayPulse)
+        ..style = PaintingStyle.fill;
+      final anchorGlow = Paint()
+        ..color = _cGold.withValues(alpha: 0.55 * anchorAlpha)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4)
         ..style = PaintingStyle.fill;
       const hair = [10, 109, 67, 103, 54, 21, 162, 127,
                     356, 389, 251, 284, 332, 297, 338];
       for (final i in hair) {
         final p = px(i);
         if (p != null) {
-          canvas.drawCircle(p, 2.0, anchorPaint);
-          canvas.drawCircle(p, 5, Paint()
-            ..color = _cGold.withValues(alpha: 0.35 * anchorAlpha)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
+          canvas.drawCircle(p, dramatic ? 8 : 5, anchorGlow);
+          canvas.drawCircle(p, dramatic ? 3 : 2, anchorPaint);
         }
       }
     }

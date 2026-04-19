@@ -27,6 +27,10 @@ class Fix {
 
 @immutable
 class Report {
+  /// One-sentence hero line. Screenshot-worthy. Cites a specific measurement,
+  /// names strongest + pulldown in one breath. Rendered at the top of the
+  /// report in hero typography.
+  final String oneLineVerdict;
   final String strongest;
   final String pulldown;
   final String boneReading;   // human translation of measured geometry
@@ -34,6 +38,7 @@ class Report {
   final String verdict;
 
   const Report({
+    required this.oneLineVerdict,
     required this.strongest,
     required this.pulldown,
     required this.boneReading,
@@ -42,9 +47,10 @@ class Report {
   });
 
   factory Report.fromJson(Map<String, dynamic> j) => Report(
-    strongest:   j['strongest']   as String? ?? '',
-    pulldown:    j['pulldown']    as String? ?? '',
-    boneReading: j['boneReading'] as String? ?? '',
+    oneLineVerdict: j['oneLineVerdict'] as String? ?? '',
+    strongest:      j['strongest']      as String? ?? '',
+    pulldown:       j['pulldown']       as String? ?? '',
+    boneReading:    j['boneReading']    as String? ?? '',
     fixes: ((j['fixes'] as List?) ?? [])
         .map((e) => Fix.fromJson(e as Map<String, dynamic>))
         .toList(),

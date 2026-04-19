@@ -9,10 +9,30 @@ import '../../services/chat_service.dart';
 import '../../services/scoring_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
+import '../../widgets/common/fullscreen_image.dart';
+import '../../widgets/common/quick_tryon_chips.dart';
 
+/// Face-aware advisor chat. Text replies + inline Flux Kontext renders
+/// showing the user with the suggested change applied.
+///
+/// `embedded=true` when used as a tab in the home hub — hides the back
+/// button (tab nav replaces it) so it doesn't pop the entire home stack.
+/// `imagePath` is the local scan image path used for identity-preserved tryon.
 class ChatScreen extends StatefulWidget {
   final FaceGeometry geometry;
-  const ChatScreen({super.key, required this.geometry});
+  final String? imagePath;
+  final bool embedded;
+  /// If provided, auto-sends this string as the first user turn on mount.
+  /// Used when a QuickTryonChip is tapped on the report screen.
+  final String? autoSend;
+
+  const ChatScreen({
+    super.key,
+    required this.geometry,
+    this.imagePath,
+    this.embedded = false,
+    this.autoSend,
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -26,29 +46,26 @@ class _ChatScreenState extends State<ChatScreen> {
   late final AestheticScore _score;
   late final ArchetypeMatch _match;
 
-  static const _suggestions = [
-    'What haircut should I get?',
-    'Skin routine for my face?',
-    'Should I grow a beard?',
-    'Genioplasty — worth it?',
-    'How do I lose midface fat?',
-  ];
-
   @override
   void initState() {
     super.initState();
     _score = ScoringService.compute(widget.geometry);
     _match = ArchetypeService.bestMatch(widget.geometry);
     _messages.add(ChatMessage(ChatRole.assistant, _openingLine()));
+    if (widget.autoSend != null && widget.autoSend!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _send(widget.autoSend!);
+      });
+    }
   }
 
   String _openingLine() {
-    return 'I\'ve read your measurements. Score ${_score.value} '
-        '(${_score.tierLabel}). Closest archetype: ${_match.archetype.name} '
-        '(${(_match.match * 100).round()}% match). Strongest: '
-        '${_score.strongestAxis.$1}. Pulldown: ${_score.weakestAxis.$1}. '
-        'Ask me anything — haircut, beard, skin, gym, surgery. I\'ll answer '
-        'against *your* bones, not a generic face.';
+    return "I've read your face. You scored ${_score.value} (${_score.tierLabel}), "
+        "closest archetype ${_match.archetype.name} at ${(_match.match * 100).round()}%. "
+        "Your strongest read: ${_score.strongestAxis.$1.toLowerCase()}. "
+        "Your pulldown: ${_score.weakestAxis.$1.toLowerCase()}. "
+        "Ask me what to do — haircut, beard, skin, glasses, surgery, whatever. "
+        "I'll answer against your actual numbers and, when it helps, show you the change on your face.";
   }
 
   Future<void> _send([String? prefilled]) async {
@@ -64,13 +81,18 @@ class _ChatScreenState extends State<ChatScreen> {
     HapticFeedback.lightImpact();
 
     final reply = await ChatService.send(
-      history:  _messages,
-      geometry: widget.geometry,
+      history:   _messages,
+      geometry:  widget.geometry,
+      imagePath: widget.imagePath,
     );
 
     if (!mounted) return;
     setState(() {
-      _messages.add(ChatMessage(ChatRole.assistant, reply));
+      _messages.add(ChatMessage(
+        ChatRole.assistant, reply.text,
+        imageUrl:      reply.imageUrl,
+        imageCaption:  reply.styleRequest,
+      ));
       _sending = false;
     });
     _scrollToEnd();
@@ -80,8 +102,8 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollCtl.hasClients) return;
       _scrollCtl.animateTo(
-        _scrollCtl.position.maxScrollExtent + 120,
-        duration: const Duration(milliseconds: 300),
+        _scrollCtl.position.maxScrollExtent + 200,
+        duration: const Duration(milliseconds: 320),
         curve: Curves.easeOut,
       );
     });
@@ -110,12 +132,19 @@ class _ChatScreenState extends State<ChatScreen> {
                 itemBuilder: (c, i) {
                   if (i == _messages.length) return const _TypingIndicator();
                   final m = _messages[i];
-                  return _MessageBubble(message: m,
-                    isFirst: i == 0 && m.role == ChatRole.assistant);
+                  return _MessageBubble(
+                    message: m,
+                    isFirst: i == 0 && m.role == ChatRole.assistant,
+                  );
                 },
               ),
             ),
-            if (_messages.length <= 2) _suggestionStrip(),
+            // Persistent smart-tryon chips — always visible above the input
+            QuickTryonChips(
+              geometry: widget.geometry,
+              compact: true,
+              onTap: (style, _) => _send(style),
+            ),
             _inputBar(),
           ],
         ),
@@ -128,36 +157,34 @@ class _ChatScreenState extends State<ChatScreen> {
       padding: const EdgeInsets.fromLTRB(Sp.md, Sp.sm, Sp.md, Sp.md),
       child: Row(
         children: [
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => context.pop(),
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.surface1,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.accent.withValues(alpha: 0.3), width: 0.8),
+          if (!widget.embedded)
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => context.pop(),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface1, shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.accent.withValues(alpha: 0.3), width: 0.8),
+                  ),
+                  child: const Icon(Icons.arrow_back_ios_new_rounded,
+                    size: 14, color: AppColors.textSecondary),
                 ),
-                child: const Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 14, color: AppColors.textSecondary),
               ),
             ),
-          ),
-          const SizedBox(width: Sp.md),
+          if (!widget.embedded) const SizedBox(width: Sp.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Text('Consultation',
+                    Text('Advisor',
                       style: AppTypography.h1.copyWith(
-                        fontSize: 22,
-                        letterSpacing: -0.6,
-                        height: 1)),
+                        fontSize: 24, letterSpacing: -0.6, height: 1)),
                     const SizedBox(width: 8),
                     Container(
                       width: 4, height: 4, margin: const EdgeInsets.only(top: 6),
@@ -166,10 +193,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 3),
-                Text('AI AESTHETIC ADVISOR · SEES YOUR BONES',
+                const SizedBox(height: 2),
+                Text('KNOWS YOUR BONES · ANSWERS FROM YOUR NUMBERS',
                   style: AppTypography.label.copyWith(
-                    color: AppColors.textMuted, fontSize: 8, letterSpacing: 2.8)),
+                    color: AppColors.textMuted, fontSize: 8, letterSpacing: 2.6)),
               ],
             ),
           ),
@@ -184,14 +211,14 @@ class _ChatScreenState extends State<ChatScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: AppColors.surface1,
-        border: Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.45)),
         borderRadius: BorderRadius.circular(100),
       ),
       child: Row(
         children: [
           Text('${_score.value}',
             style: AppTypography.measurement.copyWith(
-              color: AppColors.gold, fontSize: 13, fontWeight: FontWeight.w700)),
+              color: AppColors.gold, fontSize: 13, fontWeight: FontWeight.w800)),
           const SizedBox(width: 4),
           Text('/ 100',
             style: AppTypography.label.copyWith(
@@ -201,48 +228,11 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _suggestionStrip() {
-    return SizedBox(
-      height: 42,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-        itemCount: _suggestions.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final s = _suggestions[i];
-          return Center(
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => _send(s),
-                borderRadius: BorderRadius.circular(100),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface1,
-                    border: Border.all(
-                      color: AppColors.accent.withValues(alpha: 0.28), width: 0.8),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: Text(s,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary, fontSize: 12)),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    ).animate().fadeIn(duration: 400.ms);
-  }
-
   Widget _inputBar() {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         Sp.md, Sp.sm, Sp.md,
-        MediaQuery.of(context).viewInsets.bottom > 0
-          ? Sp.sm : Sp.md,
+        MediaQuery.of(context).viewInsets.bottom > 0 ? Sp.sm : Sp.md,
       ),
       child: Container(
         padding: const EdgeInsets.fromLTRB(Sp.md, 4, 4, 4),
@@ -323,39 +313,52 @@ class _MessageBubble extends StatelessWidget {
           if (!isUser) _avatarDot(),
           if (!isUser) const SizedBox(width: 10),
           Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: isUser ? AppColors.accent.withValues(alpha: 0.14) : AppColors.surface1,
-                borderRadius: BorderRadius.only(
-                  topLeft:  Radius.circular(isUser ? 18 : 6),
-                  topRight: Radius.circular(isUser ? 6 : 18),
-                  bottomLeft: const Radius.circular(18),
-                  bottomRight: const Radius.circular(18),
-                ),
-                border: Border.all(
-                  color: (isUser ? AppColors.accent : AppColors.gold)
-                      .withValues(alpha: isFirst ? 0.35 : 0.18),
-                  width: 0.8,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (isFirst)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Text('YOUR ANALYSIS',
-                        style: AppTypography.label.copyWith(
-                          color: AppColors.gold, letterSpacing: 2.4, fontSize: 8)),
+            child: Column(
+              crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isUser ? AppColors.accent.withValues(alpha: 0.14) : AppColors.surface1,
+                    borderRadius: BorderRadius.only(
+                      topLeft:  Radius.circular(isUser ? 18 : 6),
+                      topRight: Radius.circular(isUser ? 6 : 18),
+                      bottomLeft: const Radius.circular(18),
+                      bottomRight: const Radius.circular(18),
                     ),
-                  Text(message.content,
-                    style: AppTypography.body.copyWith(
-                      color: AppColors.textPrimary,
-                      fontSize: 14.5,
-                      height: 1.55)),
+                    border: Border.all(
+                      color: (isUser ? AppColors.accent : AppColors.gold)
+                          .withValues(alpha: isFirst ? 0.4 : 0.18),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (isFirst)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text('YOUR ANALYSIS',
+                            style: AppTypography.label.copyWith(
+                              color: AppColors.gold, letterSpacing: 2.4, fontSize: 8)),
+                        ),
+                      Text(message.content,
+                        style: AppTypography.body.copyWith(
+                          color: AppColors.textPrimary,
+                          fontSize: 14.5,
+                          height: 1.55)),
+                    ],
+                  ),
+                ),
+                // Inline Flux render attached to an assistant reply
+                if (!isUser && message.imageUrl != null) ...[
+                  const SizedBox(height: 10),
+                  _InlineRender(
+                    url:     message.imageUrl!,
+                    caption: message.imageCaption),
                 ],
-              ),
+              ],
             ).animate().fadeIn(duration: 260.ms).slideY(
               begin: 0.08, end: 0, duration: 260.ms, curve: Curves.easeOut),
           ),
@@ -378,9 +381,88 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  Inline Flux render — shown under assistant messages when a tryon fired
+// ═══════════════════════════════════════════════════════════════════════════
+class _InlineRender extends StatelessWidget {
+  final String url;
+  final String? caption;
+  const _InlineRender({required this.url, this.caption});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => FullscreenImage.open(context, url: url, caption: caption),
+        borderRadius: BorderRadius.circular(Rd.lg),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 260),
+          child: AspectRatio(
+            aspectRatio: 3 / 4,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(Rd.lg),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(color: AppColors.surface1)),
+                  Image.network(url, fit: BoxFit.cover,
+                    loadingBuilder: (_, child, p) => p == null ? child
+                      : const Center(child: SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.8, color: AppColors.gold))),
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Icon(Icons.broken_image_rounded,
+                        color: AppColors.textMuted, size: 24))),
+                  // Caption pill
+                  if (caption != null)
+                    Positioned(
+                      left: 0, right: 0, bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(10, 20, 10, 8),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.85),
+                            ],
+                          ),
+                        ),
+                        child: Text(caption!,
+                          maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: AppTypography.label.copyWith(
+                            color: AppColors.gold,
+                            fontSize: 9, letterSpacing: 1.8)),
+                      ),
+                    ),
+                  // Zoom hint
+                  Positioned(
+                    top: 8, right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.zoom_in_rounded,
+                        size: 14, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TypingIndicator extends StatefulWidget {
   const _TypingIndicator();
-
   @override
   State<_TypingIndicator> createState() => _TypingIndicatorState();
 }
@@ -388,17 +470,14 @@ class _TypingIndicator extends StatefulWidget {
 class _TypingIndicatorState extends State<_TypingIndicator>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ac;
-
   @override
   void initState() {
     super.initState();
     _ac = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))
       ..repeat();
   }
-
   @override
   void dispose() { _ac.dispose(); super.dispose(); }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -424,7 +503,6 @@ class _TypingIndicatorState extends State<_TypingIndicator>
       ),
     );
   }
-
   double _dotOpacity(int i, double t) {
     final phase = (t - i * 0.15) % 1.0;
     if (phase < 0.5) return 0.3 + phase * 1.4;

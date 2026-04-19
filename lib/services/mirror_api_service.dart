@@ -7,16 +7,28 @@ import '../models/mirror_analysis.dart';
 
 class MirrorApiService {
   static Map<String, dynamic> _geometryToJson(FaceGeometry g) => {
-    'canthalTilt':     g.canthalTilt,
-    'symmetryScore':   g.symmetryScore,
-    'facialThirdTop':  g.facialThirdTop,
-    'facialThirdMid':  g.facialThirdMid,
-    'facialThirdLow':  g.facialThirdLow,
-    'fwhr':            g.fwhr,
-    'eyeSpacingRatio': g.eyeSpacingRatio,
-    'jawAngle':        g.jawAngle,
-    'chinProjection':  g.chinProjection,
+    // Original 9 — stable contract with existing backend
+    'canthalTilt':          g.canthalTilt,
+    'symmetryScore':        g.symmetryScore,
+    'facialThirdTop':       g.facialThirdTop,
+    'facialThirdMid':       g.facialThirdMid,
+    'facialThirdLow':       g.facialThirdLow,
+    'fwhr':                 g.fwhr,
+    'eyeSpacingRatio':      g.eyeSpacingRatio,
+    'jawAngle':             g.jawAngle,
+    'chinProjection':       g.chinProjection,
+    // Extended 7 — unlocks "head shape", "lip fullness", etc. in advice
+    'faceLengthRatio':      g.faceLengthRatio,
+    'noseLengthRatio':      g.noseLengthRatio,
+    'lipFullness':          g.lipFullness,
+    'brow2EyeGap':          g.brow2EyeGap,
+    'philtrumRatio':        g.philtrumRatio,
+    'interpupillaryRatio':  g.interpupillaryRatio,
+    'headShape':            g.headShape,
   };
+
+  /// Serializable form, callable from chat_service.dart.
+  static Map<String, dynamic> geometryToJson(FaceGeometry g) => _geometryToJson(g);
 
   /// Run full scan: analyse + maximize in one round-trip.
   static Future<MirrorAnalysis> scan({

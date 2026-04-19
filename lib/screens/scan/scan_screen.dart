@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:image/image.dart' as img;
 
 import '../../models/face_geometry.dart';
 import '../../services/face_geometry_service.dart';
@@ -43,7 +45,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   Timer? _countdownTimer;
 
   int _faceFrames = 0;
-  static const int _requiredFrames = 10;
+  static const int _requiredFrames = 12;  // ~2s of face-lock at typical detect rate
 
   bool _processing = false;
 
@@ -65,11 +67,11 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
 
   // Rotating copy per phase
   static const _scanCopy = [
-    '468 landmarks',
-    'Orbital vector resolving',
-    'Jaw angle acquired',
-    'FWHR locking',
-    'Structural archetype match running',
+    '468 points locked',
+    'Reading your jawline',
+    'Eye tilt found',
+    'Face width calculated',
+    'Matching your archetype',
   ];
   int _copyIdx = 0;
   Timer? _copyTimer;
@@ -242,13 +244,18 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       if (!mounted) return;
 
       if (faces.isEmpty) {
-        _faceFrames = 0;
-        if (_phase != ScanPhase.searching) {
-          setState(() {
-            _phase    = ScanPhase.searching;
-            _progress = 0;
-            _mesh     = null;
-          });
+        // Only reset to SEARCHING from scanning-phase — once we're past
+        // measuring the user briefly loses face detection while rotating,
+        // and we don't want to nuke the scan.
+        if (_phase == ScanPhase.searching || _phase == ScanPhase.scanning) {
+          _faceFrames = 0;
+          if (_phase != ScanPhase.searching) {
+            setState(() {
+              _phase    = ScanPhase.searching;
+              _progress = 0;
+              _mesh     = null;
+            });
+          }
         }
         return;
       }
@@ -328,7 +335,6 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       if (_phase == ScanPhase.scanning) {
         final p = (_faceFrames / _requiredFrames).clamp(0.0, 1.0);
         setState(() => _progress = p);
-
         if (_faceFrames >= _requiredFrames) {
           _startMeasuring();
         }
@@ -351,16 +357,19 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     });
   }
 
+  /// Measuring — slowed so the dramatic bone reveal takes ~3s. Combined
+  /// with ~2s of scanning and 3s countdown, total scan is ~8s: enough for
+  /// the user to feel the depth of analysis without padding.
   void _startMeasuring() {
     setState(() {
       _phase    = ScanPhase.measuring;
-      _progress = 0.6;
+      _progress = 0.0;
     });
     HapticFeedback.mediumImpact();
     _measureTimer?.cancel();
-    _measureTimer = Timer.periodic(30.ms, (t) {
+    _measureTimer = Timer.periodic(40.ms, (t) {
       if (!mounted) { t.cancel(); return; }
-      final np = _progress + 0.02;
+      final np = _progress + 0.013;  // ~3s full reveal
       setState(() => _progress = np.clamp(0.0, 1.0));
       if (np >= 1.0) {
         t.cancel();
@@ -400,7 +409,16 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       await _camera?.stopImageStream();
       final file = await _camera?.takePicture();
       if (file == null) throw Exception('capture failed');
-      final bytes = await File(file.path).readAsBytes();
+      final raw = await File(file.path).readAsBytes();
+
+      // Bake EXIF orientation into the pixels. Front-cam JPEGs from the
+      // flutter camera plugin carry orientation metadata that Flutter's
+      // Image.memory honours inconsistently — and the backend definitely
+      // doesn't honour it when feeding the bytes to Flux Kontext. Rewrite
+      // the pixels upright so every downstream consumer sees the correct
+      // orientation.
+      final bytes = await compute<Uint8List, Uint8List>(
+        _bakeOrientation, raw);
 
       if (!mounted) return;
       final geometry = _geometry ??
@@ -430,21 +448,21 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
 
   String get _phaseTitle {
     switch (_phase) {
-      case ScanPhase.searching:  return 'POSITION YOUR FACE';
+      case ScanPhase.searching:  return 'LINE UP YOUR FACE';
       case ScanPhase.scanning:   return _scanCopy[_copyIdx];
-      case ScanPhase.measuring:  return 'GEOMETRY RESOLVED';
+      case ScanPhase.measuring:  return 'READING YOUR BONES';
       case ScanPhase.capturing:  return 'HOLD STILL';
-      case ScanPhase.analysing:  return 'COMPOSITING';
+      case ScanPhase.analysing:  return 'WORKING ON IT';
     }
   }
 
   String get _phaseSub {
     switch (_phase) {
-      case ScanPhase.searching:  return 'Look directly into the lens';
-      case ScanPhase.scanning:   return 'Mapping 468 landmarks at 30fps';
-      case ScanPhase.measuring:  return 'Structural archetype match running';
-      case ScanPhase.capturing:  return 'Capturing reference frame';
-      case ScanPhase.analysing:  return 'Rendering maximized version';
+      case ScanPhase.searching:  return 'Look into the lens';
+      case ScanPhase.scanning:   return 'Mapping 468 points on your face';
+      case ScanPhase.measuring:  return 'Jawline · eyes · thirds · cheekbones';
+      case ScanPhase.capturing:  return 'Capturing your reference frame';
+      case ScanPhase.analysing:  return 'Personal analysis incoming';
     }
   }
 
@@ -741,5 +759,18 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         ],
       ),
     );
+  }
+}
+
+/// Isolate entrypoint — decode the JPEG, apply EXIF rotation/mirror into
+/// the pixels, re-encode. Runs off the UI thread via `compute`.
+Uint8List _bakeOrientation(Uint8List input) {
+  try {
+    final decoded = img.decodeImage(input);
+    if (decoded == null) return input;
+    final baked = img.bakeOrientation(decoded);
+    return Uint8List.fromList(img.encodeJpg(baked, quality: 92));
+  } catch (_) {
+    return input;
   }
 }

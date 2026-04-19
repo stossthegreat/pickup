@@ -34,7 +34,9 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final extra = state.extra as Map<String, dynamic>;
         return ChatScreen(
-          geometry: extra['geometry'] as FaceGeometry,
+          geometry:  extra['geometry']  as FaceGeometry,
+          imagePath: extra['imagePath'] as String?,
+          autoSend:  extra['autoSend']  as String?,
         );
       },
     ),

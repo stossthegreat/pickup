@@ -1,0 +1,135 @@
+import OpenAI from 'openai';
+import { tryOn } from './tryon.js';
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+/**
+ * Face-aware advisor chat.
+ *
+ * Input:
+ *   messages — [{role: 'user'|'assistant', content: '...'}, ...]
+ *   face: {
+ *     imageBase64 (optional — the scan image, for inline identity-preserving tryon),
+ *     geometry    (measurements object — used verbatim by the model),
+ *     score, tier, archetype (string summaries),
+ *   }
+ *
+ * Output:
+ *   {
+ *     reply:   string,       // clear, specific, references the user's numbers
+ *     generated_image_url?:  string,   // set ONLY when the advisor decided a tryon was helpful
+ *     style_request?:        string,   // the request used to drive the tryon
+ *     category?:             string,   // haircut | beard | glasses | hair_color | facial_hair | weight
+ *   }
+ *
+ * Rules the model follows (baked into system prompt):
+ *   - Talks like a personal advisor, not a surgeon's report
+ *   - Cites specific measurements every time
+ *   - Rules OUT styles that don't suit their bones ("your head is narrow — long hair won't suit you")
+ *   - Returns strict JSON with an optional style_request when a visual would help
+ */
+export async function chat({ messages, face }) {
+  const g = face?.geometry ?? {};
+
+  const measurementSummary = [
+    g.canthalTilt       != null && `canthal tilt ${g.canthalTilt.toFixed(1)}° (>2 = hunter eyes, <0 = drooping)`,
+    g.symmetryScore     != null && `symmetry ${g.symmetryScore.toFixed(0)}/100`,
+    (g.facialThirdTop   != null) && `thirds ${g.facialThirdTop.toFixed(0)}/${g.facialThirdMid.toFixed(0)}/${g.facialThirdLow.toFixed(0)} (ideal 33/33/33)`,
+    g.fwhr              != null && `FWHR ${g.fwhr.toFixed(2)} (>1.95 broad/dominant, <1.75 narrow)`,
+    g.eyeSpacingRatio   != null && `eye spacing ${g.eyeSpacingRatio.toFixed(2)} (~0.46 ideal)`,
+    g.jawAngle          != null && `jaw angle ${g.jawAngle.toFixed(0)}° (<120 sharp, >135 soft)`,
+    g.chinProjection    != null && `chin projection ${g.chinProjection.toFixed(2)}`,
+    g.faceLengthRatio   != null && `face length ratio ${g.faceLengthRatio.toFixed(2)} (>1.35 = long/narrow head)`,
+    g.noseLengthRatio   != null && `nose length ratio ${g.noseLengthRatio.toFixed(2)}`,
+    g.lipFullness       != null && `lip fullness ${g.lipFullness.toFixed(2)}`,
+    g.brow2EyeGap       != null && `brow-to-eye gap ${g.brow2EyeGap.toFixed(2)}`,
+  ].filter(Boolean).join('\n');
+
+  const systemPrompt = `You are Mirrorly's advisor. You measured this person's face with computer vision and now you tell them the truth. You are NOT clinical. You are NOT polite. You are a direct, sharp, intelligent friend who knows bones and faces.
+
+## THEIR NUMBERS — FACT, NOT OPINION
+
+${measurementSummary || '(no measurements provided)'}
+
+Score: ${face?.score ?? '(unknown)'}/100   Tier: ${face?.tier ?? '(unknown)'}   Archetype: ${face?.archetype ?? '(unknown)'}
+
+## VOICE
+
+Short. Direct. Cites the actual number. Rules things out as aggressively as in. Never polite for politeness' sake. Every sentence earns its place.
+
+BAD: "Your face is good."
+GOOD: "Your jaw at 118° is sharp — don't cover it with beard."
+
+BAD: "A short haircut could work."
+GOOD: "Your head is 1.45 ratio, long. Short crop with volume on top. Long hair will make your face read even longer — skip it."
+
+BAD: "Consider skincare."
+GOOD: "Your symmetry reads 73 not 85 — that's 90% skin texture, not bones. Tretinoin 0.025% 3×/week, eight weeks, your symmetry reads higher."
+
+## BANNED WORDS
+
+"handsome", "beautiful", "striking", "gorgeous", "attractive" — never. You don't compliment. You analyse.
+
+## ANSWER LENGTH
+
+2–5 sentences max, unless they asked for depth. You don't lecture. You hit.
+
+## THE VISUAL LOOP
+
+When a user asks what would suit them / should they get X / show me Y — you include a \`style_request\` + \`category\` in the JSON. The backend fires Flux Kontext on their actual face and returns the render inline. This is your most powerful move — don't waste it, but use it whenever visual would help the answer land.
+
+Categories: haircut | beard | hair_color | glasses | facial_hair | weight
+
+## STRICT JSON — no markdown, no prose outside the object
+
+{
+  "reply":          "<2–5 sentences. Direct. Cites their specific measurement.>",
+  "style_request":  "<optional — only when a Flux render would help the answer>",
+  "category":       "<optional — haircut|beard|hair_color|glasses|facial_hair|weight>"
+}`;
+
+  const chatMessages = [
+    { role: 'system', content: systemPrompt },
+    ...messages.slice(-12).map(m => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.content,
+    })),
+  ];
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: chatMessages,
+    response_format: { type: 'json_object' },
+    temperature: 0.7,
+    max_tokens: 700,
+  });
+
+  let parsed;
+  try {
+    parsed = JSON.parse(response.choices[0].message.content);
+  } catch {
+    return { reply: response.choices[0].message.content };
+  }
+
+  const result = { reply: parsed.reply || '' };
+
+  // Fire a tryon render if the model requested one AND we have the image.
+  if (parsed.style_request && face?.imageBase64) {
+    try {
+      const tryResult = await tryOn({
+        imageBase64:  face.imageBase64,
+        styleRequest: parsed.style_request,
+        category:     parsed.category || 'haircut',
+        geometry:     g,
+      });
+      result.generated_image_url = tryResult.url;
+      result.style_request       = parsed.style_request;
+      result.category            = parsed.category;
+    } catch (err) {
+      console.error('[chat] tryon side-call failed:', err.message);
+      // Don't fail the whole reply just because tryon failed
+    }
+  }
+
+  return result;
+}

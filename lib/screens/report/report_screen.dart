@@ -7,13 +7,21 @@ import '../../models/face_geometry.dart';
 import '../../models/mirror_analysis.dart';
 import '../../models/scan_record.dart';
 import '../../services/archetype_service.dart';
+import '../../services/face_asset_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/mirror_api_service.dart';
 import '../../services/scoring_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
+import '../../services/chat_service.dart';
+import '../../services/share_service.dart';
+import '../../widgets/common/before_after_card.dart';
+import '../../widgets/common/fullscreen_image.dart';
+import '../../widgets/common/quick_tryon_chips.dart';
 import '../../widgets/report/archetype_card.dart';
+import '../../widgets/report/measurement_grid.dart';
 import '../../widgets/report/score_card.dart';
+import '../../widgets/report/verdict_card.dart';
 
 class ReportScreen extends StatefulWidget {
   final Uint8List imageBytes;
@@ -74,15 +82,25 @@ class _ReportScreenState extends State<ReportScreen> {
   Future<void> _persistScan(MirrorAnalysis a) async {
     final score = ScoringService.compute(widget.geometry);
     final match = ArchetypeService.bestMatch(widget.geometry);
+    final id = 'scan-${DateTime.now().millisecondsSinceEpoch}';
+
+    // Save the oriented JPEG to app docs so the advisor + tryon + gallery
+    // can load it later without hitting the camera again.
+    String? savedPath;
+    try {
+      savedPath = await FaceAssetService.saveScanImage(
+        scanId: id, bytes: widget.imageBytes);
+    } catch (_) {}
+
     final record = ScanRecord(
-      id:                 'scan-${DateTime.now().millisecondsSinceEpoch}',
+      id:                 id,
       takenAt:            DateTime.now(),
       geometry:           widget.geometry,
       score:              score.value,
       tierLabel:          score.tierLabel,
       archetypeName:      match.archetype.name,
       archetypeMatchPct:  (match.match * 100).round(),
-      capturedImagePath:  null,
+      capturedImagePath:  savedPath,
       maximizedImageUrl:  a.maximizedImageUrl,
     );
     await LocalStoreService.saveScan(record);
@@ -172,29 +190,97 @@ class _ReportScreenState extends State<ReportScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Text('THE COMPOSITE', style: AppTypography.label.copyWith(
-            color: AppColors.textTertiary, letterSpacing: 2.5))
-            .animate().fadeIn(duration: 400.ms),
-          const SizedBox(height: Sp.xs),
-          Text('Your face, measured.', style: AppTypography.h1)
-            .animate().fadeIn(delay: 100.ms, duration: 400.ms),
+          // Header with Share action
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('YOUR ANALYSIS', style: AppTypography.label.copyWith(
+                      color: AppColors.textTertiary, letterSpacing: 2.5))
+                      .animate().fadeIn(duration: 400.ms),
+                    const SizedBox(height: Sp.xs),
+                    Text('Down to the millimetre.',
+                      style: AppTypography.h1.copyWith(fontSize: 28))
+                      .animate().fadeIn(delay: 100.ms, duration: 400.ms),
+                  ],
+                ),
+              ),
+              _ShareButton(
+                onTap: () => ShareService.shareComposed(
+                  context:     context,
+                  beforeBytes: widget.imageBytes,
+                  afterUrl:    a.maximizedImageUrl,
+                  score:       score.value,
+                  tier:        score.tierLabel,
+                  archetype:   match.archetype.name,
+                  verdict:     a.report.oneLineVerdict,
+                  text: 'My face, measured — ${score.value}/100, '
+                        '${score.tierLabel}, ${match.archetype.name}. mirrorly.app',
+                ),
+              ),
+            ],
+          ),
 
           const SizedBox(height: Sp.xl),
 
-          // ── Hero: Aesthetic Index score ─────────────────────────────────
+          // ── HERO VERDICT · screenshot-gold ──────────────────────────────
+          if (a.report.oneLineVerdict.isNotEmpty) ...[
+            VerdictCard(
+              verdict:   a.report.oneLineVerdict,
+              score:     score.value,
+              tier:      score.tierLabel,
+              archetype: match.archetype.name),
+            const SizedBox(height: Sp.md),
+          ],
+
+          // ── Score + axes ────────────────────────────────────────────────
           ScoreCard(score: score)
-            .animate().fadeIn(delay: 160.ms, duration: 500.ms)
-            .slideY(begin: 0.04, end: 0, duration: 500.ms, delay: 160.ms,
-                curve: Curves.easeOut),
+            .animate().fadeIn(delay: 160.ms, duration: 500.ms),
+
+          const SizedBox(height: Sp.md),
+
+          // ── Maximized Twin · NOW vs MAXIMIZED · tappable, caption-worthy ─
+          BeforeAfterCard(
+            beforeBytes: widget.imageBytes,
+            afterUrl:    a.maximizedImageUrl,
+            caption:     a.report.oneLineVerdict.isNotEmpty
+                ? null
+                : 'You, with skin, light, and grooming pushed to their best.',
+          ).animate().fadeIn(delay: 240.ms, duration: 600.ms),
+
+          const SizedBox(height: Sp.md),
+
+          // ── Quick-action chips — fires tryon on tap ─────────────────────
+          Text('TRY IT ON YOUR FACE',
+            style: AppTypography.label.copyWith(
+              color: AppColors.gold, letterSpacing: 2.5, fontSize: 9)),
+          const SizedBox(height: Sp.sm),
+          QuickTryonChips(
+            geometry: widget.geometry,
+            onTap: (style, cat) => context.push(
+              '/chat',
+              extra: {
+                'geometry':  widget.geometry,
+                'imagePath': null,
+                'autoSend':  style,
+              },
+            ),
+          ).animate().fadeIn(delay: 360.ms, duration: 500.ms),
+
+          const SizedBox(height: Sp.md),
+
+          // ── Measurement grid — the precision proof ──────────────────────
+          MeasurementGrid(g: widget.geometry)
+            .animate().fadeIn(delay: 420.ms, duration: 500.ms),
 
           const SizedBox(height: Sp.md),
 
           // ── Archetype match ─────────────────────────────────────────────
           ArchetypeCard(match: match)
-            .animate().fadeIn(delay: 320.ms, duration: 500.ms)
-            .slideY(begin: 0.04, end: 0, duration: 500.ms, delay: 320.ms,
-                curve: Curves.easeOut),
+            .animate().fadeIn(delay: 520.ms, duration: 500.ms),
 
           const SizedBox(height: Sp.md),
 
@@ -202,36 +288,25 @@ class _ReportScreenState extends State<ReportScreen> {
           _ConsultCard(
             onTap: () => context.push(
               '/chat',
-              extra: {'geometry': widget.geometry},
+              extra: {'geometry': widget.geometry, 'imagePath': null},
             ),
-          ).animate().fadeIn(delay: 460.ms, duration: 500.ms),
-
-          const SizedBox(height: Sp.xl),
-
-          // Before/after split
-          Text('THE MAXIMIZED TWIN', style: AppTypography.label.copyWith(
-            color: AppColors.textTertiary, letterSpacing: 2.5)),
-          const SizedBox(height: Sp.sm),
-          _BeforeAfter(
-            before: widget.imageBytes,
-            afterUrl: a.maximizedImageUrl,
-          ).animate().fadeIn(delay: 600.ms, duration: 600.ms),
+          ).animate().fadeIn(delay: 620.ms, duration: 500.ms),
 
           const SizedBox(height: Sp.xl),
 
           // Bone reading — the human translation of measured geometry
           if (a.report.boneReading.isNotEmpty) ...[
             _Block(
-              label: 'YOUR BONE STRUCTURE',
+              label: 'THE READ',
               color: AppColors.measure,
               body: a.report.boneReading,
-            ).animate().fadeIn(delay: 760.ms),
+            ).animate().fadeIn(delay: 780.ms),
             const SizedBox(height: Sp.md),
           ],
 
           // Strongest trait
           _Block(
-            label: 'ALREADY WORKING',
+            label: 'WHAT\'S ALREADY WORKING',
             color: AppColors.signalGreen,
             body: a.report.strongest,
           ).animate().fadeIn(delay: 860.ms),
@@ -253,8 +328,11 @@ class _ReportScreenState extends State<ReportScreen> {
             .animate().fadeIn(delay: 1080.ms),
           const SizedBox(height: Sp.sm),
           ...a.report.fixes.asMap().entries.map((e) =>
-            _FixCard(index: e.key + 1, fix: e.value)
-              .animate().fadeIn(delay: Duration(milliseconds: 1140 + e.key * 100))),
+            _FixCard(
+              index: e.key + 1, fix: e.value,
+              capturedBytes: widget.imageBytes,
+              geometry:      widget.geometry,
+            ).animate().fadeIn(delay: Duration(milliseconds: 1140 + e.key * 100))),
 
           const SizedBox(height: Sp.xl),
 
@@ -376,80 +454,38 @@ class _ConsultCard extends StatelessWidget {
   }
 }
 
-// ── Before / after ────────────────────────────────────────────────────────────
-class _BeforeAfter extends StatelessWidget {
-  final Uint8List before;
-  final String afterUrl;
-
-  const _BeforeAfter({required this.before, required this.afterUrl});
+// ── Share button (top-right of report header) ───────────────────────────────
+class _ShareButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ShareButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(child: _SideLabel('NOW', AppColors.textTertiary)),
-            const SizedBox(width: 8),
-            Expanded(child: _SideLabel('MAXIMIZED', AppColors.accent)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _ImageTile.memory(before)),
-            const SizedBox(width: 8),
-            Expanded(child: _ImageTile.network(afterUrl)),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _SideLabel extends StatelessWidget {
-  final String text;
-  final Color color;
-  const _SideLabel(this.text, this.color);
-
-  @override
-  Widget build(BuildContext context) => Text(text,
-    style: AppTypography.label.copyWith(color: color, letterSpacing: 2.5, fontSize: 10));
-}
-
-class _ImageTile extends StatelessWidget {
-  final Uint8List? bytes;
-  final String?    url;
-
-  const _ImageTile.memory(Uint8List this.bytes)  : url = null;
-  const _ImageTile.network(String this.url)      : bytes = null;
-
-  @override
-  Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 3 / 4,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(Rd.lg),
-        child: DecoratedBox(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(100),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            border: Border.all(color: AppColors.accent.withValues(alpha: 0.15)),
-            borderRadius: BorderRadius.circular(Rd.lg),
-            color: AppColors.surface1,
+            color: AppColors.gold.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: AppColors.gold.withValues(alpha: 0.55), width: 0.8),
           ),
-          child: bytes != null
-              ? Image.memory(bytes!, fit: BoxFit.cover)
-              : (url != null && url!.isNotEmpty
-                    ? Image.network(url!, fit: BoxFit.cover,
-                        loadingBuilder: (c, child, p) =>
-                            p == null ? child :
-                            const Center(child: CircularProgressIndicator(
-                              color: AppColors.accent, strokeWidth: 2)),
-                        errorBuilder: (c, e, s) => Center(
-                          child: Text('Image unavailable',
-                            style: AppTypography.bodySmall.copyWith(fontSize: 11))))
-                    : const SizedBox.shrink()),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.ios_share_rounded,
+                size: 14, color: AppColors.gold),
+              const SizedBox(width: 6),
+              Text('SHARE',
+                style: AppTypography.label.copyWith(
+                  color: AppColors.gold, letterSpacing: 2.0, fontSize: 10,
+                  fontWeight: FontWeight.w800)),
+            ],
+          ),
         ),
       ),
     );
@@ -504,13 +540,76 @@ class _Block extends StatelessWidget {
 }
 
 // ── Fix card ──────────────────────────────────────────────────────────────────
-class _FixCard extends StatelessWidget {
+class _FixCard extends StatefulWidget {
   final int index;
   final Fix fix;
-  const _FixCard({required this.index, required this.fix});
+  final Uint8List? capturedBytes;
+  final FaceGeometry geometry;
+  const _FixCard({
+    required this.index, required this.fix,
+    required this.capturedBytes, required this.geometry,
+  });
+  @override
+  State<_FixCard> createState() => _FixCardState();
+}
+
+class _FixCardState extends State<_FixCard> {
+  String? _renderUrl;
+  bool    _rendering = false;
+  String? _renderError;
+
+  Future<void> _seeIt() async {
+    if (_rendering) return;
+    setState(() { _rendering = true; _renderError = null; });
+
+    try {
+      // Build a tryon style request from the fix action + title.
+      final style = '${widget.fix.title}: ${widget.fix.action}';
+      final cat   = _guessCategory(widget.fix.title, widget.fix.action);
+      // Save bytes to disk on-the-fly so TryOnService can load them.
+      final bytes = widget.capturedBytes;
+      String? url;
+      if (bytes != null) {
+        // Inline call — bypass the service's file-path loading by posting
+        // bytes directly. Simpler: reuse the service by saving a temp file.
+        final tempId = 'fix-${DateTime.now().millisecondsSinceEpoch}';
+        final path = await FaceAssetService.saveScanImage(
+          scanId: tempId, bytes: bytes);
+        url = await TryOnService.render(
+          imagePath:    path,
+          styleRequest: style,
+          category:     cat,
+          geometry:     widget.geometry,
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _renderUrl = url;
+        _rendering = false;
+        _renderError = url == null ? 'Couldn\'t render — try again' : null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _rendering = false;
+        _renderError = 'Error rendering';
+      });
+    }
+  }
+
+  String _guessCategory(String title, String action) {
+    final t = '$title $action'.toLowerCase();
+    if (RegExp(r'\b(hair|fade|crop|cut|fringe|undercut|buzz|trim|taper)\b').hasMatch(t)) return 'haircut';
+    if (RegExp(r'\b(beard|stubble|facial hair|goatee|mustache)\b').hasMatch(t))          return 'beard';
+    if (RegExp(r'\b(glasses|frame|eyewear|specs)\b').hasMatch(t))                         return 'glasses';
+    if (RegExp(r'\b(lean|cut|body|weight|fat|recomp)\b').hasMatch(t))                     return 'weight';
+    if (RegExp(r'\b(color|dye|tint)\b').hasMatch(t))                                      return 'hair_color';
+    return 'haircut';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final fix = widget.fix;
     return Container(
       margin: const EdgeInsets.only(bottom: Sp.md),
       padding: const EdgeInsets.all(Sp.md),
@@ -525,7 +624,7 @@ class _FixCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('$index',
+              Text('${widget.index}',
                 style: AppTypography.h1.copyWith(
                   color: AppColors.accent, fontSize: 28, letterSpacing: -1)),
               const SizedBox(width: Sp.sm),
@@ -562,6 +661,64 @@ class _FixCard extends StatelessWidget {
               _Chip(label: 'RESCAN DAY ${fix.rescanDay}', color: AppColors.accent),
             ],
           ),
+          const SizedBox(height: Sp.md),
+
+          // "See It" — generates a Flux Kontext render of the user with this change
+          if (_renderUrl != null)
+            GestureDetector(
+              onTap: () => FullscreenImage.open(context,
+                url: _renderUrl, caption: fix.title),
+              child: Container(
+                width: double.infinity,
+                height: 160,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(Rd.md),
+                  border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
+                ),
+                child: Image.network(_renderUrl!, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Center(
+                    child: Text('Render unavailable',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textMuted))),
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              width: double.infinity, height: 44,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: AppColors.gold.withValues(alpha: 0.55)),
+                  foregroundColor: AppColors.gold,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(Rd.md)),
+                ),
+                onPressed: _rendering ? null : _seeIt,
+                child: _rendering
+                  ? const SizedBox(width: 16, height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.8, color: AppColors.gold))
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.auto_awesome,
+                          size: 14, color: AppColors.gold),
+                        const SizedBox(width: 8),
+                        Text('SEE IT ON YOUR FACE',
+                          style: AppTypography.label.copyWith(
+                            color: AppColors.gold, letterSpacing: 2.0,
+                            fontSize: 10, fontWeight: FontWeight.w800)),
+                      ],
+                    ),
+              ),
+            ),
+          if (_renderError != null) ...[
+            const SizedBox(height: 6),
+            Text(_renderError!,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.signalAmber, fontSize: 11)),
+          ],
         ],
       ),
     );

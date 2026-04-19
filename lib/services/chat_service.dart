@@ -2,13 +2,19 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/face_geometry.dart';
+import 'face_asset_service.dart';
+import 'mirror_api_service.dart';
 import 'scoring_service.dart';
 import 'archetype_service.dart';
 
 class ChatMessage {
   final ChatRole role;
   final String content;
-  const ChatMessage(this.role, this.content);
+  /// Inline image attached to the assistant's reply (Flux Kontext tryon).
+  final String? imageUrl;
+  /// What the image is showing — shown as a caption pill over the image.
+  final String? imageCaption;
+  const ChatMessage(this.role, this.content, {this.imageUrl, this.imageCaption});
 
   Map<String, dynamic> toJson() => {
     'role': role == ChatRole.user ? 'user' : 'assistant',
@@ -18,28 +24,47 @@ class ChatMessage {
 
 enum ChatRole { user, assistant }
 
+/// Response from /chat — text reply plus an optional inline Flux tryon.
+class ChatReply {
+  final String text;
+  final String? imageUrl;
+  final String? styleRequest;
+  final String? category;
+  const ChatReply({
+    required this.text,
+    this.imageUrl,
+    this.styleRequest,
+    this.category,
+  });
+}
+
 class ChatService {
-  /// Send the full conversation + face context to the backend.
-  /// The backend is expected to synthesize a system prompt that includes
-  /// the geometry / score / archetype and route to a Claude/GPT endpoint.
+  /// Send the conversation to the face-aware backend /chat endpoint. The
+  /// user's scan image is included so the advisor can trigger Flux Kontext
+  /// tryon renders inline when a visual would help the answer.
   ///
-  /// If the backend route isn't live yet (404 / 5xx / timeout), we fall
-  /// back to a deterministic local stub so the UX never reads as broken.
-  static Future<String> send({
+  /// Falls back to a rich local stub if the endpoint is unreachable.
+  static Future<ChatReply> send({
     required List<ChatMessage> history,
     required FaceGeometry geometry,
+    String? imagePath,
   }) async {
     final score = ScoringService.compute(geometry);
     final match = ArchetypeService.bestMatch(geometry);
 
-    final context = {
-      'geometry':  _geometryToJson(geometry),
+    // Load image bytes if we have a path — backend uses for inline tryon.
+    String? imageBase64;
+    if (imagePath != null) {
+      final bytes = await FaceAssetService.loadScanImageBytes(imagePath);
+      if (bytes != null) imageBase64 = base64Encode(bytes);
+    }
+
+    final face = {
+      'geometry':  MirrorApiService.geometryToJson(geometry),
       'score':     score.value,
       'tier':      score.tierLabel,
-      'archetype': {
-        'name':  match.archetype.name,
-        'match': (match.match * 100).round(),
-      },
+      'archetype': match.archetype.name,
+      if (imageBase64 != null) 'imageBase64': imageBase64,
     };
 
     try {
@@ -48,92 +73,180 @@ class ChatService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'messages': history.map((m) => m.toJson()).toList(),
-          'face':     context,
+          'face':     face,
         }),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 90));
 
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body) as Map<String, dynamic>;
         final reply = decoded['reply'] as String?;
-        if (reply != null && reply.isNotEmpty) return reply;
+        if (reply != null && reply.isNotEmpty) {
+          return ChatReply(
+            text:         reply,
+            imageUrl:     decoded['generated_image_url'] as String?,
+            styleRequest: decoded['style_request']       as String?,
+            category:     decoded['category']            as String?,
+          );
+        }
       }
     } catch (_) {
       // Fall through to local stub.
     }
 
-    return _localFallback(history.isNotEmpty ? history.last.content : '', score, match);
+    return ChatReply(
+      text: _localFallback(
+        history.isNotEmpty ? history.last.content : '', score, match, geometry),
+    );
   }
 
-  static Map<String, dynamic> _geometryToJson(FaceGeometry g) => {
-    'canthalTilt':     g.canthalTilt,
-    'symmetryScore':   g.symmetryScore,
-    'facialThirdTop':  g.facialThirdTop,
-    'facialThirdMid':  g.facialThirdMid,
-    'facialThirdLow':  g.facialThirdLow,
-    'fwhr':            g.fwhr,
-    'eyeSpacingRatio': g.eyeSpacingRatio,
-    'jawAngle':        g.jawAngle,
-    'chinProjection':  g.chinProjection,
-  };
-
-  /// Deterministic stub used when backend is unavailable. Still conditioned
-  /// on geometry + score so it feels personal, not canned.
-  static String _localFallback(String userMsg, AestheticScore s, ArchetypeMatch m) {
+  /// Deterministic local stub. More specific than the previous version —
+  /// covers 12 common topics, always cites the user's actual numbers.
+  static String _localFallback(
+      String userMsg, AestheticScore s, ArchetypeMatch m, FaceGeometry g) {
     final lower = userMsg.toLowerCase();
-    final weak = s.weakestAxis.$1;
+    final weak   = s.weakestAxis.$1;
     final strong = s.strongestAxis.$1;
 
-    if (lower.contains('hair') || lower.contains('cut') || lower.contains('fade')) {
-      return 'For your archetype (${m.archetype.name}, '
-          '${(m.match * 100).round()}% match) with a ${weak.toLowerCase()} pulldown, '
-          'prioritize a cut that extends vertical line and draws focus up. '
-          'Mid-fade with texture on top, length 3–4 cm, side part off the '
-          'stronger cheekbone. Skip the buzz — you need volume, not exposure.';
-    }
-    if (lower.contains('beard') || lower.contains('stubble') || lower.contains('facial hair')) {
-      final jaw = s.axes.jaw;
-      if (jaw < 0.55) {
-        return 'Your jaw axis is currently '
-            '${(jaw * 100).round()}%. Heavy stubble (4–6 mm, trimmed sharp '
-            'at the angle) will add mandibular definition before any other '
-            'intervention. Take the cheek line higher than feels natural.';
+    String n(double v, [int d = 1]) => v.toStringAsFixed(d);
+
+    bool has(List<String> needles) => needles.any((w) => lower.contains(w));
+
+    if (has(['hair', 'cut', 'fade', 'crop', 'undercut', 'buzz'])) {
+      if (g.headShape == 'long' || g.faceLengthRatio > 1.35) {
+        return 'Your head shape is long (ratio ${n(g.faceLengthRatio, 2)}). '
+            'Long hair will drag your face even longer — skip it. Go for '
+            'volume on the sides, flatter on top: textured mid-fade, side '
+            'part off the stronger cheekbone, crop length 3–4cm. That '
+            'compresses the vertical axis and makes your jaw read sharper.';
       }
-      return 'Your jaw is already a strength. A short, precise stubble '
-          '(2–3 mm) emphasizes without softening it. Clean the neckline '
-          'tight to the jaw curve — don\'t let it drop.';
+      if (g.headShape == 'broad' || g.fwhr > 2.0) {
+        return 'Your face is broad (FWHR ${n(g.fwhr, 2)}). Wide cuts will '
+            'make you look blocky — don\'t do crops or buzz cuts. Go '
+            'taller on top: textured 5–6cm swept up, tighter sides, mid '
+            'to low taper. That adds vertical balance.';
+      }
+      return 'Given your ${g.headShape} face and jaw angle ${n(g.jawAngle, 0)}°, '
+          'a mid-fade with a 4cm textured top side-parted is your lane. '
+          'Avoid heavy fringe — your strong ${strong.toLowerCase()} wants '
+          'to be visible, not covered.';
     }
-    if (lower.contains('skin') || lower.contains('acne') || lower.contains('routine')) {
-      return 'Baseline non-negotiables: azelaic acid morning, tretinoin '
-          '0.025 % three nights a week (build up), SPF 50 daily. Before '
-          'any chasing-perfection add-ons, lock those in for 8 weeks. '
-          'Your symmetry and thirds will read clearer once skin is uniform.';
+
+    if (has(['glasses', 'frame', 'eyewear', 'specs'])) {
+      if (g.headShape == 'long' || g.faceLengthRatio > 1.35) {
+        return 'Long/narrow head (${n(g.faceLengthRatio, 2)} ratio) — big '
+            'round or oversized frames will not suit you, they\'ll swamp '
+            'your face. Go rectangular, narrower than your face width, '
+            'with a strong top bar. Acetate in matte tortoise or black.';
+      }
+      if (g.headShape == 'broad' || g.fwhr > 2.0) {
+        return 'Broad face (FWHR ${n(g.fwhr, 2)}) — tiny rectangular '
+            'frames disappear on you. You can carry larger, rounder '
+            'frames — but pick ones that sit within your cheekbone width, '
+            'not beyond. Tortoise, titanium, or clear.';
+      }
+      return 'Your face length is balanced. Go medium-sized — avoid '
+          'bottom-heavy frames (weaken the ${strong.toLowerCase()}). '
+          'Rectangular or subtle aviator works.';
     }
-    if (lower.contains('surgery') || lower.contains('jaw') || lower.contains('chin') ||
-        lower.contains('implant') || lower.contains('genio')) {
-      return 'Surgical consults should target your lowest axis — right now '
-          'that\'s ${weak.toLowerCase()}. Before scheduling anything, '
-          'exhaust: mewing (12 weeks disciplined), body-fat to 12–14 %, '
-          'dental alignment if off. Those three alone shift your metrics '
-          'enough to re-run this analysis and make an informed surgical call.';
+
+    if (has(['beard', 'stubble', 'facial hair', 'goatee'])) {
+      if (g.jawAngle > 128) {
+        return 'Your jaw angle is ${n(g.jawAngle, 0)}° — softer side. A '
+            'short squared beard (5–7mm) will rebuild your mandibular '
+            'edge from the outside. Keep the cheek line high, squared '
+            'corners at the chin. Don\'t go pointy — that elongates.';
+      }
+      return 'Jaw at ${n(g.jawAngle, 0)}° is already sharp — heavy beard '
+          'will cover what\'s working. Stay to 2–3mm stubble, tight '
+          'neckline under the jaw curve. Preserve the line, don\'t '
+          'smother it.';
     }
-    if (lower.contains('gym') || lower.contains('lose') || lower.contains('fat') ||
-        lower.contains('body') || lower.contains('weight')) {
-      return 'Body fat is the single highest-leverage facial intervention '
-          'that isn\'t a scalpel. Below 14 % body fat, your mandibular '
-          'angle and zygomatic shelf both sharpen visibly. If you\'re '
-          'above 18 %, a cut takes priority over any cosmetic move.';
+
+    if (has(['skin', 'acne', 'routine', 'skincare', 'cream'])) {
+      return 'Non-negotiable base: gentle cleanser AM+PM, SPF 50 daily, '
+          'tretinoin 0.025% 3×/week (ramp slow), azelaic acid 10% daily. '
+          'Eight weeks of that, nothing else, before any add-ons. Your '
+          'symmetry (${n(g.symmetryScore, 0)}/100) reads stronger when '
+          'skin texture is uniform.';
     }
-    if (lower.contains('score') || lower.contains('rating') || lower.contains('why')) {
+
+    if (has(['surgery', 'genioplasty', 'implant', 'filler', 'bichectomy'])) {
+      return 'Surgical consults should target your lowest axis — '
+          'currently $weak. Before scheduling anything, exhaust: mewing '
+          '(12 weeks), body-fat to 12–14%, dental alignment. Those three '
+          'alone shift measurable metrics enough to re-run this scan and '
+          'inform the decision properly.';
+    }
+
+    if (has(['gym', 'lose', 'fat', 'body', 'weight', 'cut'])) {
+      return 'Body fat is the highest-leverage facial intervention '
+          'that isn\'t a scalpel. Below 14% body fat, jaw angle sharpens '
+          'visibly and zygomatic shelf (FWHR ${n(g.fwhr, 2)}) reads '
+          'harder. If you\'re above 18% now, cut takes priority over '
+          'any styling move.';
+    }
+
+    if (has(['score', 'rating', 'why', 'tier'])) {
       return 'You scored ${s.value} (${s.tierLabel}). Strongest axis: '
-          '$strong. Weakest: $weak. The archetype nearest your geometry '
-          'is ${m.archetype.name} (${(m.match * 100).round()}% match). '
-          'The fastest ${s.value < 80 ? 'point lift' : 'refinement'} is '
+          '$strong. Weakest: $weak. Archetype: ${m.archetype.name} '
+          '(${(m.match * 100).round()}% match). The fastest lift is '
           'targeting $weak — everything else compounds off it.';
     }
 
-    return 'Consulting offline for this one. Try: "what haircut?", '
-        '"skin routine?", "should I get genioplasty?", "what\'s my '
-        'archetype?" — I\'ll answer any of those conditioned on your '
-        'actual measurements.';
+    if (has(['makeup', 'concealer', 'foundation'])) {
+      return 'For your canthal tilt of ${n(g.canthalTilt)}°, a subtle '
+          'outer-eye shadow lift (warm brown, pulled outward) '
+          'emphasizes your ${g.canthalTilt > 2 ? 'already-positive' : 'neutral'} '
+          'tilt. Under-eye concealer warmer than your skin to kill '
+          'shadow, not lighter.';
+    }
+
+    if (has(['archetype', 'match', 'look like'])) {
+      return '${m.archetype.name} at ${(m.match * 100).round()}%. '
+          '${m.archetype.tagline}. ${m.archetype.story}';
+    }
+
+    if (has(['protocol', 'program', 'plan'])) {
+      return 'Your pulldown is $weak. Ask me to "start protocol" and '
+          'I\'ll prescribe a 60-day program with daily check-ins and '
+          'rescan milestones at day 14 / 30 / 60.';
+    }
+
+    return 'Tell me what you\'re thinking about: haircut, beard, skin, '
+        'glasses, body comp, surgery, or what your score means. I\'ll '
+        'answer against your actual numbers, not generic advice.';
+  }
+}
+
+/// Standalone TryOn service — called from report recommendation cards
+/// ("See me with this fade") and as explicit quick-actions in chat.
+class TryOnService {
+  static Future<String?> render({
+    required String imagePath,
+    required String styleRequest,
+    required String category,
+    required FaceGeometry geometry,
+  }) async {
+    final bytes = await FaceAssetService.loadScanImageBytes(imagePath);
+    if (bytes == null) return null;
+
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiConfig.backendBaseUrl}/tryon'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'imageBase64':  base64Encode(bytes),
+          'styleRequest': styleRequest,
+          'category':     category,
+          'geometry':     MirrorApiService.geometryToJson(geometry),
+        }),
+      ).timeout(const Duration(seconds: 120));
+
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+        return decoded['url'] as String?;
+      }
+    } catch (_) {}
+    return null;
   }
 }
