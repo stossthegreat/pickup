@@ -149,9 +149,9 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       if (!mounted) return;
 
       final faces = results[0] as List<Face>;
-      final mesh  = results[1] as FaceMesh?;
+      var mesh    = results[1] as FaceMesh?;
 
-      if (faces.isEmpty || mesh == null || !mesh.isValid) {
+      if (faces.isEmpty) {
         _faceFrames = 0;
         if (_phase != ScanPhase.searching) {
           setState(() {
@@ -163,8 +163,30 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         return;
       }
 
-      _faceFrames++;
       final face = faces.first;
+
+      // Fallback: if MediaPipe face-mesh didn't fire (older iPhone, unsupported
+      // device), synthesize a point cloud from ML Kit face contours. Fewer
+      // points but still renders a visible landmark overlay.
+      if (mesh == null || !mesh.isValid) {
+        final pts = <Offset>[];
+        for (final contour in face.contours.values) {
+          if (contour == null) continue;
+          for (final p in contour.points) {
+            pts.add(Offset(p.x / imgW, p.y / imgH));
+          }
+        }
+        if (pts.length >= 20) {
+          mesh = FaceMesh(pts);
+        }
+      }
+
+      if (mesh == null || !mesh.isValid) {
+        // Still nothing — skip this frame, wait for the next detection.
+        return;
+      }
+
+      _faceFrames++;
       final geom = FaceGeometryService.computeGeometry(face, imgW, imgH);
 
       setState(() {
@@ -321,29 +343,23 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         children: [
           if (preview != null && preview.value.isInitialized)
             Positioned.fill(
-              child: Builder(
-                builder: (context) {
-                  final size = MediaQuery.of(context).size;
-                  // preview.value.aspectRatio is the native sensor ratio
-                  // (always > 1). In portrait we need to invert it.
-                  final previewAspect = 1 / preview.value.aspectRatio;
-                  final screenAspect  = size.width / size.height;
-                  // Scale the preview to cover the whole screen
-                  final scale = screenAspect > previewAspect
-                      ? screenAspect / previewAspect
-                      : previewAspect / screenAspect;
-                  return ClipRect(
-                    child: Transform.scale(
-                      scale: scale,
-                      child: Center(
-                        child: AspectRatio(
-                          aspectRatio: previewAspect,
-                          child: CameraPreview(preview),
-                        ),
-                      ),
+              child: ClipRect(
+                child: OverflowBox(
+                  alignment: Alignment.center,
+                  maxWidth:  double.infinity,
+                  maxHeight: double.infinity,
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    // previewSize is always in sensor (landscape) orientation;
+                    // swap w/h to render as portrait on the screen.
+                    child: SizedBox(
+                      width:  preview.value.previewSize?.height ?? 1,
+                      height: preview.value.previewSize?.width  ?? 1,
+                      child: CameraPreview(preview),
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
             )
           else

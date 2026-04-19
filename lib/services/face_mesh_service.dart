@@ -8,7 +8,7 @@ class FaceMesh {
 
   const FaceMesh(this.points);
 
-  bool get isValid => points.length >= 400;
+  bool get isValid => points.length >= 50;
 
   /// Known MediaPipe face mesh indices for key anchors.
   /// https://developers.google.com/mediapipe/solutions/vision/face_landmarker
