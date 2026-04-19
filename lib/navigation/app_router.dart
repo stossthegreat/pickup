@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../models/face_geometry.dart';
 import '../screens/scan/scan_screen.dart';
 import '../screens/report/report_screen.dart';
+import '../screens/settings/settings_screen.dart';
 import '../screens/splash/splash_screen.dart';
 
 final appRouter = GoRouter(
@@ -15,6 +16,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/scan',
       builder: (_, __) => const ScanScreen(),
+    ),
+    GoRoute(
+      path: '/settings',
+      builder: (_, __) => const SettingsScreen(),
     ),
     GoRoute(
       path: '/report',

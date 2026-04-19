@@ -101,15 +101,16 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     final camera = _camera;
     if (camera == null) return null;
 
+    // iOS camera plugin pre-rotates the image buffer to match the UI orientation,
+    // so ML Kit expects rotation0deg. Android gives raw sensor data that needs
+    // rotation based on sensorOrientation.
     final rotation = Platform.isIOS
-        ? InputImageRotationValue.fromRawValue(camera.description.sensorOrientation)
-              ?? InputImageRotation.rotation0deg
+        ? InputImageRotation.rotation0deg
         : (camera.description.sensorOrientation == 90
               ? InputImageRotation.rotation90deg
               : InputImageRotation.rotation270deg);
 
-    // iOS front camera: bgra8888, single plane, ML Kit expects this
-    // Android front camera: nv21, single plane
+    // iOS: bgra8888 single plane. Android: nv21 single plane.
     final format = Platform.isIOS
         ? InputImageFormat.bgra8888
         : InputImageFormat.nv21;
@@ -422,20 +423,20 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
           // Top bar
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
                 children: [
-                  Text('MIRROR',
+                  Text('MIRRORLY',
                     style: AppTypography.label.copyWith(
                       color: AppColors.textPrimary,
                       fontSize: 12,
                       letterSpacing: 4,
                     )),
-                  const Spacer(),
+                  const SizedBox(width: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppColors.surface2,
+                      color: AppColors.surface2.withValues(alpha: 0.85),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text('MESH · 468',
@@ -444,6 +445,26 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
                         fontSize: 8,
                         letterSpacing: 1.5,
                       )),
+                  ),
+                  const Spacer(),
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => context.push('/settings'),
+                      borderRadius: BorderRadius.circular(22),
+                      child: Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.textSecondary.withValues(alpha: 0.25),
+                            width: 1),
+                        ),
+                        child: const Icon(Icons.settings_outlined,
+                          size: 18, color: AppColors.textPrimary),
+                      ),
+                    ),
                   ),
                 ],
               ),
