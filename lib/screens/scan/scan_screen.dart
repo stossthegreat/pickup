@@ -82,7 +82,9 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       front,
       ResolutionPreset.high,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.nv21,
+      imageFormatGroup: Platform.isIOS
+          ? ImageFormatGroup.bgra8888
+          : ImageFormatGroup.nv21,
     );
 
     try {
@@ -98,14 +100,20 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   InputImage? _buildInputImage(CameraImage image) {
     final camera = _camera;
     if (camera == null) return null;
+
     final rotation = Platform.isIOS
         ? InputImageRotationValue.fromRawValue(camera.description.sensorOrientation)
               ?? InputImageRotation.rotation0deg
         : (camera.description.sensorOrientation == 90
               ? InputImageRotation.rotation90deg
               : InputImageRotation.rotation270deg);
-    final format = InputImageFormatValue.fromRawValue(image.format.raw);
-    if (format == null) return null;
+
+    // iOS front camera: bgra8888, single plane, ML Kit expects this
+    // Android front camera: nv21, single plane
+    final format = Platform.isIOS
+        ? InputImageFormat.bgra8888
+        : InputImageFormat.nv21;
+
     final plane = image.planes.first;
     return InputImage.fromBytes(
       bytes: plane.bytes,
@@ -312,9 +320,32 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         children: [
           if (preview != null && preview.value.isInitialized)
             Positioned.fill(
-              child: AspectRatio(
-                aspectRatio: preview.value.aspectRatio,
-                child: CameraPreview(preview),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Camera preview natural size is landscape-ish.
+                  // Force it to cover the full portrait screen.
+                  final previewRatio = preview.value.aspectRatio;
+                  final screenRatio  = constraints.maxWidth / constraints.maxHeight;
+                  double w, h;
+                  if (screenRatio < previewRatio) {
+                    h = constraints.maxHeight;
+                    w = h * previewRatio;
+                  } else {
+                    w = constraints.maxWidth;
+                    h = w / previewRatio;
+                  }
+                  return ClipRect(
+                    child: OverflowBox(
+                      maxWidth: w,
+                      maxHeight: h,
+                      child: SizedBox(
+                        width: w,
+                        height: h,
+                        child: CameraPreview(preview),
+                      ),
+                    ),
+                  );
+                },
               ),
             )
           else
