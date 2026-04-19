@@ -362,23 +362,14 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         children: [
           if (preview != null && preview.value.isInitialized)
             Positioned.fill(
-              child: ClipRect(
-                child: Builder(
-                  builder: (context) {
-                    final screenSize = MediaQuery.of(context).size;
-                    // CameraPreview self-applies aspect = 1/cameraAspect in portrait
-                    final previewAspect = 1 / preview.value.aspectRatio;
-                    final screenAspect  = screenSize.width / screenSize.height;
-                    // Scale up to cover the full screen
-                    final scale = previewAspect > screenAspect
-                        ? previewAspect / screenAspect
-                        : screenAspect / previewAspect;
-                    return Transform.scale(
-                      scale: scale,
-                      alignment: Alignment.center,
-                      child: Center(child: CameraPreview(preview)),
-                    );
-                  },
+              child: SizedBox.expand(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width:  preview.value.previewSize?.height ?? 1,
+                    height: preview.value.previewSize?.width  ?? 1,
+                    child: CameraPreview(preview),
+                  ),
                 ),
               ),
             )
