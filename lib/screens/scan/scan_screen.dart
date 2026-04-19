@@ -416,26 +416,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       body: Stack(
         children: [
           if (preview != null && preview.value.isInitialized)
-            Positioned.fill(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final mqSize = MediaQuery.of(context).size;
-                  // Standard Flutter camera fullscreen scale formula —
-                  // proven on every Flutter camera plugin version.
-                  var scale = mqSize.aspectRatio * preview.value.aspectRatio;
-                  if (scale < 1) scale = 1 / scale;
-                  return ClipRect(
-                    child: Transform.scale(
-                      scale: scale,
-                      alignment: Alignment.center,
-                      child: Center(
-                        child: CameraPreview(preview),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            )
+            Positioned.fill(child: CameraPreview(preview))
           else
             const Positioned.fill(child: ColoredBox(color: Colors.black)),
 
