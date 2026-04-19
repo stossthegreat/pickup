@@ -320,28 +320,25 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         children: [
           if (preview != null && preview.value.isInitialized)
             Positioned.fill(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // Camera preview natural size is landscape-ish.
-                  // Force it to cover the full portrait screen.
-                  final previewRatio = preview.value.aspectRatio;
-                  final screenRatio  = constraints.maxWidth / constraints.maxHeight;
-                  double w, h;
-                  if (screenRatio < previewRatio) {
-                    h = constraints.maxHeight;
-                    w = h * previewRatio;
-                  } else {
-                    w = constraints.maxWidth;
-                    h = w / previewRatio;
-                  }
+              child: Builder(
+                builder: (context) {
+                  final size = MediaQuery.of(context).size;
+                  // preview.value.aspectRatio is the native sensor ratio
+                  // (always > 1). In portrait we need to invert it.
+                  final previewAspect = 1 / preview.value.aspectRatio;
+                  final screenAspect  = size.width / size.height;
+                  // Scale the preview to cover the whole screen
+                  final scale = screenAspect > previewAspect
+                      ? screenAspect / previewAspect
+                      : previewAspect / screenAspect;
                   return ClipRect(
-                    child: OverflowBox(
-                      maxWidth: w,
-                      maxHeight: h,
-                      child: SizedBox(
-                        width: w,
-                        height: h,
-                        child: CameraPreview(preview),
+                    child: Transform.scale(
+                      scale: scale,
+                      child: Center(
+                        child: AspectRatio(
+                          aspectRatio: previewAspect,
+                          child: CameraPreview(preview),
+                        ),
                       ),
                     ),
                   );
