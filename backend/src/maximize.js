@@ -88,12 +88,24 @@ function buildPrompt({ anchors, improve, preserve }) {
     ? `\nMEASURED IDENTITY ANCHORS — do not alter:\n${anchors.map(g => `- ${g}`).join('\n')}\n`
     : '';
 
-  return `Produce the best-day version of the SAME person in this photo. Imagine this person: well-rested, well-lit, clean skin, healthy colour, tidy grooming. That is what you render. Same face, same age, same identity — visibly at their peak.
+  return `Produce the BEST-looking version of the SAME person in this photo. Not a filter. Not a different person. The same exact human — but visibly BETTER than the source image. Significantly better. If the output doesn't look distinctly more attractive than the input, the render has failed.
 
-This is NOT a filter. NOT a beautification. NOT a transformation. It is a believable high-quality portrait of the exact same person after 8 hours of sleep, good skincare, a fresh haircut, great lighting, and a good mood.
+Imagine this person: walked out of a top salon, two weeks of great sleep, a clean skincare routine on week six, shot by an editorial portrait photographer in golden-hour window light. That is your target output. Same face — but the obvious visual improvement a viewer would notice immediately.
+
+This is NOT cosmetic surgery. NOT altered bone structure. NOT a filter look. It is the person at the absolute peak of what is achievable through grooming, skincare, lighting, hair, and health — applied maximally.
 ${geoBlock}
-APPLY ALL OF THESE LIFT the presentation without touching identity:
+APPLY ALL OF THESE LIFTS — combine them, don't pick one:
 ${improveList.map(i => `- ${i}`).join('\n')}
+
+Additional maximization — apply these even if not listed above:
+- The hairstyle that best suits their measured head shape and face length (if long face: compression cut with height; if broad: taller top, tighter sides; if oval: mid-fade with texture). Cleanly styled and shot.
+- Skin distinctly clearer and more even than the source — no blemishes, uniform tone, healthy glow. Keep natural pores.
+- Bright, clearly rested eyes. No dark circles, no puffiness.
+- Well-defined, neatly groomed brows matching their face structure.
+- If bearded in source: beard perfectly trimmed and shaped to their jaw geometry. If clean-shaven in source: stay clean-shaven.
+- Flattering warm daylight catching the cheekbones.
+- Slight subtle leanness if appropriate — the face 5–8% tighter, never gaunt.
+- Overall: obvious, visible upgrade the user will post on social media.
 
 IDENTITY — preserve at pixel level:
 ${preserveList.map(p => `- ${p}`).join('\n')}

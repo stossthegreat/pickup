@@ -40,6 +40,11 @@ class GeometryOverlayPainter extends CustomPainter {
   final int countdown;
   final double animT; // seconds since scan screen opened
 
+  // Face-ID style guide state — drives oval color + status text + hold stroke
+  final String statusText;
+  final String statusColor; // 'idle' | 'adjusting' | 'locked'
+  final double holdProgress; // 0..1
+
   const GeometryOverlayPainter({
     required this.mesh,
     required this.phase,
@@ -47,6 +52,9 @@ class GeometryOverlayPainter extends CustomPainter {
     required this.animT,
     this.lockProgress = 0,
     this.countdown = 0,
+    this.statusText = '',
+    this.statusColor = 'idle',
+    this.holdProgress = 0,
   });
 
   // ── Palette ───────────────────────────────────────────────────────────────
@@ -65,11 +73,21 @@ class GeometryOverlayPainter extends CustomPainter {
     _drawAmbientParticles(canvas, size);
     _drawScannerGrid(canvas, size);
 
+    // ── Face-ID oval guide — drawn during positioning phases ────────────
+    // This is the primary instructional element. Everything else layers on.
+    final showOvalGuide = phase == ScanPhase.searching
+        || phase == ScanPhase.scanning
+        || phase == ScanPhase.rotateLeft
+        || phase == ScanPhase.rotateRight;
+    if (showOvalGuide) {
+      _drawFaceOvalGuide(canvas, size);
+      _drawStatusCoachText(canvas, size);
+    }
+
     // ── Phase-specific stack ────────────────────────────────────────────
     switch (phase) {
       case ScanPhase.searching:
         _drawSearchingReticle(canvas, size);
-        _drawTopTicker(canvas, size, '◦ SEARCHING · ALIGN FACE · WAIT FOR LOCK');
         break;
 
       case ScanPhase.scanning:
@@ -79,8 +97,6 @@ class GeometryOverlayPainter extends CustomPainter {
           _drawScanSweep(canvas, size);
           _drawFaceLockBrackets(canvas, size, intensity: 0.6);
         }
-        _drawTopTicker(canvas, size,
-          '▸ MAPPING ${_visibleCount().toString().padLeft(3, '0')} / 468 POINTS ON YOUR FACE');
         _drawBottomMeasurementStream(canvas, size);
         break;
 
@@ -143,6 +159,143 @@ class GeometryOverlayPainter extends CustomPainter {
         _drawTopTicker(canvas, size, '◈ COMPOSITING  ·  RENDERING MAXIMIZED TWIN');
         break;
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Face-ID oval guide + coaching text (Apple / Jumio / Yoti pattern)
+  //  - 72% screen-width portrait oval, centered at 45% screen height
+  //  - Stroke color tracks status: idle (grey) → adjusting (amber) →
+  //    locked (green)
+  //  - Hold-progress animates a bright stroke around the perimeter
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawFaceOvalGuide(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height * 0.45;
+    final ovalW = size.width * 0.72;
+    final ovalH = size.width * 0.96;  // portrait ratio ~1:1.33
+    final rect = Rect.fromCenter(center: Offset(cx, cy), width: ovalW, height: ovalH);
+
+    // Color by status — matches research guide (idle/adjusting/locked)
+    const idleColor      = Color(0xFF8A8F98);
+    const adjustingColor = Color(0xFFFFC857);
+    const lockedColor    = Color(0xFF2ECC71);
+    final Color stateColor = statusColor == 'locked' ? lockedColor
+                           : statusColor == 'adjusting' ? adjustingColor
+                           : idleColor;
+
+    // Scrim outside the oval — dims the rest of the frame so attention lands
+    // on the face zone. Classic ID-capture move.
+    final scrim = Path()
+      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..addOval(rect)
+      ..fillType = PathFillType.evenOdd;
+    canvas.drawPath(scrim, Paint()
+      ..color = Colors.black.withValues(alpha: 0.35));
+
+    // Base idle stroke
+    canvas.drawOval(rect, Paint()
+      ..color = stateColor.withValues(alpha: 0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8);
+
+    // Hold-progress stroke — sweeps around the oval as user holds still.
+    // Starts at the top (12 o'clock) and goes clockwise.
+    if (holdProgress > 0.01 && statusColor == 'locked') {
+      final progressPaint = Paint()
+        ..color = lockedColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.6
+        ..strokeCap = StrokeCap.round;
+      final glowPaint = Paint()
+        ..color = lockedColor.withValues(alpha: 0.8)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 9
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+
+      const start = -math.pi / 2;
+      final sweep = 2 * math.pi * holdProgress;
+      canvas.drawArc(rect, start, sweep, false, glowPaint);
+      canvas.drawArc(rect, start, sweep, false, progressPaint);
+    }
+
+    // Small 12-tick marks around the oval for biometric feel
+    final tickPaint = Paint()
+      ..color = stateColor.withValues(alpha: 0.45)
+      ..strokeWidth = 1.2;
+    final rx = ovalW / 2;
+    final ry = ovalH / 2;
+    for (var i = 0; i < 24; i++) {
+      final a = (i / 24) * 2 * math.pi - math.pi / 2;
+      final inX = cx + math.cos(a) * (rx - 5);
+      final inY = cy + math.sin(a) * (ry - 5);
+      final outX = cx + math.cos(a) * (rx - 1);
+      final outY = cy + math.sin(a) * (ry - 1);
+      canvas.drawLine(Offset(inX, inY), Offset(outX, outY), tickPaint);
+    }
+
+    // Subtle scale pulse when locked to communicate "active"
+    if (statusColor == 'locked') {
+      final pulse = (math.sin(animT * 4) * 0.006 + 1.0);
+      final pulseRect = Rect.fromCenter(
+        center: Offset(cx, cy),
+        width: ovalW * pulse, height: ovalH * pulse);
+      canvas.drawOval(pulseRect, Paint()
+        ..color = lockedColor.withValues(alpha: 0.25)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
+    }
+  }
+
+  void _drawStatusCoachText(Canvas canvas, Size size) {
+    if (statusText.isEmpty) return;
+
+    const idleColor      = Color(0xFF8A8F98);
+    const adjustingColor = Color(0xFFFFC857);
+    const lockedColor    = Color(0xFF2ECC71);
+    final Color c = statusColor == 'locked' ? lockedColor
+                  : statusColor == 'adjusting' ? adjustingColor
+                  : idleColor;
+
+    final y = size.height * 0.14;
+    final tp = TextPainter(
+      text: TextSpan(
+        text: statusText,
+        style: TextStyle(
+          color: c,
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.2,
+          fontFamilyFallback: const ['monospace'],
+          shadows: [
+            Shadow(color: c.withValues(alpha: 0.55), blurRadius: 10),
+          ],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    )..layout(minWidth: 0, maxWidth: size.width - 40);
+
+    // Dark pill under text for legibility
+    final rect = Rect.fromLTWH(
+      (size.width - tp.width) / 2 - 16,
+      y - 9,
+      tp.width + 32,
+      tp.height + 18,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(100)),
+      Paint()..color = Colors.black.withValues(alpha: 0.6),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(100)),
+      Paint()
+        ..color = c.withValues(alpha: 0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8,
+    );
+    tp.paint(canvas, Offset((size.width - tp.width) / 2, y));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1769,12 +1922,6 @@ class GeometryOverlayPainter extends CustomPainter {
   // ═══════════════════════════════════════════════════════════════════════════
   //  Utilities
   // ═══════════════════════════════════════════════════════════════════════════
-  int _visibleCount() {
-    if (mesh == null) return 0;
-    final total = mesh!.points.length;
-    final reveal = (progress / 0.6).clamp(0.0, 1.0);
-    return (total * reveal).floor();
-  }
 
   /// Deterministic pseudo-random 0..1 from a seed. Used for ambient particles
   /// + any place we want stable "randomness" across frames.
@@ -1785,12 +1932,15 @@ class GeometryOverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(GeometryOverlayPainter old) =>
-      old.mesh         != mesh       ||
-      old.phase        != phase      ||
-      old.progress     != progress   ||
-      old.countdown    != countdown  ||
-      old.animT        != animT      ||
-      old.lockProgress != lockProgress;
+      old.mesh         != mesh         ||
+      old.phase        != phase        ||
+      old.progress     != progress     ||
+      old.countdown    != countdown    ||
+      old.animT        != animT        ||
+      old.lockProgress != lockProgress ||
+      old.statusText   != statusText   ||
+      old.statusColor  != statusColor  ||
+      old.holdProgress != holdProgress;
 }
 
 // ── Static MediaPipe face mesh edge subset (~80 edges covering face oval,

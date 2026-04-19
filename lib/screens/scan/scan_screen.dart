@@ -45,10 +45,22 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   Timer? _countdownTimer;
 
   int _faceFrames = 0;
-  // First angle needs a full lock (2s-ish). Side angles are faster (1s-ish)
-  // because we already have geometry — it's more about the capture beat.
-  static const int _requiredFrames      = 10;
-  static const int _sideRequiredFrames  = 5;
+  // Stable-in-position frames required before advancing. 30fps typical →
+  // 90 frames ≈ 3s for front lock, 54 frames ≈ 1.8s for side lock.
+  static const int _requiredFrames      = 30;
+  static const int _sideRequiredFrames  = 18;
+
+  // ── Face-ID style signals — computed every frame ─────────────────────────
+  // Face lock is the Apple/Jumio/Yoti pattern: oval guide + distance check
+  // + stability hold. These fields feed the painter and gate progression.
+  double _bboxArea   = 0;   // face-box area as fraction of screen
+  double _offsetX    = 0;   // face-center offset from screen-center (−1..1)
+  double _offsetY    = 0;   // same, vertical
+  double _yawDeg     = 0;   // head yaw from ML Kit euler angle Y
+  bool   _faceInPosition = false; // green-light signal per current phase
+  String _statusText = 'POSITION YOUR FACE IN THE CIRCLE';
+  String _statusColor = 'idle'; // idle | adjusting | locked
+  double _holdProgress = 0.0; // 0..1, fills the oval stroke when holding
 
   bool _processing = false;
 
@@ -273,6 +285,101 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
 
       final face = faces.first;
 
+      // ── Face-ID style signals ───────────────────────────────────────────
+      // Bbox area (fraction of image), center offset, yaw. Feed the oval
+      // guide + gate progression on these rather than a frame counter alone.
+      {
+        final bb = face.boundingBox;
+        final imgA = imgW * imgH;
+        _bboxArea = (bb.width * bb.height) / (imgA <= 0 ? 1 : imgA);
+        final cx = (bb.left + bb.right) / 2;
+        final cy = (bb.top + bb.bottom) / 2;
+        _offsetX = ((cx - imgW / 2) / imgW) * 2;  // roughly -1..1
+        _offsetY = ((cy - imgH / 2) / imgH) * 2;
+        _yawDeg  = face.headEulerAngleY ?? 0.0;
+      }
+
+      // Position gating depends on current phase.
+      final bool frontalLockWanted =
+          _angleIdx == 0 &&
+          (_phase == ScanPhase.searching || _phase == ScanPhase.scanning);
+      final bool leftProfileWanted =
+          _angleIdx == 1 &&
+          (_phase == ScanPhase.searching || _phase == ScanPhase.scanning);
+      final bool rightProfileWanted =
+          _angleIdx == 2 &&
+          (_phase == ScanPhase.searching || _phase == ScanPhase.scanning);
+
+      bool inPosition = false;
+      String nextStatus = _statusText;
+      String nextColor = _statusColor;
+
+      if (frontalLockWanted) {
+        // Front — need centered + correct distance + frontal yaw
+        if (_bboxArea < 0.10) {
+          nextStatus = 'MOVE CLOSER';
+          nextColor = 'adjusting';
+        } else if (_bboxArea > 0.42) {
+          nextStatus = 'MOVE BACK';
+          nextColor = 'adjusting';
+        } else if (_offsetX.abs() > 0.16 || _offsetY.abs() > 0.20) {
+          nextStatus = 'CENTER YOUR FACE';
+          nextColor = 'adjusting';
+        } else if (_yawDeg.abs() > 12) {
+          nextStatus = 'LOOK STRAIGHT AT THE LENS';
+          nextColor = 'adjusting';
+        } else {
+          inPosition = true;
+          nextStatus = 'HOLD STILL';
+          nextColor = 'locked';
+        }
+      } else if (leftProfileWanted) {
+        // Flutter-camera front-cam preview is mirrored. User turning LEFT
+        // produces POSITIVE yaw from ML Kit (relative to mirrored image).
+        if (_yawDeg < 18) {
+          nextStatus = 'TURN FURTHER LEFT';
+          nextColor = 'adjusting';
+        } else if (_yawDeg > 45) {
+          nextStatus = 'TURN BACK A LITTLE';
+          nextColor = 'adjusting';
+        } else {
+          inPosition = true;
+          nextStatus = 'HOLD STILL · LEFT';
+          nextColor = 'locked';
+        }
+      } else if (rightProfileWanted) {
+        if (_yawDeg > -18) {
+          nextStatus = 'TURN FURTHER RIGHT';
+          nextColor = 'adjusting';
+        } else if (_yawDeg < -45) {
+          nextStatus = 'TURN BACK A LITTLE';
+          nextColor = 'adjusting';
+        } else {
+          inPosition = true;
+          nextStatus = 'HOLD STILL · RIGHT';
+          nextColor = 'locked';
+        }
+      } else if (_phase == ScanPhase.measuring) {
+        // During the dramatic bone reveal, just show the scan label.
+        inPosition = true;
+        nextStatus = 'ANALYSING · ${((_progress * 100).clamp(0, 100)).toStringAsFixed(0)}%';
+        nextColor = 'locked';
+      } else if (_phase == ScanPhase.rotateLeft) {
+        inPosition = false;
+        nextStatus = 'TURN LEFT';
+        nextColor = 'adjusting';
+      } else if (_phase == ScanPhase.rotateRight) {
+        inPosition = false;
+        nextStatus = 'TURN RIGHT';
+        nextColor = 'adjusting';
+      }
+
+      _faceInPosition = inPosition;
+      if (nextStatus != _statusText || nextColor != _statusColor) {
+        _statusText  = nextStatus;
+        _statusColor = nextColor;
+      }
+
       // LAYERED FALLBACK — try in order, take the first that yields enough
       // points. This guarantees we advance past SEARCHING the moment a face
       // is on screen, regardless of which ML Kit surface fires on the device.
@@ -339,15 +446,25 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         _geometry = geom;
       });
 
-      if (_phase == ScanPhase.searching && _faceFrames >= 2) {
+      // Face-ID-style gating: face must be IN position for the counter to
+      // advance. Out of position = decrement (hysteresis, prevents flicker).
+      // This is what turns the scan from a timer-gimmick into a real lock.
+      if (_faceInPosition) {
+        _faceFrames = _faceFrames + 1;
+      } else {
+        _faceFrames = (_faceFrames - 3).clamp(0, 9999).toInt();
+      }
+
+      // Update hold progress for the oval stroke
+      final threshold = _angleIdx == 0 ? _requiredFrames : _sideRequiredFrames;
+      _holdProgress = (_faceFrames / threshold).clamp(0.0, 1.0);
+
+      if (_phase == ScanPhase.searching && _faceFrames >= 4) {
         _startScanning();
       }
 
       if (_phase == ScanPhase.scanning) {
-        // Side angles need fewer frames to feel responsive
-        final threshold = _angleIdx == 0 ? _requiredFrames : _sideRequiredFrames;
-        final p = (_faceFrames / threshold).clamp(0.0, 1.0);
-        setState(() => _progress = p);
+        setState(() => _progress = _holdProgress);
         if (_faceFrames >= threshold) {
           _startMeasuring();
         }
@@ -503,17 +620,20 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     });
   }
 
+  // Phase labels are DEliberately generic now — the active user instruction
+  // (MOVE CLOSER / HOLD STILL / TURN LEFT) is shown by the oval's coaching
+  // text above. Bottom labels are just phase indicators.
   String get _phaseTitle {
     switch (_phase) {
       case ScanPhase.searching:
-        return _angleIdx == 0 ? 'LINE UP YOUR FACE'
-             : _angleIdx == 1 ? 'HOLD · LEFT PROFILE'
-             :                  'HOLD · RIGHT PROFILE';
-      case ScanPhase.scanning:      return _scanCopy[_copyIdx];
+        return _angleIdx == 0 ? 'STEP 01 · FRONT'
+             : _angleIdx == 1 ? 'STEP 02 · LEFT'
+             :                  'STEP 03 · RIGHT';
+      case ScanPhase.scanning:      return 'LOCK ACQUIRING';
       case ScanPhase.measuring:     return 'READING YOUR BONES';
-      case ScanPhase.rotateLeft:    return 'TURN LEFT · 30°';
-      case ScanPhase.rotateRight:   return 'TURN RIGHT · 30°';
-      case ScanPhase.capturing:     return 'HOLD STILL';
+      case ScanPhase.rotateLeft:    return 'STEP 02 · LEFT';
+      case ScanPhase.rotateRight:   return 'STEP 03 · RIGHT';
+      case ScanPhase.capturing:     return 'CAPTURING';
       case ScanPhase.analysing:     return 'WORKING ON IT';
     }
   }
@@ -521,13 +641,11 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   String get _phaseSub {
     switch (_phase) {
       case ScanPhase.searching:
-        return _angleIdx == 0
-          ? 'Look into the lens'
-          : 'Slow movement — keep the face in frame';
-      case ScanPhase.scanning:      return 'Mapping 468 points on your face';
+      case ScanPhase.scanning:
+      case ScanPhase.rotateLeft:
+      case ScanPhase.rotateRight:
+        return 'Follow the coaching above';
       case ScanPhase.measuring:     return 'Jawline · eyes · thirds · cheekbones';
-      case ScanPhase.rotateLeft:    return 'Show us the left side of your jaw';
-      case ScanPhase.rotateRight:   return 'One more — right side';
       case ScanPhase.capturing:     return 'Capturing your reference frame';
       case ScanPhase.analysing:     return 'Personal analysis incoming';
     }
@@ -638,11 +756,14 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
               builder: (_, constraints) => CustomPaint(
                 size: Size(constraints.maxWidth, constraints.maxHeight),
                 painter: GeometryOverlayPainter(
-                  mesh:      _mesh,
-                  phase:     _phase,
-                  progress:  _progress,
-                  countdown: _countdown,
-                  animT:     _animT,
+                  mesh:         _mesh,
+                  phase:        _phase,
+                  progress:     _progress,
+                  countdown:    _countdown,
+                  animT:        _animT,
+                  statusText:   _statusText,
+                  statusColor:  _statusColor,
+                  holdProgress: _holdProgress,
                 ),
               ),
             ),
