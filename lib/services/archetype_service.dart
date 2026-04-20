@@ -37,120 +37,93 @@ class ArchetypeMatch {
 }
 
 class ArchetypeService {
-  /// Curated archetype library. Kept small and distinct so the top-1 feels
-  /// decisive. Extend over time; never let it feel like a dropdown.
+  /// Universal archetype library. Named by FEATURE PROFILE, not ethnicity
+  /// or culture. Each label is short, identity-forming, globally readable.
+  /// Users tell friends "I'm a MONARCH" — that's the virality lever.
   static const library = <Archetype>[
     Archetype(
-      name: 'Nordic Apex',
-      tagline: 'Glacial, angular, sovereign',
+      name: 'MONARCH',
+      tagline: 'Elite across every axis',
       story:
-        'Sharp zygomatic shelf, forward-set eyes, long ramus. Reads cold, '
-        'camera-ready, executive. Think Skarsgård, Alexander.',
-      canthalTilt: 4.0,
-      symmetryScore: 88,
-      thirdsBalance: 0.90,
-      fwhr: 1.95,
-      eyeSpacingRatio: 0.47,
-      jawAngle: 118,
-      chinProjection: 3.0,
-    ),
-    Archetype(
-      name: 'Mediterranean Hunter',
-      tagline: 'Warm, dense, carved',
-      story:
-        'Deep-set hunter eyes, compact midface, strong mandible. The '
-        'classical leading-man template — Cavill, Dornan, di Caprio.',
+        'Top-tier across the full measurement set. Symmetric, defined, '
+        'proportional. The apex read — rare, camera-ready.',
       canthalTilt: 3.5,
-      symmetryScore: 85,
-      thirdsBalance: 0.88,
-      fwhr: 1.88,
-      eyeSpacingRatio: 0.45,
-      jawAngle: 120,
+      symmetryScore: 92,
+      thirdsBalance: 0.95,
+      fwhr: 1.92,
+      eyeSpacingRatio: 0.46,
+      jawAngle: 118,
       chinProjection: 3.5,
     ),
     Archetype(
-      name: 'Slavic Monolith',
-      tagline: 'Broad, stoic, tectonic',
+      name: 'HUNTER',
+      tagline: 'Sharp eyes, sharp jaw',
       story:
-        'Wide malar bone, high FWHR, square mandible. Reads powerful, '
-        'unbothered. Adonis-coded — think Plemyannikov, Aksenov.',
-      canthalTilt: 2.0,
-      symmetryScore: 82,
-      thirdsBalance: 0.85,
-      fwhr: 2.10,
-      eyeSpacingRatio: 0.48,
+        'Positive canthal tilt and a defined mandible. Reads intense, '
+        'unbothered, magnetic. Your eyes do the work before you speak.',
+      canthalTilt: 4.2,
+      symmetryScore: 86,
+      thirdsBalance: 0.88,
+      fwhr: 1.88,
+      eyeSpacingRatio: 0.45,
       jawAngle: 116,
-      chinProjection: 2.5,
-    ),
-    Archetype(
-      name: 'East-Asian Precision',
-      tagline: 'Clean, linear, surgical',
-      story:
-        'Minimal vertical excess, precise thirds, refined jaw transition. '
-        'The idol blueprint — Jung, Wang, Lee.',
-      canthalTilt: 4.5,
-      symmetryScore: 90,
-      thirdsBalance: 0.93,
-      fwhr: 1.75,
-      eyeSpacingRatio: 0.46,
-      jawAngle: 122,
-      chinProjection: 2.0,
-    ),
-    Archetype(
-      name: 'Classical Greek',
-      tagline: 'Divine proportion, textbook',
-      story:
-        'Golden-ratio thirds, balanced FWHR, mild positive tilt. The '
-        'sculptor\'s template. Reads timeless, not trendy.',
-      canthalTilt: 3.0,
-      symmetryScore: 92,
-      thirdsBalance: 0.95,
-      fwhr: 1.85,
-      eyeSpacingRatio: 0.46,
-      jawAngle: 120,
       chinProjection: 3.0,
     ),
     Archetype(
-      name: 'Executive',
-      tagline: 'Mature, dominant, commanding',
+      name: 'SOVEREIGN',
+      tagline: 'Classical proportion',
       story:
-        'Forward chin, mature fat-pad structure, wider bizygomatic. Reads '
-        'authority. Older-Clooney / Hamm territory.',
-      canthalTilt: 1.5,
-      symmetryScore: 80,
-      thirdsBalance: 0.82,
+        'Near-golden thirds, balanced FWHR, strong symmetry. Reads timeless '
+        'over trendy. The sculptor\'s template.',
+      canthalTilt: 2.8,
+      symmetryScore: 90,
+      thirdsBalance: 0.96,
+      fwhr: 1.85,
+      eyeSpacingRatio: 0.46,
+      jawAngle: 121,
+      chinProjection: 2.8,
+    ),
+    Archetype(
+      name: 'EXECUTIVE',
+      tagline: 'Authority, presence, dominance',
+      story:
+        'Forward chin, wide FWHR, mature structural weight. Reads '
+        'authoritative — the face that runs the room.',
+      canthalTilt: 1.8,
+      symmetryScore: 82,
+      thirdsBalance: 0.85,
       fwhr: 2.05,
       eyeSpacingRatio: 0.47,
       jawAngle: 119,
       chinProjection: 4.0,
     ),
     Archetype(
-      name: 'Ethereal',
-      tagline: 'Long, soft, androgynous',
+      name: 'SCULPTED',
+      tagline: 'Angular, carved, high-contrast',
       story:
-        'Elongated mid-face, softer jaw ramus, slightly wider eye spacing. '
-        'Reads model, not movie-star. Elfin.',
-      canthalTilt: 3.5,
-      symmetryScore: 86,
-      thirdsBalance: 0.78,
-      fwhr: 1.65,
-      eyeSpacingRatio: 0.50,
-      jawAngle: 128,
-      chinProjection: 1.5,
-    ),
-    Archetype(
-      name: 'Street Alpha',
-      tagline: 'Wide, aggressive, magnetic',
-      story:
-        'High FWHR, pronounced gonial angle, forward brow-ridge. Reads '
-        'physical, disarming. Athlete/boxer archetype.',
-      canthalTilt: 2.5,
-      symmetryScore: 81,
-      thirdsBalance: 0.84,
-      fwhr: 2.15,
+        'Pronounced zygomatic and jaw angle, strong brow ridge. Reads '
+        'photographic — hard shadows and defined lines.',
+      canthalTilt: 3.2,
+      symmetryScore: 84,
+      thirdsBalance: 0.86,
+      fwhr: 2.10,
       eyeSpacingRatio: 0.45,
       jawAngle: 114,
-      chinProjection: 3.5,
+      chinProjection: 3.6,
+    ),
+    Archetype(
+      name: 'PROTOTYPE',
+      tagline: 'Clean foundation · room to build',
+      story:
+        'Balanced geometry with upside on every axis. Nothing is breaking; '
+        'nothing is elite yet. High-leverage starting point.',
+      canthalTilt: 2.0,
+      symmetryScore: 78,
+      thirdsBalance: 0.82,
+      fwhr: 1.80,
+      eyeSpacingRatio: 0.46,
+      jawAngle: 124,
+      chinProjection: 2.5,
     ),
   ];
 

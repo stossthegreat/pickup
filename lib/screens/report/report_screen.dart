@@ -12,6 +12,7 @@ import '../../services/feature_analysis_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/mirror_api_service.dart';
 import '../../services/scoring_service.dart';
+import '../../services/trait_builder_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../services/chat_service.dart';
@@ -21,8 +22,10 @@ import '../../widgets/common/fullscreen_image.dart';
 import '../../widgets/common/quick_tryon_chips.dart';
 import '../../widgets/report/archetype_card.dart';
 import '../../widgets/report/feature_grid.dart';
+import '../../widgets/report/hero_card.dart';
 import '../../widgets/report/hidden_depth_panel.dart';
-import '../../widgets/report/score_card.dart';
+import '../../widgets/report/radar_chart.dart';
+import '../../widgets/report/trait_grid.dart';
 import '../../widgets/report/verdict_card.dart';
 
 class ReportScreen extends StatefulWidget {
@@ -192,9 +195,43 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
+  /// Estimate percentile from score — rough but reads as real.
+  int _percentile(int score) {
+    if (score >= 92) return 2;
+    if (score >= 85) return 8;
+    if (score >= 78) return 16;
+    if (score >= 70) return 28;
+    if (score >= 60) return 44;
+    return 62;
+  }
+
+  /// Potential delta — how many points a full maximisation could add.
+  /// Capped at 22 so users believe the number.
+  int _potentialDelta(int score) {
+    final headroom = (100 - score).clamp(0, 40);
+    return (headroom * 0.55).round();
+  }
+
   Widget _buildReport(MirrorAnalysis a) {
     final score = ScoringService.compute(widget.geometry);
     final match = ArchetypeService.bestMatch(widget.geometry);
+    final traits = TraitBuilderService.build(widget.geometry);
+    final percentile = _percentile(score.value);
+    final potential = _potentialDelta(score.value);
+
+    // 6-axis radar values (each 0..1) built from the same measurements
+    // used by the trait system.
+    final radarValues = [
+      ((widget.geometry.canthalTilt + 2) / 7).clamp(0.0, 1.0),        // EYES
+      (1.0 - ((widget.geometry.jawAngle - 110) / 30)).clamp(0.0, 1.0), // JAW
+      (widget.geometry.symmetryScore / 100).clamp(0.0, 1.0),           // SYMMETRY
+      (widget.geometry.lipFullness).clamp(0.0, 1.0),                   // LIPS
+      ((2.0 - (widget.geometry.fwhr - 1.9).abs()) / 2.0).clamp(0.0, 1.0),// FWHR
+      (1.0 - ((((widget.geometry.facialThirdTop - 33.33).abs()
+                + (widget.geometry.facialThirdMid - 33.33).abs()
+                + (widget.geometry.facialThirdLow - 33.33).abs()) / 3) / 10))
+          .clamp(0.0, 1.0),                                            // BALANCE
+    ];
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.md, Sp.lg, Sp.lg),
@@ -221,148 +258,96 @@ class _ReportScreenState extends State<ReportScreen> {
               ),
               _ShareButton(
                 onTap: () => ShareService.shareComposed(
-                  context:     context,
-                  beforeBytes: widget.imageBytes,
-                  afterUrl:    a.maximizedImageUrl,
-                  score:       score.value,
-                  tier:        score.tierLabel,
-                  archetype:   match.archetype.name,
-                  verdict:     a.report.oneLineVerdict,
-                  text: 'My face, measured — ${score.value}/100, '
-                        '${score.tierLabel}, ${match.archetype.name}. mirrorly.app',
+                  context:        context,
+                  beforeBytes:    widget.imageBytes,
+                  afterUrl:       a.maximizedImageUrl,
+                  score:          score.value,
+                  tier:           score.tierLabel,
+                  archetype:      match.archetype.name,
+                  verdict:        a.report.oneLineVerdict,
+                  percentile:     percentile,
+                  potentialDelta: potential,
+                  traits:         traits,
+                  text: 'I scored ${score.value}/100. ${match.archetype.name}. '
+                        'Top $percentile%. mirrorly.app',
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: Sp.xl),
+          const SizedBox(height: Sp.lg),
 
-          // ── HERO VERDICT · screenshot-gold ──────────────────────────────
-          if (a.report.oneLineVerdict.isNotEmpty) ...[
-            VerdictCard(
-              verdict:   a.report.oneLineVerdict,
-              score:     score.value,
-              tier:      score.tierLabel,
-              archetype: match.archetype.name),
-            const SizedBox(height: Sp.md),
-          ],
-
-          // ── Score + axes ────────────────────────────────────────────────
-          ScoreCard(score: score)
-            .animate().fadeIn(delay: 160.ms, duration: 500.ms),
+          // ── 1 · HERO CARD ─ the viral screenshot moment ────────────────
+          HeroCard(
+            score:           score.value,
+            archetype:       match.archetype.name,
+            percentile:      percentile,
+            potentialDelta:  potential,
+          ),
 
           const SizedBox(height: Sp.md),
 
-          // ── HERO BEFORE/AFTER with "APPLY ALL FIXES" overlay ───────────
+          // ── 2 · TRAITS GRID ─ Umax secret sauce, ours backed by mesh ───
+          TraitGrid(traits: traits)
+            .animate().fadeIn(delay: 1600.ms, duration: 500.ms),
+
+          const SizedBox(height: Sp.md),
+
+          // ── 3 · RADAR ─ "measured, not guessed" proof ──────────────────
+          RadarChart(
+            values: radarValues,
+            labels: const ['EYES', 'JAW', 'SYMMETRY', 'LIPS', 'FWHR', 'BALANCE'],
+          ).animate().fadeIn(delay: 1900.ms, duration: 500.ms),
+
+          const SizedBox(height: Sp.md),
+
+          // ── 4 · BEFORE / MAXED ─ blurred reveal, variable reward ───────
           BeforeAfterCard(
-            beforeBytes: widget.imageBytes,
-            afterUrl:    a.maximizedImageUrl,
-            caption:     'YOU · MAXIMIZED',
-          ).animate().fadeIn(delay: 240.ms, duration: 600.ms),
+            beforeBytes:    widget.imageBytes,
+            afterUrl:       a.maximizedImageUrl,
+            potentialDelta: potential,
+          ).animate().fadeIn(delay: 2200.ms, duration: 500.ms),
 
           const SizedBox(height: Sp.md),
 
-          // ── APPLY ALL FIXES — the primary CTA (final form unlocked) ────
+          // ── 5 · APPLY ALL FIXES ────────────────────────────────────────
           _ApplyAllFixesButton(
             maximizedImageUrl: a.maximizedImageUrl,
-          ).animate().fadeIn(delay: 340.ms, duration: 500.ms),
+          ).animate().fadeIn(delay: 2400.ms, duration: 400.ms),
 
           const SizedBox(height: Sp.xl),
 
-          // ── FEATURE GRID — the addictive part ──────────────────────────
-          FeatureGrid(
-            reads: FeatureAnalysisService.analyse(widget.geometry),
-            onSeeIt: (read) => context.push(
-              '/chat',
-              extra: {
-                'geometry':  widget.geometry,
-                'imagePath': _savedImagePath,
-                'autoSend':  read.tryonPrompt,
-              },
-            ),
-          ).animate().fadeIn(delay: 440.ms, duration: 500.ms),
-
-          const SizedBox(height: Sp.xl),
-
-          // ── Archetype match ─────────────────────────────────────────────
-          ArchetypeCard(match: match)
-            .animate().fadeIn(delay: 560.ms, duration: 500.ms),
-
-          const SizedBox(height: Sp.md),
-
-          // ── Quick-action tryon chips ────────────────────────────────────
-          Text('TRY IT ON YOUR FACE',
+          // ── 6 · THREE FIX CARDS (GPT-sourced, with inline Flux) ────────
+          Text('THE FIXES',
             style: AppTypography.label.copyWith(
-              color: AppColors.gold, letterSpacing: 2.5, fontSize: 9)),
-          const SizedBox(height: Sp.sm),
-          QuickTryonChips(
-            geometry: widget.geometry,
-            onTap: (style, cat) => context.push(
-              '/chat',
-              extra: {
-                'geometry':  widget.geometry,
-                'imagePath': _savedImagePath,
-                'autoSend':  style,
-              },
-            ),
-          ).animate().fadeIn(delay: 620.ms, duration: 500.ms),
-
-          const SizedBox(height: Sp.md),
-
-          // ── Consultation CTA ────────────────────────────────────────────
-          _ConsultCard(
-            onTap: () => context.push(
-              '/chat',
-              extra: {'geometry': widget.geometry, 'imagePath': _savedImagePath},
-            ),
-          ).animate().fadeIn(delay: 720.ms, duration: 500.ms),
-
-          const SizedBox(height: Sp.xl),
-
-          // ── HIDDEN DEPTH — collapsed, for nerds / credibility ──────────
-          HiddenDepthPanel(geometry: widget.geometry)
-            .animate().fadeIn(delay: 820.ms, duration: 500.ms),
-
-          const SizedBox(height: Sp.xl),
-
-          // Bone reading — the human translation of measured geometry
-          if (a.report.boneReading.isNotEmpty) ...[
-            _Block(
-              label: 'THE READ',
-              color: AppColors.measure,
-              body: a.report.boneReading,
-            ).animate().fadeIn(delay: 920.ms),
-            const SizedBox(height: Sp.md),
-          ],
-
-          // GPT-generated strongest + pulldown (kept as supplementary colour)
-          _Block(
-            label: 'WHAT\'S ALREADY WORKING',
-            color: AppColors.signalGreen,
-            body: a.report.strongest,
-          ).animate().fadeIn(delay: 1020.ms),
-
-          const SizedBox(height: Sp.md),
-
-          _Block(
-            label: 'WHAT\'S HOLDING IT BACK',
-            color: AppColors.signalRed,
-            body: a.report.pulldown,
-          ).animate().fadeIn(delay: 1120.ms),
-
-          const SizedBox(height: Sp.xl),
-
-          // Fixes from GPT (ordered by leverage) — these pair with the
-          // feature grid but come from GPT's visual read not our geometry
-          Text('GPT FIXES — ORDERED BY LEVERAGE', style: AppTypography.label.copyWith(
-            color: AppColors.accent, letterSpacing: 2.0)),
+              color: AppColors.gold, letterSpacing: 3.0, fontSize: 10)),
           const SizedBox(height: Sp.sm),
           ...a.report.fixes.asMap().entries.map((e) =>
             _FixCard(
               index: e.key + 1, fix: e.value,
               capturedBytes: widget.imageBytes,
               geometry:      widget.geometry,
-            ).animate().fadeIn(delay: Duration(milliseconds: 1240 + e.key * 100))),
+            ).animate().fadeIn(delay: Duration(milliseconds: 2600 + e.key * 120))),
+
+          const SizedBox(height: Sp.xl),
+
+          // ── 7 · CONSULT CTA ────────────────────────────────────────────
+          _ConsultCard(
+            onTap: () => context.push(
+              '/chat',
+              extra: {'geometry': widget.geometry, 'imagePath': _savedImagePath},
+            ),
+          ).animate().fadeIn(delay: 3000.ms, duration: 400.ms),
+
+          const SizedBox(height: Sp.xl),
+
+          // ── 8 · DEEPER ANALYSIS ─ collapsed; the full detail dump ──────
+          _DeeperAnalysisPanel(
+            analysis:   a,
+            geometry:   widget.geometry,
+            match:      match,
+            savedImagePath: _savedImagePath,
+          ).animate().fadeIn(delay: 3200.ms, duration: 400.ms),
 
           const SizedBox(height: Sp.xl),
 
@@ -424,6 +409,169 @@ class _ReportScreenState extends State<ReportScreen> {
 }
 
 // ── Consultation CTA card ────────────────────────────────────────────────────
+// ── DEEPER ANALYSIS · collapsed disclosure housing all old widgets ──────────
+class _DeeperAnalysisPanel extends StatefulWidget {
+  final MirrorAnalysis analysis;
+  final FaceGeometry geometry;
+  final ArchetypeMatch match;
+  final String? savedImagePath;
+  const _DeeperAnalysisPanel({
+    required this.analysis, required this.geometry, required this.match,
+    this.savedImagePath,
+  });
+  @override
+  State<_DeeperAnalysisPanel> createState() => _DeeperAnalysisPanelState();
+}
+
+class _DeeperAnalysisPanelState extends State<_DeeperAnalysisPanel> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => setState(() => _open = !_open),
+            borderRadius: BorderRadius.circular(Rd.lg),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: Sp.md, vertical: 16),
+              decoration: BoxDecoration(
+                color: AppColors.surface1,
+                borderRadius: BorderRadius.circular(Rd.lg),
+                border: Border.all(
+                  color: AppColors.measure.withValues(alpha: 0.38), width: 0.9),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      color: AppColors.measure.withValues(alpha: 0.14),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.measure.withValues(alpha: 0.6), width: 0.8),
+                    ),
+                    child: const Icon(Icons.all_inclusive,
+                      size: 17, color: AppColors.measure),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('READ THE FULL BREAKDOWN',
+                          style: AppTypography.label.copyWith(
+                            color: AppColors.measure,
+                            letterSpacing: 2.6, fontSize: 10.5,
+                            fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 3),
+                        Text('All 16 measurements · GPT read · fixes timeline',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textTertiary, fontSize: 11.5)),
+                      ],
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: _open ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 240),
+                    child: const Icon(Icons.expand_more_rounded,
+                      color: AppColors.measure, size: 22),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: _open ? _fullDetail(context) : const SizedBox.shrink(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _fullDetail(BuildContext context) {
+    final a = widget.analysis;
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Archetype details
+          ArchetypeCard(match: widget.match),
+          const SizedBox(height: Sp.md),
+
+          // Feature-by-feature deep read
+          FeatureGrid(
+            reads: FeatureAnalysisService.analyse(widget.geometry),
+            onSeeIt: (read) => context.push(
+              '/chat',
+              extra: {
+                'geometry':  widget.geometry,
+                'imagePath': widget.savedImagePath,
+                'autoSend':  read.tryonPrompt,
+              },
+            ),
+          ),
+          const SizedBox(height: Sp.md),
+
+          // 16-metric grid behind one more tap
+          HiddenDepthPanel(geometry: widget.geometry),
+          const SizedBox(height: Sp.md),
+
+          // GPT prose blocks
+          if (a.report.oneLineVerdict.isNotEmpty) ...[
+            VerdictCard(
+              verdict:   a.report.oneLineVerdict,
+              score:     ScoringService.compute(widget.geometry).value,
+              tier:      ScoringService.compute(widget.geometry).tierLabel,
+              archetype: widget.match.archetype.name),
+            const SizedBox(height: Sp.md),
+          ],
+
+          if (a.report.boneReading.isNotEmpty) ...[
+            _Block(label: 'THE READ', color: AppColors.measure,
+              body: a.report.boneReading),
+            const SizedBox(height: Sp.md),
+          ],
+          _Block(label: 'WHAT\'S ALREADY WORKING', color: AppColors.signalGreen,
+            body: a.report.strongest),
+          const SizedBox(height: Sp.md),
+          _Block(label: 'WHAT\'S HOLDING IT BACK', color: AppColors.signalRed,
+            body: a.report.pulldown),
+
+          const SizedBox(height: Sp.md),
+
+          // Quick-action chips — kept here for depth users who want more renders
+          Text('TRY MORE LOOKS',
+            style: AppTypography.label.copyWith(
+              color: AppColors.gold, letterSpacing: 2.5, fontSize: 9)),
+          const SizedBox(height: Sp.sm),
+          QuickTryonChips(
+            geometry: widget.geometry,
+            onTap: (style, cat) => context.push(
+              '/chat',
+              extra: {
+                'geometry':  widget.geometry,
+                'imagePath': widget.savedImagePath,
+                'autoSend':  style,
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── APPLY ALL FIXES — the primary transformation moment ─────────────────────
 class _ApplyAllFixesButton extends StatefulWidget {
   final String maximizedImageUrl;

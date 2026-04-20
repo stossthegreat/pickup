@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../services/trait_builder_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/common/share_card.dart';
 
@@ -45,6 +46,9 @@ class ShareService {
     required String tier,
     required String archetype,
     required String verdict,
+    required int percentile,
+    required int potentialDelta,
+    required List<Trait> traits,
     String? text,
   }) async {
     HapticFeedback.lightImpact();
@@ -63,12 +67,15 @@ class ShareService {
     try {
       if (!context.mounted) return;
       final card = ShareCard(
-        beforeBytes: beforeBytes,
-        afterUrl:    afterUrl,
-        score:       score,
-        tier:        tier,
-        archetype:   archetype,
-        verdict:     verdict,
+        beforeBytes:     beforeBytes,
+        afterUrl:        afterUrl,
+        score:           score,
+        tier:            tier,
+        archetype:       archetype,
+        verdict:         verdict,
+        percentile:      percentile,
+        potentialDelta:  potentialDelta,
+        traits:          traits,
       );
       final bytes = await _captureOffscreen(
         context:     context,

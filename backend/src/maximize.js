@@ -58,14 +58,16 @@ function buildAnchors(geometry) {
 function buildPrompt({ anchors, improve, preserve }) {
   // SAME person, but their BEST version. The improvement list is LOADED —
   // we want a visible uplift, not a pixel clone.
+  // If GPT provided specific improve items, use them verbatim (same specificity
+  // as /tryon). Otherwise default to a curated 5-item list.
+  // This is the consistency fix: the hero twin now gets identity-anchored
+  // specific prompts, not vague "clear skin" directives that Flux ignores.
   const improveList = improve.length > 0 ? improve : [
-    'clear, even skin with a healthy natural tone and vitality',
+    'clear, even skin with healthy natural tone — keep pores visible',
     'bright rested eyes, no dark circles, no puffiness',
-    'tidied eyebrows, cleanly groomed hairline, neat hair',
-    'subtle natural contouring from flattering soft daylight',
-    'fuller natural-looking skin volume (well-rested, well-hydrated look)',
-    'neatly trimmed facial hair if present — or clean smooth skin if not',
-    'slightly leaner, more defined facial contours (not gaunt — healthy lean)',
+    'tidied eyebrows, cleanly groomed hairline, neat hair matched to face shape',
+    'subtle flattering soft-daylight contouring',
+    'slightly leaner, more defined facial contours — healthy-lean, not gaunt',
   ];
 
   const preserveList = [

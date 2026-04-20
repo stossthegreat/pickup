@@ -368,46 +368,15 @@ class GeometryOverlayPainter extends CustomPainter {
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  LAYER 3  —  Searching reticle (no face yet)
+  //  NOTE: the oval face-guide (drawn elsewhere) is the primary visual.
+  //  This only adds a central crosshair + outer corner brackets. The
+  //  previously-drawn mid-size rotating segment ring has been removed.
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawSearchingReticle(Canvas canvas, Size size) {
     final cx = size.width / 2;
     final cy = size.height / 2;
 
-    // Rotating outer ring with broken segments
-    final rOuter = math.min(size.width, size.height) * 0.32;
-    final rotate = animT * 0.6;
-    final segPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 1.4;
-    for (var i = 0; i < 8; i++) {
-      final a0 = rotate + i * (math.pi / 4);
-      final seg = math.pi / 10;
-      final alpha = 0.25 + (math.sin(animT * 2 + i) + 1) / 2 * 0.45;
-      segPaint.color = (i.isEven ? _cGold : _cCyan).withValues(alpha: alpha);
-      canvas.drawArc(
-        Rect.fromCircle(center: Offset(cx, cy), radius: rOuter),
-        a0, seg, false, segPaint,
-      );
-    }
-
-    // Inner targeting square (45° rotated, pulsing)
-    final pulse = (math.sin(animT * 3) + 1) / 2;
-    final boxSize = 44.0 + pulse * 6;
-    canvas.save();
-    canvas.translate(cx, cy);
-    canvas.rotate(math.pi / 4);
-    final boxPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..color = _cCyan.withValues(alpha: 0.55 + pulse * 0.3);
-    canvas.drawRect(
-      Rect.fromCenter(center: Offset.zero, width: boxSize, height: boxSize),
-      boxPaint,
-    );
-    canvas.restore();
-
-    // Central crosshair
+    // Central crosshair (the "little one in the center" — kept)
     final hair = Paint()
       ..color = _cGold.withValues(alpha: 0.75)
       ..strokeWidth = 1;
@@ -415,10 +384,9 @@ class GeometryOverlayPainter extends CustomPainter {
     canvas.drawLine(Offset(cx + 3, cy), Offset(cx + 10, cy), hair);
     canvas.drawLine(Offset(cx, cy - 10), Offset(cx, cy - 3), hair);
     canvas.drawLine(Offset(cx, cy + 3), Offset(cx, cy + 10), hair);
-    canvas.drawCircle(Offset(cx, cy), 1.5,
-      Paint()..color = _cGold);
+    canvas.drawCircle(Offset(cx, cy), 1.5, Paint()..color = _cGold);
 
-    // Four outer corner brackets (wider search area)
+    // Outer corner brackets (the biggest container — kept)
     _drawCornerBrackets(canvas, size,
       rect: Rect.fromCenter(
         center: Offset(cx, cy),
