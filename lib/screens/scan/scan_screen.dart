@@ -72,21 +72,15 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   // a single input image anyway, and front gives the richest mesh).
   FaceGeometry? _primaryGeometry;
 
-  // Diagnostic counters — visible on-screen so bugs in the detect pipeline
-  // (empty meshes, rotation mismatches, unsupported devices) surface loud
-  // instead of manifesting as a silent black overlay.
+  // Diagnostic counters — kept (unused right now) so we can re-surface
+  // a dev-only HUD later without re-plumbing every increment.
+  // ignore_for_file: unused_field
   int _framesTotal = 0;
   int _facesHit    = 0;
   int _meshHit     = 0;
   int _fallbackHit = 0;
   int _lastMeshPts = 0;
   String _pipelineErr = '';
-  // Extra debug — raw camera signals visible in the diagnostic panel
-  int _dbgImgW = 0;
-  int _dbgImgH = 0;
-  int _dbgSensorRot = -1;
-  String _dbgFirstRaw = '';  // first mesh point raw pixel coords
-  String _dbgFirstNorm = ''; // first mesh point normalized 0..1
 
   // 60fps animation clock — drives particle drift, scan sweep, radar rings,
   // pulse, glitch cadence. Monotonic seconds since screen init.
@@ -264,9 +258,6 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
 
       final imgW = image.width.toDouble();
       final imgH = image.height.toDouble();
-      _dbgImgW = image.width;
-      _dbgImgH = image.height;
-      _dbgSensorRot = _camera?.description.sensorOrientation ?? -1;
 
       // Run face detection always. Run mesh detection only where supported.
       List<Face> faces = [];
@@ -278,29 +269,13 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       }
       if (_meshService != null) {
         try {
-          // Capture first point's raw coords for debug
-          bool firstCaptured = false;
           mesh = await _meshService!.detect(
             inputImage,
-            (x, y) {
-              if (!firstCaptured) {
-                firstCaptured = true;
-                _dbgFirstRaw = '(${x.toStringAsFixed(0)}, ${y.toStringAsFixed(0)})';
-              }
-              final n = _normalize(x, y, imgW, imgH);
-              if (firstCaptured && _dbgFirstNorm.isEmpty) {
-                _dbgFirstNorm = '(${n.dx.toStringAsFixed(2)}, ${n.dy.toStringAsFixed(2)})';
-              }
-              return n;
-            },
+            (x, y) => _normalize(x, y, imgW, imgH),
           );
           if (mesh != null && mesh.isValid) {
             _meshHit++;
             _lastMeshPts = mesh.points.length;
-            // Refresh first-point debug each successful detection
-            _dbgFirstNorm = '';
-          } else if (mesh == null) {
-            _pipelineErr = 'MESH EMPTY (plugin returned no faces)';
           }
         } catch (e) {
           _pipelineErr = 'FM: ${_trim(e)}';
@@ -719,80 +694,6 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     return s.length > 40 ? s.substring(0, 40) : s;
   }
 
-  Widget _diagPanel() {
-    // Traffic light: green = mesh firing, amber = fallback only, red = no faces
-    final state = _meshHit > 0
-        ? ('GREEN', AppColors.signalGreen, 'MEDIAPIPE LIVE')
-        : (_fallbackHit > 0
-            ? ('AMBER', AppColors.signalAmber, 'FALLBACK (CONTOUR/LANDMARK/BBOX)')
-            : ('RED',   AppColors.signalRed,   _facesHit == 0
-                ? 'NO FACE DETECTED'
-                : 'FACE HIT, MESH FAILED'));
-    final plat = Platform.isAndroid ? 'ANDROID' : (Platform.isIOS ? 'iOS' : 'OTHER');
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      constraints: const BoxConstraints(maxWidth: 280),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: state.$2.withValues(alpha: 0.6), width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 7, height: 7,
-                margin: const EdgeInsets.only(right: 6),
-                decoration: BoxDecoration(
-                  color: state.$2, shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: state.$2.withValues(alpha: 0.6), blurRadius: 6)],
-                ),
-              ),
-              Text('${state.$1} · ${state.$3}',
-                style: TextStyle(color: state.$2, fontSize: 9,
-                  fontWeight: FontWeight.w800, letterSpacing: 1.4,
-                  fontFamilyFallback: const ['monospace'])),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text('$plat · PHASE ${_phase.name.toUpperCase()}',
-            style: const TextStyle(color: Colors.white70, fontSize: 8.5,
-              fontWeight: FontWeight.w700, letterSpacing: 1.4,
-              fontFamilyFallback: ['monospace'])),
-          const SizedBox(height: 3),
-          Text(
-            'FR $_framesTotal   FC $_facesHit   MS $_meshHit   FB $_fallbackHit   PTS $_lastMeshPts',
-            style: const TextStyle(color: Colors.white, fontSize: 9,
-              fontWeight: FontWeight.w600, letterSpacing: 0.6, height: 1.3,
-              fontFamilyFallback: ['monospace'])),
-          const SizedBox(height: 3),
-          Text(
-            'IMG ${_dbgImgW}x$_dbgImgH   ROT ${_rotation.name.replaceAll('rotation', '').replaceAll('deg', '°')}   SENSOR $_dbgSensorRot°',
-            style: const TextStyle(color: Colors.white60, fontSize: 8.5,
-              fontWeight: FontWeight.w600, letterSpacing: 0.4, height: 1.25,
-              fontFamilyFallback: ['monospace'])),
-          if (_dbgFirstRaw.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text('RAW $_dbgFirstRaw → NORM $_dbgFirstNorm',
-              style: const TextStyle(color: Colors.white60, fontSize: 8.5,
-                fontWeight: FontWeight.w600, letterSpacing: 0.4, height: 1.25,
-                fontFamilyFallback: ['monospace'])),
-          ],
-          if (_pipelineErr.isNotEmpty) ...[
-            const SizedBox(height: 3),
-            Text(_pipelineErr,
-              style: TextStyle(color: AppColors.signalAmber, fontSize: 8.5,
-                fontWeight: FontWeight.w700, height: 1.3,
-                fontFamilyFallback: const ['monospace'])),
-          ],
-        ],
-      ),
-    );
-  }
-
   // Cover-fill camera: scale the CameraPreview's natural AspectRatio box
   // up until it fully covers the screen (parts of the preview are clipped on
   // the overflow side). The mesh overlay is passed as CameraPreview's `child`
@@ -942,12 +843,9 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
               ),
             ),
 
-          // Diagnostic panel — shows exactly what the detect pipeline is
-          // doing live. Remove once we trust the pipeline on target devices.
-          Positioned(
-            left: 10, bottom: 14,
-            child: SafeArea(child: _diagPanel()),
-          ),
+          // Diagnostic panel removed — Android silent-failure root causes
+          // were: minSdk 21 (needed 23), missing R8 keep rules, ABI filter.
+          // All three fixed in android/app/build.gradle.kts + proguard-rules.pro.
 
           // Top bar — editorial masthead
           SafeArea(
