@@ -207,22 +207,33 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   // extra flip. 0°/180° is the only case where we mirror explicitly for front.
   //
   // Returns normalized 0..1 display-space coordinates for the portrait preview.
+  /// Coordinate translator.
+  ///
+  /// Rule (ported from the working fitness-app SkeletonPainter):
+  /// - ANDROID: sensor delivers unmirrored frames; preview plugin mirrors.
+  ///   → We mirror the X for front cam. Rotation 270° bakes swap of dims.
+  /// - iOS: AVCaptureVideoPreviewLayer auto-mirrors the front-cam preview
+  ///   at the SYSTEM level, and ML Kit output already matches that mirrored
+  ///   space. → We MUST NOT mirror in code (double-mirror = opposite movement).
+  ///   The sensor reports landscape dimensions even in portrait, so swap
+  ///   imgW/imgH in the division.
   Offset _normalize(double bx, double by, double imgW, double imgH) {
     final isIOS = Platform.isIOS;
     double nx, ny;
     switch (_rotation) {
       case InputImageRotation.rotation90deg:
-        nx = bx / (isIOS ? imgW : imgH);
-        ny = by / (isIOS ? imgH : imgW);
-        break;
       case InputImageRotation.rotation270deg:
-        nx = 1.0 - bx / (isIOS ? imgW : imgH);
-        ny = by / (isIOS ? imgH : imgW);
+        // Both platforms: swap dims (sensor landscape → display portrait)
+        nx = bx / imgH;
+        ny = by / imgW;
+        // Android only — iOS system mirror handles this for us
+        if (!isIOS && _isFrontCam) nx = 1.0 - nx;
         break;
       case InputImageRotation.rotation0deg:
       case InputImageRotation.rotation180deg:
-        nx = _isFrontCam ? 1.0 - bx / imgW : bx / imgW;
+        nx = bx / imgW;
         ny = by / imgH;
+        if (!isIOS && _isFrontCam) nx = 1.0 - nx;
         break;
     }
     return Offset(nx, ny);
@@ -298,7 +309,11 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         final cy = (bb.top + bb.bottom) / 2;
         _offsetX = ((cx - imgW / 2) / imgW) * 2;  // roughly -1..1
         _offsetY = ((cy - imgH / 2) / imgH) * 2;
-        _yawDeg  = face.headEulerAngleY ?? 0.0;
+        // Raw yaw from ML Kit. Convention: subject turning toward OWN LEFT
+        // shoulder = NEGATIVE. iOS system-mirrors the preview but ML Kit
+        // output is in the same mirrored space, so the raw yaw already
+        // matches what the user sees. No platform flip needed.
+        _yawDeg = face.headEulerAngleY ?? 0.0;
       }
 
       // Position gating depends on current phase.

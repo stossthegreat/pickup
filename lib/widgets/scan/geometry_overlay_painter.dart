@@ -94,6 +94,7 @@ class GeometryOverlayPainter extends CustomPainter {
         if (mesh != null && mesh!.isValid) {
           _drawMeshAssembly(canvas, size);
           _drawMeshTriangleWash(canvas, size);
+          _drawLiveMeasurementLines(canvas, size);  // NEW — horizontal rails
           _drawScanSweep(canvas, size);
           _drawFaceLockBrackets(canvas, size, intensity: 0.6);
         }
@@ -103,14 +104,16 @@ class GeometryOverlayPainter extends CustomPainter {
       case ScanPhase.measuring:
         if (mesh != null && mesh!.isValid) {
           _drawFaceSilhouetteGlow(canvas, size);      // glowing gold oval
-          _drawMeshDots(canvas, size, alphaScale: 0.55);
+          // Keep the mesh RICH throughout — previously dimmed to 0.55 but
+          // user wants the opening density maintained.
+          _drawMeshDots(canvas, size, alphaScale: 1.0);
           _drawMeshTriangleWash(canvas, size);
           _drawBoneStructure(canvas, size, dramatic: true);
           _drawMeasurementArcs(canvas, size);         // jaw / canthal / FWHR arcs
           _drawConstellation(canvas, size);           // twinkling anchor stars
           _drawFeatureBeam(canvas, size);             // sweeping feature scan
+          _drawLiveMeasurementLines(canvas, size);    // sci-fi horizontal rails
           _drawDigitalRain(canvas, size);             // numbers streaming
-          _drawMeasurementCallouts(canvas, size);
           _drawFloatingMeasurements(canvas, size);
           _drawRadarRings(canvas, size);
           _drawFaceLockBrackets(canvas, size, intensity: 1.0);
@@ -816,6 +819,146 @@ class GeometryOverlayPainter extends CustomPainter {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  //  Live measurement rails — horizontal lines extending from 5 anchor
+  //  landmarks to the screen edge, each ending in a value pill. Reads like
+  //  a HUD overlay in a sci-fi film. Shown live throughout scanning AND
+  //  measuring so data density stays high the whole scan.
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawLiveMeasurementLines(Canvas canvas, Size size) {
+    final points = mesh!.points;
+    if (points.length < 200) return;
+
+    Offset? px(int i) {
+      if (i >= points.length) return null;
+      final p = points[i];
+      return Offset(p.dx * size.width, p.dy * size.height);
+    }
+
+    // Fake-live values modulated by animT — visually sell the precision.
+    // Real values come from backend /analyse.
+    final canthal = (3.0 + math.sin(animT * 2.1) * 0.12);
+    final jaw     = (118 + math.sin(animT * 1.6) * 0.6);
+    final fwhr    = (1.87 + math.sin(animT * 1.9) * 0.015);
+    final sym     = (87 + math.sin(animT * 1.3) * 0.8);
+    final nose    = (0.34 + math.sin(animT * 1.5) * 0.008);
+
+    // 5 rails — each: (anchor index, left-side boolean, label text, delay)
+    final rails = <({int anchor, bool leftSide, String label, double delayFrac})>[
+      (anchor: 33,    leftSide: true,  label: 'EYE TILT · ${canthal.toStringAsFixed(2)}°', delayFrac: 0.00),
+      (anchor: 454,   leftSide: false, label: 'SYM · ${sym.toStringAsFixed(0)}%',          delayFrac: 0.10),
+      (anchor: 234,   leftSide: true,  label: 'FWHR · ${fwhr.toStringAsFixed(2)}',         delayFrac: 0.20),
+      (anchor: 1,     leftSide: false, label: 'NOSE · ${nose.toStringAsFixed(2)}',         delayFrac: 0.30),
+      (anchor: 152,   leftSide: false, label: 'JAW · ${jaw.toStringAsFixed(0)}°',          delayFrac: 0.40),
+    ];
+
+    // Base reveal so rails don't blast in all at once during scanning
+    final baseReveal = phase == ScanPhase.scanning
+        ? ((progress - 0.1) / 0.5).clamp(0.0, 1.0)
+        : 1.0;
+    if (baseReveal <= 0) return;
+
+    for (final r in rails) {
+      final anchor = px(r.anchor);
+      if (anchor == null) continue;
+
+      final local = ((baseReveal - r.delayFrac) / 0.3).clamp(0.0, 1.0);
+      if (local <= 0) continue;
+
+      _drawSingleRail(canvas, size, anchor, r.label, r.leftSide, local);
+    }
+  }
+
+  void _drawSingleRail(Canvas canvas, Size size, Offset anchor,
+      String label, bool leftSide, double t) {
+    final endX = leftSide ? 18.0 : size.width - 18.0;
+    final railEnd = Offset(endX, anchor.dy);
+
+    // Current end of the animating line
+    final currentEndX = anchor.dx + (railEnd.dx - anchor.dx) * t;
+    final currentEnd = Offset(currentEndX, anchor.dy);
+
+    // 1. Soft gold glow under the line
+    canvas.drawLine(anchor, currentEnd, Paint()
+      ..color = _cGold.withValues(alpha: 0.55 * t)
+      ..strokeWidth = 4.5
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3)
+      ..strokeCap = StrokeCap.round);
+    // 2. Crisp gold line
+    canvas.drawLine(anchor, currentEnd, Paint()
+      ..color = _cGoldHi.withValues(alpha: 0.95 * t)
+      ..strokeWidth = 1.3
+      ..strokeCap = StrokeCap.round);
+    // 3. Tip flare — small bright circle at the leading edge while drawing
+    if (t < 0.98) {
+      canvas.drawCircle(currentEnd, 3.5, Paint()
+        ..color = _cWhite.withValues(alpha: 0.95));
+      canvas.drawCircle(currentEnd, 8, Paint()
+        ..color = _cGold.withValues(alpha: 0.6)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+    }
+
+    // 4. Anchor node — filled gold dot with white centre at the landmark
+    canvas.drawCircle(anchor, 4.2, Paint()
+      ..color = _cGold.withValues(alpha: 0.5 * t)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2));
+    canvas.drawCircle(anchor, 2.2, Paint()
+      ..color = _cGoldHi.withValues(alpha: 0.95 * t));
+    canvas.drawCircle(anchor, 0.9, Paint()
+      ..color = _cWhite.withValues(alpha: t));
+
+    // 5. Label pill at the end (only after line fully drawn)
+    if (t >= 0.9) {
+      final labelAlpha = ((t - 0.9) / 0.1).clamp(0.0, 1.0);
+      _drawRailLabel(canvas, size, railEnd, label, leftSide, labelAlpha);
+    }
+  }
+
+  void _drawRailLabel(Canvas canvas, Size size, Offset endPoint,
+      String label, bool leftSide, double alpha) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          color: _cGoldHi.withValues(alpha: alpha),
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.8,
+          fontFamilyFallback: const ['monospace'],
+          shadows: [
+            Shadow(color: _cGold.withValues(alpha: alpha * 0.65), blurRadius: 6),
+          ],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final pillPad = const EdgeInsets.symmetric(horizontal: 8, vertical: 4);
+    final rectX = leftSide
+        ? endPoint.dx - tp.width - pillPad.horizontal + 12
+        : endPoint.dx - 12;
+    final rect = Rect.fromLTWH(
+      rectX,
+      endPoint.dy - tp.height / 2 - pillPad.vertical / 2,
+      tp.width + pillPad.horizontal,
+      tp.height + pillPad.vertical,
+    );
+
+    // Dark underlay for legibility on any skin tone
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+      Paint()..color = Colors.black.withValues(alpha: 0.7 * alpha),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+      Paint()
+        ..color = _cGold.withValues(alpha: 0.5 * alpha)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.7,
+    );
+    tp.paint(canvas, Offset(rect.left + pillPad.left, rect.top + pillPad.top));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   //  Face silhouette glow — traces the outer face oval with a huge gold
   //  halo, making the entire face read as highlighted. This is the heaviest
   //  weight layer in the overlay — it's what makes the whole thing feel
@@ -1465,111 +1608,6 @@ class GeometryOverlayPainter extends CustomPainter {
       tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
       canvas.restore();
     }
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  LAYER 7  —  Measurement callouts (leader lines → corner labels)
-  // ═══════════════════════════════════════════════════════════════════════════
-  void _drawMeasurementCallouts(Canvas canvas, Size size) {
-    final points = mesh!.points;
-    if (points.length < 200) return;
-    final reveal = ((progress - 0.4) / 0.5).clamp(0.0, 1.0);
-    if (reveal <= 0) return;
-
-    Offset? px(int i) {
-      if (i >= points.length) return null;
-      final p = points[i];
-      return Offset(p.dx * size.width, p.dy * size.height);
-    }
-
-    // Anchor → corner endpoint → label text
-    final callouts = <(Offset? anchor, Offset corner, String label, double delay)>[
-      (px(FaceMesh.idxLeftEyeOuter),  Offset(size.width * 0.08, size.height * 0.20),
-        'CANTHAL +3.1°',  0.05),
-      (px(FaceMesh.idxRightEyeOuter), Offset(size.width * 0.92, size.height * 0.22),
-        'SYMMETRY 87%',   0.20),
-      (px(FaceMesh.idxCheekL),        Offset(size.width * 0.06, size.height * 0.62),
-        'FWHR 1.87',      0.35),
-      (px(FaceMesh.idxCheekR),        Offset(size.width * 0.94, size.height * 0.60),
-        'THIRDS 33/33/34', 0.48),
-      (px(FaceMesh.idxChin),          Offset(size.width * 0.90, size.height * 0.86),
-        'JAW 118°',       0.62),
-      (px(FaceMesh.idxNoseTip),       Offset(size.width * 0.10, size.height * 0.86),
-        'CHIN +3.4mm',    0.75),
-    ];
-
-    for (final (anchor, corner, label, delay) in callouts) {
-      if (anchor == null) continue;
-      final local = ((reveal - delay) / 0.25).clamp(0.0, 1.0);
-      if (local <= 0) continue;
-      _drawLeaderCallout(canvas, anchor, corner, label, local);
-    }
-  }
-
-  void _drawLeaderCallout(Canvas canvas, Offset anchor, Offset corner, String label, double t) {
-    // Mid-elbow point — path goes anchor → elbow → corner, then label.
-    final elbow = Offset(
-      corner.dx + (anchor.dx - corner.dx) * 0.35,
-      corner.dy,
-    );
-
-    final leaderEnd = Offset.lerp(anchor, elbow, t)!;
-    final cornerEnd = t > 0.6 ? Offset.lerp(elbow, corner, (t - 0.6) / 0.4)! : elbow;
-
-    final linePaint = Paint()
-      ..color = _cGold.withValues(alpha: 0.85 * t)
-      ..strokeWidth = 0.9
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(anchor, leaderEnd, linePaint);
-    if (t > 0.6) canvas.drawLine(elbow, cornerEnd, linePaint);
-
-    // Anchor node pulse
-    final pulse = (math.sin(animT * 4 + anchor.dx) + 1) / 2;
-    canvas.drawCircle(anchor, 2.4,
-      Paint()..color = _cWhite.withValues(alpha: 0.85 * t));
-    canvas.drawCircle(anchor, 5 + pulse * 3,
-      Paint()..color = _cGold.withValues(alpha: 0.25 * t));
-
-    // Typewriter label
-    if (t > 0.75) {
-      final charCount = ((t - 0.75) / 0.25 * label.length).ceil().clamp(0, label.length);
-      final shown = label.substring(0, charCount);
-      _drawLabelBoxed(canvas, corner, shown,
-        anchorRight: corner.dx > 0.5 /* not used for side yet */ ? true : false);
-    }
-  }
-
-  void _drawLabelBoxed(Canvas canvas, Offset pos, String text, {bool anchorRight = true}) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: const TextStyle(
-          color: _cGold,
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1.4,
-          fontFamilyFallback: ['monospace'],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    final pad = const EdgeInsets.symmetric(horizontal: 6, vertical: 3);
-    final rect = Rect.fromLTWH(
-      pos.dx - (anchorRight ? 0 : tp.width + pad.horizontal),
-      pos.dy - tp.height / 2 - pad.vertical / 2,
-      tp.width + pad.horizontal,
-      tp.height + pad.vertical,
-    );
-
-    canvas.drawRect(rect,
-      Paint()..color = Colors.black.withValues(alpha: 0.55));
-    canvas.drawRect(rect, Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.7
-      ..color = _cGold.withValues(alpha: 0.55));
-
-    tp.paint(canvas, Offset(rect.left + pad.left, rect.top + pad.top));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
