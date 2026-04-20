@@ -122,5 +122,11 @@ ABSOLUTE FAIL CONDITIONS — these make the output unusable:
 
 STYLE: photorealistic portrait photography, shot on 85mm lens at f/2.8, natural window light, modern magazine editorial quality. Same pose, same angle, same framing.
 
-SUCCESS TEST — the person viewing their twin should say: "that's me on a great day". If they say "that's not me" → identity drifted. If they say "I look worse" → improvements not applied. Both are failure states.`;
+SUCCESS TEST — the person viewing their twin should say: "that's me, but visibly BETTER — I want to look like that."
+
+If they say "that's not me" → identity drifted. FAIL.
+If they say "I look the same / look worse" → improvements not applied forcefully enough. FAIL.
+The target: clear, visible, aspirational lift the user would screenshot and share.
+
+RENDER WITH CONFIDENCE. Apply all improvements in combination, not timidly. This is their ASPIRATIONAL twin — the version they'd pay for. Make it a real glow-up while preserving every identity anchor listed above.`;
 }

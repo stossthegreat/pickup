@@ -334,12 +334,13 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
           nextColor = 'locked';
         }
       } else if (leftProfileWanted) {
-        // Flutter-camera front-cam preview is mirrored. User turning LEFT
-        // produces POSITIVE yaw from ML Kit (relative to mirrored image).
-        if (_yawDeg < 18) {
+        // ML Kit convention: face turning toward SUBJECT'S LEFT shoulder
+        // (= camera's right) → NEGATIVE yaw. This is the fix — previously
+        // had signs flipped and users were told to turn the wrong way.
+        if (_yawDeg > -18) {
           nextStatus = 'TURN FURTHER LEFT';
           nextColor = 'adjusting';
-        } else if (_yawDeg > 45) {
+        } else if (_yawDeg < -48) {
           nextStatus = 'TURN BACK A LITTLE';
           nextColor = 'adjusting';
         } else {
@@ -348,10 +349,11 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
           nextColor = 'locked';
         }
       } else if (rightProfileWanted) {
-        if (_yawDeg > -18) {
+        // Subject's RIGHT shoulder = camera's left → POSITIVE yaw.
+        if (_yawDeg < 18) {
           nextStatus = 'TURN FURTHER RIGHT';
           nextColor = 'adjusting';
-        } else if (_yawDeg < -45) {
+        } else if (_yawDeg > 48) {
           nextStatus = 'TURN BACK A LITTLE';
           nextColor = 'adjusting';
         } else {

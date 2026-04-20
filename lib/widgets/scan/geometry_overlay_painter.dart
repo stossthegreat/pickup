@@ -534,9 +534,22 @@ class GeometryOverlayPainter extends CustomPainter {
       // Two-tone: nose bridge + eye landmarks in gold, rest cyan
       final isAnchor = i == 1 || i == 4 || i == 6 || i == 10 ||
                        i == 152 || i == 33 || i == 263;
-      dotPaint.color = (isAnchor ? _cGoldHi : _cCyan)
-          .withValues(alpha: (0.65 * alphaScale * depthAlpha).clamp(0.0, 1.0));
-      canvas.drawCircle(Offset(x, y), 1.2 * b * depthMul, dotPaint);
+      final baseColor = isAnchor ? _cGoldHi : _cCyan;
+      // Glow under-dot for each landmark — makes them read at distance
+      dotPaint.color = baseColor
+          .withValues(alpha: (0.35 * alphaScale * depthAlpha).clamp(0.0, 1.0));
+      dotPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      canvas.drawCircle(Offset(x, y), 3.2 * b * depthMul, dotPaint);
+      // Crisp core — solid, bright
+      dotPaint.maskFilter = null;
+      dotPaint.color = baseColor
+          .withValues(alpha: (0.95 * alphaScale * depthAlpha).clamp(0.0, 1.0));
+      canvas.drawCircle(Offset(x, y), 1.5 * b * depthMul, dotPaint);
+      // White specular hit on brighter anchors
+      if (isAnchor) {
+        canvas.drawCircle(Offset(x, y), 0.7 * b * depthMul, Paint()
+          ..color = _cWhite.withValues(alpha: 0.9 * alphaScale * depthAlpha));
+      }
     }
   }
 
@@ -551,44 +564,55 @@ class GeometryOverlayPainter extends CustomPainter {
         : 1.0;
     if (revealBase <= 0) return;
 
-    // Reuse static edge list as line network — cheaper than true tri fill.
-    final linePaint = Paint()
+    // Base edge network — now way more visible. Alpha 0.18 → 0.42 plus a
+    // 1.4px stroke instead of 0.5px. This is the "spider-web" layer that
+    // makes the face feel topologically mapped.
+    final edgeGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.2
+      ..color = _cCyan.withValues(alpha: 0.28 * revealBase)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+    final edgeLine = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4
+      ..color = _cCyanHi.withValues(alpha: 0.70 * revealBase);
+    final edgeCore = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5
-      ..color = _cCyan.withValues(alpha: 0.18 * revealBase);
+      ..color = _cWhite.withValues(alpha: 0.45 * revealBase);
 
     for (final (a, b) in _faceMeshEdges) {
       if (a >= points.length || b >= points.length) continue;
       final pa = points[a];
       final pb = points[b];
-      canvas.drawLine(
-        Offset(pa.dx * size.width, pa.dy * size.height),
-        Offset(pb.dx * size.width, pb.dy * size.height),
-        linePaint,
-      );
+      final p1 = Offset(pa.dx * size.width, pa.dy * size.height);
+      final p2 = Offset(pb.dx * size.width, pb.dy * size.height);
+      canvas.drawLine(p1, p2, edgeGlow);
+      canvas.drawLine(p1, p2, edgeLine);
+      canvas.drawLine(p1, p2, edgeCore);
     }
 
-    // Bright moving edge — a single cyan flash travels along a sub-loop
-    // each cycle to give a "neural pulse" feel.
+    // Bright moving neural pulse — larger, brighter trail (12 segments, was 6)
     final cyclePhase = (animT * 0.7) % 1.0;
     final pulseIdx = (cyclePhase * _faceMeshEdges.length).floor();
-    final flashPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.8
-      ..color = _cCyanHi.withValues(alpha: 0.9 * revealBase);
-    for (var i = 0; i < 6; i++) {
+    for (var i = 0; i < 12; i++) {
       final idx = (pulseIdx + i) % _faceMeshEdges.length;
       final (a, b) = _faceMeshEdges[idx];
       if (a >= points.length || b >= points.length) continue;
       final pa = points[a];
       final pb = points[b];
-      flashPaint.color = _cCyanHi.withValues(
-        alpha: (1 - i / 6) * 0.9 * revealBase);
-      canvas.drawLine(
-        Offset(pa.dx * size.width, pa.dy * size.height),
-        Offset(pb.dx * size.width, pb.dy * size.height),
-        flashPaint,
-      );
+      final p1 = Offset(pa.dx * size.width, pa.dy * size.height);
+      final p2 = Offset(pb.dx * size.width, pb.dy * size.height);
+      final trailAlpha = (1 - i / 12) * revealBase;
+      canvas.drawLine(p1, p2, Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5.5
+        ..color = _cCyanHi.withValues(alpha: 0.55 * trailAlpha)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
+      canvas.drawLine(p1, p2, Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2
+        ..color = _cWhite.withValues(alpha: 0.9 * trailAlpha));
     }
   }
 

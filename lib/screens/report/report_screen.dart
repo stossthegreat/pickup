@@ -42,6 +42,9 @@ class ReportScreen extends StatefulWidget {
 class _ReportScreenState extends State<ReportScreen> {
   MirrorAnalysis? _analysis;
   String? _error;
+  // Populated once the scan image is persisted. Passed to chat/tryon so the
+  // advisor can fire Flux renders inline using the real scan image.
+  String? _savedImagePath;
 
   static const _loadingCopy = [
     'Resolving skin micro-texture',
@@ -94,6 +97,9 @@ class _ReportScreenState extends State<ReportScreen> {
       savedPath = await FaceAssetService.saveScanImage(
         scanId: id, bytes: widget.imageBytes);
     } catch (_) {}
+    if (savedPath != null && mounted) {
+      setState(() => _savedImagePath = savedPath);
+    }
 
     final record = ScanRecord(
       id:                 id,
@@ -267,7 +273,7 @@ class _ReportScreenState extends State<ReportScreen> {
               '/chat',
               extra: {
                 'geometry':  widget.geometry,
-                'imagePath': null,
+                'imagePath': _savedImagePath,
                 'autoSend':  style,
               },
             ),
@@ -291,7 +297,7 @@ class _ReportScreenState extends State<ReportScreen> {
           _ConsultCard(
             onTap: () => context.push(
               '/chat',
-              extra: {'geometry': widget.geometry, 'imagePath': null},
+              extra: {'geometry': widget.geometry, 'imagePath': _savedImagePath},
             ),
           ).animate().fadeIn(delay: 620.ms, duration: 500.ms),
 
@@ -377,7 +383,10 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     onPressed: () => context.push(
                       '/chat',
-                      extra: {'geometry': widget.geometry},
+                      extra: {
+                        'geometry':  widget.geometry,
+                        'imagePath': _savedImagePath,
+                      },
                     ),
                     child: const Text('Consult',
                       style: TextStyle(fontWeight: FontWeight.w700)),
