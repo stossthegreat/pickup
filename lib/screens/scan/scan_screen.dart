@@ -72,15 +72,21 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   // a single input image anyway, and front gives the richest mesh).
   FaceGeometry? _primaryGeometry;
 
-  // Diagnostic counters — kept (unused right now) so we can re-surface
-  // a dev-only HUD later without re-plumbing every increment.
-  // ignore_for_file: unused_field
+  // Diagnostic counters — surfaced on-screen in _diagPanel() so we can tell
+  // at a glance whether the pipeline is firing: faces detected (FC), mesh
+  // returning 468-pt data (MS), or whether we're on contour/landmark fallback
+  // (FB). Without this panel, Android silent-failures look identical to a
+  // "nothing rendering" bug.
   int _framesTotal = 0;
   int _facesHit    = 0;
   int _meshHit     = 0;
   int _fallbackHit = 0;
   int _lastMeshPts = 0;
   String _pipelineErr = '';
+  int _lastPlanes = 0;
+  int _lastRawFmt = 0;
+  int _lastImgW = 0;
+  int _lastImgH = 0;
 
   // 60fps animation clock — drives particle drift, scan sweep, radar rings,
   // pulse, glitch cadence. Monotonic seconds since screen init.
@@ -253,6 +259,10 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
 
     try {
       _framesTotal++;
+      _lastPlanes = image.planes.length;
+      _lastRawFmt = image.format.raw;
+      _lastImgW   = image.width;
+      _lastImgH   = image.height;
       final inputImage = _buildInputImage(image);
       if (inputImage == null) return;
 
@@ -282,6 +292,16 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         }
       }
       if (faces.isNotEmpty) _facesHit++;
+
+      // One-line heartbeat every 30 frames (~1s). Shows up in logcat for
+      // `flutter logs` / Android Studio so we can diagnose silent failures
+      // without reading on-screen HUD text from a screenshot.
+      if (_framesTotal % 30 == 0) {
+        debugPrint('[scan] FR=$_framesTotal FC=$_facesHit MS=$_meshHit '
+            'FB=$_fallbackHit PTS=$_lastMeshPts planes=$_lastPlanes '
+            'fmt=$_lastRawFmt dim=${_lastImgW}x$_lastImgH '
+            'rot=${_rotation.name} err="${_pipelineErr}"');
+      }
 
       if (!mounted) return;
 
@@ -694,6 +714,79 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     return s.length > 40 ? s.substring(0, 40) : s;
   }
 
+  // Live pipeline HUD. Small black pill at the top-left. Tells us exactly
+  // which stage is failing on a device without needing logcat:
+  //   FR  frames processed
+  //   FC  faces detected (non-zero = face detector works)
+  //   MS  mesh hits (non-zero = 468-pt Face Mesh plugin works)
+  //   FB  fallback hits (contour / landmark / bbox fills)
+  //   PTS points in last mesh
+  //   PLANES/FMT what the camera delivered
+  //   DIM   source image dims
+  //   ROT   rotation ML Kit was told
+  Widget _diagPanel() {
+    final (String tag, Color color, String label) = _meshHit > 0
+        ? ('GREEN', AppColors.signalGreen, 'MEDIAPIPE LIVE')
+        : (_fallbackHit > 0
+            ? ('AMBER', AppColors.signalAmber, 'FALLBACK ONLY')
+            : ('RED',   AppColors.signalRed,
+                _facesHit == 0 ? 'NO FACE' : 'FACE, NO MESH'));
+    final plat = Platform.isAndroid ? 'ANDROID' : (Platform.isIOS ? 'iOS' : 'OTHER');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      constraints: const BoxConstraints(maxWidth: 300),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.6), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(children: [
+            Container(
+              width: 7, height: 7,
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                color: color, shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 6)],
+              ),
+            ),
+            Text('$tag · $label',
+              style: TextStyle(color: color, fontSize: 9,
+                fontWeight: FontWeight.w800, letterSpacing: 1.4,
+                fontFamilyFallback: const ['monospace'])),
+          ]),
+          const SizedBox(height: 4),
+          Text('$plat · ${_phase.name.toUpperCase()}',
+            style: const TextStyle(color: Colors.white70, fontSize: 8.5,
+              fontWeight: FontWeight.w700, letterSpacing: 1.4,
+              fontFamilyFallback: ['monospace'])),
+          const SizedBox(height: 3),
+          Text(
+            'FR $_framesTotal  FC $_facesHit  MS $_meshHit  FB $_fallbackHit  PTS $_lastMeshPts',
+            style: const TextStyle(color: Colors.white, fontSize: 9,
+              fontWeight: FontWeight.w600, letterSpacing: 0.6, height: 1.3,
+              fontFamilyFallback: ['monospace'])),
+          const SizedBox(height: 3),
+          Text(
+            'PLANES $_lastPlanes  FMT $_lastRawFmt  DIM ${_lastImgW}x$_lastImgH  ROT ${_rotation.name}',
+            style: const TextStyle(color: Colors.white70, fontSize: 9,
+              fontWeight: FontWeight.w600, letterSpacing: 0.6, height: 1.3,
+              fontFamilyFallback: ['monospace'])),
+          if (_pipelineErr.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(_pipelineErr,
+              style: TextStyle(color: AppColors.signalAmber, fontSize: 8.5,
+                fontWeight: FontWeight.w700, height: 1.3,
+                fontFamilyFallback: const ['monospace'])),
+          ],
+        ],
+      ),
+    );
+  }
+
   // Cover-fill camera: scale the CameraPreview's natural AspectRatio box
   // up until it fully covers the screen (parts of the preview are clipped on
   // the overflow side). The mesh overlay is passed as CameraPreview's `child`
@@ -843,9 +936,13 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
               ),
             ),
 
-          // Diagnostic panel removed — Android silent-failure root causes
-          // were: minSdk 21 (needed 23), missing R8 keep rules, ABI filter.
-          // All three fixed in android/app/build.gradle.kts + proguard-rules.pro.
+          // Live pipeline HUD — restored so Android silent-failures can be
+          // diagnosed from the device screen alone. Top-left so it doesn't
+          // overlap the phase copy at the bottom or the masthead at the top.
+          Positioned(
+            left: 10, top: 60,
+            child: SafeArea(child: _diagPanel()),
+          ),
 
           // Top bar — editorial masthead
           SafeArea(
