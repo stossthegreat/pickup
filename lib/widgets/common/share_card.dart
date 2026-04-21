@@ -2,23 +2,19 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// The share unit. 9:16 image that travels everywhere.
-///
-/// Design: editorial black-and-white. No gold, no gradients, no pills, no
-/// cards. Pure black bg, pure white type, one piece of imagery, three
-/// sentences of proof. Should read like a Nike ad or an Apple press shot,
-/// never like "an AI app".
+/// 9:16 share unit. Editorial black & white — Nike / Apple / fashion spread
+/// energy, never "AI app". Pure #000 background, pure #FFF type, one image,
+/// one verdict, three proof lines, one footer. Nothing else.
 ///
 /// Stack (top → bottom):
-///   Mirrorly          — tiny serif wordmark
-///   3 FIXES.          — huge serif headline (line 1)
-///   SAME FACE.        — huge serif headline (line 2)
-///   [BEFORE | AFTER]  — tightly-cropped face image, eyes in upper third
+///   Mirrorly          — 40pt Playfair wordmark, unmissable, pure white
+///   3 FIXES.          — 112pt italic serif (line 1)
+///   SAME FACE.        — 112pt italic serif (line 2)
+///   [BEFORE | AFTER]  — tight 5:6 face crop, eyes in upper third
 ///   You're not unattractive.
 ///   You're unoptimized.                — italic serif tagline, centered
-///   Top 3% eyes / Top 5% symmetry / …  — three plain proof lines
-///   Measured. Not guessed.             — small footer, bottom-left
-///                           mirrorly.app   — bottom-right
+///   Top 3% hunter eyes / Top 5% symmetry / Strong jaw  — 22pt plain text
+///   Measured. Not guessed.             mirrorly.app
 class ShareCard extends StatelessWidget {
   final Uint8List? beforeBytes;
   final String? afterUrl;
@@ -40,80 +36,74 @@ class ShareCard extends StatelessWidget {
     return AspectRatio(
       aspectRatio: 9 / 16,
       child: ColoredBox(
+        // Pure #000000. Not 0xFF07070A, not 0xFF0A0A0A — #000.
         color: Colors.black,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(56, 64, 56, 48),
+          padding: const EdgeInsets.fromLTRB(56, 70, 56, 52),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Wordmark (top-left, bigger + pure white, no accent dot) ─
+              // ── Wordmark — dominant, not dainty. Pure white Playfair at
+              //     40pt so the brand reads from arm's length on a feed.
               Text('Mirrorly',
                 style: GoogleFonts.playfairDisplay(
                   color: Colors.white,
-                  fontSize: 30, letterSpacing: -0.8,
-                  fontWeight: FontWeight.w500, height: 1,
+                  fontSize: 40, letterSpacing: -1.0,
+                  fontWeight: FontWeight.w600, height: 1,
                 )),
 
-              const SizedBox(height: 52),
+              const SizedBox(height: 60),
 
-              // ── Headline — the verdict. Two lines, tight leading. ─────
+              // ── Headline — the verdict. Two italic serif lines, tight
+              //     leading, pure white, no gold split. Reads as one beat.
               Text('$correctionsCount FIXES.',
                 style: GoogleFonts.playfairDisplay(
                   color: Colors.white,
-                  fontSize: 108, letterSpacing: -3.5,
+                  fontSize: 112, letterSpacing: -4.0,
                   fontWeight: FontWeight.w900, height: 0.94,
                   fontStyle: FontStyle.italic,
                 )),
               Text('SAME FACE.',
                 style: GoogleFonts.playfairDisplay(
                   color: Colors.white,
-                  fontSize: 108, letterSpacing: -3.5,
+                  fontSize: 112, letterSpacing: -4.0,
                   fontWeight: FontWeight.w900, height: 0.96,
                   fontStyle: FontStyle.italic,
                 )),
 
-              const SizedBox(height: 44),
+              const SizedBox(height: 48),
 
-              // ── Image (THE MAIN EVENT) ───────────────────────────────
-              // Tall 5:6 frame so face dominates. BoxFit.cover +
-              // alignment(0,-0.35) biases the crop toward the top so the
-              // eyes land in the upper third and the chest/background
-              // falls away — exactly what the Nike/Apple reference asks
-              // for. Labels are rendered INSIDE the image in the bottom
-              // corners at 50% opacity so they never compete with the
-              // headline or the tagline.
+              // ── Image (the main event) ────────────────────────────
+              // 5:6 tall frame + alignment(0,-0.35) crops to the face,
+              // drops the chest. No border, no rounded corners, no glow
+              // — clean rectilinear frame, magazine style.
               AspectRatio(
                 aspectRatio: 5 / 6,
                 child: Row(
                   children: [
                     Expanded(child: _half(
-                      bytes: beforeBytes,
-                      url: null,
+                      bytes: beforeBytes, url: null,
                       label: 'NOW',
-                      labelAlignment: Alignment.bottomLeft,
-                    )),
-                    // One-pixel white hairline — structural, not decorative.
+                      align: Alignment.bottomLeft)),
                     Container(width: 1, color: Colors.white),
                     Expanded(child: _half(
-                      bytes: null,
-                      url: afterUrl,
+                      bytes: null, url: afterUrl,
                       label: 'FIXED',
-                      labelAlignment: Alignment.bottomRight,
-                    )),
+                      align: Alignment.bottomRight)),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 38),
+              const SizedBox(height: 40),
 
-              // ── Tagline — serif italic, centered. The punch. ─────────
+              // ── Tagline — italic serif, centered, sits UNDER the image.
               Center(
                 child: Text(
                   "You're not unattractive.\nYou're unoptimized.",
                   textAlign: TextAlign.center,
                   style: GoogleFonts.playfairDisplay(
                     color: Colors.white,
-                    fontSize: 28, letterSpacing: -0.4,
+                    fontSize: 30, letterSpacing: -0.5,
                     fontWeight: FontWeight.w400, height: 1.28,
                     fontStyle: FontStyle.italic,
                   ),
@@ -122,38 +112,38 @@ class ShareCard extends StatelessWidget {
 
               const Spacer(),
 
-              // ── Proof block — plain text, no boxes, no bullets. ───────
-              // Three short lines, Inter, medium weight. Reads like a
-              // credit line on a magazine spread.
+              // ── Proof block — three plain text lines, 22pt Inter
+              //     medium, sentence-case. No boxes, no bullets, no
+              //     gold. Credits on a magazine spread.
               for (final p in proofs) ...[
                 Text(
                   _prettyCase(p),
                   style: GoogleFonts.inter(
                     color: Colors.white,
-                    fontSize: 19, letterSpacing: 0.2,
+                    fontSize: 22, letterSpacing: 0.2,
                     fontWeight: FontWeight.w500, height: 1.35,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
               ],
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
 
-              // ── Footer row ─────────────────────────────────────────
+              // ── Footer — small, confident.
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text('Measured. Not guessed.',
                     style: GoogleFonts.inter(
-                      color: Colors.white.withValues(alpha: 0.5),
-                      fontSize: 12, letterSpacing: 0.3,
+                      color: Colors.white.withValues(alpha: 0.55),
+                      fontSize: 13, letterSpacing: 0.3,
                       fontWeight: FontWeight.w400,
                     )),
                   const Spacer(),
                   Text('mirrorly.app',
                     style: GoogleFonts.inter(
                       color: Colors.white,
-                      fontSize: 12, letterSpacing: 0.3,
+                      fontSize: 13, letterSpacing: 0.3,
                       fontWeight: FontWeight.w500,
                     )),
                 ],
@@ -165,41 +155,33 @@ class ShareCard extends StatelessWidget {
     );
   }
 
-  /// One half of the before/after. The image fills the frame via
-  /// BoxFit.cover biased upward so we get a tight face crop. A bottom
-  /// corner carries the small NOW / FIXED label at 60% opacity over a
-  /// subtle black-to-transparent gradient so the text always reads
-  /// cleanly regardless of the image underneath.
+  /// Half of the before/after. Image fills the frame via cover-fit biased
+  /// upward. A faint gradient scrim sits behind the corner label so the
+  /// text is always legible regardless of the skin tone behind it.
   Widget _half({
     required Uint8List? bytes,
     required String? url,
     required String label,
-    required Alignment labelAlignment,
+    required Alignment align,
   }) {
     return Stack(
       fit: StackFit.expand,
       children: [
         if (bytes != null)
-          Image.memory(
-            bytes,
+          Image.memory(bytes,
             fit: BoxFit.cover,
-            alignment: const Alignment(0, -0.35),
-          )
+            alignment: const Alignment(0, -0.35))
         else if (url != null && url.isNotEmpty)
-          Image.network(
-            url,
+          Image.network(url,
             fit: BoxFit.cover,
             alignment: const Alignment(0, -0.35),
             errorBuilder: (_, __, ___) =>
-              const ColoredBox(color: Color(0xFF0E0E0E)),
-          )
+              const ColoredBox(color: Color(0xFF0C0C0C)))
         else
-          const ColoredBox(color: Color(0xFF0E0E0E)),
+          const ColoredBox(color: Color(0xFF0C0C0C)),
 
-        // Subtle scrim under the label so text is always legible.
         Positioned(
-          left: 0, right: 0, bottom: 0,
-          height: 90,
+          left: 0, right: 0, bottom: 0, height: 100,
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -207,7 +189,7 @@ class ShareCard extends StatelessWidget {
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  Colors.black.withValues(alpha: 0.6),
+                  Colors.black.withValues(alpha: 0.62),
                 ],
               ),
             ),
@@ -215,13 +197,13 @@ class ShareCard extends StatelessWidget {
         ),
 
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           child: Align(
-            alignment: labelAlignment,
+            alignment: align,
             child: Text(label,
               style: GoogleFonts.inter(
-                color: Colors.white.withValues(alpha: 0.85),
-                fontSize: 11, letterSpacing: 3.2,
+                color: Colors.white.withValues(alpha: 0.9),
+                fontSize: 12, letterSpacing: 3.6,
                 fontWeight: FontWeight.w700,
               )),
           ),
@@ -230,12 +212,11 @@ class ShareCard extends StatelessWidget {
     );
   }
 
-  /// "TOP 3% HUNTER EYES" → "Top 3% eyes".
-  /// Editorial share card reads better in sentence case than screaming-caps.
+  /// "TOP 3% HUNTER EYES" → "Top 3% hunter eyes".
+  /// Editorial share reads better in sentence case than screaming caps.
   String _prettyCase(String s) {
     final lower = s.toLowerCase();
     if (lower.isEmpty) return s;
-    // Capitalise first letter; preserve any % number intact.
     return lower[0].toUpperCase() + lower.substring(1);
   }
 }
