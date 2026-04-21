@@ -4,33 +4,27 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_typography.dart';
 
-/// Hero card on the report page. Editorial black & white — zero gold, zero
-/// gradients, zero chrome. Mirrors the share card's design language so the
-/// in-app moment and the screenshot feel like one continuous thing.
+/// Hero card on the report page — editorial black with one surgical red
+/// accent (the score-transition arrow). Mirrors the share card's language.
 ///
-/// Stack (top → bottom):
-///   1.  54 → 76    CURRENT · PROJECTED     (slim white serif numbers)
-///   2.  [ BEFORE | AFTER ]                  (tight face crop, no border)
-///   3.  "You're not unattractive.           (italic serif tagline,
-///        You're unoptimized."                 centered, UNDER the image)
-///   4.  Top 3% hunter eyes                  (plain text, sentence case,
-///       Top 5% symmetry                      17pt Inter, white)
-///       Strong jaw
-///
-/// The score transition still animates: current counts up first, then the
-/// thin arrow + projected number reveal. That remains the dopamine moment.
+/// Stack:
+///   1.  54  →  76            (white numbers, RED arrow = the transformation)
+///   2.  CURRENT · PROJECTED  (tiny captions)
+///   3.  [ BEFORE | AFTER ]   (tight face crop, eyes in upper third)
+///   4.  "You're not unattractive. You're unoptimized."   (big italic serif)
+///   5.  TOP 3% HUNTER EYES   (22pt all-caps, white, big enough to read)
+///       TOP 5% SYMMETRY
+///       STRONG JAW
 class HeroCard extends StatefulWidget {
-  final int currentScore;       // e.g. 54
-  final int projectedScore;     // e.g. 76
-  final String tagline;         // "You're not unattractive. / You're unoptimized."
+  static const Color accentRed = Color(0xFFE8222A);
+
+  final int currentScore;
+  final int projectedScore;
+  final String tagline;
   final Uint8List? beforeBytes;
   final String? afterUrl;
-  // Retained for API compatibility with the report screen. No longer
-  // rendered — we dropped the "3 CHANGES. SAME FACE." sub-line because
-  // the before/after image plus the tagline already say it, and one less
-  // line makes the whole card breathe.
-  final int correctionsCount;
-  final List<String> microProofs; // up to 3 short lines
+  final int correctionsCount;     // kept for API parity, not rendered
+  final List<String> microProofs;
 
   const HeroCard({
     super.key,
@@ -69,62 +63,51 @@ class _HeroCardState extends State<HeroCard>
   Widget build(BuildContext context) {
     final proofs = widget.microProofs.take(3).toList();
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(Sp.lg, 36, Sp.lg, 28),
-      decoration: BoxDecoration(
-        // Pure #000 — no radial glow, no gradient, no gold. Content does
-        // the work, the surface gets out of the way.
-        color: Colors.black,
-        borderRadius: BorderRadius.circular(Rd.xxl),
-        // Hairline in 8% white — structural frame, not ornament.
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08), width: 1),
-      ),
+    // No border, no rounded frame, no glow. The card IS the black canvas.
+    // Borders read as "UI", not as "editorial", and the user called that
+    // out. Pure content, pure typography.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── 1 · SCORE TRANSITION ─────────────────────────────────────
-          // Slimmer than before. Current in muted white, projected in
-          // pure white at slightly larger size — no colour distinction.
+          // Score transition — red arrow is the single pop colour.
           _ScoreTransition(
             controller: _counter,
             currentScore: widget.currentScore,
             projectedScore: widget.projectedScore,
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              SizedBox(width: 92, child: Text('CURRENT',
+              SizedBox(width: 100, child: Text('CURRENT',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   color: Colors.white.withValues(alpha: 0.45),
-                  fontSize: 10, letterSpacing: 3.0,
+                  fontSize: 11, letterSpacing: 3.2,
                   fontWeight: FontWeight.w700,
                 ))),
-              const SizedBox(width: 56),
-              SizedBox(width: 92, child: Text('PROJECTED',
+              const SizedBox(width: 60),
+              SizedBox(width: 100, child: Text('PROJECTED',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   color: Colors.white,
-                  fontSize: 10, letterSpacing: 3.0,
+                  fontSize: 11, letterSpacing: 3.2,
                   fontWeight: FontWeight.w700,
                 ))),
             ],
           ).animate().fadeIn(delay: 1500.ms, duration: 400.ms),
 
-          const SizedBox(height: 26),
+          const SizedBox(height: 32),
 
-          // ── 2 · IMAGE ─────────────────────────────────────────────
-          // Tight 5:6 portrait. BoxFit.cover + alignment(0,-0.35) pushes
-          // the eyes into the upper third and drops the chest. No border,
-          // no shadow — the image is the statement.
+          // Image — 5:6 tight crop, clean rectangle.
           AspectRatio(
             aspectRatio: 5 / 6,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(Rd.md),
+              borderRadius: BorderRadius.circular(Rd.sm),
               child: Row(
                 children: [
                   Expanded(child: _half(
@@ -139,36 +122,32 @@ class _HeroCardState extends State<HeroCard>
             ),
           ).animate().fadeIn(delay: 1700.ms, duration: 500.ms),
 
-          const SizedBox(height: 26),
+          const SizedBox(height: 32),
 
-          // ── 3 · TAGLINE (UNDER the image per spec) ─────────────────
+          // Tagline — bigger than before so the punch lands.
           Center(
             child: Text(widget.tagline,
               textAlign: TextAlign.center,
               maxLines: 3, overflow: TextOverflow.ellipsis,
               style: GoogleFonts.playfairDisplay(
                 color: Colors.white,
-                fontSize: 22, letterSpacing: -0.3,
+                fontSize: 26, letterSpacing: -0.4,
                 fontStyle: FontStyle.italic,
-                fontWeight: FontWeight.w500, height: 1.3,
+                fontWeight: FontWeight.w500, height: 1.25,
               )),
           ).animate().fadeIn(delay: 1900.ms, duration: 500.ms),
 
           if (proofs.isNotEmpty) ...[
-            const SizedBox(height: 22),
-            Container(height: 1,
-              color: Colors.white.withValues(alpha: 0.08)),
-            const SizedBox(height: 18),
+            const SizedBox(height: 28),
 
-            // ── 4 · MICRO PROOFS ─────────────────────────────────────
-            // Plain text, sentence case, bigger than before so each line
-            // lands as its own moment. No bullets, no boxes, no colour.
+            // Proof lines — big, all-caps, readable from across the room.
+            // No bullets. No boxes. No divider. The spacing is the structure.
             for (var i = 0; i < proofs.length; i++) ...[
-              Text(_prettyCase(proofs[i]),
+              Text(proofs[i].toUpperCase(),
                 style: GoogleFonts.inter(
                   color: Colors.white,
-                  fontSize: 17, letterSpacing: 0.1,
-                  fontWeight: FontWeight.w500, height: 1.35,
+                  fontSize: 22, letterSpacing: 1.5,
+                  fontWeight: FontWeight.w700, height: 1.35,
                 ),
               ).animate().fadeIn(
                 delay: Duration(milliseconds: 2100 + i * 140),
@@ -176,7 +155,7 @@ class _HeroCardState extends State<HeroCard>
               ).slideX(begin: -0.03, end: 0,
                 delay: Duration(milliseconds: 2100 + i * 140),
                 duration: 350.ms, curve: Curves.easeOut),
-              if (i != proofs.length - 1) const SizedBox(height: 6),
+              if (i != proofs.length - 1) const SizedBox(height: 4),
             ],
           ],
         ],
@@ -206,7 +185,6 @@ class _HeroCardState extends State<HeroCard>
         else
           const ColoredBox(color: Color(0xFF0C0C0C)),
 
-        // Gentle scrim so corner label never fights the skin tone behind.
         Positioned(
           left: 0, right: 0, bottom: 0, height: 64,
           child: DecoratedBox(
@@ -228,8 +206,8 @@ class _HeroCardState extends State<HeroCard>
             alignment: align,
             child: Text(label,
               style: GoogleFonts.inter(
-                color: Colors.white.withValues(alpha: 0.85),
-                fontSize: 9.5, letterSpacing: 2.6,
+                color: Colors.white.withValues(alpha: 0.9),
+                fontSize: 10.5, letterSpacing: 2.8,
                 fontWeight: FontWeight.w700,
               )),
           ),
@@ -237,18 +215,12 @@ class _HeroCardState extends State<HeroCard>
       ],
     );
   }
-
-  String _prettyCase(String s) {
-    final lower = s.toLowerCase();
-    if (lower.isEmpty) return s;
-    return lower[0].toUpperCase() + lower.substring(1);
-  }
 }
 
-/// Number → arrow → number block. Both numbers white (no gold). Current
-/// counts up on entry, then the thin arrow + projected number reveal with
-/// a subtle opacity/scale pop. Restrained — the numbers aren't the loudest
-/// thing on the card anymore; the image is.
+/// Current → arrow → projected. The arrow is THE single red accent on the
+/// whole card. Everything else is white. Current in muted white (you've
+/// been this all along); projected in bold white (here's where you land);
+/// arrow in red (the path is the product).
 class _ScoreTransition extends StatelessWidget {
   final AnimationController controller;
   final int currentScore;
@@ -273,32 +245,32 @@ class _ScoreTransition extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             SizedBox(
-              width: 92,
+              width: 100,
               child: Text('$shownCurrent',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.playfairDisplay(
-                  fontSize: 64, height: 1.0, letterSpacing: -2.0,
+                  fontSize: 68, height: 1.0, letterSpacing: -2.0,
                   color: Colors.white.withValues(alpha: 0.62),
                   fontStyle: FontStyle.italic,
                   fontWeight: FontWeight.w500,
                 )),
             ),
-            const SizedBox(width: 28),
+            const SizedBox(width: 32),
             Opacity(
               opacity: revealT,
               child: Transform.scale(
                 scale: 0.8 + revealT * 0.2,
                 child: Text('→',
                   style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 36, height: 1,
+                    color: HeroCard.accentRed,
+                    fontSize: 44, height: 1,
                     fontWeight: FontWeight.w300,
                   )),
               ),
             ),
-            const SizedBox(width: 28),
+            const SizedBox(width: 32),
             SizedBox(
-              width: 92,
+              width: 100,
               child: Opacity(
                 opacity: revealT,
                 child: Transform.scale(
@@ -306,7 +278,7 @@ class _ScoreTransition extends StatelessWidget {
                   child: Text('$projectedScore',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.playfairDisplay(
-                      fontSize: 76, height: 1.0, letterSpacing: -2.2,
+                      fontSize: 82, height: 1.0, letterSpacing: -2.4,
                       color: Colors.white,
                       fontStyle: FontStyle.italic,
                       fontWeight: FontWeight.w700,
