@@ -31,18 +31,24 @@ class ShareService {
     } catch (_) {}
   }
 
-  /// Render the viral ShareCard off-screen at 1080×1920, capture as PNG,
-  /// open share sheet. The card is pure composition — never appears in UI.
+  /// Render the ShareCard off-screen at 1080×1920, capture as PNG, open
+  /// share sheet. The card never appears in UI — pure composition.
   ///
-  /// Format is locked to:
-  ///   "X CORRECTIONS. SAME FACE." → before/after → 3 micro-proofs → footer.
-  /// No score, no archetype, no percentile pills — those are report-screen
-  /// concerns. Share format optimises for shareability, not completeness.
+  /// Format is the 9:16 export of the in-app hero card: score transition
+  /// on top (CURRENT → PROJECTED with red arrow), before/after with
+  /// "Mirrorly" overlaid on the NOW half, tagline, three proof lines,
+  /// domain footer. Same visual language in-app and on socials.
+  ///
+  /// Pass currentScore / projectedScore = 0 from contexts that don't have
+  /// scores (e.g. chat inline tryon); the card hides the score row and
+  /// shows the brand wordmark at the top instead.
   static Future<void> shareComposed({
     required BuildContext context,
     required Uint8List? beforeBytes,
     required String? afterUrl,
-    required int correctionsCount,
+    required int currentScore,
+    required int projectedScore,
+    required String tagline,
     required List<String> microProofs,
     String? text,
   }) async {
@@ -61,10 +67,12 @@ class ShareService {
     try {
       if (!context.mounted) return;
       final card = ShareCard(
-        beforeBytes:      beforeBytes,
-        afterUrl:         afterUrl,
-        correctionsCount: correctionsCount,
-        microProofs:      microProofs,
+        beforeBytes:    beforeBytes,
+        afterUrl:       afterUrl,
+        currentScore:   currentScore,
+        projectedScore: projectedScore,
+        tagline:        tagline,
+        microProofs:    microProofs,
       );
       final bytes = await _captureOffscreen(
         context:     context,

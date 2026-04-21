@@ -489,14 +489,19 @@ class _InlineBeforeAfter extends StatelessWidget {
                       borderRadius: BorderRadius.circular(Rd.md)),
                   ),
                   onPressed: () => ShareService.shareComposed(
-                    context:          context,
-                    beforeBytes:      beforeBytes,
-                    afterUrl:         afterUrl,
-                    // Inline chat tryon = a single applied change, so the
-                    // share card reads "1 CORRECTION. SAME FACE."
-                    correctionsCount: 1,
-                    microProofs:      _proofsFromTraits(traits),
-                    text: '1 correction. Same face. mirrorly.app',
+                    context:        context,
+                    beforeBytes:    beforeBytes,
+                    afterUrl:       afterUrl,
+                    // Chat tryon doesn't have the CURRENT/PROJECTED score
+                    // pair — pass 0/0 and the share card hides the score
+                    // row, showing the "Mirrorly" wordmark at the top
+                    // instead. Tagline falls back to the tryon caption
+                    // (e.g. "short squared beard, tight neckline").
+                    currentScore:   0,
+                    projectedScore: 0,
+                    tagline:        caption ?? 'Same face. Better execution.',
+                    microProofs:    _proofsFromTraits(traits),
+                    text: 'Same face. mirrorly.app',
                   ),
                   icon: const Icon(Icons.ios_share_rounded, size: 14),
                   label: Text('SHARE',
