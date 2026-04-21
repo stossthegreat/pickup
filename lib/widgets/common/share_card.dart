@@ -117,7 +117,7 @@ class ShareCard extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 38),
+              const SizedBox(height: 36),
 
               // ── 3 · TAGLINE — BIG italic serif quote. ──
               Center(
@@ -126,26 +126,29 @@ class ShareCard extends StatelessWidget {
                   maxLines: 3, overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.playfairDisplay(
                     color: Colors.white,
-                    fontSize: 56, letterSpacing: -0.9,
+                    fontSize: 54, letterSpacing: -0.9,
                     fontStyle: FontStyle.italic,
                     fontWeight: FontWeight.w500, height: 1.22,
                   )),
               ),
 
-              const Spacer(),
+              // Tight gap — proofs sit right under the tagline so they
+              // never get clipped by chat-app previews that overlay a
+              // reply bar at the bottom.
+              const SizedBox(height: 24),
 
-              // ── 4 · PROOF LINES — BIG caps credit stack. ──
+              // ── 4 · PROOF LINES — BIG caps, RED. The "verified" flex. ──
               for (var i = 0; i < proofs.length; i++) ...[
                 Text(proofs[i].toUpperCase(),
                   style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 60, letterSpacing: 2.2,
+                    color: ShareCard.accentRed,
+                    fontSize: 58, letterSpacing: 2.2,
                     fontWeight: FontWeight.w800, height: 1.22,
                   )),
-                if (i != proofs.length - 1) const SizedBox(height: 10),
+                if (i != proofs.length - 1) const SizedBox(height: 8),
               ],
 
-              const SizedBox(height: 28),
+              const Spacer(),
 
               Align(
                 alignment: Alignment.centerRight,
@@ -211,15 +214,15 @@ class ShareCard extends StatelessWidget {
             child: Text('Mirrorly',
               style: GoogleFonts.playfairDisplay(
                 color: ShareCard.accentRed,
-                fontSize: 64, letterSpacing: -1.4,
-                fontWeight: FontWeight.w800, height: 1,
+                fontSize: 68, letterSpacing: -1.6,
+                fontWeight: FontWeight.w900, height: 1,
                 shadows: [
-                  // A touch of shadow so the wordmark reads even over
-                  // a bright forehead highlight.
+                  // Tight pure-black outline shadow so the red stays
+                  // saturated but still reads over a bright highlight.
                   Shadow(
-                    color: Colors.black.withValues(alpha: 0.55),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
+                    color: Colors.black.withValues(alpha: 0.75),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
                   ),
                 ],
               )),
@@ -274,40 +277,45 @@ class _ScoreTransitionStatic extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // No fixed-width SizedBoxes on the score glyphs. A 232pt italic
+    // Playfair digit renders ~110px wide; two digits plus italic
+    // slope easily overflowed the previous 220px cap, which is why
+    // "80" was wrapping to two lines. Let each number size to its
+    // natural intrinsic width, and center the row on the arrow.
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        SizedBox(
-          width: 220,
-          child: Text('$currentScore',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.playfairDisplay(
-              fontSize: 200, height: 1.0, letterSpacing: -6.0,
-              color: Colors.white.withValues(alpha: 0.62),
-              fontStyle: FontStyle.italic,
-              fontWeight: FontWeight.w500,
-            )),
-        ),
-        const SizedBox(width: 50),
+        Text('$currentScore',
+          maxLines: 1,
+          style: GoogleFonts.playfairDisplay(
+            fontSize: 200, height: 1.0, letterSpacing: -6.0,
+            color: Colors.white.withValues(alpha: 0.62),
+            fontStyle: FontStyle.italic,
+            fontWeight: FontWeight.w500,
+          )),
+        const SizedBox(width: 42),
         Text('→',
           style: GoogleFonts.inter(
             color: ShareCard.accentRed,
             fontSize: 120, height: 1,
             fontWeight: FontWeight.w300,
           )),
-        const SizedBox(width: 50),
-        SizedBox(
-          width: 220,
-          child: Text('$projectedScore',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.playfairDisplay(
-              fontSize: 232, height: 1.0, letterSpacing: -6.6,
-              color: Colors.white,
-              fontStyle: FontStyle.italic,
-              fontWeight: FontWeight.w700,
-            )),
-        ),
+        const SizedBox(width: 42),
+        Text('$projectedScore',
+          maxLines: 1,
+          style: GoogleFonts.playfairDisplay(
+            fontSize: 232, height: 1.0, letterSpacing: -6.6,
+            color: ShareCard.accentRed,        // the "after" number = brand red
+            fontStyle: FontStyle.italic,
+            fontWeight: FontWeight.w700,
+            shadows: [
+              Shadow(
+                color: ShareCard.accentRed.withValues(alpha: 0.35),
+                blurRadius: 28,
+              ),
+            ],
+          )),
       ],
     );
   }
