@@ -42,14 +42,14 @@ class PaywallScreen extends StatelessWidget {
                       Container(
                         width: 5, height: 5, margin: const EdgeInsets.only(top: 8),
                         decoration: const BoxDecoration(
-                          color: AppColors.gold, shape: BoxShape.circle),
+                          color: AppColors.red, shape: BoxShape.circle),
                       ),
                     ],
                   ).animate().fadeIn(duration: 400.ms),
                   const SizedBox(height: Sp.xs),
                   Text('PRIVATE MEMBERSHIP',
                     style: AppTypography.label.copyWith(
-                      color: AppColors.gold, letterSpacing: 3.0, fontSize: 9))
+                      color: AppColors.red, letterSpacing: 3.0, fontSize: 9))
                     .animate().fadeIn(delay: 120.ms, duration: 400.ms),
 
                   const SizedBox(height: Sp.xl),
@@ -98,7 +98,7 @@ class PaywallScreen extends StatelessWidget {
                     width: double.infinity, height: 56,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.gold,
+                        backgroundColor: AppColors.red,
                         foregroundColor: AppColors.base,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(Rd.lg)),
@@ -151,12 +151,12 @@ class _BulletRow extends StatelessWidget {
         Container(
           width: 16, height: 16, margin: const EdgeInsets.only(top: 3, right: 12),
           decoration: BoxDecoration(
-            color: AppColors.gold.withValues(alpha: 0.12),
+            color: AppColors.red.withValues(alpha: 0.12),
             shape: BoxShape.circle,
-            border: Border.all(color: AppColors.gold.withValues(alpha: 0.55), width: 0.8),
+            border: Border.all(color: AppColors.red.withValues(alpha: 0.55), width: 0.8),
           ),
           child: const Icon(Icons.check_rounded,
-            size: 11, color: AppColors.gold),
+            size: 11, color: AppColors.red),
         ),
         Expanded(
           child: Column(
@@ -189,12 +189,12 @@ class _PriceCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppColors.gold.withValues(alpha: 0.12),
+            AppColors.red.withValues(alpha: 0.12),
             AppColors.surface1,
           ],
         ),
         borderRadius: BorderRadius.circular(Rd.xl),
-        border: Border.all(color: AppColors.gold.withValues(alpha: 0.45)),
+        border: Border.all(color: AppColors.red.withValues(alpha: 0.45)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,7 +204,7 @@ class _PriceCard extends StatelessWidget {
             children: [
               Text('£14.99',
                 style: AppTypography.display.copyWith(
-                  fontSize: 42, color: AppColors.gold, letterSpacing: -1.5, height: 1)),
+                  fontSize: 42, color: AppColors.red, letterSpacing: -1.5, height: 1)),
               const SizedBox(width: 4),
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
