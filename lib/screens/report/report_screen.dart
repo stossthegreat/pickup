@@ -20,7 +20,6 @@ import '../../services/scoring_service.dart';
 import '../../services/trait_builder_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
-import '../../services/chat_service.dart';
 import '../../services/share_service.dart';
 import '../../widgets/common/fullscreen_image.dart';
 import '../../widgets/common/quick_tryon_chips.dart';
@@ -458,26 +457,20 @@ class _ReportScreenState extends State<ReportScreen> {
 
           const SizedBox(height: Sp.xl),
 
-          // ── 5 · THREE FIX CARDS (GPT-sourced, with inline Flux) ────────
+          // ── 5 · FIX HEADLINES (text only — no per-fix Flux render) ─────
+          // We deliberately don't render per-fix inline try-ons any more
+          // (each tap on "See it" fired a fresh /tryon → 3 extra Nano
+          // Banana calls per scan). The hero "Final form" already shows
+          // the combined maximized twin, and the Mirror chat can render
+          // one-at-a-time if the user wants to drill in. This is a pure
+          // cost reduction — text advice stays, generation is centralised.
           Text('THE FIXES',
             style: AppTypography.label.copyWith(
               color: AppColors.textTertiary, letterSpacing: 3.0, fontSize: 10)),
           const SizedBox(height: Sp.sm),
-          ...a.report.fixes.asMap().entries.map((e) {
-            // Each fix card displays the cumulative chain output for its
-            // index — instantly, without a second Flux call. intermediateUrls
-            // comes from the hero's 3-pass chain. If missing (older scan
-            // or chain failure), the card falls back to firing /tryon.
-            final pre = e.key < a.intermediateUrls.length
-                ? a.intermediateUrls[e.key]
-                : null;
-            return _FixCard(
-              index: e.key + 1, fix: e.value,
-              capturedBytes:  widget.imageBytes,
-              geometry:       widget.geometry,
-              precomputedUrl: pre,
-            ).animate().fadeIn(delay: Duration(milliseconds: 2600 + e.key * 120));
-          }),
+          ...a.report.fixes.asMap().entries.map((e) =>
+            _FixTextCard(index: e.key + 1, fix: e.value)
+              .animate().fadeIn(delay: Duration(milliseconds: 2600 + e.key * 120))),
 
           const SizedBox(height: Sp.xl),
 
@@ -1146,111 +1139,21 @@ class _Block extends StatelessWidget {
 }
 
 // ── Fix card ──────────────────────────────────────────────────────────────────
-class _FixCard extends StatefulWidget {
+// ── Fix text card — text-only, no inline render ────────────────────────────
+// Previously this card offered a "See it" button that fired /tryon and
+// rendered a per-fix Nano Banana image (three fix cards × one render each =
+// three extra generations per scan, the single biggest cost item in the
+// report). We've pulled that generation out of the report entirely. The
+// hero "Final form" already shows the combined maximized twin; users who
+// want to drill into a single change can do it one at a time via the
+// Mirror chat, which remains the only per-user render surface.
+class _FixTextCard extends StatelessWidget {
   final int index;
   final Fix fix;
-  final Uint8List? capturedBytes;
-  final FaceGeometry geometry;
-  /// Pre-rendered URL from the hero's Flux chain — the cumulative state
-  /// after this fix was applied. When present, the card shows it
-  /// immediately on tap (no extra API call). Falls back to firing /tryon
-  /// only if absent (older scan, chain failure, etc).
-  final String? precomputedUrl;
-  const _FixCard({
-    required this.index, required this.fix,
-    required this.capturedBytes, required this.geometry,
-    this.precomputedUrl,
-  });
-  @override
-  State<_FixCard> createState() => _FixCardState();
-}
-
-class _FixCardState extends State<_FixCard> {
-  String? _renderUrl;
-  bool    _rendering = false;
-  String? _renderError;
-
-  Future<void> _seeIt() async {
-    if (_rendering) return;
-
-    // Fast path — the Flux chain already produced the cumulative image
-    // for this fix as part of /scan. Use it verbatim, no second Flux call.
-    final pre = widget.precomputedUrl;
-    if (pre != null && pre.isNotEmpty) {
-      setState(() {
-        _renderUrl   = pre;
-        _renderError = null;
-      });
-      return;
-    }
-
-    setState(() { _rendering = true; _renderError = null; });
-
-    try {
-      // PROTOCOL vs VISUAL — critical split. `fix.action` is the user's
-      // routine ("Tretinoin 0.025% nightly, moisturize with CeraVe") and
-      // Flux Kontext, being an image model, will render that literally
-      // (cream on the face, bottles in the shot). GPT now returns a
-      // dedicated `visualRequest` that describes only the visible end
-      // state of the face — use that when we have it, and fall back to
-      // the title alone if GPT/older-cache didn't populate it.
-      final style = widget.fix.visualRequest.trim().isNotEmpty
-          ? widget.fix.visualRequest
-          : widget.fix.title;
-      final cat   = _guessCategory(widget.fix.title, widget.fix.action);
-      // Save bytes to disk on-the-fly so TryOnService can load them.
-      final bytes = widget.capturedBytes;
-      String? url;
-      if (bytes != null) {
-        // Inline call — bypass the service's file-path loading by posting
-        // bytes directly. Simpler: reuse the service by saving a temp file.
-        final tempId = 'fix-${DateTime.now().millisecondsSinceEpoch}';
-        final path = await FaceAssetService.saveScanImage(
-          scanId: tempId, bytes: bytes);
-        url = await TryOnService.render(
-          imagePath:    path,
-          styleRequest: style,
-          category:     cat,
-          geometry:     widget.geometry,
-        );
-      }
-      if (!mounted) return;
-      setState(() {
-        _renderUrl = url;
-        _rendering = false;
-        _renderError = url == null ? 'Couldn\'t render — try again' : null;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _rendering = false;
-        _renderError = 'Error rendering';
-      });
-    }
-  }
-
-  String _guessCategory(String title, String action) {
-    final t = '$title $action'.toLowerCase();
-    // Order matters — beard/facial-hair keywords often also contain "hair"
-    // ("facial hair"), so check beard first before the haircut regex.
-    if (RegExp(r'\b(beard|stubble|facial hair|goatee|mustache|moustache)\b').hasMatch(t)) return 'beard';
-    if (RegExp(r'\b(brow|eyebrow|browline)\b').hasMatch(t))                               return 'eyebrow';
-    if (RegExp(r'\b(glasses|frame|eyewear|specs)\b').hasMatch(t))                          return 'glasses';
-    if (RegExp(r'\b(skin|acne|pore|texture|tone|retinol|tret|cream|sunscreen|glow|blemish|dark circle|under-eye)\b').hasMatch(t)) return 'skin';
-    if (RegExp(r'\b(teeth|tooth|whiten|bleach|smile)\b').hasMatch(t))                      return 'teeth';
-    if (RegExp(r'\b(color|dye|tint|bleach|highlight)\b').hasMatch(t))                      return 'hair_color';
-    if (RegExp(r'\b(lean|cut|body|weight|fat|recomp|bulk)\b').hasMatch(t))                 return 'weight';
-    if (RegExp(r'\b(hair|fade|crop|cut|fringe|undercut|buzz|trim|taper|hairstyle)\b').hasMatch(t)) return 'haircut';
-    // Fallback: 'generic' (not 'haircut'). A generic fix gets a conservative
-    // preservation clause in tryon.js that locks every feature — safer than
-    // accidentally classifying a jaw-exercise fix as a haircut and shaving
-    // the user's head.
-    return 'generic';
-  }
+  const _FixTextCard({required this.index, required this.fix});
 
   @override
   Widget build(BuildContext context) {
-    final fix = widget.fix;
     return Container(
       margin: const EdgeInsets.only(bottom: Sp.md),
       padding: const EdgeInsets.all(Sp.md),
@@ -1265,7 +1168,7 @@ class _FixCardState extends State<_FixCard> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('${widget.index}',
+              Text('$index',
                 style: AppTypography.h1.copyWith(
                   color: AppColors.accent, fontSize: 28, letterSpacing: -1)),
               const SizedBox(width: Sp.sm),
@@ -1302,78 +1205,12 @@ class _FixCardState extends State<_FixCard> {
               _Chip(label: 'RESCAN DAY ${fix.rescanDay}', color: AppColors.accent),
             ],
           ),
-          const SizedBox(height: Sp.md),
-
-          // "See It" — generates a Flux Kontext render of the user with this change
-          if (_renderUrl != null)
-            GestureDetector(
-              onTap: () => FullscreenImage.open(context,
-                url: _renderUrl, caption: fix.title),
-              child: Container(
-                width: double.infinity,
-                height: 160,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(Rd.md),
-                  border: Border.all(color: AppColors.signalGreen.withValues(alpha: 0.5)),
-                ),
-                child: Image.network(_renderUrl!, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Center(
-                    child: Text('Render unavailable',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textMuted))),
-                ),
-              ),
-            )
-          else
-            SizedBox(
-              width: double.infinity, height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.signalGreen,
-                  foregroundColor: AppColors.base,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(Rd.md)),
-                ),
-                onPressed: _rendering ? null : _seeIt,
-                child: _rendering
-                  ? const SizedBox(width: 16, height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.8, color: AppColors.base))
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.auto_awesome,
-                          size: 16, color: AppColors.base),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('GENERATE IMAGE',
-                              maxLines: 1,
-                              style: AppTypography.label.copyWith(
-                                color: AppColors.base, letterSpacing: 1.6,
-                                fontSize: 12, fontWeight: FontWeight.w900)),
-                          ),
-                        ),
-                      ],
-                    ),
-              ),
-            ),
-          if (_renderError != null) ...[
-            const SizedBox(height: 6),
-            Text(_renderError!,
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.signalAmber, fontSize: 11)),
-          ],
         ],
       ),
     );
   }
 }
+
 
 class _Chip extends StatelessWidget {
   final String label;
