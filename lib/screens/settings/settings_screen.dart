@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/dev_flags.dart';
 import '../../services/face_asset_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/purchase_service.dart';
@@ -77,16 +78,21 @@ class SettingsScreen extends StatelessWidget {
               const SizedBox(height: Sp.xl),
 
               // ── SUBSCRIPTION ──────────────────────────────────────────────
+              // In dev-bypass mode the user is forced-subscribed, so the
+              // "Upgrade" tile is hidden to avoid a dead entry point.
+              // Restore + Manage stay visible because Apple requires both
+              // present in release builds regardless.
               _SectionHeader('SUBSCRIPTION'),
-              _SettingTile(
-                icon: Icons.workspace_premium_rounded,
-                title: 'Mirrorly Pro',
-                subtitle: '2 scans / week · 10 renders / month',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  context.push('/paywall');
-                },
-              ),
+              if (!kBypassPaywall)
+                _SettingTile(
+                  icon: Icons.workspace_premium_rounded,
+                  title: 'Mirrorly Pro',
+                  subtitle: '2 scans / week · 10 renders / month',
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    context.push('/paywall');
+                  },
+                ),
               _SettingTile(
                 icon: Icons.restore_rounded,
                 title: 'Restore purchases',
