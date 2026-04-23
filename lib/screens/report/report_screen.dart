@@ -451,8 +451,18 @@ class _ReportScreenState extends State<ReportScreen> {
           // ── 4 · APPLY ALL FIXES ────────────────────────────────────────
           // BeforeAfterCard removed — the hero card now carries the B/A
           // moment, and showing it twice diluted the impact.
+          //
+          // When the hero URL is empty (Replicate was down during /scan and
+          // we returned report-only), the button's state morphs to a
+          // "Generate hero image" retry that hits /maximize directly. No
+          // re-scan required.
           _ApplyAllFixesButton(
             maximizedImageUrl: a.maximizedImageUrl,
+            imageBytes:        widget.imageBytes,
+            improveList:       a.report.fixes
+                .map((f) => f.visualRequest.trim())
+                .where((s) => s.isNotEmpty)
+                .toList(),
           ).animate().fadeIn(delay: 2400.ms, duration: 400.ms),
 
           const SizedBox(height: Sp.xl),
@@ -736,7 +746,18 @@ class _DeeperAnalysisPanelState extends State<_DeeperAnalysisPanel> {
 // ── APPLY ALL FIXES — the primary transformation moment ─────────────────────
 class _ApplyAllFixesButton extends StatefulWidget {
   final String maximizedImageUrl;
-  const _ApplyAllFixesButton({required this.maximizedImageUrl});
+  /// Captured selfie bytes — needed to call /maximize for the retry path
+  /// if the original /scan returned an empty hero url.
+  final Uint8List imageBytes;
+  /// The three visualRequest strings from the fix cards (same thing /scan
+  /// normally feeds to maximize as the "improve" list).
+  final List<String> improveList;
+
+  const _ApplyAllFixesButton({
+    required this.maximizedImageUrl,
+    required this.imageBytes,
+    required this.improveList,
+  });
 
   @override
   State<_ApplyAllFixesButton> createState() => _ApplyAllFixesButtonState();
@@ -744,11 +765,74 @@ class _ApplyAllFixesButton extends StatefulWidget {
 
 class _ApplyAllFixesButtonState extends State<_ApplyAllFixesButton> {
   bool _applied = false;
+  String? _localUrl;   // populated by a successful retry
+  bool _retrying = false;
+  String? _retryError;
+
+  String get _effectiveUrl =>
+      (_localUrl != null && _localUrl!.isNotEmpty)
+          ? _localUrl!
+          : widget.maximizedImageUrl;
+
+  /// Fire /maximize directly. No re-analysis — the fixes we got from the
+  /// original /scan are still valid. This just asks the backend to render
+  /// the hero image again, now that Replicate is (hopefully) healthy.
+  Future<void> _retryMaximize() async {
+    if (_retrying) return;
+    HapticFeedback.mediumImpact();
+    setState(() { _retrying = true; _retryError = null; });
+    try {
+      final url = await MirrorApiService.maximizeOnly(
+        imageBytes: widget.imageBytes,
+        improve:    widget.improveList,
+      );
+      if (!mounted) return;
+      setState(() {
+        _localUrl = url;
+        _retrying = false;
+        _applied = true; // auto-reveal since the user just asked for it
+      });
+    } catch (err) {
+      if (!mounted) return;
+      setState(() {
+        _retryError = _friendlyRetryError(err);
+        _retrying = false;
+      });
+    }
+  }
+
+  String _friendlyRetryError(Object err) {
+    final s = err.toString().toLowerCase();
+    if (s.contains('timeout') || s.contains('timed out')) {
+      return 'Render is taking too long. Try once more.';
+    }
+    if (s.contains('429')) {
+      return 'We\'re rendering a lot of scans right now. Try again in a moment.';
+    }
+    if (RegExp(r'\b50\d\b').hasMatch(s)) {
+      return 'Image service had a hiccup. Try again.';
+    }
+    if (s.contains('socket') || s.contains('network')) {
+      return 'Connection dropped. Check your network and try again.';
+    }
+    return 'Couldn\'t render. Try again.';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final url = _effectiveUrl;
+
+    // ─── A) Hero URL empty — retry path (Replicate was down during /scan) ──
+    if (url.isEmpty) {
+      return _RetryHeroCard(
+        retrying: _retrying,
+        error:    _retryError,
+        onRetry:  _retryMaximize,
+      );
+    }
+
+    // ─── B) Hero unlocked — final form shown ────────────────────────────
     if (_applied) {
-      // Final form unlocked — the maximized twin blown up, with glow
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(Sp.md),
@@ -771,12 +855,10 @@ class _ApplyAllFixesButtonState extends State<_ApplyAllFixesButton> {
                 aspectRatio: 3 / 4,
                 child: GestureDetector(
                   onTap: () => FullscreenImage.open(context,
-                    url: widget.maximizedImageUrl, caption: 'MAXIMIZED · you, applied'),
-                  child: widget.maximizedImageUrl.isNotEmpty
-                      ? Image.network(widget.maximizedImageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _errorBox())
-                      : _errorBox(),
+                    url: url, caption: 'MAXIMIZED · you, applied'),
+                  child: Image.network(url,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _errorBox()),
                 ),
               ),
             ),
@@ -793,6 +875,7 @@ class _ApplyAllFixesButtonState extends State<_ApplyAllFixesButton> {
             duration: 450.ms, curve: Curves.easeOutBack);
     }
 
+    // ─── C) Primary CTA — Apply all fixes ────────────────────────────────
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -835,6 +918,75 @@ class _ApplyAllFixesButtonState extends State<_ApplyAllFixesButton> {
     child: Text('Maximized render unavailable',
       style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted)),
   );
+}
+
+// ── Retry hero card — shown when /scan returned an empty hero url ──────────
+class _RetryHeroCard extends StatelessWidget {
+  final bool retrying;
+  final String? error;
+  final VoidCallback onRetry;
+  const _RetryHeroCard({
+    required this.retrying, required this.error, required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(Sp.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(Rd.xl),
+        border: Border.all(
+          color: AppColors.red.withValues(alpha: 0.35), width: 0.8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('HERO RENDER · PENDING',
+            style: AppTypography.label.copyWith(
+              color: AppColors.red, letterSpacing: 2.8, fontSize: 10,
+              fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text('Image service was busy.',
+            style: AppTypography.h3.copyWith(fontSize: 16)),
+          const SizedBox(height: 4),
+          Text('Your analysis is complete — the hero image didn\'t '
+               'finish rendering. Tap to try again without re-scanning.',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary, fontSize: 12.5, height: 1.5)),
+          const SizedBox(height: Sp.md),
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.red,
+                foregroundColor: AppColors.base,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(Rd.lg)),
+                elevation: 0,
+              ),
+              onPressed: retrying ? null : onRetry,
+              child: retrying
+                  ? const SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(
+                        color: AppColors.base, strokeWidth: 2))
+                  : const Text('Generate hero image',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14, letterSpacing: 0.4)),
+            ),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 8),
+            Text(error!,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.signalAmber, fontSize: 11.5)),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _ConsultCard extends StatelessWidget {

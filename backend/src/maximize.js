@@ -65,21 +65,36 @@ export async function maximize({ imageBase64, brief }) {
   const seed   = deterministicSeed(imageBase64);
   const inputDataUri = `data:image/jpeg;base64,${imageBase64}`;
 
-  // Stage 1+2 — primary edit via Nano Banana
-  const editUrl = await runEditWithRetry({ imageDataUri: inputDataUri, prompt });
+  console.log(`[maximize] heroChange="${heroChange}" (ranked=${ranked.length})`);
 
-  // Stage 3 — face-swap original → edit (identity guarantee)
+  // Stage 1+2 — primary edit via Nano Banana (retry on 429, 5xx, timeout)
+  const editStart = Date.now();
+  const editUrl = await runWithRetry(
+    () => runEdit({ imageDataUri: inputDataUri, prompt }),
+    { label: 'edit', maxAttempts: 3 },
+  );
+  console.log(`[maximize] edit ok: ${Date.now() - editStart}ms`);
+
+  // Stage 3 — face-swap original → edit (identity guarantee).
+  // Also retried — face-swap transient 5xxs were silently degrading
+  // identity. If all retries fail we fall back to the edit output
+  // rather than crashing the whole /scan.
   let finalUrl = editUrl;
+  const swapStart = Date.now();
   try {
-    finalUrl = await runFaceSwap({
-      editedUrl:   editUrl,
-      originalUri: inputDataUri,
-    });
+    finalUrl = await runWithRetry(
+      () => runFaceSwap({
+        editedUrl:   editUrl,
+        originalUri: inputDataUri,
+      }),
+      { label: 'swap', maxAttempts: 3 },
+    );
+    console.log(`[maximize] swap ok: ${Date.now() - swapStart}ms`);
   } catch (e) {
-    // If the face-swap post-pass fails, serve the edit as-is rather than
-    // error the whole scan. Identity will drift slightly but user still
-    // sees a maximized twin.
-    console.warn('[maximize] face-swap post-pass failed:', String(e?.message ?? e));
+    // Face-swap failed after retries. Serve the edit as-is rather than
+    // error the whole scan. Identity will drift slightly but the user
+    // still gets a usable twin.
+    console.warn(`[maximize] swap FAILED after retries (${Date.now() - swapStart}ms): ${String(e?.message ?? e)}`);
   }
 
   return {
@@ -91,6 +106,67 @@ export async function maximize({ imageBase64, brief }) {
     model:            EDIT_MODEL,
     intermediateUrls: [],
   };
+}
+
+/**
+ * Generic retry wrapper for Replicate calls. Retries on:
+ *   · HTTP 429 (rate limit)
+ *   · HTTP 5xx (transient server errors — the #1 source of "Server hiccup"
+ *     reports, Replicate's upstream is not always stable)
+ *   · Network timeouts, ECONNRESET, ETIMEDOUT, socket hang up
+ *
+ * Does NOT retry on:
+ *   · 4xx other than 429 (client errors — our payload is broken)
+ *   · Content-policy refusals
+ *
+ * Backoff: respects Retry-After hint if present, else exponential
+ * (3s, 6s, 12s) capped at 30s.
+ */
+async function runWithRetry(fn, { label, maxAttempts = 3 } = {}) {
+  let lastErr;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err?.message ?? err);
+      const transient = isTransient(msg);
+      if (!transient || attempt >= maxAttempts) {
+        console.error(`[${label}] failed attempt ${attempt}/${maxAttempts} (terminal): ${msg}`);
+        throw err;
+      }
+      // Respect Retry-After if the error body surfaced it, else
+      // exponential with a floor of 3s and cap of 30s.
+      const retryAfter = msg.match(/retry_after"?\s*:\s*(\d+)/);
+      const waitSec    = retryAfter ? Number(retryAfter[1]) : Math.pow(2, attempt) * 3;
+      const waitMs     = Math.min(Math.max(waitSec, 3), 30) * 1000;
+      console.warn(`[${label}] transient failure attempt ${attempt}/${maxAttempts}: "${msg.slice(0, 200)}" — waiting ${waitMs}ms`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+  }
+  throw lastErr;
+}
+
+function isTransient(msg) {
+  const m = msg.toLowerCase();
+  // HTTP status code matches
+  if (/\b(429|500|502|503|504)\b/.test(m))           return true;
+  if (m.includes('too many requests'))               return true;
+  if (m.includes('internal server error'))           return true;
+  if (m.includes('bad gateway'))                     return true;
+  if (m.includes('service unavailable'))             return true;
+  if (m.includes('gateway timeout'))                 return true;
+  // Network / socket level
+  if (m.includes('etimedout'))                       return true;
+  if (m.includes('econnreset'))                      return true;
+  if (m.includes('econnrefused'))                    return true;
+  if (m.includes('socket hang up'))                  return true;
+  if (m.includes('network socket disconnected'))     return true;
+  if (m.includes('network error'))                   return true;
+  if (m.includes('timeout'))                         return true;
+  // Replicate-specific prediction failures that are often transient
+  if (m.includes('prediction failed') && m.includes('overloaded')) return true;
+  return false;
 }
 
 /**
@@ -137,26 +213,6 @@ function buildPrompt(heroChange) {
 }
 
 // ─── Stage 1+2 — primary edit ────────────────────────────────────────────────
-async function runEditWithRetry({ imageDataUri, prompt }) {
-  const maxAttempts = 3;
-  let attempt = 0;
-  while (true) {
-    attempt++;
-    try {
-      return await runEdit({ imageDataUri, prompt });
-    } catch (err) {
-      const msg   = String(err?.message ?? err);
-      const is429 = msg.includes('429') || msg.includes('Too Many Requests');
-      if (!is429 || attempt >= maxAttempts) throw err;
-      const m       = msg.match(/retry_after"?\s*:\s*(\d+)/);
-      const waitSec = m ? Number(m[1]) : Math.pow(2, attempt) * 3;
-      const waitMs  = Math.min(Math.max(waitSec, 3), 30) * 1000;
-      console.warn(`[edit] 429, waiting ${waitMs}ms (attempt ${attempt}/${maxAttempts})`);
-      await new Promise(r => setTimeout(r, waitMs));
-    }
-  }
-}
-
 async function runEdit({ imageDataUri, prompt }) {
   // Nano Banana accepts `image_input` as an ARRAY (supports up to 14 refs).
   // png output avoids jpg compression artifacts on skin.
