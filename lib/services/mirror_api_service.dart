@@ -30,6 +30,54 @@ class MirrorApiService {
   /// Serializable form, callable from chat_service.dart.
   static Map<String, dynamic> geometryToJson(FaceGeometry g) => _geometryToJson(g);
 
+  /// Run ONLY the GPT analysis stage. Skips the slow Replicate maximize
+  /// call so the report screen can render the moment GPT lands (typical
+  /// /analyse latency is 6–12s, vs 60–90s for the full /scan that
+  /// chains Replicate behind it). The hero card fires /maximize itself
+  /// when the user taps the on-image GENERATE button.
+  ///
+  /// Same retry contract as [scan] — never gives up. The returned
+  /// [MirrorAnalysis] has an empty `maximizedImageUrl`; the caller is
+  /// expected to backfill it via [maximizeOnly] on user demand.
+  static Future<MirrorAnalysis> analyseOnly({
+    required Uint8List imageBytes,
+    required FaceGeometry geometry,
+    List<Uint8List> extraImages = const [],
+  }) async {
+    final payload = <String, dynamic>{
+      'imageBase64': base64Encode(imageBytes),
+      'geometry':    _geometryToJson(geometry),
+    };
+    if (extraImages.isNotEmpty) {
+      payload['extraImagesBase64'] =
+          extraImages.map((b) => base64Encode(b)).toList();
+    }
+    final body = jsonEncode(payload);
+
+    return _retryForever<MirrorAnalysis>(
+      label: 'analyse',
+      run: () async {
+        final response = await http.post(
+          Uri.parse('${ApiConfig.backendBaseUrl}/analyse'),
+          headers: {'Content-Type': 'application/json'},
+          body: body,
+        ).timeout(const Duration(seconds: 60));
+
+        if (response.statusCode != 200) {
+          throw Exception('Backend ${response.statusCode}: ${response.body}');
+        }
+        // /analyse returns the bare report object — wrap it into the
+        // MirrorAnalysis envelope with an empty maximized payload so
+        // the rest of the app keeps the same contract.
+        final report = jsonDecode(response.body) as Map<String, dynamic>;
+        return MirrorAnalysis.fromJson({
+          'report':    report,
+          'maximized': {'url': ''},
+        });
+      },
+    );
+  }
+
   /// Run full scan: analyse + maximize in one round-trip.
   /// `extraImages` are additional angles (left 3/4, right 3/4). The backend
   /// can use these for richer vision analysis via GPT-4o; Nano Banana still
