@@ -88,44 +88,38 @@ class ShareCard extends StatelessWidget {
                   )),
 
               // Push pics down a little so the score row breathes.
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
               // ── 2 · IMAGE (Mirrorly wordmark + RED on NOW side) ──
-              // Flexible so the image shrinks if the bigger typography
-              // above/below eats into its room — never clips.
-              // Aspect has been tightened THREE times at user request:
-              //   5:6 → 5:8 → 5:11 → 5:15  — each step +33% taller.
-              // Plus: the trailing Spacer() below was removed so the
-              // Flexible image consumes ALL remaining vertical space
-              // instead of sharing it with the bottom filler. Net: the
-              // user's face now fills the 9:16 frame substantially
-              // more than the v1 share card.
-              Flexible(
-                fit: FlexFit.tight,
-                child: AspectRatio(
-                  aspectRatio: 5 / 15,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Row(
-                      children: [
-                        Expanded(child: _half(
-                          bytes: beforeBytes, url: null,
-                          label: 'NOW', align: Alignment.bottomLeft,
-                          showBrandWordmark: true,
-                        )),
-                        Container(width: 1, color: Colors.white),
-                        Expanded(child: _half(
-                          bytes: null, url: afterUrl,
-                          label: 'FIXED', align: Alignment.bottomRight,
-                          showBrandWordmark: false,
-                        )),
-                      ],
-                    ),
+              // Aspect history: 5:6 → 5:8 → 5:11 → 5:15 → 5:11.25.
+              // The 5:15 version was filling almost the whole frame and
+              // the bullets were getting pushed under chat-app preview
+              // bars. Trim back 25% of the height (15 × 0.75 = 11.25)
+              // and drop the Flexible.tight wrap so the column packs
+              // up — bullets sit higher, more breathing room top + bottom.
+              AspectRatio(
+                aspectRatio: 5 / 11.25,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Row(
+                    children: [
+                      Expanded(child: _half(
+                        bytes: beforeBytes, url: null,
+                        label: 'NOW', align: Alignment.bottomLeft,
+                        showBrandWordmark: true,
+                      )),
+                      Container(width: 1, color: Colors.white),
+                      Expanded(child: _half(
+                        bytes: null, url: afterUrl,
+                        label: 'FIXED', align: Alignment.bottomRight,
+                        showBrandWordmark: false,
+                      )),
+                    ],
                   ),
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 18),
 
               // ── 3 · TAGLINE — the one statement under the images. RED. ──
               //  Sourced from the /rate "viral killer line" (strength-led,

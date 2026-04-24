@@ -11,11 +11,18 @@ import '../../theme/app_typography.dart';
 /// Stack:
 ///   1.  54  →  76            (white numbers, RED arrow = the transformation)
 ///   2.  CURRENT · PROJECTED  (tiny captions)
-///   3.  [ BEFORE | AFTER ]   (tight face crop, eyes in upper third)
+///   3.  [ BEFORE | GENERATE ]  (after side carries the GENERATE button)
 ///   4.  "You're not unattractive. You're unoptimized."   (big italic serif)
-///   5.  TOP 3% HUNTER EYES   (22pt all-caps, white, big enough to read)
+///   5.  TOP 3% HUNTER EYES
 ///       TOP 5% SYMMETRY
 ///       STRONG JAW
+///
+/// The "after" half doubles as the maximize action: when no afterUrl is
+/// present and the parent isn't already generating, the right side shows
+/// a big red GENERATE button on a dark placeholder. Tap → onGenerate
+/// fires (parent calls /maximize) → spinner fades in → image arrives →
+/// the placeholder dissolves into the maxed render. Same psychological
+/// beat as the Mirror tab's inline tryon.
 class HeroCard extends StatefulWidget {
   static const Color accentRed = Color(0xFFE8222A);
 
@@ -27,6 +34,15 @@ class HeroCard extends StatefulWidget {
   final int correctionsCount;     // kept for API parity, not rendered
   final List<String> microProofs;
 
+  /// Fired when the user taps the on-image GENERATE button. Parent is
+  /// expected to call /maximize and feed the resulting URL back through
+  /// [afterUrl] (and flip [isGenerating] back to false).
+  final VoidCallback? onGenerate;
+
+  /// While true, the after half shows a spinner + "RENDERING…" caption
+  /// instead of the GENERATE button.
+  final bool isGenerating;
+
   const HeroCard({
     super.key,
     required this.currentScore,
@@ -36,6 +52,8 @@ class HeroCard extends StatefulWidget {
     required this.afterUrl,
     required this.correctionsCount,
     required this.microProofs,
+    this.onGenerate,
+    this.isGenerating = false,
   });
 
   @override
@@ -45,12 +63,6 @@ class HeroCard extends StatefulWidget {
 class _HeroCardState extends State<HeroCard>
     with SingleTickerProviderStateMixin {
   late final AnimationController _counter;
-
-  // The after image on the right half starts blurred behind a "TAP TO
-  // REVEAL" chip, same pattern as the Mirror-tab try-on card. Variable
-  // reward UX — anticipation of the unveil lands harder than an always-
-  // visible result. Sticky once true for the life of this mount.
-  bool _revealed = false;
 
   @override
   void initState() {
@@ -118,58 +130,21 @@ class _HeroCardState extends State<HeroCard>
 
           // Image — 10:9 crop (25% shorter than the old 5:6 portrait),
           // sits tight under the score so the eye-path reads as one unit.
+          // Right half doubles as the GENERATE action when no afterUrl is
+          // present yet — see _afterHalf() for the three-state stack
+          // (placeholder → spinner → image).
           AspectRatio(
             aspectRatio: 10 / 9,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(Rd.sm),
-              child: Stack(
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(child: _half(
-                        bytes: widget.beforeBytes, url: null,
-                        label: 'NOW', align: Alignment.bottomLeft,
-                        blurred: false)),
-                      Container(width: 1, color: Colors.white),
-                      Expanded(child: _half(
-                        bytes: null, url: widget.afterUrl,
-                        label: 'FIXED', align: Alignment.bottomRight,
-                        blurred: !_revealed,
-                        onTap: _revealed
-                            ? null
-                            : () => setState(() => _revealed = true))),
-                    ],
-                  ),
-                  // "TAP TO REVEAL" chip pinned over the right (FIXED) half
-                  // while still blurred. IgnorePointer so the underlying
-                  // half captures the tap.
-                  if (!_revealed)
-                    Positioned(
-                      right: 0, top: 0, bottom: 0,
-                      width: MediaQuery.of(context).size.width * 0.5 - 24,
-                      child: IgnorePointer(
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 9),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.65),
-                              borderRadius: BorderRadius.circular(100),
-                              border: Border.all(
-                                color: HeroCard.accentRed
-                                    .withValues(alpha: 0.8),
-                                width: 0.9),
-                            ),
-                            child: Text('TAP TO REVEAL',
-                              style: GoogleFonts.inter(
-                                color: HeroCard.accentRed,
-                                fontSize: 10, letterSpacing: 2.4,
-                                fontWeight: FontWeight.w900)),
-                          ),
-                        ),
-                      ),
-                    ).animate(onPlay: (c) => c.repeat(reverse: true))
-                      .fadeIn(duration: 900.ms),
+                  Expanded(child: _half(
+                    bytes: widget.beforeBytes, url: null,
+                    label: 'NOW', align: Alignment.bottomLeft,
+                    blurred: false)),
+                  Container(width: 1, color: Colors.white),
+                  Expanded(child: _afterHalf()),
                 ],
               ),
             ),
@@ -214,6 +189,103 @@ class _HeroCardState extends State<HeroCard>
           ],
         ],
       ),
+    );
+  }
+
+  /// Three-state stack on the after side:
+  ///   1. afterUrl present       → render the maxed image, no overlay.
+  ///   2. isGenerating == true   → dark placeholder + spinner + RENDERING…
+  ///   3. neither, with onGenerate
+  ///                             → dark placeholder + big red GENERATE button.
+  ///
+  /// State (3) is the new entry point that replaces the old "TAP TO
+  /// REVEAL" chip + the standalone APPLY ALL FIXES button. One tap, one
+  /// place, on the image itself.
+  Widget _afterHalf() {
+    final url = widget.afterUrl;
+    final hasUrl = url != null && url.isNotEmpty;
+
+    if (hasUrl) {
+      return _half(
+        bytes: null, url: url,
+        label: 'FIXED', align: Alignment.bottomRight,
+        blurred: false,
+      );
+    }
+
+    // Placeholder background — keep it clearly empty rather than
+    // showing a duplicate of the NOW image, so the user can tell the
+    // maxed render hasn't been computed yet.
+    final placeholder = const ColoredBox(color: Color(0xFF0C0C0C));
+
+    if (widget.isGenerating) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          placeholder,
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 24, height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4, color: HeroCard.accentRed)),
+                const SizedBox(height: 12),
+                Text('RENDERING…',
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: 10, letterSpacing: 2.4,
+                    fontWeight: FontWeight.w900)),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Idle — show the GENERATE call to action.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        placeholder,
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onGenerate,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18, vertical: 12),
+                decoration: BoxDecoration(
+                  color: HeroCard.accentRed,
+                  borderRadius: BorderRadius.circular(100),
+                  boxShadow: [
+                    BoxShadow(
+                      color: HeroCard.accentRed.withValues(alpha: 0.55),
+                      blurRadius: 18, offset: const Offset(0, 4)),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.auto_awesome,
+                      size: 14, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text('GENERATE',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 11, letterSpacing: 2.4,
+                        fontWeight: FontWeight.w900)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ).animate(onPlay: (c) => c.repeat(reverse: true))
+          .scaleXY(begin: 0.97, end: 1.03, duration: 1200.ms,
+                   curve: Curves.easeInOut),
+      ],
     );
   }
 
