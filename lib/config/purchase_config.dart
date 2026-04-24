@@ -26,10 +26,10 @@
 /// ──────────────────────────────────────────────────────────────────────
 class PurchaseConfig {
   /// RevenueCat public SDK key for iOS. Starts with `appl_`.
-  static const iosApiKey     = '';
+  static const iosApiKey     = 'appl_LZCBJirwBRyekXFKrBGdcdnyRLJ';
 
   /// RevenueCat public SDK key for Android. Starts with `goog_`.
-  static const androidApiKey = '';
+  static const androidApiKey = 'goog_cdoFAjjiwMkzsxNjPBwoKalEwkF';
 
   /// The entitlement identifier that grants Mirrorly Pro. Configured
   /// in RevenueCat dashboard → Entitlements. Both monthly and annual
