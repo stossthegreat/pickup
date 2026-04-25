@@ -50,10 +50,18 @@ jobs:
       - name: Verify keystore
         run: |
           set -e
+          echo "================================================================"
+          echo " EXPECTED FINGERPRINTS (registered with Play Console for Mirrorly)"
+          echo "================================================================"
+          echo "         SHA1: C2:27:D7:BE:A2:38:70:40:16:6A:E3:D9:BD:23:39:8D:60:DC:08:DE"
+          echo "         SHA256: 76:E1:49:7A:35:36:DD:9A:02:8C:DB:46:5F:F8:D2:38:18:C0:FC:40:A2:55:53:C5:C7:AB:CF:2B:A7:5C:BD:ED"
+          echo "================================================================"
+          echo ""
           echo "Using keystore from repo: android/app/upload-keystore.jks"
           ls -l android/app/upload-keystore.jks
-          echo "Getting SHA-1 fingerprint:"
-          keytool -list -v -keystore android/app/upload-keystore.jks -alias skeletalpt -storepass skeletalpt123 -keypass skeletalpt123 | grep "SHA1:"
+          echo ""
+          echo "Actual fingerprints from keystore:"
+          keytool -list -v -keystore android/app/upload-keystore.jks -alias skeletalpt -storepass skeletalpt123 -keypass skeletalpt123 | grep -E "SHA1:|SHA256:"
           echo "KEY_ALIAS=skeletalpt" >> $GITHUB_ENV
           echo "STORE_PASSWORD=skeletalpt123" >> $GITHUB_ENV
           echo "KEY_PASSWORD=skeletalpt123" >> $GITHUB_ENV
