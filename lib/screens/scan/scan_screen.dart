@@ -13,6 +13,7 @@ import 'package:image/image.dart' as img;
 import '../../models/face_geometry.dart';
 import '../../services/face_geometry_service.dart';
 import '../../services/face_mesh_service.dart';
+import '../../services/ios_face_mesh_service.dart';
 import '../../services/local_store_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
@@ -29,7 +30,13 @@ class ScanScreen extends StatefulWidget {
 class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   CameraController? _camera;
   FaceDetector?     _faceDetector;
-  FaceMeshService?  _meshService;
+  // Per-platform dense-mesh sources. Android uses Google ML Kit's
+  // face mesh detector (Android-only plugin). iOS uses the
+  // mediapipe_face_mesh community wrapper around Google's official
+  // MediaPipe Tasks Vision iOS framework. Only one of these is
+  // populated per build — the other stays null.
+  FaceMeshService?     _meshService;
+  IosFaceMeshService?  _iosMeshService;
 
   // Image orientation snapshot taken at init, reused for every frame's point
   // transform so landmarks rotate/mirror into the same space as the preview.
@@ -131,13 +138,20 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
               ?? InputImageRotation.rotation270deg);
     _isFrontCam = front.lensDirection == CameraLensDirection.front;
 
-    // Android gets the full 468-point mesh via google_mlkit_face_mesh_detection
-    // (Android-only plugin). iOS falls back to contour points from face_detection
-    // — same pipeline, fewer points, still renders.
+    // Dense mesh source — picks the right native runtime per platform.
+    //   Android → google_mlkit_face_mesh_detection (Google's ML Kit, 468 pts)
+    //   iOS     → mediapipe_face_mesh (Google's MediaPipe Tasks Vision, 478 pts)
+    // Both produce a `FaceMesh` of normalized 0..1 Offsets at the same
+    // canonical MediaPipe indices, so the painter is platform-agnostic.
     if (Platform.isAndroid) {
-      _meshService = FaceMeshService();
+      _meshService    = FaceMeshService();
+      _iosMeshService = null;
+    } else if (Platform.isIOS) {
+      _meshService    = null;
+      _iosMeshService = IosFaceMeshService();
     } else {
-      _meshService = null;
+      _meshService    = null;
+      _iosMeshService = null;
     }
 
     // Canonical Flutter + ML Kit setup — per google_mlkit_commons README:
@@ -363,6 +377,23 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
           mesh = await _meshService!.detect(
             inputImage,
             (x, y) => _normalize(x, y, imgW, imgH),
+          );
+        } catch (_) {}
+      } else if (_iosMeshService != null) {
+        // iOS path — feed the BGRA8888 frame directly to MediaPipe.
+        // Rotation degrees: iOS frames arrive in sensor orientation,
+        // so pass the raw sensorOrientation to MediaPipe so it knows
+        // how to rotate before inference.
+        // Mirror horizontal: front cam preview is auto-mirrored on
+        // iOS at the platform level — we want the mesh coordinates to
+        // match the mirrored preview, so request mirrored output.
+        final cam = _camera?.description;
+        final rotDeg = cam?.sensorOrientation ?? 0;
+        try {
+          mesh = await _iosMeshService!.detect(
+            image:            image,
+            rotationDegrees:  rotDeg,
+            mirrorHorizontal: _isFrontCam,
           );
         } catch (_) {}
       }
@@ -834,6 +865,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     _camera?.dispose();
     _faceDetector?.close();
     _meshService?.close();
+    _iosMeshService?.close();
     super.dispose();
   }
 
