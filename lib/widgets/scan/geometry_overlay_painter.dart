@@ -51,6 +51,16 @@ class GeometryOverlayPainter extends CustomPainter {
   // direction. Caller passes `Platform.isAndroid` here.
   final bool mirrorLR;
 
+  // True when the upstream produced a real 468-point MediaPipe mesh
+  // (Android only). Topology-dependent layers (bone structure, arc
+  // measurements) reach into obscure mesh indices and must be skipped
+  // when this is false — otherwise they draw garbage through whatever
+  // happens to live at those indices in the iOS contour-fallback list.
+  // Anchor-driven layers (silhouette glow, live rails, floating
+  // readouts, feature beam, constellation) work in both modes since
+  // _buildSemanticMesh on iOS populates the canonical anchor indices.
+  final bool denseMesh;
+
   const GeometryOverlayPainter({
     required this.mesh,
     required this.phase,
@@ -62,6 +72,7 @@ class GeometryOverlayPainter extends CustomPainter {
     this.statusColor = 'idle',
     this.holdProgress = 0,
     this.mirrorLR = false,
+    this.denseMesh = false,
   });
 
   // ── Palette ───────────────────────────────────────────────────────────────
@@ -608,6 +619,12 @@ class GeometryOverlayPainter extends CustomPainter {
     bool pulseBoost = false,
     bool dramatic   = false,
   }) {
+    // Bone structure draws polylines through arbitrary MediaPipe indices
+    // (chain([10, 152, 234, 454, ...])). Without a real 468-point mesh
+    // those indices land on whichever points happen to live in the
+    // iOS contour-fallback list, producing a plate of garbage lines.
+    // Keep this Android-only.
+    if (!denseMesh) return;
     final points = mesh!.points;
     if (points.length < 200) return;
 
@@ -804,11 +821,19 @@ class GeometryOverlayPainter extends CustomPainter {
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawLiveMeasurementLines(Canvas canvas, Size size) {
     final points = mesh!.points;
-    if (points.length < 200) return;
+    // Anchor-driven (33, 234, 454, 1, 152) — works on iOS too via the
+    // semantic mesh. Just need enough points for the canonical indices
+    // to be addressable, which the semantic builder guarantees (length
+    // 500). We still bail on a totally empty mesh.
+    if (points.isEmpty) return;
 
     Offset? px(int i) {
       if (i >= points.length) return null;
       final p = points[i];
+      // Off-canvas sentinel — semantic mesh fills unmapped indices with
+      // (-10, -10). Treat anything outside [0,1] as "no data here" so
+      // we don't try to anchor a rail to thin air.
+      if (p.dx < 0 || p.dx > 1 || p.dy < 0 || p.dy > 1) return null;
       return Offset(p.dx * size.width, p.dy * size.height);
     }
 
@@ -944,9 +969,12 @@ class GeometryOverlayPainter extends CustomPainter {
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawFaceSilhouetteGlow(Canvas canvas, Size size) {
     final points = mesh!.points;
-    if (points.length < 200) return;
+    if (points.isEmpty) return;
 
     // Face-oval indices (MediaPipe 468 mesh face boundary, clockwise).
+    // The semantic-mesh builder on iOS distributes ML Kit's face oval
+    // contour points across these same canonical indices, so the glow
+    // traces the same outline on both platforms.
     const faceOvalIdx = [
       10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
       397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
@@ -961,6 +989,8 @@ class GeometryOverlayPainter extends CustomPainter {
     final pts = faceOvalIdx.map((i) {
       if (i >= points.length) return null;
       final p = points[i];
+      // Skip sentinel / unmapped entries.
+      if (p.dx < 0 || p.dx > 1 || p.dy < 0 || p.dy > 1) return null;
       return Offset(p.dx * size.width, p.dy * size.height);
     }).whereType<Offset>().toList();
     if (pts.length < 8) return;
@@ -1010,7 +1040,7 @@ class GeometryOverlayPainter extends CustomPainter {
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawConstellation(Canvas canvas, Size size) {
     final points = mesh!.points;
-    if (points.length < 200) return;
+    if (points.isEmpty) return;
 
     final reveal = ((progress - 0.25) / 0.6).clamp(0.0, 1.0);
     if (reveal <= 0) return;
@@ -1024,6 +1054,9 @@ class GeometryOverlayPainter extends CustomPainter {
     for (final i in anchors) {
       if (i >= points.length) continue;
       final p = points[i];
+      // Skip unmapped / sentinel anchors so iOS doesn't draw stars
+      // bunched off-canvas or in random positions.
+      if (p.dx < 0 || p.dx > 1 || p.dy < 0 || p.dy > 1) continue;
       final x = p.dx * size.width;
       final y = p.dy * size.height;
 
@@ -1062,6 +1095,10 @@ class GeometryOverlayPainter extends CustomPainter {
   //  This makes the "we measured you" feel VISIBLE, not just numerical.
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawMeasurementArcs(Canvas canvas, Size size) {
+    // Arcs hang off obscure jaw / cheek mesh indices (172, 397, 288, 58)
+    // that aren't in the iOS semantic-mesh anchor set. Without dense
+    // mesh they'd render at the off-canvas sentinel — gate to Android.
+    if (!denseMesh) return;
     final points = mesh!.points;
     if (points.length < 200) return;
 
@@ -1187,8 +1224,10 @@ class GeometryOverlayPainter extends CustomPainter {
   //  the biometric-grade moment that sells the precision.
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawFeatureBeam(Canvas canvas, Size size) {
+    // Pure horizontal sweep — no point indexing required. Just needs to
+    // know a face was detected (any non-empty mesh).
     final points = mesh!.points;
-    if (points.length < 200) return;
+    if (points.isEmpty) return;
 
     // 6 feature zones, each gets its own progress slice.
     const zones = [
@@ -1429,13 +1468,18 @@ class GeometryOverlayPainter extends CustomPainter {
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawFloatingMeasurements(Canvas canvas, Size size) {
     final points = mesh!.points;
-    if (points.length < 200) return;
+    // Anchor-only — uses idxLeftEyeOuter, idxChin, idxCheekL, idxCheekR
+    // which the iOS semantic mesh populates correctly.
+    if (points.isEmpty) return;
     final reveal = ((progress - 0.55) / 0.35).clamp(0.0, 1.0);
     if (reveal <= 0) return;
 
     Offset? px(int i) {
       if (i >= points.length) return null;
       final p = points[i];
+      // Sentinel guard so an unmapped anchor doesn't paint a readout
+      // off-screen at (-X, -Y).
+      if (p.dx < 0 || p.dx > 1 || p.dy < 0 || p.dy > 1) return null;
       return Offset(p.dx * size.width, p.dy * size.height);
     }
 

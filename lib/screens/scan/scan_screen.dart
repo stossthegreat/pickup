@@ -35,6 +35,11 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   // transform so landmarks rotate/mirror into the same space as the preview.
   InputImageRotation _rotation = InputImageRotation.rotation0deg;
   bool _isFrontCam = false;
+  // True when the current frame produced a real 468-point MediaPipe mesh
+  // (Android only). The painter uses this to gate topology-dependent
+  // layers (bone structure, measurement arcs) that index into obscure
+  // MediaPipe indices we can't synthesize from ML Kit contours on iOS.
+  bool _denseMesh = false;
 
   ScanPhase    _phase    = ScanPhase.searching;
   FaceMesh?    _mesh;
@@ -165,23 +170,24 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   // camera plugin configured to deliver NV21 on Android and BGRA on iOS, we
   // just forward the first plane to ML Kit verbatim. No conversion, no stride
   // handling, no manual byte shuffling.
+  //
+  // Rotation: reuse `_rotation` set in _initCamera. Previously this method
+  // re-read camera.description.sensorOrientation per frame, which on iOS
+  // returned 90/270° while `_rotation` (used downstream by _normalize) was
+  // hardcoded to 0°. ML Kit and the coordinate translator disagreed about
+  // the frame, so landmarks came out flipped — the iOS "skeleton turns the
+  // wrong way" bug. Single source of truth fixes it.
   InputImage? _buildInputImage(CameraImage image) {
     final camera = _camera;
     if (camera == null) return null;
     if (image.planes.isEmpty) return null;
-
-    final rotation = Platform.isIOS
-        ? (InputImageRotationValue.fromRawValue(camera.description.sensorOrientation)
-              ?? InputImageRotation.rotation0deg)
-        : (InputImageRotationValue.fromRawValue(camera.description.sensorOrientation)
-              ?? InputImageRotation.rotation270deg);
 
     final plane = image.planes.first;
     return InputImage.fromBytes(
       bytes: plane.bytes,
       metadata: InputImageMetadata(
         size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: rotation,
+        rotation: _rotation,
         format: Platform.isAndroid
             ? InputImageFormat.nv21
             : InputImageFormat.bgra8888,
@@ -236,6 +242,90 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         break;
     }
     return Offset(nx, ny);
+  }
+
+  /// Build a "semantic-compatible" FaceMesh from ML Kit contours. iOS
+  /// can't run google_mlkit_face_mesh_detection (Android-only plugin),
+  /// so the painter — which indexes into canonical MediaPipe positions
+  /// like `idxLeftEyeOuter = 33`, `idxChin = 152`, the 36 face-oval
+  /// indices — used to render almost nothing on iOS (`points.length <
+  /// 200 return`). This builder backfills: it places the right semantic
+  /// landmarks at the right MediaPipe indices using ML Kit's contour
+  /// + landmark API, so anchor-driven painter layers (silhouette glow,
+  /// live measurement rails, floating measurements, feature beam,
+  /// constellation) light up on iOS too.
+  ///
+  /// Topology-dependent layers (bone structure with arbitrary chains,
+  /// measurement arcs at obscure indices) still need a real 468-point
+  /// mesh — those are gated by `_denseMesh` upstream.
+  ///
+  /// Out-of-canvas sentinel for unmapped indices means painters that
+  /// loop with `if (i >= points.length) continue` or per-point bounds
+  /// checks render correctly without drawing junk in the middle of the
+  /// face.
+  FaceMesh? _buildSemanticMesh(Face face, double imgW, double imgH) {
+    final faceOval   = face.contours[FaceContourType.face]?.points ?? [];
+    final leftEye    = face.contours[FaceContourType.leftEye]?.points ?? [];
+    final rightEye   = face.contours[FaceContourType.rightEye]?.points ?? [];
+    final noseBridge = face.contours[FaceContourType.noseBridge]?.points ?? [];
+
+    if (faceOval.length < 8) return null;
+
+    Offset norm(num x, num y) =>
+        _normalize(x.toDouble(), y.toDouble(), imgW, imgH);
+
+    // 500 covers every canonical index the painter touches (max 454).
+    // Off-canvas sentinel keeps unmapped indices visually inert.
+    const sentinel = Offset(-10, -10);
+    final pts = List<Offset>.filled(500, sentinel);
+
+    // Face-oval extremes → cardinal anchors.
+    var topI = 0, botI = 0, leftI = 0, rightI = 0;
+    for (var i = 1; i < faceOval.length; i++) {
+      final p = faceOval[i];
+      if (p.y < faceOval[topI].y)   topI   = i;
+      if (p.y > faceOval[botI].y)   botI   = i;
+      if (p.x < faceOval[leftI].x)  leftI  = i;
+      if (p.x > faceOval[rightI].x) rightI = i;
+    }
+    pts[FaceMesh.idxForehead] = norm(faceOval[topI].x,   faceOval[topI].y);
+    pts[FaceMesh.idxChin]     = norm(faceOval[botI].x,   faceOval[botI].y);
+    pts[FaceMesh.idxCheekL]   = norm(faceOval[leftI].x,  faceOval[leftI].y);
+    pts[FaceMesh.idxCheekR]   = norm(faceOval[rightI].x, faceOval[rightI].y);
+
+    // Eye corners — ML Kit returns each eye contour starting at the
+    // outer corner and going around. First/last give the two corners.
+    if (leftEye.length >= 2) {
+      pts[FaceMesh.idxLeftEyeOuter] = norm(leftEye.first.x, leftEye.first.y);
+      pts[FaceMesh.idxLeftEyeInner] = norm(leftEye.last.x,  leftEye.last.y);
+    }
+    if (rightEye.length >= 2) {
+      pts[FaceMesh.idxRightEyeOuter] = norm(rightEye.first.x, rightEye.first.y);
+      pts[FaceMesh.idxRightEyeInner] = norm(rightEye.last.x,  rightEye.last.y);
+    }
+
+    // Nose tip — last point on nose bridge (lowest = tip).
+    if (noseBridge.isNotEmpty) {
+      final tip = noseBridge.reduce((a, b) => a.y > b.y ? a : b);
+      pts[FaceMesh.idxNoseTip] = norm(tip.x, tip.y);
+    }
+
+    // Distribute the 36 ML Kit face-oval points across the 36 canonical
+    // MediaPipe face-oval indices, starting from the top and going
+    // clockwise. ML Kit's oval is already roughly clockwise-ordered.
+    const ovalCanonical = [
+      10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
+      397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
+      172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
+    ];
+    final n = faceOval.length;
+    for (var i = 0; i < ovalCanonical.length; i++) {
+      final src = (topI + (i * n / ovalCanonical.length).round()) % n;
+      final p = faceOval[src];
+      pts[ovalCanonical[i]] = norm(p.x, p.y);
+    }
+
+    return FaceMesh(pts);
   }
 
   // Front-cam preview is auto-mirrored on iOS at the platform level. Android
@@ -415,13 +505,26 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         _statusColor = nextColor;
       }
 
-      // LAYERED FALLBACK — try in order, take the first that yields enough
-      // points. This guarantees we advance past SEARCHING the moment a face
-      // is on screen, regardless of which ML Kit surface fires on the device.
-      //   1. MediaPipe face mesh (Android only, 468 pts)
-      //   2. Face contours (iOS + older Android, up to ~130 pts)
-      //   3. Face landmarks (eyes, nose, mouth — ~8 pts, always available)
-      //   4. BoundingBox sampled corners + center (always works, 9 pts)
+      // LAYERED FALLBACK — try in order, take the first that yields a
+      // usable mesh. Guarantees we advance past SEARCHING the moment a
+      // face is on screen, regardless of which ML Kit surface fires.
+      //   1. MediaPipe face mesh    (Android, 468 pts, full topology)
+      //   2. SEMANTIC contour mesh  (iOS — anchor indices populated to
+      //                              match MediaPipe so the painter's
+      //                              canonical lookups keep working)
+      //   3. Flat contour blob      (any platform, last-ditch points)
+      //   4. Landmarks + bbox       (always works, ~12 pts)
+      //
+      // _denseMesh tracks whether layer 1 succeeded — the painter gates
+      // topology-dependent layers (bone structure, measurement arcs)
+      // on it, since those use obscure MediaPipe indices that only
+      // exist in a real 468-point mesh.
+      bool denseMesh = mesh != null && mesh.isValid && mesh.points.length >= 200;
+
+      if (mesh == null || !mesh.isValid) {
+        mesh = _buildSemanticMesh(face, imgW, imgH);
+      }
+
       if (mesh == null || !mesh.isValid) {
         final pts = <Offset>[];
         for (final contour in face.contours.values) {
@@ -436,14 +539,13 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       }
 
       if (mesh == null || !mesh.isValid) {
-        // Layer 3 — landmarks
+        // Layer 4 — landmarks + bbox
         final pts = <Offset>[];
         for (final lm in face.landmarks.values) {
           if (lm == null) continue;
           pts.add(_normalize(
             lm.position.x.toDouble(), lm.position.y.toDouble(), imgW, imgH));
         }
-        // Layer 4 — bounding box corners + mid-edges + center
         final bb = face.boundingBox;
         final bboxPts = [
           Offset(bb.left,              bb.top),
@@ -468,6 +570,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       // The painter checks for mesh validity before drawing mesh-dependent
       // layers, so SEARCHING → SCANNING always transitions when a face lands.
       mesh ??= FaceMesh(const []);
+      _denseMesh = denseMesh;
 
       _faceFrames++;
       final geom = FaceGeometryService.computeGeometry(face, imgW, imgH);
@@ -771,6 +874,11 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
                   // Front-cam preview behaves opposite on Android (no auto
                   // mirror) — flag the painter to swap LEFT/RIGHT cues.
                   mirrorLR:     Platform.isAndroid,
+                  // True only when MediaPipe gave us a real 468-point mesh
+                  // (Android). Gates topology-dependent layers — bone
+                  // structure, measurement arcs — that need indices the
+                  // iOS semantic mesh can't synthesise from contours.
+                  denseMesh:    _denseMesh,
                 ),
               ),
             ),
