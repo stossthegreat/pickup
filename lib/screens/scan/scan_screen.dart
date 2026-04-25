@@ -246,7 +246,14 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       case InputImageRotation.rotation180deg:
         nx = bx / imgW;
         ny = by / imgH;
-        if (_isFrontCam) nx = 1.0 - nx;
+        // Mirror for front cam — but ONLY on Android. iOS Flutter
+        // camera plugin delivers the front-cam BGRA buffer already
+        // in the mirrored orientation that matches the auto-mirrored
+        // preview, so an explicit mirror here creates a double flip
+        // → mesh tracks the wrong direction (user turns right, mesh
+        // goes left). Skip the mirror on iOS to keep mesh + preview
+        // in sync.
+        if (_isFrontCam && !Platform.isIOS) nx = 1.0 - nx;
         break;
     }
     return Offset(nx, ny);
