@@ -204,7 +204,7 @@ NO. No advertising identifiers, no device fingerprint.
 | Question | Answer |
 |---|---|
 | Is data encrypted in transit? | **YES** — all backend calls go over HTTPS to our API and to OpenAI / Replicate. |
-| Do you provide a way for users to request deletion? | **YES** — uninstalling the app deletes all on-device data; transient server-side request data auto-expires. Email contact at `hello@mirrorly.app` is in the Privacy Policy for written deletion requests. |
+| Do you provide a way for users to request deletion? | **YES** — uninstalling the app deletes all on-device data; transient server-side request data auto-expires. Email contact at `info@m2mb.co.uk` is in the Privacy Policy for written deletion requests. |
 | Does the app collect data from children under 13? | **NO** — minimum age 13 is stated in the Terms of Use. |
 | Does the app commit to the Google Play Families policy? | **NO** — Mirrorly is for adult / teen-13+ self-assessment, not children. |
 | Does the app track users across apps / websites? *(Apple ATT)* | **NO** |
@@ -238,7 +238,7 @@ NO. No advertising identifiers, no device fingerprint.
 
 ### "Data deletion process"
 
-> Mirrorly does not require an account, so all user data is held client-side in the app sandbox. To delete: uninstall the app — iOS and Android automatically delete all sandbox files, including all selfies, generated images, and saved scans. Server-side, the only data Mirrorly briefly handles is the single API request payload (image + geometry numbers) for the seconds it takes to generate the analysis or render; this is auto-expired and never linked to a persistent identifier because no account exists. For written confirmation of deletion or further data requests, email hello@mirrorly.app.
+> Mirrorly does not require an account, so all user data is held client-side in the app sandbox. To delete: uninstall the app — iOS and Android automatically delete all sandbox files, including all selfies, generated images, and saved scans. Server-side, the only data Mirrorly briefly handles is the single API request payload (image + geometry numbers) for the seconds it takes to generate the analysis or render; this is auto-expired and never linked to a persistent identifier because no account exists. For written confirmation of deletion or further data requests, email info@m2mb.co.uk.
 
 ### "Data retention"
 

@@ -161,26 +161,34 @@ const termsDoc = LegalDoc(
       'scans live on your device and are tied to your App Store or '
       'Google Play account for billing purposes only.'),
     LegalSection('SUBSCRIPTIONS & AUTO-RENEWAL',
-      'Mirrorly offers auto-renewing subscriptions (Monthly and '
-      'Annual). When you subscribe:\n\n'
-      '• Payment is charged to your App Store or Google Play account '
+      'Mirrorly offers auto-renewing subscriptions:\n\n'
+      '• Mirrorly Pro Monthly — \$4.99 USD per month (or local '
+      'equivalent), billed monthly until cancelled.\n'
+      '• Mirrorly Pro Annual — \$29.99 USD per year (or local '
+      'equivalent), with a 7-day free trial for new subscribers, '
+      'billed annually until cancelled.\n\n'
+      'Subscription terms:\n\n'
+      '• Payment is charged to your Apple ID or Google Play account '
       'at confirmation of purchase.\n'
       '• Your subscription automatically renews for the same term at '
       'the same price unless you cancel at least 24 hours before the '
       'current period ends.\n'
       '• Your account is charged for renewal within 24 hours of the '
       'period ending.\n'
-      '• You can manage or cancel subscriptions in your App Store or '
+      '• You can manage or cancel subscriptions in your Apple ID or '
       'Google Play account settings at any time. Uninstalling the '
       'app does NOT cancel the subscription.\n'
+      '• Any unused portion of a free trial period is forfeited when '
+      'you purchase a subscription.\n'
       '• No refund is issued for the unused portion of the current '
       'period. Partial refunds, where offered, are handled by Apple '
       'or Google directly, not by Mirrorly.'),
     LegalSection('ONE-TIME CREDIT PACKS',
-      'Credit packs are non-subscription, one-time purchases. Each '
-      'credit entitles you to one AI-rendered "after" image. Credits '
-      'do not expire, but they are non-refundable and '
-      'non-transferable between accounts or devices.'),
+      'Credit packs are non-subscription, one-time purchases. '
+      'Mirrorly Rescue Pack — \$9.99 USD (or local equivalent) — '
+      'grants 20 AI-rendered "after" image credits. Credits do not '
+      'expire, but they are non-refundable and non-transferable '
+      'between accounts or devices.'),
     LegalSection('WHAT WE RENDER — AND WHAT WE DO NOT',
       'Mirrorly renders illustrative previews of grooming and '
       'styling changes applied to your photo. These images are '
@@ -197,19 +205,57 @@ const termsDoc = LegalDoc(
       'to produce your measurements, score, and rendered outputs. '
       'We do not sell your photos. We do not train AI models on '
       'your photos.'),
-    LegalSection('FACE DATA',
-      'Mirrorly uses on-device computer-vision (Apple ML Kit on iOS, '
-      'Google ML Kit / MediaPipe on Android) to derive geometric '
-      'measurements from your selfie — eye position, jawline angle, '
-      'facial symmetry, proportions. These measurements are NUMBERS, '
-      'not face templates: Mirrorly does NOT perform facial '
-      'recognition, does NOT match your face to any identity, and '
-      'does NOT build a biometric template that could be used to '
-      'identify you. The selfie photo itself is sent to OpenAI '
-      '(GPT-4o Vision) and Replicate for analysis and rendering, '
-      'then forgotten — see the Privacy Policy for the data flow. '
-      'You can stop the app from collecting any face data at any '
-      'time by deleting it.'),
+    LegalSection('FACE DATA — WHAT WE COLLECT, WHY, WHO RECEIVES IT, HOW LONG WE KEEP IT',
+      'WHAT FACE DATA MIRRORLY COLLECTS\n\n'
+      'Mirrorly collects two related pieces of face data:\n'
+      '1) The selfie photograph captured with the in-app scan camera.\n'
+      '2) Sixteen scalar geometric measurements derived from that '
+      'photograph, computed entirely on your device by Apple ML Kit '
+      '(iOS) or Google ML Kit (Android). These measurements are plain '
+      'numbers describing facial shape — canthal-tilt angle in '
+      'degrees, jaw angle in degrees, face width-to-height ratio, '
+      'facial symmetry score, facial-thirds proportions, eye spacing '
+      'ratio, lip fullness, brow-to-eye gap, philtrum ratio, '
+      'interpupillary ratio, nose length ratio, face length ratio, '
+      'and a head-shape category. They are NOT a biometric template, '
+      'a face print, or anything that could be used to recognise or '
+      'identify you.\n\n'
+      'HOW MIRRORLY USES FACE DATA\n\n'
+      '• Compute and display your geometry score, trait badges, and '
+      'archetype match on screen, on-device.\n'
+      '• Generate a written analysis of your facial proportions '
+      '(photo sent to OpenAI GPT-4o Vision for one API request).\n'
+      '• Generate an illustrative "maximised" preview image (photo '
+      'sent to Replicate Nano Banana + cdingram/face-swap for one '
+      'API request).\n'
+      '• Persist the photo and the geometry numbers in the app\'s '
+      'sandboxed local storage so you can revisit prior scans.\n\n'
+      'Mirrorly does NOT use face data for: facial recognition, '
+      'identity matching, authentication, ARKit Face ID, advertising, '
+      'profiling, AI model training, building a biometric template, '
+      'or any cross-app tracking purpose.\n\n'
+      'WHO RECEIVES FACE DATA\n\n'
+      'The selfie photo is sent over HTTPS to two third-party AI '
+      'providers, solely to deliver app functionality:\n'
+      '• OpenAI (GPT-4o Vision) — to generate analysis text and '
+      'cosmetic rating. Default API endpoints exclude inputs from '
+      'training and long-term retention.\n'
+      '• Replicate (Google Nano Banana + cdingram/face-swap) — to '
+      'render the "maximised" preview image. API terms exclude '
+      'inputs from training and provide for transient processing.\n\n'
+      'No other third party receives face data. No advertisers, data '
+      'brokers, analytics providers, or social-login partners.\n\n'
+      'STORAGE LOCATIONS\n\n'
+      '• On your device — app sandbox, until you uninstall.\n'
+      '• Transiently on OpenAI / Replicate infrastructure — seconds.\n'
+      '• On Mirrorly servers — request timestamps and status codes '
+      'only (no photo bytes, no face data); logs expire after 30 days.\n\n'
+      'HOW LONG FACE DATA IS RETAINED\n\n'
+      'On your device: indefinitely, until uninstall or scan deletion.\n'
+      'On Mirrorly\'s servers: never retained.\n'
+      'On OpenAI / Replicate: only for the duration of one API call.\n\n'
+      'You can stop the app from collecting any face data at any time '
+      'by deleting it.'),
     LegalSection('ACCEPTABLE USE',
       'You agree not to use Mirrorly to scan, analyse, or render a '
       'face that is not your own without that person\'s explicit '
@@ -230,7 +276,7 @@ const termsDoc = LegalDoc(
       'inside the app before they take effect. Continued use after '
       'an update constitutes acceptance.'),
     LegalSection('CONTACT',
-      'Questions? Email hello@mirrorly.app.'),
+      'Questions? Email info@m2mb.co.uk.'),
   ],
 );
 
@@ -302,7 +348,7 @@ const privacyDoc = LegalDoc(
     LegalSection('CHILDREN',
       'Mirrorly is not intended for children under 13. We do not '
       'knowingly collect data from children under 13. If you '
-      'believe a child has used the app, email hello@mirrorly.app '
+      'believe a child has used the app, email info@m2mb.co.uk '
       'and we will delete any on-device and server-side records '
       'associated with the submission.'),
     LegalSection('YOUR RIGHTS',
@@ -324,6 +370,6 @@ const privacyDoc = LegalDoc(
       'We may update this policy. Material changes will be '
       'surfaced inside the app before they take effect.'),
     LegalSection('CONTACT',
-      'Questions or data requests? Email hello@mirrorly.app.'),
+      'Questions or data requests? Email info@m2mb.co.uk.'),
   ],
 );
