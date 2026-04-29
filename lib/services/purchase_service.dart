@@ -35,6 +35,59 @@ class PurchaseService {
   /// every Android-side cause.
   static String? lastErrorMessage;
 
+  /// Diagnostic snapshot of the last RevenueCat fetch. Populated by
+  /// loadOfferings() and surfaced via diagnose() so the paywall can show
+  /// *exactly* what RC returned on this device — useful when "it works
+  /// on iOS but not Android" and the user can't read adb logcat.
+  static String? lastDiagnostic;
+
+  /// Walk RevenueCat end-to-end and produce a one-paragraph summary of
+  /// the SDK state on this device. Safe to call any time. The output
+  /// is intentionally short so it fits in a snackbar.
+  static Future<String> diagnose() async {
+    final lines = <String>[];
+    lines.add('Platform: ${Platform.isIOS ? "iOS" : "Android"}');
+    lines.add('Configured: ${PurchaseConfig.isConfigured}');
+    lines.add('Initialised: $_initialized');
+    if (!_initialized) {
+      lines.add('→ Init never ran. Check API key in purchase_config.dart.');
+      return lines.join('\n');
+    }
+    try {
+      final offerings = await Purchases.getOfferings();
+      final cur = offerings.current;
+      lines.add('Offerings.all keys: ${offerings.all.keys.toList()}');
+      if (cur == null) {
+        lines.add('→ No CURRENT offering. Publish a Default Offering in '
+                  'RevenueCat dashboard and mark it Current.');
+      } else {
+        lines.add('Current offering: "${cur.identifier}"');
+        lines.add('Packages: ${cur.availablePackages.length}');
+        for (final p in cur.availablePackages) {
+          lines.add('  · pkg "${p.identifier}" → '
+                    '${p.storeProduct.identifier} '
+                    '(${p.storeProduct.priceString})');
+        }
+        if (cur.availablePackages.isEmpty) {
+          lines.add('→ Offering exists but has 0 packages. Attach products '
+                    'in dashboard → Offerings → Default Offering.');
+        }
+      }
+    } catch (err) {
+      lines.add('getOfferings threw: $err');
+    }
+    try {
+      final info = await Purchases.getCustomerInfo();
+      lines.add('Active entitlements: '
+                '${info.entitlements.active.keys.toList()}');
+    } catch (err) {
+      lines.add('getCustomerInfo threw: $err');
+    }
+    final out = lines.join('\n');
+    lastDiagnostic = out;
+    return out;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   //  INITIALISATION
   // ─────────────────────────────────────────────────────────────────────────

@@ -154,9 +154,18 @@ class _PaywallScreenState extends State<PaywallScreen> {
     if (_purchasing) return;
     final pkg = _packageFor(_selected);
     if (pkg == null) {
-      // Configure-state safety net — in production the CTA is disabled
-      // when no package is available, so this shouldn't fire.
-      _snack('Store unavailable. Try again in a moment.');
+      // No live Package on this platform — almost always Android, where
+      // Play Billing / RevenueCat hasn't returned an Offering. Run the
+      // diagnostic so the user sees exactly what RC saw on this device
+      // (which Offering is current, which packages it has, which
+      // entitlements are active) instead of a generic "store
+      // unavailable" with zero info.
+      HapticFeedback.mediumImpact();
+      setState(() => _purchasing = true);
+      final diag = await PurchaseService.diagnose();
+      if (!mounted) return;
+      setState(() => _purchasing = false);
+      _showDiagnostic(diag);
       return;
     }
 
@@ -261,6 +270,43 @@ class _PaywallScreenState extends State<PaywallScreen> {
       backgroundColor: Colors.black,
       behavior: SnackBarBehavior.floating,
     ));
+  }
+
+  /// Show the RevenueCat diagnostic in a scrollable dialog. Built for
+  /// when "iOS works but Android paywall buttons do nothing" — taps the
+  /// SDK on this device, reports back current offering id, package
+  /// list, and active entitlements, so we know whether Android is
+  /// missing the Offering, missing packages, or has products with the
+  /// wrong identifiers.
+  void _showDiagnostic(String diag) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.black,
+        title: const Text('Store status',
+          style: TextStyle(color: Colors.white)),
+        content: SingleChildScrollView(
+          child: SelectableText(diag,
+            style: const TextStyle(
+              color: Colors.white, fontSize: 12,
+              fontFamily: 'monospace', height: 1.4)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: diag));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Copied. Paste into chat for help.')));
+            },
+            child: const Text('COPY'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('CLOSE'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
