@@ -83,7 +83,16 @@
   <p>Mirrorly renders illustrative previews of grooming and styling changes applied to your photo. These images are approximations, not photographs of real outcomes, and may differ from the real-world result you would get from a barber, surgeon, or dermatologist. Never use a Mirrorly rendering as the sole basis for a medical, dental, or surgical decision. Consult a licensed professional.</p>
 
   <h2>Your content</h2>
-  <p>You retain all rights to photos you take inside Mirrorly. By scanning a photo, you grant Mirrorly a limited, revocable, royalty-free licence to process that photo on your device and transmit it to our AI providers (OpenAI and Replicate) solely to produce your measurements, score, and rendered outputs. We do not sell your photos. We do not train AI models on your photos.</p>
+  <p>You retain all rights to photos you take inside Mirrorly. By scanning a photo and granting in-app permission in the AI data consent dialog, you grant Mirrorly a limited, revocable, royalty-free licence to process that photo on your device and transmit it to our AI providers (OpenAI and Replicate) solely to produce your measurements, score, and rendered outputs. We do not sell your photos. We do not train AI models on your photos.</p>
+
+  <h2>AI data permission — in-app consent gate</h2>
+  <p>Before any selfie photo is transmitted to a third-party AI service, the app shows a full-screen permission dialog disclosing:</p>
+  <ul>
+    <li><strong>What is sent:</strong> the selfie photo + the 16 on-device geometric measurements.</li>
+    <li><strong>Who receives it:</strong> OpenAI (GPT-4o Vision) for the analysis text; Replicate (Google Nano Banana + cdingram/face-swap) for the rendered preview.</li>
+    <li><strong>How long they keep it:</strong> the duration of one API request, excluded from training and long-term retention by the providers' default API terms.</li>
+  </ul>
+  <p>You must tap <strong>ALLOW</strong> for the app to send the photo. Tapping <strong>CANCEL</strong> keeps the photo on your device and aborts the analysis. You may revoke this permission at any time from Settings &rarr; Revoke AI permission, which clears the consent flag and re-shows the dialog on your next scan.</p>
 
   <h2>Face data — what we collect, why, who receives it, how long we keep it</h2>
   <p><strong>What face data Mirrorly collects:</strong></p>
@@ -140,7 +149,7 @@
   <h2>Contact</h2>
   <p>Questions? Email <a href="mailto:info@m2mb.co.uk">info@m2mb.co.uk</a>.</p>
 
-  <div class="updated">Last updated 25 April 2026.</div>
+  <div class="updated">Last updated 30 April 2026.</div>
 </main>
 </body>
 </html>

@@ -6,6 +6,7 @@ These answers reflect what Mirrorly actually does:
 
 - On-device camera capture + ML Kit / MediaPipe face detection (entirely local).
 - 16 facial-geometry numbers (canthal tilt, jaw angle, FWHR, symmetry, thirds, etc.) computed on-device.
+- **In-app permission gate** before any selfie bytes leave the device: a full-screen consent dialog (`AiConsentDialog`) discloses what is sent (photo + 16 measurements), who receives it (OpenAI GPT-4o Vision; Replicate Nano Banana + cdingram/face-swap), how long they keep it (one API request, excluded from training and long-term retention), and how to revoke (Settings → Revoke AI permission). Tapping CANCEL aborts the scan with no transmission. Required by App Store guideline 5.1.2(i); the flag is persisted in `LocalStoreService.hasAiConsent` so the dialog is asked once per install (re-asked on revoke).
 - Selfie photo bytes + geometry numbers sent to OpenAI (GPT-4o Vision) and Replicate (Nano Banana, face-swap) for one API call each — analysis text + rendered "maximized" image are returned and the providers retain nothing per their default API terms.
 - Scan history + generated images + active protocol persisted in the app sandbox on-device.
 - RevenueCat handles subscription receipts.

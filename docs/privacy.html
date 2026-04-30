@@ -52,7 +52,17 @@
   </header>
 
   <h2>The short version</h2>
-  <p>Your photos are processed on your device. We send your photo to OpenAI and Replicate to generate your analysis and renders, then we forget it. We do not sell your data. We do not train AI on your face. We do not require an account.</p>
+  <p>Your photos are processed on your device. Before we send your photo to OpenAI and Replicate to generate your analysis and renders, the app shows you an in-app permission dialog explaining exactly what is sent and to whom — you must tap <strong>ALLOW</strong> for the photo to leave your device. After processing, we forget it. We do not sell your data. We do not train AI on your face. We do not require an account. You can revoke AI permission at any time in Settings.</p>
+
+  <h2>AI data permission — how we ask</h2>
+  <p>The first time you complete a scan, Mirrorly displays a full-screen permission dialog. The dialog discloses:</p>
+  <ul>
+    <li><strong>What is sent:</strong> only the selfie photo you just captured plus the sixteen on-device geometric measurements (canthal tilt, jaw angle, symmetry, facial-thirds, etc.). No name, email, contacts, or location.</li>
+    <li><strong>Who receives it:</strong> OpenAI (GPT-4o Vision) for the written analysis and honest-looks rating; Replicate (Google Nano Banana + cdingram/face-swap) for the rendered "maximised" preview image.</li>
+    <li><strong>How long they keep it:</strong> the duration of one API request only — both providers' default API terms exclude inputs from training and from long-term retention.</li>
+    <li><strong>How to revoke:</strong> Settings &rarr; Revoke AI permission. After that, no further scans will be transmitted until you grant permission again.</li>
+  </ul>
+  <p>You must tap <strong>ALLOW</strong> in this dialog before any photo bytes leave the device. Tapping <strong>CANCEL</strong> aborts the analysis and keeps the photo entirely on your device. The choice is persisted across launches so we ask once, not every scan, unless you revoke from Settings.</p>
 
   <h2>What we collect</h2>
   <p>On your device: photos you take with the scan camera, the facial-geometry numbers derived from them (canthal tilt, jaw angle, FWHR, symmetry score, facial thirds, etc.), your score, your active protocol, and your purchase receipts. Nothing leaves your device unless you tap a button that clearly says it will send an image to our servers (e.g. "GENERATE IMAGE", "SCAN").</p>
@@ -101,7 +111,7 @@
   <h2>Contact</h2>
   <p>Questions or data requests? Email <a href="mailto:info@m2mb.co.uk">info@m2mb.co.uk</a>.</p>
 
-  <div class="updated">Last updated 25 April 2026.</div>
+  <div class="updated">Last updated 30 April 2026.</div>
 </main>
 </body>
 </html>
