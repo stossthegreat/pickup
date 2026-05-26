@@ -52,7 +52,7 @@
   </header>
 
   <h2>About Mirrorly</h2>
-  <p>Mirrorly is a self-assessment tool for cosmetic and grooming decisions. It uses on-device face measurement (Apple ML Kit on iOS, Google ML Kit / MediaPipe on Android) plus AI image generation and analysis (Replicate, OpenAI) to show you measurements of your own face and generate illustrative "after" previews of grooming changes applied to your photo. Mirrorly is not a medical device and does not provide medical, dental, psychological, or surgical advice.</p>
+  <p>Mirrorly is a self-assessment and self-training tool for cosmetic, grooming, and charisma decisions. It uses on-device face measurement (Apple ML Kit on iOS, Google ML Kit / MediaPipe on Android) plus AI image generation and analysis (Replicate, OpenAI) to show you measurements of your own face and generate illustrative "after" previews of grooming changes applied to your photo. The <strong>Eyes</strong> and <strong>Game</strong> tabs add real-time gaze drills, voice-delivery scoring, and a voice-driven roleplay coach ("Lucien") that uses the OpenAI Realtime API for live conversation practice. Mirrorly is not a medical device and does not provide medical, dental, psychological, or surgical advice.</p>
 
   <h2>Who can use this app</h2>
   <p>You must be at least 13 years old to use Mirrorly. If you are under 18, you represent that your parent or legal guardian has reviewed and agreed to these terms on your behalf.</p>
@@ -127,6 +127,59 @@
   <h3>How to revoke</h3>
   <p>Settings &rarr; <em>Revoke AI permission</em>. The consent flag is cleared and the dialog is re-shown on your next AI-firing action. Settings &rarr; <em>Delete all data</em> wipes every on-device scan, render, and protocol.</p>
 
+  <h2>Voice &amp; training data — Eyes and Game tabs</h2>
+  <p>The Eyes and Game tabs use the device microphone for charisma training. Microphone access is requested at the iOS / Android system level the first time you enter a voice drill; you may deny it and the rest of the app still works.</p>
+
+  <h3>When audio is captured</h3>
+  <p>Only when you explicitly tap a record / talk button inside a voice drill. The app does NOT listen passively, NOT in the background, NOT outside an active drill. Recording stops the moment you finish the drill.</p>
+
+  <h3>Exactly what is sent</h3>
+  <ol>
+    <li>The short audio clip you just recorded (PCM or compressed WAV / M4A, base64-encoded inside an HTTPS multipart body), OR — for live "Free Flow" and "Council" voice sessions — a live PCM16 audio stream over a secure WebSocket.</li>
+    <li>Lesson metadata: lesson id, target line, target words-per-minute band, expected warmth flag. No personal identifiers.</li>
+  </ol>
+  <p><strong>Not sent:</strong> name, email, phone, location, contacts, advertising IDs, ambient or background audio (the mic is only live during an active drill).</p>
+
+  <h3>Exact route the audio takes</h3>
+  <p><strong>Recorded drills</strong> (Eyes voice, Arena, rhetoric scoring):</p>
+  <p>Phone &rarr; Mirrorly's AURALAY backend at <code>https://auralayai-production-65c2.up.railway.app</code>, encrypted by HTTPS / TLS 1.3 &rarr; backend forwards to OpenAI in-memory for one request &rarr; response (transcript text + reply audio) returns to phone. The AURALAY backend does NOT persist audio bytes; only timestamps and HTTP status codes are logged for diagnostics, auto-expiring after 30 days.</p>
+  <p><strong>Live voice</strong> (Free Flow, Council):</p>
+  <p>Phone requests a short-lived ephemeral OpenAI Realtime API token from the AURALAY backend (HTTPS) &rarr; phone opens a TLS-encrypted WebSocket directly to <code>api.openai.com</code> &rarr; live audio streams to OpenAI and replies stream back, <em>never traversing Mirrorly servers</em>.</p>
+
+  <h3>OpenAI models used</h3>
+  <ul>
+    <li><strong>whisper-1</strong> — transcribes your recorded audio to text for scoring.</li>
+    <li><strong>gpt-4o</strong> — produces in-character text replies for Lucien and the Arena women.</li>
+    <li><strong>gpt-4o-mini-tts</strong> — synthesises Lucien's and the Arena characters' voice replies.</li>
+    <li><strong>gpt-realtime</strong> — drives the live Free Flow and Council voice sessions via direct WebSocket.</li>
+  </ul>
+
+  <h3>Who receives it, by name</h3>
+  <ul>
+    <li><strong>OpenAI, L.L.C.</strong> (San Francisco, CA, USA) — receives the audio for transcription, language modelling, and voice synthesis.</li>
+    <li><strong>Mirrorly's AURALAY backend</strong> on Railway — transient routing and Realtime token minting only.</li>
+  </ul>
+  <p>No other party receives your voice data.</p>
+
+  <h3>Retention</h3>
+  <ul>
+    <li><strong>On your phone</strong> — clips are written to a temporary directory during the drill and deleted when the drill ends or the app is closed; transcripts are not stored.</li>
+    <li><strong>In flight</strong> — TLS 1.3 encrypted.</li>
+    <li><strong>Mirrorly AURALAY backend</strong> — bytes not persisted; only HTTP status + timestamp logs, auto-expiring after 30 days.</li>
+    <li><strong>OpenAI</strong> — duration of one API request (or one live Realtime session); excluded from training and long-term retention under OpenAI's standard API terms.</li>
+  </ul>
+
+  <h3>Why your voice is sent</h3>
+  <p>Sole purpose: transcribe what you said, score your delivery (pace, conviction, warmth, presence), and play back the in-character reply. Never used for voice-print biometrics, speaker identification, advertising, profiling, AI model training, or resale.</p>
+
+  <h3>How to stop it</h3>
+  <p>Skip the Eyes and Game tabs, or deny microphone permission at the iOS / Android system level. Settings &rarr; <em>Delete all data</em> wipes any on-device training history.</p>
+
+  <h2>Creator mode</h2>
+  <p>Settings &rarr; <strong>CREATOR</strong> is a password-gated, off-by-default switch that swaps Lucien and the Arena characters into a sharper, less filtered persona for the Game tab's voice surfaces. It is intended for adult users who want a less polished coaching tone.</p>
+  <p>Even when CREATOR is ON, the underlying OpenAI policy guardrails are enforced server-side: no sexually explicit content, no instructions for real-world harassment, coercion, or harm, and no targeting of protected groups. Output remains within OpenAI's and the App Store / Play Store's content policies.</p>
+  <p>CREATOR is OFF until you explicitly enter the password. Turning it ON only affects this device. Tapping the same tile again, or deleting the app, re-locks everything.</p>
+
   <h2>Face data — what we collect, why, who receives it, how long we keep it</h2>
   <p><strong>What face data Mirrorly collects:</strong></p>
   <p>Mirrorly collects two related pieces of face data:</p>
@@ -190,7 +243,7 @@
   <h2>Contact</h2>
   <p>Questions? Email <a href="mailto:info@m2mb.co.uk">info@m2mb.co.uk</a>.</p>
 
-  <div class="updated">Last updated 04 May 2026.</div>
+  <div class="updated">Last updated 26 May 2026.</div>
 </main>
 </body>
 </html>

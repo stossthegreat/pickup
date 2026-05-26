@@ -8,11 +8,15 @@ import 'package:share_plus/share_plus.dart';
 
 import '../theme/app_colors.dart';
 import '../widgets/common/share_card.dart';
+import '../widgets/share/eye_strip_share_card.dart';
+import '../widgets/share/score_share_card.dart';
 
 /// Captures any widget via RepaintBoundary + exports a PNG + opens the
 /// system share sheet. Supports:
 /// - Simple repaint-boundary share (widget already on screen)
 /// - Off-screen ShareCard render (composed just for sharing, never shown)
+/// - Auralay eye-strip card (Eyes tab — gaze sessions)
+/// - Auralay score card (Game tab — Free Flow + Eyes scores)
 class ShareService {
   /// Screenshot an existing widget wrapped in RepaintBoundary via GlobalKey.
   static Future<void> shareFromKey(
@@ -121,6 +125,173 @@ class ShareService {
         ),
       );
     }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  //  Auralay-imported cards (Eyes + Game tabs)
+  // ──────────────────────────────────────────────────────────────────────
+
+  /// Render + share Auralay's eye-strip card. Used by the EYES tab after a
+  /// gaze session (post_session_screen) and by the seduction/charisma test
+  /// result-reveal screen. Composes at 1080×device-aspect, captures off
+  /// screen, opens system share sheet. Same pipeline as [shareComposed].
+  static Future<void> shareAuraResult({
+    required BuildContext context,
+    required Uint8List? photoBytes,
+    required double? eyeYNormalized,
+    required int score,
+    required String tier,
+    required String roast,
+    required Map<String, double> dimensions,
+    int sessionIndex = 1,
+    String? techniqueName,
+    String? text,
+  }) async {
+    HapticFeedback.lightImpact();
+
+    if (context.mounted) {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+        builder: (_) => const _RenderingOverlay(),
+      );
+    }
+
+    final mq = MediaQuery.of(context);
+    final origin = Rect.fromLTWH(
+      mq.size.width / 2 - 1, mq.padding.top + 8, 2, 2);
+
+    String errorMsg = 'Share failed';
+    try {
+      if (!context.mounted) return;
+      final card = EyeStripShareCard(
+        photoBytes:     photoBytes,
+        eyeYNormalized: eyeYNormalized,
+        score:          score,
+        tier:           tier,
+        roast:          roast,
+        dimensions:     dimensions,
+        sessionIndex:   sessionIndex,
+        techniqueName:  techniqueName,
+      );
+      final bytes = await _captureOffscreen(
+        context:     context,
+        widget:      card,
+        logicalSize: _auralayCardSize(context),
+        pixelRatio:  2.0,
+      );
+      if (bytes == null) {
+        errorMsg = "Couldn't render the card — try again";
+      } else {
+        if (context.mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+        HapticFeedback.mediumImpact();
+        await _shareBytes(
+          bytes,
+          'mirrorly-${DateTime.now().millisecondsSinceEpoch}.png',
+          text,
+          origin: origin,
+        );
+        return;
+      }
+    } catch (e) {
+      errorMsg = 'Share failed: ${e.toString().split('\n').first}';
+    }
+
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(errorMsg),
+        backgroundColor: AppColors.surface2,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  /// Render + share the universal Auralay score card (0–10). Used by The
+  /// Gaze, Presence/Eye Contact+Voice, and Free Flow so every shared
+  /// result is on-brand with a single visual language.
+  static Future<void> shareScore({
+    required BuildContext context,
+    required String kindLabel,
+    required String subLabel,
+    required int score,
+    required String badge,
+    required String verdict,
+    List<({String label, int score})> stats = const [],
+    String? text,
+  }) async {
+    HapticFeedback.lightImpact();
+
+    if (context.mounted) {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+        builder: (_) => const _RenderingOverlay(),
+      );
+    }
+
+    final mq = MediaQuery.of(context);
+    final origin = Rect.fromLTWH(
+      mq.size.width / 2 - 1, mq.padding.top + 8, 2, 2);
+
+    String errorMsg = 'Share failed';
+    try {
+      if (!context.mounted) return;
+      final card = ScoreShareCard(
+        kindLabel: kindLabel,
+        subLabel:  subLabel,
+        score:     score.clamp(0, 10).toInt(),
+        badge:     badge,
+        verdict:   verdict,
+        stats:     stats,
+      );
+      final bytes = await _captureOffscreen(
+        context:     context,
+        widget:      card,
+        logicalSize: _auralayCardSize(context),
+        pixelRatio:  2.0,
+      );
+      if (bytes == null) {
+        errorMsg = "Couldn't render the card — try again";
+      } else {
+        if (context.mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+        HapticFeedback.mediumImpact();
+        await _shareBytes(
+          bytes,
+          'mirrorly-${DateTime.now().millisecondsSinceEpoch}.png',
+          text ?? '$kindLabel · $score/10 on MIRRORLY',
+          origin: origin,
+        );
+        return;
+      }
+    } catch (e) {
+      errorMsg = 'Share failed: ${e.toString().split('\n').first}';
+    }
+
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(errorMsg),
+        backgroundColor: AppColors.surface2,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  /// Auralay cards render at the device's portrait aspect — wider phones get
+  /// taller cards. Width pinned at 1080 for crisp output.
+  static Size _auralayCardSize(BuildContext context) {
+    final s = MediaQuery.of(context).size;
+    final aspect =
+        (s.width <= 0 || s.height <= 0) ? 9 / 19.5 : s.width / s.height;
+    const w = 1080.0;
+    return Size(w, (w / aspect).clamp(1920.0, 2600.0));
   }
 
   static Future<void> _shareBytes(

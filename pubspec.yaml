@@ -48,17 +48,54 @@ dependencies:
   flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
 
+  # ── AURALAY GRAFT (Eyes + Game tabs + voice AI) ─────────────────────────
+  # Auralay imported its full charisma-training stack into Mirrorly:
+  # gaze lessons (Eyes tab), Lucien voice roleplay (Game tab), shared
+  # progress in the Progress tab.
+  smooth_page_indicator: ^1.2.0+3
+  # Mic recording for charisma drills + realtime voice. Pinned the same
+  # way Auralay pinned camera 0.10.5+5 — moving versions breaks iOS.
+  record: ^5.2.1
+  # Played-back TTS clips from /v1/diablo/speak + /v1/villain/* /scene/turn.
+  audioplayers: ^6.1.0
+  # Low-latency PCM playback for OpenAI Realtime API audio deltas (the
+  # Game tab Free Flow + Council voice surfaces stream PCM, not MP3).
+  flutter_pcm_sound: ^3.0.0
+  # WebSocket transport for the OpenAI Realtime API. Dart-only, no native.
+  web_socket_channel: ^3.0.1
+  # Keeps the screen on during eye-contact drills + voice sessions.
+  wakelock_plus: ^1.2.1
+  # Secure storage for the creator/diablo unlock flags (mirrors Auralay).
+  flutter_secure_storage: ^9.2.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.1
 
+# record 5.2.1 transitively pulls record_linux 0.7.2, which doesn't
+# implement `startStream` — a method added in record_platform_interface
+# 1.5.0 (which 5.2.1 also accepts). The Dart frontend compiles every
+# referenced library regardless of target platform, so the iOS archive
+# build fails in record_linux.dart with "missing implementations".
+# Pinning record_linux to 1.x picks up the implementation matching the
+# modern interface. iOS only links record_darwin, so this has zero
+# runtime impact on iOS/Android — it just lets kernel_snapshot succeed.
+# (Lifted verbatim from Auralay where this same fix was shipped.)
+dependency_overrides:
+  record_linux: ^1.0.0
+
 flutter:
   uses-material-design: true
   assets:
     - assets/icons/appstore.png
     - assets/icons/playstore.png
+    # Auralay-imported assets — MediaPipe FaceLandmarker model directory
+    # (download .task file at runtime via assets/models/README.txt) +
+    # voice coach clips for charisma drills (assets/voice/README.txt).
+    - assets/models/
+    - assets/voice/
     # Mirror-tab pre-scan before/after pair. Declared as a directory
     # so the build doesn't fail when the JPEGs haven't been dropped
     # yet — Flutter bundles whatever exists in the folder, and the

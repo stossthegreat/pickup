@@ -52,7 +52,9 @@
   </header>
 
   <h2>The short version</h2>
-  <p>Your selfie is captured by your phone's camera, analysed on-device by Apple ML Kit (iOS) or Google ML Kit (Android), and only then — after you tap <strong>ALLOW</strong> in an in-app permission dialog — transmitted over HTTPS / TLS 1.3 to Mirrorly's backend at <code>mirrorly-production.up.railway.app</code>, which forwards it to two third-party AI services: <strong>OpenAI</strong> (GPT-4o Vision, for the analysis text and honest-looks rating) and <strong>Replicate</strong> (Google Nano Banana + cdingram/face-swap, for the rendered "maximised" preview). Both providers process the photo for the duration of one API request only, exclude it from training, and do not retain it long-term. Mirrorly's backend does not persist the photo bytes to disk. We do not sell your data. We do not train AI on your face. We do not require an account. You can revoke AI permission at any time in Settings &rarr; <em>Revoke AI permission</em>.</p>
+  <p>Your selfie is captured by your phone's camera, analysed on-device by Apple ML Kit (iOS) or Google ML Kit (Android), and only then — after you tap <strong>ALLOW</strong> in an in-app permission dialog — transmitted over HTTPS / TLS 1.3 to Mirrorly's backend at <code>mirrorly-production.up.railway.app</code>, which forwards it to two third-party AI services: <strong>OpenAI</strong> (GPT-4o Vision, for the analysis text and honest-looks rating) and <strong>Replicate</strong> (Google Nano Banana + cdingram/face-swap, for the rendered "maximised" preview).</p>
+  <p>The <strong>Eyes</strong> and <strong>Game</strong> tabs add voice training: when you tap a record / talk button inside a drill, the captured audio is sent over TLS to our AURALAY backend (<code>auralayai-production-65c2.up.railway.app</code>), forwarded in-memory to OpenAI for transcription, language modelling, and voice synthesis, then discarded. Live "Free Flow" and "Council" voice sessions open a TLS WebSocket directly to OpenAI using an ephemeral token; that audio never traverses Mirrorly servers. The mic is only live while you're inside an active drill.</p>
+  <p>All providers process the photo or audio for the duration of one API request only, exclude it from training, and do not retain it long-term. Neither Mirrorly backend persists the bytes to disk. We do not sell your data. We do not train AI on your face or your voice. We do not require an account. You can revoke AI permission and delete all on-device data at any time in Settings.</p>
 
   <h2>AI data permission — every detail of what gets sent, where, and why</h2>
   <p>At the end of onboarding, before any photo bytes leave your device, Mirrorly displays a full-screen permission dialog (titled <em>"PERMISSION TO SHARE YOUR PHOTO WITH AI PROVIDERS"</em>). The same dialog is also shown the first time you reach any other AI-firing path (Mirror chat, try-on render, maximise) if it has not already been answered. You must tap <strong>ALLOW</strong> for any photo bytes to be transmitted; tapping <strong>CANCEL</strong> keeps the photo entirely on your device and aborts the analysis. The choice is persisted across app launches so we ask once, not every scan, unless you revoke from Settings.</p>
@@ -96,9 +98,54 @@
   <h3>How to revoke</h3>
   <p>Settings &rarr; <em>Revoke AI permission</em>. After that, no further photos or measurements will be transmitted until you grant permission again. You can also delete every scan and render stored on this device from Settings &rarr; <em>Delete all data</em>.</p>
 
+  <h2>Voice &amp; training data — Eyes and Game tabs</h2>
+  <p>The Eyes and Game tabs use the device microphone for charisma training. Microphone access is requested at the iOS / Android system level the first time you enter a voice drill; you may deny it and the rest of the app still works.</p>
+
+  <h3>When audio is captured</h3>
+  <p>Only when you explicitly tap a <strong>record</strong> or <strong>talk</strong> button inside a voice drill. The microphone is NOT live in the background, NOT outside an active drill, and the app does NOT listen passively.</p>
+
+  <h3>Exactly what is sent</h3>
+  <ol>
+    <li>The short audio clip you just recorded, OR — for live "Free Flow" and "Council" voice sessions — a live PCM16 audio stream over a secure WebSocket.</li>
+    <li>Lesson metadata (lesson id, target words-per-minute band, expected warmth flag). No personal identifiers.</li>
+  </ol>
+  <p><strong>Not sent:</strong> name, email, phone, location, contacts, ambient audio outside the drill, advertising IDs.</p>
+
+  <h3>Exact route</h3>
+  <p><strong>Recorded drills:</strong> phone &rarr; AURALAY backend (<code>https://auralayai-production-65c2.up.railway.app</code>) over HTTPS / TLS 1.3 &rarr; backend forwards to OpenAI in-memory for one request &rarr; response (transcript + reply audio) returns to phone. The AURALAY backend does NOT persist audio bytes; only timestamps + HTTP status codes are logged, auto-expiring after 30 days.</p>
+  <p><strong>Live voice (Free Flow, Council):</strong> phone requests an ephemeral OpenAI Realtime API token from the AURALAY backend (HTTPS) &rarr; phone opens a TLS WebSocket directly to <code>api.openai.com</code> &rarr; live audio streams to OpenAI and replies stream back. Audio <em>never traverses Mirrorly servers</em> in this mode.</p>
+
+  <h3>OpenAI models</h3>
+  <p><code>whisper-1</code> (transcription) · <code>gpt-4o</code> (text replies) · <code>gpt-4o-mini-tts</code> (voice synthesis) · <code>gpt-realtime</code> (live voice sessions).</p>
+
+  <h3>Who receives it</h3>
+  <ul>
+    <li><strong>OpenAI, L.L.C.</strong> (San Francisco, CA, USA).</li>
+    <li><strong>Mirrorly's AURALAY backend</strong> on Railway — transient routing and Realtime token minting only.</li>
+  </ul>
+  <p>No other party.</p>
+
+  <h3>Retention</h3>
+  <ul>
+    <li><strong>On your phone</strong> — clips deleted at drill end; transcripts not stored.</li>
+    <li><strong>In flight</strong> — TLS 1.3 encrypted.</li>
+    <li><strong>AURALAY backend</strong> — bytes not persisted; only status + timestamp logs, auto-expire after 30 days.</li>
+    <li><strong>OpenAI</strong> — duration of one API request or one Realtime session; excluded from training and long-term retention under OpenAI's standard API terms.</li>
+  </ul>
+
+  <h3>Why</h3>
+  <p>Sole purpose: transcribe what you said, score your delivery (pace, conviction, warmth, presence), and play back the in-character reply. Never used for voice-print biometrics, speaker identification, advertising, profiling, AI model training, or resale.</p>
+
+  <h3>How to stop it</h3>
+  <p>Deny microphone permission in iOS / Android system settings, or simply skip the Eyes and Game tabs.</p>
+
+  <h2>Creator mode</h2>
+  <p>Settings &rarr; <strong>CREATOR</strong> is a password-gated, off-by-default switch on the Game tab's voice surfaces. It swaps the Lucien and Arena characters into a less polished coaching tone intended for adult users.</p>
+  <p>Even when CREATOR is ON, OpenAI's content policy guardrails are enforced server-side: no sexually explicit content, no real-world coercion or harassment instructions, no targeting of protected groups. CREATOR is OFF by default, must be explicitly unlocked with a password, applies only on this device, and can be re-locked at any time.</p>
+
   <h2>What we collect</h2>
-  <p>On your device: photos you take with the scan camera, the facial-geometry numbers derived from them (canthal tilt, jaw angle, FWHR, symmetry score, facial thirds, etc.), your score, your active protocol, and your purchase receipts. Nothing leaves your device unless you tap a button that clearly says it will send an image to our servers (e.g. "GENERATE IMAGE", "SCAN").</p>
-  <p>On our servers, temporarily: the single photo you submit to /scan, /rate, /tryon, or /maximize for the duration of that one request (seconds), plus the measurements and the generated image URL. We do not attach your photo to a persistent account, because there is no account.</p>
+  <p>On your device: photos you take with the scan camera, the facial-geometry numbers derived from them (canthal tilt, jaw angle, FWHR, symmetry score, facial thirds, etc.), your score, your active protocol, your training drill history (Eyes + Game), and your purchase receipts. Nothing leaves your device unless you tap a button that clearly says it will send an image or audio clip to our servers (e.g. "GENERATE IMAGE", "SCAN", "RECORD", "TALK").</p>
+  <p>On our servers, temporarily: the single photo you submit to <code>/scan</code>, <code>/rate</code>, <code>/tryon</code>, or <code>/maximize</code> for the duration of one request (seconds), or the single audio clip you submit to <code>/v1/diablo/*</code>, <code>/v1/villain/*</code>, <code>/v1/presence/*</code>, <code>/v1/rhetoric/*</code> for the duration of one request. We do not attach your photo or audio to a persistent account, because there is no account.</p>
 
   <h2>Face data — what it is, what it isn't</h2>
   <p>Mirrorly uses on-device computer vision to derive geometric measurements from your selfie (Apple ML Kit on iOS, Google ML Kit on Android — both run entirely on the phone). These measurements are plain numbers: a canthal-tilt degree, a jaw angle, a symmetry score. They are NOT a biometric template that could be used to recognise you, match you to another photo, or unlock anything.</p>
@@ -117,8 +164,10 @@
     <li>No sharing with data brokers, advertisers, or analytics partners.</li>
   </ul>
 
-  <h2>Who processes your photos</h2>
-  <p>OpenAI — GPT-4o Vision runs your analysis and honest rating. Replicate — Google Nano Banana renders your transformation images; cdingram/face-swap locks the identity. Both providers process the photo for the duration of one API request and do not, by their terms, retain or train on the data we send them through the API.</p>
+  <h2>Who processes your photos and voice</h2>
+  <p><strong>Photos.</strong> OpenAI — GPT-4o Vision runs your analysis and honest rating. Replicate — Google Nano Banana renders your transformation images; cdingram/face-swap locks the identity.</p>
+  <p><strong>Voice (Eyes + Game tabs).</strong> OpenAI — <code>whisper-1</code> transcribes recorded audio, <code>gpt-4o</code> produces text replies, <code>gpt-4o-mini-tts</code> synthesises in-character voice replies, and <code>gpt-realtime</code> drives live sessions. No other vendor processes your voice.</p>
+  <p>All providers process the photo or audio for the duration of one API request (or one Realtime session) and do not, by their default API terms, retain or train on the data we send them through the API.</p>
 
   <h2>Third-party protection parity</h2>
   <p>Per App Store guideline 5.1.2(i), any third party that receives Mirrorly user data must provide the same or equal privacy protection as Mirrorly itself. Both AI providers we transmit photos to meet this bar:</p>
@@ -129,7 +178,7 @@
   <p>Mirrorly does not transmit user photos to any other third party — no advertisers, data brokers, analytics providers, or social-login partners.</p>
 
   <h2>What we do not collect</h2>
-  <p>No name. No email. No phone number. No location. No social contacts. No tracking across other apps. No advertising identifier for profiling purposes.</p>
+  <p>No name. No email. No phone number. No location. No social contacts. No tracking across other apps. No advertising identifier for profiling purposes. No voice-print biometrics. No speaker identification. No facial recognition or biometric template.</p>
 
   <h2>Children</h2>
   <p>Mirrorly is not intended for children under 13. We do not knowingly collect data from children under 13. If you believe a child has used the app, email <a href="mailto:info@m2mb.co.uk">info@m2mb.co.uk</a> and we will delete any on-device and server-side records associated with the submission.</p>
@@ -151,7 +200,7 @@
   <h2>Contact</h2>
   <p>Questions or data requests? Email <a href="mailto:info@m2mb.co.uk">info@m2mb.co.uk</a>.</p>
 
-  <div class="updated">Last updated 04 May 2026.</div>
+  <div class="updated">Last updated 26 May 2026.</div>
 </main>
 </body>
 </html>

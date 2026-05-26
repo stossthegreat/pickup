@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/dev_flags.dart';
+import '../../services/creator_mode_store.dart';
 import '../../services/face_asset_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/purchase_service.dart';
@@ -187,6 +188,18 @@ class SettingsScreen extends StatelessWidget {
                 destructive: true,
                 onTap: () => _confirmDelete(context),
               ),
+
+              const SizedBox(height: Sp.lg),
+
+              // ── CREATOR ───────────────────────────────────────────────────
+              // The single master switch for the Lucien-unchained pipeline
+              // grafted from Auralay. Password-gated, persisted via
+              // [CreatorModeStore]. Live state shown so the user always
+              // knows whether Free Flow / Arena / Council are running the
+              // store-safe persona or the savage roasting persona. Still
+              // policy-bounded server-side regardless.
+              _SectionHeader('CREATOR'),
+              const _CreatorTile(),
 
               const SizedBox(height: Sp.lg),
 
@@ -523,4 +536,216 @@ class _Badge extends StatelessWidget {
     child: Text(label, style: AppTypography.label.copyWith(
       color: AppColors.accent, fontSize: 8, letterSpacing: 1.4)),
   );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CREATOR tile — password-gated Lucien-unchained switch (Auralay graft)
+// ═══════════════════════════════════════════════════════════════════════════
+class _CreatorTile extends StatefulWidget {
+  const _CreatorTile();
+  @override
+  State<_CreatorTile> createState() => _CreatorTileState();
+}
+
+class _CreatorTileState extends State<_CreatorTile> {
+  bool _active = false;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final v = await CreatorModeStore.isActive();
+    if (!mounted) return;
+    setState(() {
+      _active = v;
+      _loading = false;
+    });
+  }
+
+  Future<void> _promptUnlock() async {
+    HapticFeedback.selectionClick();
+    final controller = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface1,
+        title: Text('Unlock Creator',
+          style: AppTypography.h3.copyWith(color: AppColors.red)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Switches Lucien, the Arena women, and the Council into the '
+              'savage roasting persona. Free Flow runs unchained. Diablo '
+              'content unlocks.\n\n'
+              'Still policy-bounded server-side. Lock it again any time.',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary, height: 1.5)),
+            const SizedBox(height: Sp.md),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              textCapitalization: TextCapitalization.characters,
+              style: AppTypography.body.copyWith(
+                color: AppColors.textPrimary, letterSpacing: 0.4,
+                fontFeatures: const []),
+              decoration: InputDecoration(
+                hintText: 'PASSWORD',
+                hintStyle: AppTypography.label.copyWith(
+                  color: AppColors.textTertiary, letterSpacing: 2),
+                filled: true,
+                fillColor: AppColors.surface2,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(Rd.md),
+                  borderSide: BorderSide(color: AppColors.divider)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(Rd.md),
+                  borderSide: BorderSide(color: AppColors.red)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final ok = await CreatorModeStore.tryActivate(controller.text);
+              if (!ctx.mounted) return;
+              Navigator.of(ctx).pop(ok);
+            },
+            child: Text('Unlock',
+              style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (result == true) {
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.surface2,
+        content: Text('Lucien · Unchained · Active',
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.red, fontWeight: FontWeight.w700)),
+      ));
+    } else if (result == false && controller.text.trim().isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.surface2,
+        content: Text('Wrong password.',
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textPrimary)),
+      ));
+    }
+  }
+
+  Future<void> _lock() async {
+    HapticFeedback.selectionClick();
+    await CreatorModeStore.deactivate();
+    await _refresh();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: AppColors.surface2,
+      content: Text('Re-locked to store-safe persona.',
+        style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary)),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const SizedBox(height: 60);
+    }
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _active ? _lock : _promptUnlock,
+        borderRadius: BorderRadius.circular(Rd.lg),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.all(Sp.md),
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            borderRadius: BorderRadius.circular(Rd.lg),
+            border: Border.all(
+              color: _active
+                  ? AppColors.red.withValues(alpha: 0.55)
+                  : AppColors.surface3,
+              width: _active ? 1.2 : 1.0,
+            ),
+            boxShadow: _active
+                ? [BoxShadow(
+                    color: AppColors.red.withValues(alpha: 0.12),
+                    blurRadius: 18, spreadRadius: 0)]
+                : null,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                _active
+                    ? Icons.local_fire_department
+                    : Icons.lock_outline_rounded,
+                size: 22,
+                color: _active ? AppColors.red : AppColors.textSecondary),
+              const SizedBox(width: Sp.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _active ? 'Lucien · Unchained' : 'Lucien · Locked',
+                      style: AppTypography.body.copyWith(
+                        color: _active ? AppColors.red : AppColors.textPrimary,
+                        fontSize: 15,
+                        fontStyle: _active ? FontStyle.italic : FontStyle.normal,
+                        fontWeight: _active ? FontWeight.w800 : FontWeight.w600,
+                      )),
+                    const SizedBox(height: 2),
+                    Text(
+                      _active
+                          ? 'Free Flow / Arena / Council in savage persona'
+                          : 'Tap to enter the password and unleash',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textTertiary, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _active
+                      ? AppColors.red.withValues(alpha: 0.18)
+                      : AppColors.surface2,
+                  border: Border.all(
+                    color: _active
+                        ? AppColors.red.withValues(alpha: 0.55)
+                        : AppColors.divider),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(_active ? 'ACTIVE' : 'LOCKED',
+                  style: AppTypography.label.copyWith(
+                    color: _active ? AppColors.red : AppColors.textTertiary,
+                    fontSize: 8.5, letterSpacing: 1.6,
+                    fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

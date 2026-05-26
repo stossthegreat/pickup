@@ -13,6 +13,17 @@ import '../screens/report/report_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/splash/splash_screen.dart';
 
+// ── Auralay graft (Eyes + Game tabs) ───────────────────────────────────────
+import '../screens/debug/diagnostic_screen.dart';
+import '../screens/lessons/lesson_detail_screen.dart';
+import '../screens/test/charisma_test_screen.dart';
+import '../screens/test/result_reveal_screen.dart';
+import '../screens/test/seduction_lesson_screen.dart';
+import '../screens/test/seduction_test_screen.dart';
+import '../screens/train/post_session_screen.dart';
+import '../screens/train/train_screen.dart';
+import '../services/test/charisma_test_engine.dart';
+
 final appRouter = GoRouter(
   initialLocation: '/',
   routes: [
@@ -41,7 +52,15 @@ final appRouter = GoRouter(
         );
       },
     ),
-    GoRoute(path: '/home',     builder: (_, __) => const HomeScreen()),
+    GoRoute(
+      path: '/home',
+      builder: (context, state) {
+        final extra = state.extra is Map<String, dynamic>
+            ? state.extra as Map<String, dynamic>
+            : const <String, dynamic>{};
+        return HomeScreen(initialTab: (extra['initialTab'] as int?));
+      },
+    ),
     GoRoute(path: '/scan',     builder: (_, __) => const ScanScreen()),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
     GoRoute(path: '/protocol', builder: (_, __) => const ProtocolScreen()),
@@ -69,5 +88,74 @@ final appRouter = GoRouter(
         );
       },
     ),
+
+    // ── Auralay-imported routes ─────────────────────────────────────────
+    // Charisma test + result reveal + seduction test (onboarding viral
+    // hook funnel from Auralay — pushed by some lesson flows + post-
+    // session screens). Result-reveal needs the photo + score extras.
+    GoRoute(
+      path: '/charisma-test',
+      builder: (_, __) => const CharismaTestScreen(),
+    ),
+    GoRoute(
+      path: '/seduction-test',
+      builder: (_, __) => const SeductionTestScreen(),
+    ),
+    GoRoute(
+      path: '/seduction-lesson',
+      builder: (_, __) => const SeductionLessonScreen(),
+    ),
+    GoRoute(
+      path: '/test-result',
+      builder: (_, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        final result = extra?['result'] as CharismaTestResult?;
+        if (result == null) {
+          // Shouldn't ever hit — push always carries a result. Bail
+          // gracefully to home rather than crash on the cast.
+          return const HomeScreen();
+        }
+        return ResultRevealScreen(
+          result:          result,
+          photoBytes:      extra?['photoBytes'] as Uint8List?,
+          eyeY:            extra?['eyeY'] as double?,
+          isFreeTraining:  (extra?['isFreeTraining'] as bool?)   ?? false,
+          isSeductionTest: (extra?['isSeductionTest'] as bool?)  ?? false,
+        );
+      },
+    ),
+
+    // Eye-contact training + post-session reflection.
+    GoRoute(path: '/train', builder: (_, __) => const TrainScreen()),
+    GoRoute(
+      path: '/post-session',
+      builder: (_, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return PostSessionScreen(results: extra ?? const {});
+      },
+    ),
+
+    // Lesson detail (Auralay's Eyes-tab curriculum, hit from the You
+    // section of Progress tab and from the bottom-sheet picker).
+    GoRoute(
+      path: '/lesson/:id',
+      builder: (_, state) {
+        final id = state.pathParameters['id'] ?? '';
+        final extra = state.extra as Map<String, dynamic>?;
+        final currentDay = (extra?['currentDay'] as int?) ?? 1;
+        return LessonDetailScreen(techniqueId: id, currentDay: currentDay);
+      },
+    ),
+
+    // Auralay's profile route — folded into Mirrorly's HomeScreen
+    // Progress tab (tab index 4). Pushing /you lands on that tab.
+    GoRoute(
+      path: '/you',
+      builder: (_, __) => const HomeScreen(initialTab: 4),
+    ),
+
+    // Debug HUD (Auralay's diagnostic console, gated behind 5-tap easter
+    // egg in Settings). Useful for backend health checks post-graft.
+    GoRoute(path: '/diagnostic', builder: (_, __) => const DiagnosticScreen()),
   ],
 );

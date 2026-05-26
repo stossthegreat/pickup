@@ -3,10 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/protocol.dart';
 import '../../models/scan_record.dart';
+import '../../models/technique.dart';
+import '../../providers/auralay_app_provider.dart';
+import '../../services/gaze/gaze_progress_store.dart';
 import '../../services/local_store_service.dart';
+import '../../services/presence/presence_progress_store.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 
@@ -31,6 +36,10 @@ class _ProgressScreenState extends State<ProgressScreen> {
   List<GenerationRecord> _generations = [];
   bool _loading = true;
 
+  // Auralay training stats — surfaced in the TRAINING section.
+  int _gazeCompleted = 0;
+  int _presenceCompleted = 0;
+
   @override
   void initState() {
     super.initState();
@@ -40,10 +49,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
   Future<void> _loadAll() async {
     final scans = await LocalStoreService.loadScans();
     final gens  = await LocalStoreService.loadGenerations();
+    final gz    = await GazeProgressStore.completedCount();
+    final pr    = await PresenceProgressStore.completedCount();
     if (!mounted) return;
     setState(() {
       _scans = scans;
       _generations = gens;
+      _gazeCompleted = gz;
+      _presenceCompleted = pr;
       _loading = false;
     });
   }
@@ -63,7 +76,13 @@ class _ProgressScreenState extends State<ProgressScreen> {
           child: _loading
               ? const Center(child: CircularProgressIndicator(
                   color: AppColors.red, strokeWidth: 2))
-              : _scans.isEmpty
+              // Empty-state ONLY when nothing exists on either side — no
+              // scans AND no Auralay training activity. Auralay-only users
+              // (Eyes/Game without scanning) still get a populated Progress
+              // tab with their training block.
+              : (_scans.isEmpty &&
+                      _gazeCompleted == 0 &&
+                      _presenceCompleted == 0)
                   ? _emptyState()
                   : _body(),
         ),
@@ -75,7 +94,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
   Widget _body() {
     final sorted = [..._scans]..sort((a, b) => a.takenAt.compareTo(b.takenAt));
-    final deltas = _computeAxisDeltas(sorted);
+    final deltas = _scans.length >= 2 ? _computeAxisDeltas(sorted) : null;
+    final hasTraining = _gazeCompleted > 0 || _presenceCompleted > 0;
+    final hasScans    = _scans.isNotEmpty;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.lg, Sp.lg, Sp.xxl),
@@ -96,28 +117,44 @@ class _ProgressScreenState extends State<ProgressScreen> {
         ),
         const SizedBox(height: 2),
         Text('${_scans.length} SCAN${_scans.length == 1 ? '' : 'S'}'
-             ' · ${_generations.length} GENERATIONS',
+             ' · ${_generations.length} GENERATIONS'
+             ' · ${_gazeCompleted + _presenceCompleted} DRILLS',
           style: AppTypography.label.copyWith(
             color: AppColors.textMuted, fontSize: 8.5, letterSpacing: 2.8)),
 
         const SizedBox(height: Sp.xl),
 
-        // Score-over-time chart
-        _ChartCard(scans: sorted)
-          .animate().fadeIn(duration: 400.ms),
-
-        const SizedBox(height: Sp.md),
-
-        if (deltas != null) ...[
-          _DeltaRow(deltas: deltas)
-            .animate().fadeIn(delay: 160.ms, duration: 400.ms),
-          const SizedBox(height: Sp.md),
+        // ── TRAINING block (Auralay graft) ──────────────────────────────
+        // Aura Score hero + Day/Streak chips + per-tab drill counts +
+        // technique curriculum dot row. Shows once the user has ANY
+        // Auralay activity, otherwise hidden so the tab still feels like
+        // Mirrorly to scan-first users.
+        if (hasTraining) ...[
+          _TrainingBlock(
+            gazeCompleted:     _gazeCompleted,
+            presenceCompleted: _presenceCompleted,
+          ).animate().fadeIn(duration: 400.ms),
+          const SizedBox(height: Sp.lg),
         ],
 
-        _ScanHistoryList(scans: _scans)
-          .animate().fadeIn(delay: 280.ms, duration: 400.ms),
+        if (hasScans) ...[
+          // Score-over-time chart (Mirrorly's face-score timeline)
+          _ChartCard(scans: sorted)
+            .animate().fadeIn(delay: hasTraining ? 0.ms : 0.ms, duration: 400.ms),
 
-        const SizedBox(height: Sp.lg),
+          const SizedBox(height: Sp.md),
+
+          if (deltas != null) ...[
+            _DeltaRow(deltas: deltas)
+              .animate().fadeIn(delay: 160.ms, duration: 400.ms),
+            const SizedBox(height: Sp.md),
+          ],
+
+          _ScanHistoryList(scans: _scans)
+            .animate().fadeIn(delay: 280.ms, duration: 400.ms),
+
+          const SizedBox(height: Sp.lg),
+        ],
 
         if (_generations.isNotEmpty) ...[
           Text('GENERATION VAULT',
@@ -690,6 +727,308 @@ class _GenerationGrid extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  TRAINING block — Auralay graft
+//
+//  Surfaces the data accumulated by the Eyes + Game tabs. Reads from
+//  [AuralayAppProvider] (Aura score, current day, training streak) plus
+//  the per-curriculum drill counters passed in from the parent.
+//
+//  Tap Aura number → Eyes tab (drill more, raise the score).
+//  Tap a technique dot → /lesson/<id> deep-link.
+// ═══════════════════════════════════════════════════════════════════════════
+class _TrainingBlock extends StatelessWidget {
+  final int gazeCompleted;
+  final int presenceCompleted;
+  const _TrainingBlock({
+    required this.gazeCompleted,
+    required this.presenceCompleted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AuralayAppProvider>().state;
+    return Container(
+      padding: const EdgeInsets.all(Sp.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(Rd.xl),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('TRAINING',
+            style: AppTypography.label.copyWith(
+              color: AppColors.accent, letterSpacing: 2.8, fontSize: 9.5)),
+          const SizedBox(height: 6),
+          Text('Eyes · Game · Streak',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textTertiary, fontSize: 12)),
+
+          const SizedBox(height: Sp.md),
+
+          // Aura score hero — Auralay's signature number.
+          _AuraHero(score: state.auraScore, day: state.currentDay),
+
+          const SizedBox(height: Sp.md),
+
+          // Day / Streak row
+          Row(
+            children: [
+              Expanded(child: _StatChip(
+                label: 'DAY', value: '${state.currentDay}', accent: AppColors.measure)),
+              const SizedBox(width: 8),
+              Expanded(child: _StatChip(
+                label: 'STREAK',
+                value: '${state.streakDays}',
+                accent: state.streakDays > 0
+                    ? AppColors.red
+                    : AppColors.textTertiary,
+                trailing: state.streakDays > 0 ? ' 🔥' : '',
+              )),
+            ],
+          ),
+
+          const SizedBox(height: Sp.md),
+
+          // Per-tab drill counts
+          Row(
+            children: [
+              Expanded(child: _StatChip(
+                label: 'EYES · GAZE',
+                value: '$gazeCompleted / 10',
+                accent: gazeCompleted > 0 ? AppColors.signalGreen : AppColors.textTertiary,
+              )),
+              const SizedBox(width: 8),
+              Expanded(child: _StatChip(
+                label: 'EYES · VOICE',
+                value: '$presenceCompleted / 10',
+                accent: presenceCompleted > 0 ? AppColors.signalGreen : AppColors.textTertiary,
+              )),
+            ],
+          ),
+
+          const SizedBox(height: Sp.md),
+
+          // Technique curriculum — compact 11-dot row representing days
+          _TechniqueRow(currentDay: state.currentDay),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuraHero extends StatelessWidget {
+  final int score;
+  final int day;
+  const _AuraHero({required this.score, required this.day});
+
+  String get _stageLabel {
+    if (score < 20) return 'Raw material.';
+    if (score < 40) return 'Building foundations.';
+    if (score < 60) return 'Control developing.';
+    if (score < 78) return 'Presence forming.';
+    if (score < 90) return 'The room notices.';
+    return 'Magnetic.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(Sp.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(Rd.lg),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        children: [
+          Text('AURA SCORE',
+            style: AppTypography.label.copyWith(
+              color: AppColors.accent, letterSpacing: 2.4, fontSize: 9)),
+          const SizedBox(height: 8),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: score.toDouble()),
+            duration: const Duration(milliseconds: 1400),
+            curve: Curves.easeOutCubic,
+            builder: (_, value, __) => Text(
+              value.round().toString(),
+              style: AppTypography.display.copyWith(
+                fontSize: 56,
+                color: AppColors.textPrimary,
+                letterSpacing: -2,
+                fontWeight: FontWeight.w800,
+                fontStyle: FontStyle.italic,
+                height: 1,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(100),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: score / 100),
+              duration: const Duration(milliseconds: 1100),
+              curve: Curves.easeOutCubic,
+              builder: (_, v, __) => LinearProgressIndicator(
+                value: v,
+                backgroundColor: AppColors.surface3,
+                valueColor: const AlwaysStoppedAnimation(AppColors.accent),
+                minHeight: 2,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(_stageLabel,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color accent;
+  final String trailing;
+  const _StatChip({
+    required this.label,
+    required this.value,
+    required this.accent,
+    this.trailing = '',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(Rd.lg),
+        border: Border.all(color: accent.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+            style: AppTypography.label.copyWith(
+              color: accent, letterSpacing: 2, fontSize: 9)),
+          const SizedBox(height: 3),
+          Text('$value$trailing',
+            style: AppTypography.h2.copyWith(
+              color: AppColors.textPrimary,
+              fontSize: 18, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TechniqueRow extends StatelessWidget {
+  final int currentDay;
+  const _TechniqueRow({required this.currentDay});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(Sp.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(Rd.lg),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('CURRICULUM',
+            style: AppTypography.label.copyWith(
+              color: AppColors.textTertiary, letterSpacing: 2, fontSize: 9)),
+          const SizedBox(height: 8),
+          // Day-dot row — 11 dots, mastered green, current red glow,
+          // locked muted. Tap any unlocked dot → /lesson/<id>.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final t in Technique.all)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: t.isUnlocked(currentDay)
+                          ? () {
+                              HapticFeedback.selectionClick();
+                              context.push('/lesson/${t.id}',
+                                extra: {'currentDay': currentDay});
+                            }
+                          : null,
+                      child: _TechDot(
+                        day: t.day,
+                        unlocked: t.isUnlocked(currentDay),
+                        mastered: t.isMastered(currentDay),
+                        current:  t.day == currentDay,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TechDot extends StatelessWidget {
+  final int day;
+  final bool unlocked, mastered, current;
+  const _TechDot({
+    required this.day,
+    required this.unlocked,
+    required this.mastered,
+    required this.current,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = !unlocked
+        ? AppColors.textTertiary.withValues(alpha: 0.3)
+        : mastered
+            ? AppColors.signalGreen
+            : current
+                ? AppColors.red
+                : AppColors.accent;
+    return Column(
+      children: [
+        Container(
+          width: 22, height: 22,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: mastered
+                ? AppColors.signalGreen.withValues(alpha: 0.18)
+                : Colors.transparent,
+            border: Border.all(color: color, width: 1.3),
+            boxShadow: current
+                ? [BoxShadow(
+                    color: AppColors.red.withValues(alpha: 0.45),
+                    blurRadius: 8, spreadRadius: 1)]
+                : null,
+          ),
+          child: Center(
+            child: mastered
+                ? Icon(Icons.check, size: 12, color: AppColors.signalGreen)
+                : Text('$day',
+                    style: AppTypography.label.copyWith(
+                      color: color, fontSize: 9, fontWeight: FontWeight.w700)),
+          ),
+        ),
+      ],
     );
   }
 }
