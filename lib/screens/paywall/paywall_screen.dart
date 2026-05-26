@@ -352,11 +352,17 @@ class _PaywallScreenState extends State<PaywallScreen> {
                           'Haircut, beard, skin. Same person, undeniable '
                           'lift.'),
                   const SizedBox(height: 18),
+                  // Point 3 — what used to be "THE MIRROR · ON CALL" got
+                  // folded into the bullet list under the CTA (the Mirror
+                  // advisor stays — see "Unlimited Mirror chat advice"
+                  // below) so this slot now markets the Eyes + Game
+                  // training surfaces. Same shape as 1 and 2, no extra
+                  // vertical real estate above the price cards.
                   const _Point(n: '3',
-                    headline: 'THE MIRROR · ON CALL',
-                    body: 'An AI that knows every inch of your anatomy. '
-                          'Every fix designed for your bones — not a '
-                          'generic.'),
+                    headline: 'TRAIN THE GAZE · OWN THE GAME',
+                    body: 'Eye-contact drills. Lucien\'s arena, council, '
+                          'free-flow voice AI. The face you measured, '
+                          'in motion.'),
 
                   const SizedBox(height: 26),
 
@@ -590,14 +596,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
     switch (_selected) {
       case _Tier.monthly:
         text = '$price billed monthly. Auto-renews until cancelled. '
-               'Mirrorly Pro subscription required for scans and '
-               'AI renders.';
+               'Mirrorly Pro subscription required for scans, AI '
+               'renders, and Eyes + Game training.';
         break;
       case _Tier.annual:
         text = '$price billed once per year (${_perMonthForAnnual()}/'
                'mo equivalent). Auto-renews yearly until cancelled. '
-               'Mirrorly Pro subscription required for scans and '
-               'AI renders.';
+               'Mirrorly Pro subscription required for scans, AI '
+               'renders, and Eyes + Game training.';
         break;
       case _Tier.rescue:
         text = '$price one-time charge. NOT a subscription. '
@@ -689,12 +695,19 @@ class _PaywallScreenState extends State<PaywallScreen> {
     switch (t) {
       case _Tier.monthly:
       case _Tier.annual:
+        // Same length as before (6 lines). Two old bullets — "Honest-
+        // looks score (GPT-4o Vision)" and "Geometry score (on-device,
+        // 16 metrics)" — merged into one tight line, freeing room for
+        // the Eyes-and-Game training disclosure under the CTA without
+        // pushing the cancel line further down the scroll.
         return [
           '2 scans per week',
           '10 AI-rendered images per month',
           'The Mirror — unlimited chat advice',
-          'Honest-looks score (GPT-4o Vision)',
-          'Geometry score (on-device, 16 metrics)',
+          'Two-score rating — geometry (on-device, 16 metrics) + '
+              'honest-looks (GPT-4o Vision)',
+          'Eyes + Game training — gaze drills, voice coach, Lucien '
+              'arena & council, free-flow voice AI',
           cancelLine,
         ];
       case _Tier.rescue:

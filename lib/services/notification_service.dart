@@ -4,6 +4,7 @@ import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/protocol.dart';
+import '../providers/auralay_app_provider.dart';
 
 /// Local-notification retention engine.
 ///
@@ -33,9 +34,14 @@ class NotificationService {
   static bool _permissionRequested = false;
 
   // Stable integer IDs so later schedules overwrite earlier ones cleanly.
-  static const _streakNudgeId  = 1001;
-  static const _rescanDay14Id  = 1014;
-  static const _rescanDay30Id  = 1030;
+  // 1xxx = Mirrorly protocol; 2xxx = Auralay training (Eyes + Game tabs).
+  static const _streakNudgeId        = 1001;
+  static const _rescanDay14Id        = 1014;
+  static const _rescanDay30Id        = 1030;
+  // Auralay graft — fires at 9pm local if the user hasn't trained today.
+  // Independent of the protocol streak (1001) so each can speak to its
+  // own state without contaminating the other.
+  static const _trainingNudgeId      = 2001;
 
   // ─────────────────────────────────────────────────────────────────────────
   //  INIT
@@ -238,6 +244,116 @@ class NotificationService {
       'mirrorly.rescan', 'Rescan reminders',
       channelDescription: 'Milestone prompts to rescan and check your deltas.',
       importance: Importance.defaultImportance, priority: Priority.defaultPriority,
+    ),
+    iOS: DarwinNotificationDetails(),
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  TRAINING NUDGE — 9pm daily, gaze + presence streak (Auralay graft)
+  //
+  //  Distinct from the protocol streak (1001) because they map to different
+  //  rituals: protocol = log today's face routine; training = run a 30-second
+  //  drill. Each survives the other's misses, and the copy speaks to its own
+  //  state so they don't blur into one another.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Schedule (or re-schedule) the daily 9pm training nudge. Called after
+  /// every training session via [AuralayAppProvider.recordSession]
+  /// completes, and on app boot. Reads streak/lastSession state directly
+  /// from prefs so it doesn't need a Provider context.
+  static Future<void> scheduleTrainingNudge({
+    required int streakDays,
+  }) async {
+    if (!_initialized) return;
+    try {
+      await _plugin.cancel(_trainingNudgeId);
+
+      final trainedToday = await AuralayAppProvider.readTrainedToday();
+      final atRisk       = await AuralayAppProvider.readStreakAtRisk();
+
+      final now    = tz.TZDateTime.now(tz.local);
+      var target   = tz.TZDateTime(
+        tz.local, now.year, now.month, now.day, 21, 0); // 9pm today
+      // If 9pm has already passed today (or user already trained), push it
+      // to tomorrow so the nudge speaks to a meaningful state.
+      if (now.isAfter(target) || trainedToday) {
+        target = target.add(const Duration(days: 1));
+      }
+
+      final (title, body) = _trainingCopy(
+        streakDays:   streakDays,
+        trainedToday: trainedToday,
+        atRisk:       atRisk,
+      );
+
+      await _plugin.zonedSchedule(
+        _trainingNudgeId,
+        title,
+        body,
+        target,
+        _trainingDetails(),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (e) {
+      debugPrint('scheduleTrainingNudge failed: $e');
+    }
+  }
+
+  /// Cancel the training nudge — call this when the user has trained
+  /// today AND we don't want a pre-emptive evening ping until tomorrow.
+  /// Generally the next [scheduleTrainingNudge] takes care of this by
+  /// cancelling and rescheduling, but the explicit cancel is exposed for
+  /// settings → mute / data deletion flows.
+  static Future<void> cancelTrainingNudge() async {
+    if (!_initialized) return;
+    try {
+      await _plugin.cancel(_trainingNudgeId);
+    } catch (e) {
+      debugPrint('cancelTrainingNudge failed: $e');
+    }
+  }
+
+  /// Copy lanes — fresh (no streak yet), live, at-risk (streak alive but
+  /// nothing today), trained-today (celebratory; the cancel-and-reschedule
+  /// dance means this fires the next day, not today).
+  static (String title, String body) _trainingCopy({
+    required int streakDays,
+    required bool trainedToday,
+    required bool atRisk,
+  }) {
+    if (streakDays <= 0) {
+      return (
+        'Run a drill',
+        'Eyes or Game — 30 seconds locks in day one.',
+      );
+    }
+    if (atRisk) {
+      return (
+        'Don\'t break $streakDays',
+        'You\'re on a $streakDays-day run. One drill keeps it alive.',
+      );
+    }
+    if (trainedToday) {
+      return (
+        '$streakDays days · on fire',
+        'See you tomorrow. Keep the streak.',
+      );
+    }
+    return (
+      '$streakDays days',
+      'One drill. 30 seconds. Streak stays alive.',
+    );
+  }
+
+  static NotificationDetails _trainingDetails() => const NotificationDetails(
+    android: AndroidNotificationDetails(
+      'mirrorly.training', 'Training streak',
+      channelDescription:
+          'Daily nudge to run an Eyes / Game drill and keep the streak alive.',
+      importance: Importance.high, priority: Priority.high,
     ),
     iOS: DarwinNotificationDetails(),
   );

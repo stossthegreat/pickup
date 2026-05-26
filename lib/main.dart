@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'config/dev_flags.dart';
 import 'navigation/app_router.dart';
+import 'providers/auralay_app_provider.dart';
 import 'services/analytics_service.dart';
 import 'services/local_store_service.dart';
 import 'services/notification_service.dart';
@@ -35,6 +38,19 @@ void main() async {
   // ("your streak reminder").
   await NotificationService.init();
 
+  // ── Auralay training-streak nudge ──────────────────────────────────────
+  // Reschedule the 9pm training nudge with the latest streak state every
+  // launch. Reads streak count directly from prefs so it works even
+  // before the Provider has loaded. Idempotent — call site can be called
+  // again from session log without conflict.
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final streak = prefs.getInt('streak_days') ?? 0;
+    await NotificationService.scheduleTrainingNudge(streakDays: streak);
+  } catch (_) {
+    // Non-fatal — the next session will reschedule.
+  }
+
   // Dev-flag bypass: force the subscribed flag true so every gate in the
   // app (scan → report, Mirror tab, Progress tab, etc.) reads the user
   // as Pro without any purchase. Safe to leave on for local testing —
@@ -51,11 +67,19 @@ class MirrorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'MIRROR',
-      debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(),
-      routerConfig: appRouter,
+    // ChangeNotifierProvider wraps the app so the Auralay-imported state
+    // (Aura score, current day, gaze streak) is reachable from the
+    // Progress tab + the Eyes/Game session screens. Mirrorly's own state
+    // continues to live in SharedPreferences-backed static services
+    // (LocalStoreService, PurchaseService, etc.) — no migration needed.
+    return ChangeNotifierProvider(
+      create: (_) => AuralayAppProvider()..load(),
+      child: MaterialApp.router(
+        title: 'MIRROR',
+        debugShowCheckedModeBanner: false,
+        theme: buildAppTheme(),
+        routerConfig: appRouter,
+      ),
     );
   }
 }

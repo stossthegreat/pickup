@@ -5,7 +5,9 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Mirrorly uses your camera to capture a selfie for analysis. Before any photo is sent to OpenAI or Replicate, you'll be asked permission in-app. Manage in Settings.</string>
+	<string>Mirrorly uses your camera to capture a selfie for analysis, and during Eyes training drills to measure eye contact, blink rate and head stillness in real time. Before any photo leaves the device for AI analysis you'll be asked permission in-app. Manage in Settings.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Mirrorly uses your microphone in the Eyes and Game tabs to record your voice during rhetoric drills, Lucien's roleplay scenes, and live free-flow conversations. Audio is sent securely to OpenAI for transcription and the in-character reply, then discarded. Manage in Settings.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Mirrorly saves your before/after transformations to your photo library so you can share them.</string>
 	<key>CFBundleDisplayName</key>

@@ -10,21 +10,28 @@ import '../../services/protocol_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../chat/chat_screen.dart';
+import '../eyes/eyes_tab_screen.dart';
+import '../game/game_tab_screen.dart';
 import '../progress/progress_screen.dart';
 
-/// The hub. Three deep surfaces — not six shallow ones:
-///   0. Scan — trigger a fresh scan / see latest report
-///   1. Advisor — AI chat, always primed with latest scan
-///   2. Progress — history charts + generation gallery + active protocol
+/// The hub. Five deep surfaces — Mirrorly's three plus Auralay's two:
+///   0. Scan    — trigger a fresh scan / see latest report   (Mirrorly)
+///   1. Mirror  — AI chat, always primed with latest scan    (Mirrorly)
+///   2. Eyes    — gaze + presence drills                     (Auralay graft)
+///   3. Game    — Lucien · Arena / Council / Free Flow       (Auralay graft, renamed)
+///   4. Progress— history + protocol + Aura score + streaks  (blended)
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  /// Optional initial tab. Pushed by `/you` from Auralay screens so they
+  /// land on the merged profile (tab 4 = Progress).
+  final int? initialTab;
+  const HomeScreen({super.key, this.initialTab});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _tab = 0;
+  late int _tab;
   ScanRecord? _latest;
   Protocol?   _protocol;
   bool _loading = true;
@@ -32,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _tab = widget.initialTab ?? 0;
     _reload();
   }
 
@@ -57,6 +65,8 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 _ScanHubTab(latest: _latest, protocol: _protocol, onRefresh: _reload),
                 _advisorTab(),
+                const EyesTabScreen(),
+                const GameTabScreen(),
                 ProgressScreen(latest: _latest, protocol: _protocol, onReload: _reload),
               ],
             ),
@@ -635,10 +645,18 @@ class _NavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = const [
-      ('Scan',     Icons.center_focus_strong_rounded),
-      ('Mirror',   Icons.auto_awesome),
-      ('Progress', Icons.show_chart_rounded),
+    // ── Tab roster ────────────────────────────────────────────────────────
+    // Five tabs. Three Mirrorly originals + two Auralay imports. The Game
+    // tab is the renamed "Lucien" / "Villain" surface from Auralay; user
+    // explicitly asked for the label to land as "GAME" in the same italic
+    // Playfair voice that Auralay used for "LUCIEN". We pass an italic flag
+    // per item so the nav bar can swap fonts on that one entry.
+    final items = const <({String label, IconData icon, bool italic})>[
+      (label: 'Scan',     icon: Icons.center_focus_strong_rounded, italic: false),
+      (label: 'Mirror',   icon: Icons.auto_awesome,                italic: false),
+      (label: 'Eyes',     icon: Icons.visibility_outlined,         italic: false),
+      (label: 'Game',     icon: Icons.local_fire_department_outlined, italic: true),
+      (label: 'Progress', icon: Icons.show_chart_rounded,          italic: false),
     ];
     return Container(
       decoration: BoxDecoration(
@@ -659,18 +677,33 @@ class _NavBar extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(items[i].$2,
+                        Icon(items[i].icon,
                           size: 20,
                           color: i == index
                               ? AppColors.red
                               : AppColors.textTertiary),
                         const SizedBox(height: 3),
-                        Text(items[i].$1.toUpperCase(),
-                          style: AppTypography.label.copyWith(
-                            color: i == index
-                                ? AppColors.red
-                                : AppColors.textTertiary,
-                            fontSize: 8.5, letterSpacing: 1.8)),
+                        // GAME renders italic Playfair to match how the
+                        // Auralay tab used to brand Lucien — the editorial
+                        // serif italic against the all-caps tracked sans.
+                        Text(
+                          items[i].italic
+                              ? items[i].label    // mixed case for italic serif
+                              : items[i].label.toUpperCase(),
+                          style: (items[i].italic
+                                  ? AppTypography.h1.copyWith(
+                                      fontStyle: FontStyle.italic,
+                                      fontWeight: FontWeight.w700)
+                                  : AppTypography.label)
+                              .copyWith(
+                                color: i == index
+                                    ? AppColors.red
+                                    : AppColors.textTertiary,
+                                fontSize: items[i].italic ? 11 : 8.5,
+                                letterSpacing: items[i].italic ? -0.2 : 1.8,
+                                height: 1,
+                              ),
+                        ),
                       ],
                     ),
                   ),
