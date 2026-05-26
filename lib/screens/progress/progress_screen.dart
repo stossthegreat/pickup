@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/dev_flags.dart';
 import '../../models/protocol.dart';
 import '../../models/scan_record.dart';
 import '../../models/technique.dart';
@@ -962,10 +963,22 @@ class _TechniqueRow extends StatelessWidget {
                     padding: const EdgeInsets.only(right: 8),
                     child: GestureDetector(
                       onTap: t.isUnlocked(currentDay)
-                          ? () {
+                          ? () async {
                               HapticFeedback.selectionClick();
-                              context.push('/lesson/${t.id}',
-                                extra: {'currentDay': currentDay});
+                              // Paywall gate — the /train curriculum is
+                              // pro-only. Free users (who reach this row
+                              // via their one free Eyes drill) get the
+                              // paywall instead of the lesson.
+                              final pro = kBypassPaywall
+                                  ? true
+                                  : await LocalStoreService.isSubscribed();
+                              if (!context.mounted) return;
+                              context.push(
+                                pro
+                                    ? '/lesson/${t.id}'
+                                    : '/paywall',
+                                extra: pro ? {'currentDay': currentDay} : null,
+                              );
                             }
                           : null,
                       child: _TechDot(
