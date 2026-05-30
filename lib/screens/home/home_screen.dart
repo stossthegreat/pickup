@@ -9,6 +9,7 @@ import '../../services/local_store_service.dart';
 import '../../services/protocol_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
+import '../../widgets/common/mirrorly_components.dart';
 import '../chat/chat_screen.dart';
 import '../eyes/eyes_tab_screen.dart';
 import '../game/game_tab_screen.dart';
@@ -98,72 +99,118 @@ class _ScanHubTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasScan = latest != null;
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: onRefresh,
         color: AppColors.red,
         backgroundColor: AppColors.surface1,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.lg, Sp.lg, Sp.xxl),
+          padding: const EdgeInsets.only(bottom: Sp.xxl),
           children: [
-            // Masthead
-            Row(
-              children: [
-                Text('Mirrorly',
-                  style: AppTypography.h1.copyWith(
-                    fontSize: 28, letterSpacing: -0.8, height: 1)),
-                const SizedBox(width: 10),
-                Container(
-                  width: 5, height: 5, margin: const EdgeInsets.only(top: 8),
-                  decoration: const BoxDecoration(
-                    color: AppColors.red, shape: BoxShape.circle),
-                ),
-                const Spacer(),
-                // Paywall / upgrade chip — always visible so the user can
-                // preview the paywall screen during testing. The `force`
-                // flag in extras tells PaywallScreen to ignore the
-                // kBypassPaywall auto-redirect, otherwise the user would
-                // land right back on /home.
-                _IconBtn(
+            // ── Masthead — Mirrorly + tab thesis + actions
+            MirrorlyMasthead(
+              title: 'Mirrorly',
+              subtitle: 'THE FACE  ·  THE PRESENCE  ·  THE GAME',
+              actions: [
+                MastheadAction(
                   icon: Icons.workspace_premium_rounded,
-                  tint: AppColors.red,
+                  iconColor: AppColors.red,
+                  borderColor: AppColors.red.withOpacity(0.55),
                   onTap: () => context.push(
-                    '/paywall', extra: const {'force': true}),
+                      '/paywall', extra: const {'force': true}),
                 ),
-                const SizedBox(width: 8),
-                _IconBtn(
+                MastheadAction(
                   icon: Icons.tune,
                   onTap: () => context.push('/settings'),
                 ),
               ],
             ),
-            const SizedBox(height: 2),
-            Text('THE FACE · MEASURED · MAXIMIZED',
-              style: AppTypography.label.copyWith(
-                color: AppColors.textMuted, fontSize: 8.5, letterSpacing: 3.0)),
 
-            const SizedBox(height: Sp.xl),
+            const SizedBox(height: Sp.lg),
 
-            _CheckInCard(latest: latest)
-              .animate().fadeIn(duration: 400.ms)
+            // ── Display headline — italic "YOUR FACE. MEASURED." with the
+            // bottom line in red. Subhead kills the AI-slop fear; body
+            // body opens the gap-to-potential thesis.
+            const DisplayBlock(
+              lineOne: 'Your face.',
+              lineTwo: 'Measured.',
+              subhead: 'Real geometry. Not filters. Not guesses.',
+            ),
+
+            const SizedBox(height: Sp.lg),
+
+            // ── The 1-2-3 path + Current vs Optimised hero side-by-side.
+            // This is the conversion bait: he sees the path AND a glimpse
+            // of his strongest face in the same frame.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: _PathFlow(stepDone: hasScan)),
+                    const SizedBox(width: Sp.md),
+                    const Expanded(child: _OptimisedSplitCard()),
+                  ],
+                ),
+              ),
+            ).animate().fadeIn(duration: 400.ms)
               .slideY(begin: 0.04, end: 0, duration: 400.ms, curve: Curves.easeOut),
 
-            const SizedBox(height: Sp.md),
+            const SizedBox(height: Sp.lg),
 
+            // ── Primary CTA — full-width red, 30-second meta underneath.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+              child: PrimaryCta(
+                label: hasScan ? 'Rescan Face' : 'Begin Face Scan',
+                icon: Icons.center_focus_strong_rounded,
+                meta: 'Takes 30 seconds',
+                onTap: () => context.push('/scan'),
+              ),
+            ).animate().fadeIn(delay: 160.ms, duration: 400.ms),
+
+            const SizedBox(height: Sp.lg),
+
+            // ── After the scan, unlock — Presence + Game badges.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+              child: const LockStrip(
+                label: 'After the scan, unlock',
+                highlight: 'Presence  ·  Game',
+                badges: [
+                  LockBadge(
+                    icon: Icons.remove_red_eye_outlined,
+                    label: 'Presence',
+                    color: AppColors.accent,
+                  ),
+                  LockBadge(
+                    icon: Icons.local_fire_department_rounded,
+                    label: 'Game',
+                    color: AppColors.red,
+                  ),
+                ],
+              ),
+            ).animate().fadeIn(delay: 260.ms, duration: 400.ms),
+
+            // ── Returning-user extras. Score snapshot + active protocol.
+            // Hidden on first impression so the conversion column above
+            // owns the screen for new users.
+            if (hasScan) ...[
+              const SizedBox(height: Sp.lg),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+                child: _LatestSnapshot(scan: latest!),
+              ).animate().fadeIn(delay: 360.ms, duration: 400.ms),
+            ],
             if (protocol != null) ...[
-              _ActiveProtocolCard(protocol: protocol!)
-                .animate().fadeIn(delay: 160.ms, duration: 400.ms),
               const SizedBox(height: Sp.md),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+                child: _ActiveProtocolCard(protocol: protocol!),
+              ).animate().fadeIn(delay: 420.ms, duration: 400.ms),
             ],
-
-            if (latest != null) ...[
-              _LatestSnapshot(scan: latest!)
-                .animate().fadeIn(delay: 260.ms, duration: 400.ms),
-              const SizedBox(height: Sp.md),
-            ],
-
-            _PrimaryScanCta(hasPrior: latest != null)
-              .animate().fadeIn(delay: 360.ms, duration: 400.ms),
           ],
         ),
       ),
@@ -171,85 +218,178 @@ class _ScanHubTab extends StatelessWidget {
   }
 }
 
-// ── Check-in card ───────────────────────────────────────────────────────────
-class _CheckInCard extends StatelessWidget {
-  final ScanRecord? latest;
-  const _CheckInCard({required this.latest});
+// ── 1-2-3 path flow used on the Scan tab — numbered circles, the current
+// step painted red, subsequent steps muted. Lives next to the optimised
+// split card so the user sees the path AND a glimpse of the destination.
+class _PathFlow extends StatelessWidget {
+  final bool stepDone;
+  const _PathFlow({required this.stepDone});
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final (title, body, accent) = _state(now);
-
-    return Container(
-      padding: const EdgeInsets.all(Sp.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(Rd.xl),
-        border: Border.all(color: accent.withValues(alpha: 0.4), width: 0.8),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-              border: Border.all(color: accent.withValues(alpha: 0.5), width: 0.8),
-            ),
-            // Compass + triangle — "we draft your face like an
-            // architect drafts a building." On-brand for a clinical
-            // measurement product; replaces the generic
-            // sparkle/glitter that read as a stock UI flourish.
-            child: Icon(Icons.architecture_outlined, color: accent, size: 18),
-          ),
-          const SizedBox(width: Sp.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                  style: AppTypography.label.copyWith(
-                    color: accent, letterSpacing: 2.5, fontSize: 9)),
-                const SizedBox(height: 4),
-                Text(body,
-                  style: AppTypography.body.copyWith(
-                    color: AppColors.textPrimary, fontSize: 14, height: 1.45)),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _step(1, 'Face first',  'Scan your face',
+            active: !stepDone, done: stepDone),
+        const SizedBox(height: 18),
+        _step(2, 'Presence next', 'Train eye contact & voice'),
+        const SizedBox(height: 18),
+        _step(3, 'Game after',   'Real roleplay with Lucien'),
+      ],
     );
   }
 
-  (String, String, Color) _state(DateTime now) {
-    if (latest == null) {
-      return (
-        'READ YOUR BONES',
-        'Sixteen measurements. On-device. Not a vibe.',
-        AppColors.red,
-      );
-    }
-    final daysSince = now.difference(latest!.takenAt).inDays;
-    if (daysSince >= 7) {
-      return (
-        'RESCAN · $daysSince DAYS',
-        'Jawline, skin, body comp — something\'s shifted. See what.',
-        AppColors.signalAmber,
-      );
-    }
-    if (daysSince >= 3) {
-      return (
-        'CHECK-IN',
-        'Ask The Mirror one thing you\'ve been wondering about your face.',
-        AppColors.accent,
-      );
-    }
-    return (
-      'ACTIVE',
-      '${latest!.score}/100 · ${latest!.tierLabel} · ${latest!.archetypeName}.',
-      AppColors.signalGreen,
+  Widget _step(int n, String label, String body,
+      {bool active = false, bool done = false}) {
+    final accent = active || done ? AppColors.red : AppColors.textTertiary;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 26, height: 26,
+          decoration: BoxDecoration(
+            color: done ? AppColors.red.withOpacity(0.18) : Colors.transparent,
+            shape: BoxShape.circle,
+            border: Border.all(color: accent, width: 1.2),
+          ),
+          alignment: Alignment.center,
+          child: done
+              ? const Icon(Icons.check_rounded, size: 14, color: AppColors.red)
+              : Text(
+                  '$n',
+                  style: AppTypography.label.copyWith(
+                    color: accent,
+                    fontSize: 12,
+                    letterSpacing: 0,
+                  ),
+                ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label.toUpperCase(),
+                style: AppTypography.label.copyWith(
+                  color: accent,
+                  letterSpacing: 2.0,
+                  fontSize: 10.5,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                body,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Current vs Optimised split — the hero photo on the right side of the
+// Scan tab. Single image with vertical split labels; falls back to twin
+// silhouettes when the asset hasn't been dropped in yet.
+class _OptimisedSplitCard extends StatelessWidget {
+  const _OptimisedSplitCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(Rd.lg),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface2,
+          border: Border.all(color: AppColors.surface3, width: 1),
+          borderRadius: BorderRadius.circular(Rd.lg),
+        ),
+        child: Stack(
+          fit: StackFit.passthrough,
+          children: [
+            AspectRatio(
+              aspectRatio: 4 / 5,
+              child: Image.asset(
+                MirrorlyAssets.optimisedSplit,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Row(
+                  children: [
+                    Expanded(child: Container(
+                      color: AppColors.surface1,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.person_outline_rounded,
+                          size: 36, color: AppColors.surface3),
+                    )),
+                    Container(width: 1, color: AppColors.surface3),
+                    Expanded(child: Container(
+                      color: AppColors.surface1,
+                      alignment: Alignment.center,
+                      child: Icon(Icons.person_rounded,
+                          size: 36, color: AppColors.red.withOpacity(0.6)),
+                    )),
+                  ],
+                ),
+              ),
+            ),
+            const Positioned(
+              left: 10, top: 10,
+              child: _SplitLabel(text: 'CURRENT'),
+            ),
+            const Positioned(
+              right: 10, top: 10,
+              child: _SplitLabel(text: 'OPTIMISED', color: AppColors.red),
+            ),
+            Positioned(
+              left: 10, right: 10, bottom: 10,
+              child: Row(
+                children: [
+                  const Icon(Icons.lock_rounded,
+                      size: 12, color: AppColors.textTertiary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'See your strongest version rendered on you'.toUpperCase(),
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 8.5,
+                        letterSpacing: 1.4,
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SplitLabel extends StatelessWidget {
+  final String text;
+  final Color color;
+  const _SplitLabel({required this.text, this.color = AppColors.textSecondary});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: AppTypography.label.copyWith(
+        color: color,
+        fontSize: 9,
+        letterSpacing: 2.0,
+      ),
     );
   }
 }
@@ -403,35 +543,6 @@ class _LatestSnapshot extends StatelessWidget {
   }
 }
 
-// ── Primary scan CTA ────────────────────────────────────────────────────────
-class _PrimaryScanCta extends StatelessWidget {
-  final bool hasPrior;
-  const _PrimaryScanCta({required this.hasPrior});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity, height: 58,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.red,
-          foregroundColor: AppColors.base,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(Rd.lg)),
-        ),
-        onPressed: () {
-          HapticFeedback.mediumImpact();
-          context.push('/scan');
-        },
-        child: Text(hasPrior ? 'Begin new scan' : 'Begin first scan',
-          style: const TextStyle(
-            fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: 0.4)),
-      ),
-    );
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 //  Mirror locked — the Advisor sell page, shown until the user has scanned
 // ═══════════════════════════════════════════════════════════════════════════
@@ -449,79 +560,107 @@ class _MirrorLocked extends StatelessWidget {
       backgroundColor: AppColors.base,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.xl, Sp.lg, Sp.xxl),
+          padding: const EdgeInsets.only(bottom: Sp.xxl),
           children: [
-            Text('The Mirror',
-              style: AppTypography.h1.copyWith(
-                fontSize: 32, letterSpacing: -0.8, height: 1)),
-            const SizedBox(height: 4),
-            Text('SAME FACE · DIFFERENT LANE',
-              style: AppTypography.label.copyWith(
-                color: AppColors.red,
-                fontSize: 9, letterSpacing: 3.0,
-                fontWeight: FontWeight.w800)),
-
-            const SizedBox(height: Sp.xxl),
-
-            // The deadly quote — what the AI actually does, in
-            // language that hits. Knows your geometry to the
-            // millimetre, picks the changes, renders them on YOUR
-            // face. Italic editorial.
-            Text('"Knows your bones to the millimetre.\n'
-                 'Picks the cut. Renders it. On you."',
-              style: AppTypography.h1.copyWith(
-                fontSize: 22, height: 1.3, letterSpacing: -0.4,
-                fontStyle: FontStyle.italic,
-                fontWeight: FontWeight.w600,
-              ))
-              .animate().fadeIn(duration: 420.ms)
-              .slideY(begin: 0.04, end: 0, duration: 420.ms, curve: Curves.easeOut),
-
-            const SizedBox(height: Sp.xl),
-
-            // BEFORE | AFTER — single pair, side-by-side. One look,
-            // one transformation, no categories.
-            const _BeforeAfterPairs()
-              .animate().fadeIn(delay: 200.ms, duration: 420.ms),
-
-            const SizedBox(height: Sp.xl),
-
-            // Primary CTA.
-            SizedBox(
-              width: double.infinity, height: 56,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.red,
-                  foregroundColor: AppColors.base,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(Rd.lg)),
-                  elevation: 0,
+            // ── Masthead — italic display name + tab thesis + tune action.
+            MirrorlyMasthead(
+              title: 'The Mirror',
+              subtitle: 'SAME FACE  ·  DIFFERENT LANE',
+              actions: [
+                MastheadAction(
+                  icon: Icons.tune,
+                  onTap: () => context.push('/settings'),
                 ),
-                onPressed: () {
-                  HapticFeedback.mediumImpact();
-                  context.push('/scan');
-                },
-                child: const Text('Begin first scan',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15, letterSpacing: 0.4)),
+              ],
+            ),
+
+            const SizedBox(height: Sp.lg),
+
+            // ── Display headline — italic two-line "KNOWS YOUR BONES /
+            // TO THE MILLIMETRE" with the bottom line in red.
+            const DisplayBlock(
+              lineOne: 'Knows your bones',
+              lineTwo: 'to the millimetre.',
+              subhead: 'Picks the cut. Renders it on you.',
+            ),
+
+            const SizedBox(height: Sp.lg),
+
+            // ── Before / After hero pair — existing tiles, asset-safe.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+              child: const _BeforeAfterPairs(),
+            ).animate().fadeIn(delay: 120.ms, duration: 400.ms),
+
+            const SizedBox(height: Sp.lg),
+
+            // ── Stat strip — the credibility proof. Reads as a lab report.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+              child: const StatStrip(stats: [
+                StatPoint(
+                  icon: Icons.architecture_outlined,
+                  value: '16',
+                  label: 'Measurements',
+                ),
+                StatPoint(
+                  icon: Icons.gps_fixed_rounded,
+                  value: '0.1mm',
+                  label: 'Precision',
+                ),
+                StatPoint(
+                  icon: Icons.auto_awesome_rounded,
+                  value: 'AI',
+                  label: 'Photoreal',
+                ),
+              ]),
+            ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
+
+            const SizedBox(height: Sp.lg),
+
+            // ── Primary CTA — full-width red, 30s meta.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+              child: PrimaryCta(
+                label: 'Begin First Scan',
+                icon: Icons.auto_awesome_rounded,
+                trailingIcon: Icons.arrow_forward_rounded,
+                meta: 'Takes 30 seconds',
+                onTap: () => context.push('/scan'),
               ),
-            ).animate().fadeIn(delay: 320.ms, duration: 360.ms),
+            ).animate().fadeIn(delay: 300.ms, duration: 400.ms),
 
-            const SizedBox(height: Sp.sm),
+            const SizedBox(height: Sp.lg),
 
-            // Tiny privacy link — compliance only, not real estate.
+            // ── Lock strip — what unlocks with the first scan.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+              child: LockStrip(
+                label: 'First scan unlocks',
+                highlight: 'Looks  ·  Presence  ·  Game',
+                badges: const [],
+                onTap: () => context.push('/scan'),
+              ),
+            ).animate().fadeIn(delay: 400.ms, duration: 400.ms),
+
+            const SizedBox(height: Sp.md),
+
+            // ── Compliance link, kept tiny.
             Center(
               child: TextButton(
                 onPressed: () {
                   HapticFeedback.selectionClick();
                   context.push('/privacy');
                 },
-                child: Text('Privacy',
+                child: Text(
+                  'Privacy',
                   style: AppTypography.label.copyWith(
                     color: AppColors.textTertiary,
-                    fontSize: 10, letterSpacing: 1.8,
-                    fontWeight: FontWeight.w600)),
+                    fontSize: 10,
+                    letterSpacing: 1.8,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
           ],
@@ -710,42 +849,6 @@ class _NavBar extends StatelessWidget {
                 ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _IconBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  /// Optional accent. Used for the paywall chip to make it pop in the
-  /// header. Defaults to neutral textSecondary when omitted.
-  final Color? tint;
-  const _IconBtn({required this.icon, required this.onTap, this.tint});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = tint ?? AppColors.textSecondary;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        child: Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(
-            color: tint != null
-              ? tint!.withValues(alpha: 0.12)
-              : Colors.transparent,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: tint != null
-                ? tint!.withValues(alpha: 0.55)
-                : AppColors.divider,
-              width: 0.8),
-          ),
-          child: Icon(icon, size: 16, color: color),
         ),
       ),
     );

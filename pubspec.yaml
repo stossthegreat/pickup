@@ -1,7 +1,7 @@
 name: mirror
 description: "Real facial geometry analysis. Not a rating. Measurements."
 publish_to: 'none'
-version: 1.1.8+31
+version: 1.1.8+32
 
 environment:
   sdk: ^3.8.0
@@ -105,6 +105,17 @@ flutter:
     # per assets/marketing/README.md and they auto-bundle on next
     # build — no pubspec edit needed.
     - assets/marketing/
+    # Character renders — Lucien + roleplay women + gaze partners +
+    # free-flow hero + scan split. Declared as directories so the
+    # build never breaks before the JPEGs land. Every tab uses
+    # Image.asset with an errorBuilder that falls back to a glyph,
+    # so missing files render gracefully. See the README.md inside
+    # each folder for the exact filenames and art-direction brief.
+    - assets/characters/lucien/
+    - assets/characters/women/
+    - assets/eyes/partners/
+    - assets/game/
+    - assets/scan/
 
 # Generates every iOS + Android launcher icon from two master PNGs.
 # Run after dropping new masters:  dart run flutter_launcher_icons
