@@ -19,6 +19,7 @@ import '../../../services/user_memory.dart';
 import '../../../services/villain/villain_api.dart';
 import '../../../theme/auralay_app_colors.dart';
 import '../../../theme/auralay_app_typography.dart';
+import '../../../widgets/common/mirrorly_components.dart';
 import '../../../widgets/debug_panel.dart';
 import '../../../widgets/safe_close_button.dart';
 
@@ -58,8 +59,11 @@ class _Vibe {
   /// One-line scene Lucien sets before you open. Where she is, who
   /// she's with — your cue to make the move.
   final String context;
+  /// Asset path to her portrait. Renders inside the orb during the
+  /// live phase so the user is talking to a real face, not a glow.
+  final String assetPath;
   const _Vibe(this.key, this.label, this.tagline, this.setting, this.voice,
-      this.context);
+      this.context, this.assetPath);
 }
 
 const _vibes = <_Vibe>[
@@ -74,6 +78,7 @@ const _vibes = <_Vibe>[
     'sage',
     'Coffee shop. She\'s alone at a window table, laptop open, one '
         'earbud in. She clocked you walk in. Make your move.',
+    MirrorlyAssets.iceQueen,
   ),
   _Vibe(
     'into_you',
@@ -85,6 +90,7 @@ const _vibes = <_Vibe>[
     'coral',
     'Bar, Friday night. She\'s with her friend and she\'s already '
         'glanced over twice. The door\'s open. Make your move.',
+    MirrorlyAssets.arenaWoman,
   ),
   _Vibe(
     'chaos',
@@ -97,6 +103,7 @@ const _vibes = <_Vibe>[
     'shimmer',
     'House party, kitchen. She\'s mid-laugh with two friends, three '
         'drinks deep, buzzing. Make your move.',
+    MirrorlyAssets.chaosGirl,
   ),
   _Vibe(
     'testing',
@@ -109,6 +116,7 @@ const _vibes = <_Vibe>[
     'ballad',
     'Bar. She\'s leaning on the counter with a friend, sizing up the '
         'room, unimpressed by all of it. Make your move.',
+    MirrorlyAssets.intellectual,
   ),
   _Vibe(
     'ice_then_fire',
@@ -121,6 +129,7 @@ const _vibes = <_Vibe>[
     'verse',
     'Rooftop bar. She\'s by the railing, arms crossed, looking at the '
         'view like it bores her. Make your move.',
+    MirrorlyAssets.socialite,
   ),
 ];
 
@@ -806,6 +815,9 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                         thinking: _phase == _Phase.connecting ||
                             _phase == _Phase.lucien ||
                             _phase == _Phase.scoring,
+                        // Render HER face as the orb itself so the user
+                        // is talking to a real person, not a glow.
+                        imagePath: _vibe?.assetPath,
                       ),
                     ],
                   ),
@@ -1356,45 +1368,97 @@ class _Orb extends StatelessWidget {
   final bool speaking;
   final bool holding;
   final bool thinking;
+  /// When set, the orb renders HER face as a circular portrait with a
+  /// pulsing red rim — far more compelling than a generic glow. Null
+  /// falls back to the original glowing orb.
+  final String? imagePath;
   const _Orb({
     required this.active,
     required this.speaking,
     required this.thinking,
     this.holding = false,
+    this.imagePath,
   });
   @override
   Widget build(BuildContext context) {
-    final size = (speaking || holding) ? 196.0 : 168.0;
-    final glow = holding ? 0.7 : (speaking ? 0.6 : 0.32);
-    final w = AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          colors: [
-            AppColors.accent,
-            AppColors.accent.withValues(alpha: holding ? 0.9 : 0.75),
+    final size = (speaking || holding) ? 220.0 : 192.0;
+    // Rim accent — red when she speaks (her voice), indigo when the
+    // user is holding (your voice), dim when idle.
+    final rim = speaking
+        ? AppColors.red
+        : (holding ? AppColors.accent : AppColors.divider);
+    final glowAlpha = holding ? 0.7 : (speaking ? 0.65 : 0.18);
+
+    final Widget w;
+    if (imagePath != null) {
+      w = AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: rim,
+            width: speaking ? 3 : (holding ? 2.2 : 1.5),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: rim.withValues(alpha: glowAlpha.clamp(0.0, 1.0)),
+              blurRadius: (speaking || holding) ? 70 : 28,
+              spreadRadius: (speaking || holding) ? 3 : -4,
+            ),
           ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.accent.withValues(alpha: glow.clamp(0.0, 1.0)),
-            blurRadius: (speaking || holding) ? 80 : 44,
-            spreadRadius: (speaking || holding) ? 4 : -6,
+        child: ClipOval(
+          child: Image.asset(
+            imagePath!,
+            fit: BoxFit.cover,
+            alignment: const Alignment(0, -0.25),
+            errorBuilder: (_, __, ___) => Container(
+              color: AppColors.surface1,
+              alignment: Alignment.center,
+              child: const Icon(Icons.person_rounded,
+                  size: 64, color: AppColors.surface3),
+            ),
           ),
-        ],
-      ),
-    );
-    // Hold = steady bright (the ring spins separately). Otherwise breathe.
+        ),
+      );
+    } else {
+      // Legacy fallback — no imagePath supplied, render the indigo
+      // gradient orb so the screen still works without the asset.
+      w = AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              AppColors.accent,
+              AppColors.accent.withValues(alpha: holding ? 0.9 : 0.75),
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.accent
+                  .withValues(alpha: glowAlpha.clamp(0.0, 1.0)),
+              blurRadius: (speaking || holding) ? 80 : 44,
+              spreadRadius: (speaking || holding) ? 4 : -6,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Hold = steady (ring spins separately). Otherwise breathe — faster
+    // and a touch bigger when she's speaking so the eye locks on.
     if (holding || (!active && !thinking)) return w;
     return w
         .animate(onPlay: (c) => c.repeat(reverse: true))
         .scale(
           begin: const Offset(1, 1),
-          end: Offset(speaking ? 1.06 : 1.03, speaking ? 1.06 : 1.03),
-          duration: (speaking ? 500 : 1400).ms,
+          end: Offset(speaking ? 1.045 : 1.02, speaking ? 1.045 : 1.02),
+          duration: (speaking ? 520 : 1400).ms,
           curve: Curves.easeInOut,
         );
   }
