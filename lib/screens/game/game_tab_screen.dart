@@ -53,9 +53,10 @@ class _GameTabScreenState extends State<GameTabScreen> {
   }
 
   // Free Flow: pro = unlimited; free = exactly one convo (consumed on
-  // open), then paywall. Arenas + Council are pro-only.
-  bool get _freeFlowLocked => _loaded && !_pro && _gameUsed;
-  bool get _proOnlyLocked  => _loaded && !_pro;
+  // open), then paywall. The card itself never paints as locked
+  // (handler does the gating) so we don't need a _freeFlowLocked
+  // getter. Arenas + Council are pro-only and DO paint as locked.
+  bool get _proOnlyLocked => _loaded && !_pro;
 
   Future<void> _toPaywall() async {
     await context.push('/paywall');
@@ -102,14 +103,16 @@ class _GameTabScreenState extends State<GameTabScreen> {
           padding: const EdgeInsets.only(bottom: Sp.xxl),
           children: [
             // ── Masthead — Lucien hero portrait, eyebrow + display title
-            //    + subhead on the left, action chips top-right.
+            //    + subhead on the left, action chips top-right. Short
+            //    height (200) so the title sits high on the screen and
+            //    the Free Flow card is reachable without scrolling.
             _GameMasthead(
               onPaywall: () => context.push(
                   '/paywall', extra: const {'force': true}),
               onSettings: () => context.push('/settings'),
             ),
 
-            const SizedBox(height: Sp.lg),
+            const SizedBox(height: Sp.md),
 
             // ── Body line under the hero.
             Padding(
@@ -124,17 +127,28 @@ class _GameTabScreenState extends State<GameTabScreen> {
               ),
             ),
 
-            const SizedBox(height: Sp.lg),
+            const SizedBox(height: Sp.md),
 
-            // ── FREE FLOW — live training card with the woman portrait
-            //    on the right. One free conversation on free tier.
+            // ── FREE FLOW — the main event. Always tappable (free
+            //    user gets one consumed-on-open, then paywalled). The
+            //    card pulses subtly so the eye lands on it as the
+            //    primary action on this tab. CTA always reads "Go
+            //    Live" — never "Unlock With Pro" — because the action
+            //    is always to enter Free Flow, the gating happens
+            //    inside the handler.
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
               child: _FreeFlowCard(
-                locked: _freeFlowLocked,
                 onTap: _onFreeFlow,
               ),
-            ).animate().fadeIn(delay: 120.ms, duration: 400.ms),
+            )
+                .animate(onPlay: (c) => c.repeat(reverse: true))
+                .scale(
+                  begin: const Offset(1.0, 1.0),
+                  end: const Offset(1.014, 1.014),
+                  duration: 1600.ms,
+                  curve: Curves.easeInOut,
+                ),
 
             const SizedBox(height: Sp.lg),
 
@@ -289,17 +303,18 @@ class _GameMasthead extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 300,
+      // Compact masthead so the title sits high on the screen and the
+      // Free Flow card (the main event) is reachable without scrolling.
+      // Lucien still bleeds into the right side but with a tighter crop.
+      height: 200,
       child: Stack(
         children: [
-          // ── Lucien portrait, right half, full bleed. The source is a
-          // square render so it crops to a vertical strip — alignment is
-          // pulled slightly up so the face stays in frame.
+          // ── Lucien portrait, right half, full bleed.
           Positioned.fill(
             child: Align(
               alignment: Alignment.centerRight,
               child: FractionallySizedBox(
-                widthFactor: 0.58,
+                widthFactor: 0.55,
                 heightFactor: 1.0,
                 child: Stack(
                   fit: StackFit.expand,
@@ -307,7 +322,7 @@ class _GameMasthead extends StatelessWidget {
                     Image.asset(
                       MirrorlyAssets.lucienHero,
                       fit: BoxFit.cover,
-                      alignment: const Alignment(0.1, -0.35),
+                      alignment: const Alignment(0.15, -0.4),
                       errorBuilder: (_, __, ___) => Container(
                         color: AppColors.surface1,
                         alignment: Alignment.center,
@@ -316,8 +331,7 @@ class _GameMasthead extends StatelessWidget {
                       ),
                     ),
                     // Left-edge fade so the title block reads against
-                    // the photo regardless of brightness — narrower
-                    // than before so more of Lucien stays visible.
+                    // the photo regardless of brightness.
                     Positioned.fill(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
@@ -326,10 +340,10 @@ class _GameMasthead extends StatelessWidget {
                             end: Alignment.centerRight,
                             colors: [
                               AppColors.base,
-                              AppColors.base.withOpacity(0.35),
+                              AppColors.base.withOpacity(0.30),
                               Colors.transparent,
                             ],
-                            stops: const [0.0, 0.20, 0.45],
+                            stops: const [0.0, 0.18, 0.45],
                           ),
                         ),
                       ),
@@ -340,44 +354,46 @@ class _GameMasthead extends StatelessWidget {
             ),
           ),
 
-          // ── Title block (left).
+          // ── Title block (left). Eyebrow + italic display title with
+          //    red dot + italic red subhead — same vocabulary as
+          //    MirrorlyMasthead so every tab reads in one voice. Pushed
+          //    high (top: 12) so it doesn't sit dead-centre in empty
+          //    space.
           Positioned(
             left: Sp.lg,
-            top: 24,
-            right: 100,
-            bottom: 24,
+            top: 12,
+            right: 130,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
                   'The Consigliere'.toUpperCase(),
                   style: AppTypography.label.copyWith(
                     color: AppColors.red,
-                    fontSize: 11,
+                    fontSize: 10.5,
                     letterSpacing: 3.0,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 RichText(
                   text: TextSpan(
                     style: GoogleFonts.playfairDisplay(
-                      fontSize: 64,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 38,
+                      fontWeight: FontWeight.w700,
                       fontStyle: FontStyle.italic,
                       color: AppColors.textPrimary,
-                      letterSpacing: -2.0,
+                      letterSpacing: -1.2,
                       height: 1.0,
                     ),
                     children: [
                       const TextSpan(text: 'Game'),
+                      const TextSpan(text: '  '),
                       WidgetSpan(
                         alignment: PlaceholderAlignment.middle,
                         child: Container(
-                          width: 12,
-                          height: 12,
-                          margin: const EdgeInsets.only(left: 2, bottom: 4),
+                          width: 9,
+                          height: 9,
                           decoration: const BoxDecoration(
                             color: AppColors.red,
                             shape: BoxShape.circle,
@@ -387,25 +403,15 @@ class _GameMasthead extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 8),
                 Text(
-                  'She tests you.',
+                  'She tests you. Lucien corrects you.',
                   style: GoogleFonts.inter(
-                    fontSize: 16,
+                    fontSize: 13,
                     fontStyle: FontStyle.italic,
-                    fontWeight: FontWeight.w500,
                     color: AppColors.red,
-                    height: 1.3,
-                  ),
-                ),
-                Text(
-                  'Lucien corrects you.',
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontStyle: FontStyle.italic,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.red,
-                    height: 1.3,
+                    height: 1.35,
+                    letterSpacing: 0.2,
                   ),
                 ),
               ],
@@ -414,7 +420,7 @@ class _GameMasthead extends StatelessWidget {
 
           // ── Action chips top-right (over the photo).
           Positioned(
-            top: 14, right: Sp.lg,
+            top: 12, right: Sp.lg,
             child: Row(
               children: [
                 MastheadAction(
@@ -443,9 +449,8 @@ class _GameMasthead extends StatelessWidget {
 // "UNLOCK WITH PRO" in the CTA slot.
 
 class _FreeFlowCard extends StatelessWidget {
-  final bool locked;
   final VoidCallback onTap;
-  const _FreeFlowCard({required this.locked, required this.onTap});
+  const _FreeFlowCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -512,10 +517,16 @@ class _FreeFlowCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 14),
+                    // CTA always reads "Go Live" — never "Unlock With
+                    // Pro". The handler does the gating: first tap on
+                    // free tier consumes the free session and opens
+                    // Free Flow; subsequent taps route to the paywall.
+                    // Painting the button as locked would just kill
+                    // the tap intent on the main event of the tab.
                     PrimaryCta(
-                      label: locked ? 'Unlock With Pro' : 'Go Live',
-                      icon: locked ? null : Icons.graphic_eq_rounded,
-                      locked: locked,
+                      label: 'Go Live',
+                      icon: Icons.graphic_eq_rounded,
+                      locked: false,
                       onTap: onTap,
                     ),
                   ],

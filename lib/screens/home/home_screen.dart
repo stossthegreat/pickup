@@ -111,7 +111,7 @@ class _ScanHubTab extends StatelessWidget {
             // ── Masthead — Mirrorly + tab thesis + actions
             MirrorlyMasthead(
               title: 'Mirrorly',
-              subtitle: 'THE FACE  ·  THE PRESENCE  ·  THE GAME',
+              subtitle: 'The face. The presence. The game.',
               actions: [
                 MastheadAction(
                   icon: Icons.workspace_premium_rounded,
@@ -501,7 +501,7 @@ class _MirrorLocked extends StatelessWidget {
             // ── Masthead — italic display name + tab thesis + tune action.
             MirrorlyMasthead(
               title: 'The Mirror',
-              subtitle: 'SAME FACE  ·  DIFFERENT LANE',
+              subtitle: 'Same face. Different lane.',
               actions: [
                 MastheadAction(
                   icon: Icons.tune,

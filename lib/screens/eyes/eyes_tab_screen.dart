@@ -203,6 +203,9 @@ class _EyesTabScreenState extends State<EyesTabScreen> {
                 future: _nextGaze,
                 builder: (_, snap) {
                   final l = snap.data ?? GazeSyllabus.all.first;
+                  final upcoming = GazeSyllabus.all
+                      .where((g) => g.id != l.id)
+                      .toList();
                   return CharacterCard(
                     eyebrow: 'Part one',
                     title: 'Eye Contact',
@@ -210,11 +213,21 @@ class _EyesTabScreenState extends State<EyesTabScreen> {
                         'Pure gaze training. Hold her eyes. Don\'t break first.',
                     assetPath: MirrorlyAssets.gazeNeutral,
                     locked: false,
-                    inlinePanel: _CompactLessonRow(
-                      number: l.number,
-                      name: l.name,
-                      oneLine: l.oneLine,
-                      onStart: () => _onEyeContactBegin(l),
+                    inlinePanel: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _CompactLessonRow(
+                          number: l.number,
+                          name: l.name,
+                          oneLine: l.oneLine,
+                          onStart: () => _onEyeContactBegin(l),
+                        ),
+                        if (upcoming.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          _NextLessonsStrip(lessons: upcoming),
+                        ],
+                      ],
                     ),
                   );
                 },
@@ -313,6 +326,58 @@ class _ProgressStrip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Next-lessons strip ─────────────────────────────────────────────
+// Horizontal scroll of every remaining lesson as small locked chips.
+// Lets the user see WHAT'S COMING without inflating card height the
+// way a full vertical list does. Chips aren't tappable — they're
+// previews, not entry points; tapping the main play button always
+// runs the current lesson and the rest follow naturally.
+
+class _NextLessonsStrip extends StatelessWidget {
+  final List<GazeLesson> lessons;
+  const _NextLessonsStrip({required this.lessons});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 30,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: lessons.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemBuilder: (_, i) {
+          final l = lessons[i];
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: AppColors.surface3, width: 1),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${l.number.toString().padLeft(2, '0')} · ${l.name}',
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textTertiary,
+                    fontSize: 10.5,
+                    letterSpacing: 1.4,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Icon(Icons.lock_rounded,
+                    size: 11, color: AppColors.textMuted),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

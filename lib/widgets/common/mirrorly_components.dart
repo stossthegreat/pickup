@@ -197,38 +197,47 @@ class DisplayBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     // Display sizes scaled down from the mockup so longer headlines
     // ("Knows your bones to the millimetre.") fit on a phone in TWO
-    // lines max — the previous 54pt wrapped to five lines and ate the
-    // whole screen. Each line is FittedBox-scaled so the eye still
-    // lands on a single bold block even when the line is long.
+    // lines max. BOTH lines live inside ONE FittedBox so they scale
+    // proportionally together — if "to the millimetre." needs to
+    // shrink to fit, "knows your bones" shrinks the same amount and
+    // the block stays visually consistent. Previously each line had
+    // its own FittedBox which let one line stay big while the other
+    // wrapped mid-word — the bug in the Mirror screenshot.
     final display = GoogleFonts.playfairDisplay(
-      fontSize: 42,
+      fontSize: 44,
       fontWeight: FontWeight.w800,
       fontStyle: FontStyle.italic,
       letterSpacing: -1.6,
-      height: 1.0,
+      height: 1.02,
     );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
       child: Column(
         crossAxisAlignment: align,
         children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              lineOne.toUpperCase(),
-              maxLines: 1,
-              style: display.copyWith(color: AppColors.textPrimary),
-            ),
-          ),
-          const SizedBox(height: 2),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              lineTwo.toUpperCase(),
-              maxLines: 1,
-              style: display.copyWith(color: AppColors.red),
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    lineOne.toUpperCase(),
+                    maxLines: 1,
+                    softWrap: false,
+                    style: display.copyWith(color: AppColors.textPrimary),
+                  ),
+                  Text(
+                    lineTwo.toUpperCase(),
+                    maxLines: 1,
+                    softWrap: false,
+                    style: display.copyWith(color: AppColors.red),
+                  ),
+                ],
+              ),
             ),
           ),
           if (subhead != null) ...[
