@@ -1,60 +1,62 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../theme/auralay_app_colors.dart';
 
-/// Two cinematic eye drawings, positioned in the upper third of the
-/// screen, spaced like an imagined partner's eyes. Replaces the
-/// abstract red dots — same coordinates, same gaze-target role, but
-/// the user now locks onto eyes with lashes / iris / pupil / catchlight
-/// instead of stylised circles. The eye is the entire point of this
-/// app; the target should LOOK like an eye.
+/// Cinematic eyes overlay on the eye-contact session screen.
 ///
-/// Drawn OUTSIDE the camera transform stack so they sit at absolute
-/// screen coords regardless of the camera preview's mirror / rotation
-/// / scale.
+/// Loads a single horizontal asset — a tight close-up of a real
+/// woman's eyes (cheekbone to brow, no full face) — and positions it
+/// in the upper third of the screen as the gaze target. Same coords
+/// the old painted eyes / red dots used.
 ///
-/// When the gaze engine reports lock the iris brightens, a red rim
-/// glow blooms around it, and the pupil dilates slightly — the user
-/// feels the eye RESPOND to their lock.
+/// Drop your render at:  assets/eyes/lesson_eyes.jpg
+/// Format: JPEG, 16:6 horizontal letterbox (e.g. 1600 × 600), tight
+/// crop on the EYES only (cheekbone to brow line — DO NOT include
+/// nose / mouth / hair), photoreal, dark background, soft red rim
+/// light on one side, lashes visible. Eyes should be DEAD-CENTRE
+/// and STARING INTO THE CAMERA — that's the entire intensity.
+///
+/// When the gaze engine reports lock the asset stays the same but a
+/// subtle red glow blooms around it + a soft scale pulse — the eye
+/// "responds" to the user holding gaze.
+///
+/// Falls back to a black band with a single red gleam if the asset
+/// hasn't been dropped in yet — never blocks the build.
 class FixationDots extends StatelessWidget {
   /// True when the gaze engine has locked on — eyes "wake up."
   final bool isLocked;
   const FixationDots({super.key, required this.isLocked});
 
+  /// Asset path the lesson-eyes image is loaded from. Single source
+  /// of truth — change here, every gaze lesson updates.
+  static const String assetPath = 'assets/eyes/lesson_eyes.jpg';
+
   @override
   Widget build(BuildContext context) {
     // CRITICAL: IgnorePointer wraps the WHOLE widget so the
     // Positioned.fill we sit inside doesn't absorb taps. Without
-    // this, every button on the session screens (X, pause, mic, the
-    // share-card pills) became unresponsive — the fill consumed
-    // their gestures.
+    // this every button on the session screens becomes dead.
     return IgnorePointer(
       child: LayoutBuilder(
         builder: (_, constraints) {
           final w = constraints.maxWidth;
           final h = constraints.maxHeight;
-          final y = h * 0.28;
-          const eyeW = 96.0;
-          const eyeH = 60.0;
+          // Letterbox crop sized large — these ARE the screen.
+          final imgW = w * 0.92;
+          final imgH = imgW * 0.36; // matches the 16:6 asset aspect
+          final y    = h * 0.18;
           return Stack(
             children: [
               Positioned(
-                left: w * 0.34 - eyeW / 2,
-                top:  y - eyeH / 2,
+                left: (w - imgW) / 2,
+                top:  y,
                 child: SizedBox(
-                  width: eyeW, height: eyeH,
-                  child: _PaintedEye(isLocked: isLocked),
-                ),
-              ),
-              Positioned(
-                left: w * 0.66 - eyeW / 2,
-                top:  y - eyeH / 2,
-                child: SizedBox(
-                  width: eyeW, height: eyeH,
-                  child: _PaintedEye(isLocked: isLocked),
+                  width: imgW, height: imgH,
+                  child: _CinematicEyes(
+                    isLocked: isLocked,
+                    width: imgW, height: imgH,
+                  ),
                 ),
               ),
             ],
@@ -65,210 +67,141 @@ class FixationDots extends StatelessWidget {
   }
 }
 
-class _PaintedEye extends StatelessWidget {
+class _CinematicEyes extends StatelessWidget {
   final bool isLocked;
-  const _PaintedEye({required this.isLocked});
+  final double width;
+  final double height;
+  const _CinematicEyes({
+    required this.isLocked,
+    required this.width,
+    required this.height,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _EyePainter(isLocked: isLocked),
-    ).animate(onPlay: (c) => c.repeat(reverse: true))
-      .fadeIn(duration: 1800.ms)
-      .then().fadeOut(duration: 1800.ms);
+    // The eyes themselves — Image.asset wrapped in a "ghostly" filter
+    // stack so they read like a vision, not a literal photo. Slightly
+    // see-through, cooled, slight contrast knock, soft inner vignette
+    // pulling them out of the surrounding black. When the user locks
+    // gaze the ghost wash fades + opacity bumps up — the eyes come
+    // ALIVE under the lock, like she's stepping out of memory into
+    // the room.
+    final base = ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // ── The asset.
+          Image.asset(
+            FixationDots.assetPath,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _MissingAssetFallback(
+              isLocked: isLocked,
+            ),
+          ),
+          // ── COOL GHOST WASH — pale blue-white film over the image
+          //    that fades away on lock. Reads as the eyes being a
+          //    vision until you "summon" them with your hold.
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 320),
+            opacity: isLocked ? 0.0 : 0.28,
+            child: const DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color(0xFFBFD8F0),
+              ),
+            ),
+          ),
+          // ── WARM RIM TINT on lock — soft red bloom from the edges
+          //    that brings the eyes into the warm "she's here" space.
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 320),
+            opacity: isLocked ? 0.45 : 0.0,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  radius: 1.0,
+                  colors: [
+                    Colors.transparent,
+                    AppColors.accent.withValues(alpha: 0.55),
+                  ],
+                  stops: const [0.55, 1.0],
+                ),
+              ),
+            ),
+          ),
+          // ── DARK INNER VIGNETTE — always on. Pulls the image
+          //    edges into the black background so it doesn't look
+          //    like a pasted-in rectangle.
+          IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  radius: 1.1,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.40),
+                  ],
+                  stops: const [0.55, 1.0],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // ── See-through wrapper. Opacity 0.65 idle (she's a vision) →
+    //    0.97 locked (she's in the room with you).
+    final ghostly = AnimatedOpacity(
+      duration: const Duration(milliseconds: 320),
+      opacity: isLocked ? 0.97 : 0.68,
+      child: base,
+    );
+
+    // Subtle breathing pulse — slower when locked (eye "settles in").
+    return ghostly
+        .animate(onPlay: (c) => c.repeat(reverse: true))
+        .scale(
+          begin: const Offset(1.0, 1.0),
+          end: Offset(isLocked ? 1.025 : 1.012,
+                      isLocked ? 1.025 : 1.012),
+          duration: (isLocked ? 3600 : 2400).ms,
+          curve: Curves.easeInOut,
+        );
   }
 }
 
-class _EyePainter extends CustomPainter {
+/// Tasteful fallback when the lesson_eyes.jpg asset hasn't been
+/// dropped in yet. Black band + a single soft red gleam dead-centre
+/// so the screen still has a gaze target instead of an error icon.
+class _MissingAssetFallback extends StatelessWidget {
   final bool isLocked;
-  _EyePainter({required this.isLocked});
+  const _MissingAssetFallback({required this.isLocked});
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final w  = size.width;
-    final h  = size.height;
-    final cx = w / 2;
-    final cy = h / 2;
-
-    // ── ALMOND EYE SHAPE — upper + lower lid arcs meeting at the
-    // outer + inner canthi. Upper arc is taller (the brow side),
-    // lower arc is gentler (the cheek side).
-    final eye = Path()
-      ..moveTo(0, cy)
-      ..cubicTo(w * 0.20, cy - h * 0.55,
-                w * 0.80, cy - h * 0.55,
-                w,        cy)
-      ..cubicTo(w * 0.78, cy + h * 0.40,
-                w * 0.22, cy + h * 0.40,
-                0,        cy)
-      ..close();
-
-    // ── EYE WHITE (sclera) — soft warm cream, not pure white.
-    canvas.drawPath(
-      eye,
-      Paint()..color = const Color(0xFFEDE6DA),
-    );
-
-    // ── CLIP everything below to the eye shape (so the iris doesn't
-    // bleed past the lashes).
-    canvas.save();
-    canvas.clipPath(eye);
-
-    final irisCenter = Offset(cx, cy + 1);
-    final irisR     = h * (isLocked ? 0.50 : 0.46);
-    final pupilR    = h * (isLocked ? 0.22 : 0.18);
-
-    // ── RED GLOW behind the iris when locked. Painted FIRST so it
-    // sits behind everything.
-    if (isLocked) {
-      canvas.drawCircle(
-        irisCenter,
-        irisR * 1.35,
-        Paint()
-          ..color = AppColors.accent.withValues(alpha: 0.55)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-      );
-    }
-
-    // ── IRIS — radial gradient, warmer at the centre, deeper at the
-    // rim. Reads as a real iris with depth.
-    canvas.drawCircle(
-      irisCenter,
-      irisR,
-      Paint()
-        ..shader = RadialGradient(
-          colors: const [
-            Color(0xFF8E5A2E), // warm amber centre
-            Color(0xFF5A371B), // mid brown
-            Color(0xFF2A180A), // deep edge
-          ],
-          stops: const [0.0, 0.55, 1.0],
-        ).createShader(
-          Rect.fromCircle(center: irisCenter, radius: irisR),
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: Colors.black),
+      child: Center(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 280),
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.accent.withValues(
+                alpha: isLocked ? 0.95 : 0.65),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.accent.withValues(
+                    alpha: isLocked ? 0.55 : 0.30),
+                blurRadius: isLocked ? 22 : 14,
+                spreadRadius: isLocked ? 2 : -1,
+              ),
+            ],
+          ),
         ),
-    );
-
-    // ── LIMBAL RING — the dark circle around the iris. Adds depth
-    // and is consistently the marker of a "beautiful eye."
-    canvas.drawCircle(
-      irisCenter,
-      irisR,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color = const Color(0xFF1B0E05),
-    );
-
-    // ── PUPIL — see-through black void. Slightly larger when locked
-    // (dilated response to the user holding gaze).
-    canvas.drawCircle(
-      irisCenter,
-      pupilR,
-      Paint()..color = Colors.black,
-    );
-
-    // ── CATCHLIGHT — the white speck on the pupil that makes the
-    // eye look ALIVE. Upper-right of the pupil, where a key light
-    // would land.
-    canvas.drawCircle(
-      Offset(irisCenter.dx + pupilR * 0.35,
-             irisCenter.dy - pupilR * 0.35),
-      pupilR * 0.32,
-      Paint()..color = Colors.white.withValues(alpha: 0.92),
-    );
-
-    // ── Secondary catchlight — tiny dot lower-left, the reflected
-    // bounce light. Sells the realism.
-    canvas.drawCircle(
-      Offset(irisCenter.dx - pupilR * 0.45,
-             irisCenter.dy + pupilR * 0.30),
-      pupilR * 0.14,
-      Paint()..color = Colors.white.withValues(alpha: 0.45),
-    );
-
-    canvas.restore();
-
-    // ── UPPER LASH LINE — the dark band where the lashes meet the
-    // lid. Drawn OUTSIDE the clip so it reads as a thick edge.
-    final upperLash = Path()
-      ..moveTo(0, cy)
-      ..cubicTo(w * 0.20, cy - h * 0.55,
-                w * 0.80, cy - h * 0.55,
-                w,        cy);
-    canvas.drawPath(
-      upperLash,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.4
-        ..strokeCap = StrokeCap.round
-        ..color = const Color(0xFF0A0A0A),
-    );
-
-    // ── INDIVIDUAL EYELASHES on the upper lid — twelve curved
-    // strokes, longer in the middle, fanning slightly outward at the
-    // corners. Each lash sampled along the upper-lash bezier.
-    final lashPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFF0A0A0A);
-
-    const lashCount = 12;
-    for (var i = 1; i < lashCount; i++) {
-      final t = i / lashCount;
-      // Bezier point on the upper lid at parameter t
-      final p = _cubicPoint(
-        t,
-        Offset(0, cy),
-        Offset(w * 0.20, cy - h * 0.55),
-        Offset(w * 0.80, cy - h * 0.55),
-        Offset(w,        cy),
-      );
-
-      // Lash direction: roughly perpendicular to the lid, fanning
-      // slightly outward at the corners.
-      final fan = (t - 0.5) * 1.0; // -0.5..0.5
-      final angle = -math.pi / 2 + fan * 0.8;
-      // Longer in the middle (the iconic flick).
-      final len = 7.0 + 6.0 * math.sin(t * math.pi);
-      final end = Offset(
-        p.dx + math.cos(angle) * len,
-        p.dy + math.sin(angle) * len,
-      );
-      lashPaint.strokeWidth = 1.1 + math.sin(t * math.pi) * 0.6;
-      canvas.drawLine(p, end, lashPaint);
-    }
-
-    // ── LOWER LID — thin line, barely there. Sells the eye opening
-    // without competing with the upper lashes.
-    final lowerLid = Path()
-      ..moveTo(0, cy)
-      ..cubicTo(w * 0.22, cy + h * 0.40,
-                w * 0.78, cy + h * 0.40,
-                w,        cy);
-    canvas.drawPath(
-      lowerLid,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.8
-        ..color = const Color(0xFF22150B),
+      ),
     );
   }
-
-  /// Cubic Bezier point at parameter t.
-  Offset _cubicPoint(double t, Offset p0, Offset p1, Offset p2, Offset p3) {
-    final u = 1 - t;
-    return Offset(
-      u * u * u * p0.dx
-        + 3 * u * u * t * p1.dx
-        + 3 * u * t * t * p2.dx
-        + t * t * t * p3.dx,
-      u * u * u * p0.dy
-        + 3 * u * u * t * p1.dy
-        + 3 * u * t * t * p2.dy
-        + t * t * t * p3.dy,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _EyePainter old) => old.isLocked != isLocked;
 }
