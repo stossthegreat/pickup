@@ -172,11 +172,11 @@ class _ScanHubTab extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
                 child: const LockStrip(
                   label: 'After the scan, unlock',
-                  highlight: 'Presence  ·  Game',
+                  highlight: 'Aura  ·  Game',
                   badges: [
                     LockBadge(
                       icon: Icons.remove_red_eye_outlined,
-                      label: 'Presence',
+                      label: 'Aura',
                       color: AppColors.accent,
                     ),
                     LockBadge(
@@ -334,7 +334,7 @@ class _PathFlow extends StatelessWidget {
         _step(1, 'Face first', 'Maxx your looks',
             active: !stepDone, done: stepDone),
         const SizedBox(height: 18),
-        _step(2, 'Presence next', 'Train eye contact & voice'),
+        _step(2, 'Aura next', 'Train eye contact & voice'),
         const SizedBox(height: 18),
         _step(3, 'Game after', 'Real roleplay with Lucien'),
       ],
@@ -724,7 +724,7 @@ class _NavBar extends StatelessWidget {
     final items = const <({String label, IconData icon, bool italic})>[
       (label: 'Ascend',   icon: Icons.keyboard_double_arrow_up_rounded, italic: false),
       (label: 'Looks',    icon: Icons.face_retouching_natural_outlined, italic: false),
-      (label: 'Presence', icon: Icons.visibility_outlined,               italic: false),
+      (label: 'Aura',     icon: Icons.visibility_outlined,               italic: false),
       (label: 'Game',     icon: Icons.chat_bubble_outline_rounded,       italic: true),
     ];
     return Container(

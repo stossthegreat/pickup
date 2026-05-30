@@ -156,7 +156,7 @@ class _EyesTabScreenState extends State<EyesTabScreen> {
             // ── Masthead — EYES. + thesis + tune action.
             MirrorlyMasthead(
               title: 'Mirrorly',
-              subtitle: 'Presence',
+              subtitle: 'Aura',
               actions: [
                 MastheadAction(
                   icon: Icons.tune,
