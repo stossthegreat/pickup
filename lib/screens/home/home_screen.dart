@@ -74,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
           : IndexedStack(
               index: _tab,
               children: [
-                AscendScreen(onJumpToTab: _switchTab),
+                AscendScreen(onJumpToTab: _switchTab, latest: _latest),
                 _ScanHubTab(latest: _latest, protocol: _protocol, onRefresh: _reload),
                 const EyesTabScreen(),
                 const GameTabScreen(),
@@ -108,18 +108,11 @@ class _ScanHubTab extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.only(bottom: Sp.xl),
           children: [
-            // ── Masthead — Mirrorly + tab thesis + actions
+            // ── Masthead — always visible. The brand chrome.
             MirrorlyMasthead(
               title: 'Mirrorly',
-              subtitle: 'Face. Presence. Game.',
+              subtitle: 'Looks',
               actions: [
-                MastheadAction(
-                  icon: Icons.workspace_premium_rounded,
-                  iconColor: AppColors.red,
-                  borderColor: AppColors.red.withOpacity(0.55),
-                  onTap: () => context.push(
-                      '/paywall', extra: const {'force': true}),
-                ),
                 MastheadAction(
                   icon: Icons.tune,
                   onTap: () => context.push('/settings'),
@@ -127,79 +120,99 @@ class _ScanHubTab extends StatelessWidget {
               ],
             ),
 
-            const SizedBox(height: Sp.md),
+            // ─────────────────────────────────────────────────────────────
+            //  PRE-SCAN — the full conversion column: display headline +
+            //  1-2-3 path + Current vs Optimised split + BEGIN SCAN CTA
+            //  + AFTER UNLOCK strip. This is the first-impression sell.
+            //  Hidden the moment the user has scanned — they don't need
+            //  to be sold on something they've done.
+            // ─────────────────────────────────────────────────────────────
+            if (!hasScan) ...[
+              const SizedBox(height: Sp.md),
 
-            // ── Display headline — italic "YOUR FACE. MEASURED.".
-            const DisplayBlock(
-              lineOne: 'Your face.',
-              lineTwo: 'Measured.',
-              subhead: 'Real geometry. Not filters. Not guesses.',
-            ),
+              const DisplayBlock(
+                lineOne: 'Your face.',
+                lineTwo: 'Measured.',
+                subhead: 'Real geometry. Not filters. Not guesses.',
+              ),
 
-            const SizedBox(height: Sp.lg),
+              const SizedBox(height: Sp.lg),
 
-            // ── 1-2-3 path on the LEFT, Current vs Optimised split on
-            // the RIGHT — laid out side-by-side. The path is the
-            // unlock story and the split is the visual hook ("here's
-            // your strongest version"). Together they earn the empty
-            // half of the screen, which paths-alone left dead.
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-              child: IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: _PathFlow(stepDone: hasScan)),
-                    const SizedBox(width: Sp.md),
-                    const Expanded(child: _OptimisedSplitCard()),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: _PathFlow(stepDone: false)),
+                      const SizedBox(width: Sp.md),
+                      const Expanded(child: _OptimisedSplitCard()),
+                    ],
+                  ),
+                ),
+              ).animate().fadeIn(duration: 400.ms)
+                .slideY(begin: 0.04, end: 0, duration: 400.ms,
+                    curve: Curves.easeOut),
+
+              const SizedBox(height: Sp.lg),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+                child: PrimaryCta(
+                  label: 'Begin Face Scan',
+                  icon: Icons.center_focus_strong_rounded,
+                  meta: 'Takes 30 seconds',
+                  onTap: () => context.push('/scan'),
+                ),
+              ).animate().fadeIn(delay: 160.ms, duration: 400.ms),
+
+              const SizedBox(height: Sp.lg),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+                child: const LockStrip(
+                  label: 'After the scan, unlock',
+                  highlight: 'Presence  ·  Game',
+                  badges: [
+                    LockBadge(
+                      icon: Icons.remove_red_eye_outlined,
+                      label: 'Presence',
+                      color: AppColors.accent,
+                    ),
+                    LockBadge(
+                      icon: Icons.local_fire_department_rounded,
+                      label: 'Game',
+                      color: AppColors.red,
+                    ),
                   ],
                 ),
-              ),
-            ).animate().fadeIn(duration: 400.ms)
-              .slideY(begin: 0.04, end: 0, duration: 400.ms,
-                  curve: Curves.easeOut),
+              ).animate().fadeIn(delay: 260.ms, duration: 400.ms),
+            ],
 
-            const SizedBox(height: Sp.lg),
-
-            // ── Primary CTA — full-width red, 30-second meta.
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-              child: PrimaryCta(
-                label: hasScan ? 'Rescan Face' : 'Begin Face Scan',
-                icon: Icons.center_focus_strong_rounded,
-                meta: 'Takes 30 seconds',
-                onTap: () => context.push('/scan'),
-              ),
-            ).animate().fadeIn(delay: 160.ms, duration: 400.ms),
-
-            const SizedBox(height: Sp.lg),
-
-            // ── After the scan, unlock — Presence + Game badges.
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-              child: const LockStrip(
-                label: 'After the scan, unlock',
-                highlight: 'Presence  ·  Game',
-                badges: [
-                  LockBadge(
-                    icon: Icons.remove_red_eye_outlined,
-                    label: 'Presence',
-                    color: AppColors.accent,
-                  ),
-                  LockBadge(
-                    icon: Icons.local_fire_department_rounded,
-                    label: 'Game',
-                    color: AppColors.red,
-                  ),
-                ],
-              ),
-            ).animate().fadeIn(delay: 260.ms, duration: 400.ms),
-
-            // ── Mirror chat — folded into Looks. Only shown after
-            //    the user has scanned (the /chat route requires the
-            //    scan geometry to construct ChatScreen).
+            // ─────────────────────────────────────────────────────────────
+            //  POST-SCAN — clean. Only the things a returning user cares
+            //  about: their score, their active protocol, talk to the
+            //  advisor about it, and a low-key rescan link. None of the
+            //  "first impression" scaffolding above.
+            // ─────────────────────────────────────────────────────────────
             if (hasScan) ...[
+              const SizedBox(height: Sp.lg),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+                child: _LatestSnapshot(scan: latest!),
+              ).animate().fadeIn(duration: 400.ms),
+
+              if (protocol != null) ...[
+                const SizedBox(height: Sp.md),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+                  child: _ActiveProtocolCard(protocol: protocol!),
+                ).animate().fadeIn(delay: 100.ms, duration: 400.ms),
+              ],
+
               const SizedBox(height: Sp.md),
+
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
                 child: _AdvisorLink(
@@ -208,25 +221,31 @@ class _ScanHubTab extends StatelessWidget {
                     'imagePath': latest!.capturedImagePath,
                   }),
                 ),
-              ).animate().fadeIn(delay: 320.ms, duration: 400.ms),
-            ],
+              ).animate().fadeIn(delay: 180.ms, duration: 400.ms),
 
-            // ── Returning-user extras. Score snapshot + active protocol.
-            // Hidden on first impression so the conversion column above
-            // owns the screen for new users.
-            if (hasScan) ...[
-              const SizedBox(height: Sp.lg),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-                child: _LatestSnapshot(scan: latest!),
-              ).animate().fadeIn(delay: 360.ms, duration: 400.ms),
-            ],
-            if (protocol != null) ...[
               const SizedBox(height: Sp.md),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-                child: _ActiveProtocolCard(protocol: protocol!),
-              ).animate().fadeIn(delay: 420.ms, duration: 400.ms),
+
+              // Subtle rescan link — pro user already paid, the action
+              // is one tap, no need to dominate the page with it.
+              Center(
+                child: TextButton.icon(
+                  onPressed: () {
+                    HapticFeedback.selectionClick();
+                    context.push('/scan');
+                  },
+                  icon: const Icon(Icons.center_focus_strong_rounded,
+                      size: 14, color: AppColors.textTertiary),
+                  label: Text(
+                    'RESCAN FACE',
+                    style: AppTypography.label.copyWith(
+                      color: AppColors.textTertiary,
+                      fontSize: 10.5,
+                      letterSpacing: 2.4,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ],
         ),
@@ -377,10 +396,10 @@ class _PathFlow extends StatelessWidget {
   }
 }
 
-// ── Face-being-scanned card — sits to the right of _PathFlow.
-// ONE image (assets/scan/face_scan.jpg) showing a face with the
-// scan-mesh / measurement overlay vibe. No split, no labels — single
-// hero, eyebrow at top, lock label at the bottom.
+// ── Current / Optimised card — sits to the right of _PathFlow.
+// Uses the existing Mirror-tab marketing assets (assets/marketing/
+// before.jpg + after.jpg) for a real visual hook on the pre-scan
+// screen instead of a placeholder silhouette pair.
 class _OptimisedSplitCard extends StatelessWidget {
   const _OptimisedSplitCard();
 
@@ -394,80 +413,119 @@ class _OptimisedSplitCard extends StatelessWidget {
           border: Border.all(color: AppColors.surface3, width: 1),
           borderRadius: BorderRadius.circular(Rd.lg),
         ),
-        child: Stack(
-          fit: StackFit.passthrough,
-          children: [
-            AspectRatio(
-              aspectRatio: 4 / 5,
-              child: Image.asset(
-                MirrorlyAssets.faceScan,
-                fit: BoxFit.cover,
-                alignment: const Alignment(0, -0.1),
-                errorBuilder: (_, __, ___) => Container(
-                  color: AppColors.surface1,
-                  alignment: Alignment.center,
-                  child: Icon(Icons.face_retouching_natural_outlined,
-                      size: 44, color: AppColors.red.withOpacity(0.55)),
-                ),
-              ),
-            ),
-            // Bottom shade ramp so the lock label reads on any photo.
-            Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.65),
-                      ],
-                      stops: const [0.55, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 10, top: 10,
-              child: Text(
-                'SCAN',
-                style: AppTypography.label.copyWith(
-                  color: AppColors.red,
-                  fontSize: 9,
-                  letterSpacing: 2.4,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            Positioned(
-              left: 10, right: 10, bottom: 10,
-              child: Row(
-                children: [
-                  const Icon(Icons.lock_rounded,
-                      size: 12, color: AppColors.textTertiary),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'See your potential'.toUpperCase(),
-                      style: AppTypography.label.copyWith(
-                        color: AppColors.textPrimary,
-                        fontSize: 9,
-                        letterSpacing: 1.6,
-                        height: 1.3,
-                      ),
-                      maxLines: 2,
-                    ),
-                  ),
+        child: AspectRatio(
+          aspectRatio: 4 / 5,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Row(
+                children: const [
+                  Expanded(child: _SplitFaceTile(
+                    asset: 'assets/marketing/before.jpg',
+                  )),
+                  _SplitDivider(),
+                  Expanded(child: _SplitFaceTile(
+                    asset: 'assets/marketing/after.jpg',
+                  )),
                 ],
               ),
-            ),
-          ],
+              // Bottom shade ramp so the lock label reads.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.55),
+                        ],
+                        stops: const [0.55, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 10, top: 10,
+                child: Text(
+                  'CURRENT',
+                  style: AppTypography.label.copyWith(
+                    color: Colors.white.withOpacity(0.85),
+                    fontSize: 9,
+                    letterSpacing: 2.0,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 10, top: 10,
+                child: Text(
+                  'OPTIMISED',
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.red,
+                    fontSize: 9,
+                    letterSpacing: 2.0,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 10, right: 10, bottom: 10,
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock_rounded,
+                        size: 12, color: AppColors.textTertiary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'See your strongest'.toUpperCase(),
+                        style: AppTypography.label.copyWith(
+                          color: AppColors.textPrimary,
+                          fontSize: 9,
+                          letterSpacing: 1.6,
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+class _SplitFaceTile extends StatelessWidget {
+  final String asset;
+  const _SplitFaceTile({required this.asset});
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      asset,
+      fit: BoxFit.cover,
+      alignment: const Alignment(0, -0.2),
+      errorBuilder: (_, __, ___) => Container(
+        color: AppColors.surface1,
+        alignment: Alignment.center,
+        child: const Icon(Icons.face_outlined,
+            size: 36, color: AppColors.surface3),
+      ),
+    );
+  }
+}
+
+class _SplitDivider extends StatelessWidget {
+  const _SplitDivider();
+  @override
+  Widget build(BuildContext context) =>
+      Container(width: 1, color: AppColors.surface3);
 }
 
 // ── Active protocol card ────────────────────────────────────────────────────
@@ -664,7 +722,7 @@ class _NavBar extends StatelessWidget {
     // PRESENCE is the renamed Eyes tab. GAME is unchanged. Each tab does
     // ONE thing — no five-tab sprawl, no shouting for attention.
     final items = const <({String label, IconData icon, bool italic})>[
-      (label: 'Home',     icon: Icons.keyboard_double_arrow_up_rounded, italic: false),
+      (label: 'Ascend',   icon: Icons.keyboard_double_arrow_up_rounded, italic: false),
       (label: 'Looks',    icon: Icons.face_retouching_natural_outlined, italic: false),
       (label: 'Presence', icon: Icons.visibility_outlined,               italic: false),
       (label: 'Game',     icon: Icons.chat_bubble_outline_rounded,       italic: true),
