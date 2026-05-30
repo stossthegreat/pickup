@@ -186,8 +186,8 @@ abstract final class GazeSyllabus {
       instruct: [
         'Lock. No words. Hold. Go.',
       ],
-      drillSeconds: 15,
-      targetBlinks: 4,
+      drillSeconds: 25,
+      targetBlinks: 6,
       weights: {
         GazeDimension.eyeStability: 0.45,
         GazeDimension.blinkControl: 0.15,
@@ -297,8 +297,8 @@ abstract final class GazeSyllabus {
       instruct: [
         'Lock. Drift. Return slower. Go.',
       ],
-      drillSeconds: 14,
-      targetBlinks: 4,
+      drillSeconds: 20,
+      targetBlinks: 5,
       weights: {
         GazeDimension.eyeStability: 0.30,
         GazeDimension.blinkControl: 0.10,
@@ -372,8 +372,8 @@ abstract final class GazeSyllabus {
       instruct: [
         'She\'s talking. Lock soft. Stay. Go.',
       ],
-      drillSeconds: 15,
-      targetBlinks: 5,
+      drillSeconds: 25,
+      targetBlinks: 7,
       weights: {
         GazeDimension.eyeStability: 0.45,
         GazeDimension.blinkControl: 0.10,
@@ -417,8 +417,8 @@ abstract final class GazeSyllabus {
         'Drift back — slower than you left.',
         'Now. Half a smile. One corner.',
       ],
-      drillSeconds: 18,
-      targetBlinks: 6,
+      drillSeconds: 24,
+      targetBlinks: 7,
       weights: {
         GazeDimension.eyeStability: 0.20,
         GazeDimension.blinkControl: 0.10,
@@ -462,8 +462,8 @@ abstract final class GazeSyllabus {
         'Look away like it was your choice.',
         'Back. Slow half-smile.',
       ],
-      drillSeconds: 18,
-      targetBlinks: 5,
+      drillSeconds: 28,
+      targetBlinks: 7,
       weights: {
         GazeDimension.eyeStability: 0.25,
         GazeDimension.blinkControl: 0.10,
