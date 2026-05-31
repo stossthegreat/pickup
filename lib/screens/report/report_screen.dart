@@ -530,17 +530,24 @@ class _ReportScreenState extends State<ReportScreen> {
 
           const SizedBox(height: Sp.md),
 
-          // ── 2 · TRAITS GRID ─ Umax secret sauce, ours backed by mesh ───
-          TraitGrid(traits: traits)
-            .animate().fadeIn(delay: 1600.ms, duration: 500.ms),
+          // ── 2 · TRAITS GRID — REMOVED per user feedback
+          //    The Umax-style state-labelled badges (DOMINANT BROW /
+          //    LONG LOWER / TIGHTEN UP / ASYMMETRICAL / SOLID FRAMING /
+          //    HUNTER EYES) read as clinical labels instead of
+          //    actionable steps. User: "no names other than mogged."
+          //    Fix cards below carry the real signal now.
+          // TraitGrid(traits: traits)
+          //   .animate().fadeIn(delay: 1600.ms, duration: 500.ms),
 
-          const SizedBox(height: Sp.md),
-
-          // ── 3 · RADAR ─ "measured, not guessed" proof ──────────────────
-          RadarChart(
-            values: radarValues,
-            labels: const ['EYES', 'JAW', 'SYMMETRY', 'LIPS', 'FWHR', 'BALANCE'],
-          ).animate().fadeIn(delay: 1900.ms, duration: 500.ms),
+          // ── 3 · RADAR CHART — REMOVED per user feedback
+          //    The full hexagon radar takes a screenful and adds no
+          //    actionable info. User: "we much is closer to the
+          //    bottom" — saved for a smaller version we'll bring back
+          //    inside the geometry collapsed panel later.
+          // RadarChart(
+          //   values: radarValues,
+          //   labels: const ['EYES', 'JAW', 'SYMMETRY', 'LIPS', 'FWHR', 'BALANCE'],
+          // ).animate().fadeIn(delay: 1900.ms, duration: 500.ms),
 
           const SizedBox(height: Sp.xl),
 
@@ -1068,7 +1075,9 @@ class _FixTextCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface1,
         borderRadius: BorderRadius.circular(Rd.lg),
-        border: Border.all(color: AppColors.accent.withValues(alpha: 0.14)),
+        // Red accent — user explicitly said NOT the blue cards. Brand
+        // red carries the "this is what makes you look better" tone.
+        border: Border.all(color: AppColors.red.withValues(alpha: 0.30)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1078,7 +1087,7 @@ class _FixTextCard extends StatelessWidget {
             children: [
               Text('$index',
                 style: AppTypography.h1.copyWith(
-                  color: AppColors.accent, fontSize: 28, letterSpacing: -1)),
+                  color: AppColors.red, fontSize: 30, letterSpacing: -1)),
               const SizedBox(width: Sp.sm),
               Expanded(
                 child: Column(
@@ -1101,16 +1110,104 @@ class _FixTextCard extends StatelessWidget {
           const Divider(height: 1),
           const SizedBox(height: Sp.sm),
           Text('DO THIS', style: AppTypography.label.copyWith(
-            color: AppColors.measure, fontSize: 9, letterSpacing: 1.8)),
+            color: AppColors.red, fontSize: 9, letterSpacing: 1.8)),
           const SizedBox(height: 4),
           Text(fix.action, style: AppTypography.body.copyWith(
             color: AppColors.textPrimary, fontSize: 14, height: 1.55)),
-          const SizedBox(height: Sp.sm),
+          const SizedBox(height: Sp.md),
+          // ── Projected point gain + COMMIT row.
+          //    Backend (analyse.js) now returns a `points` integer per
+          //    fix — projected delta to the user's overall LOOKS score
+          //    from doing this fix. Older reports without the field
+          //    default to 0, so the gauge stays hidden until the
+          //    backend has shipped the prompt bump.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (fix.points > 0) ...[
+                Container(
+                  width: 76,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.red.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(Rd.lg),
+                    border: Border.all(
+                        color: AppColors.red.withValues(alpha: 0.55),
+                        width: 1),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '+${fix.points}',
+                        style: AppTypography.h1.copyWith(
+                          color: AppColors.red,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -1.0,
+                        ),
+                      ),
+                      Text(
+                        'POINTS',
+                        style: AppTypography.label.copyWith(
+                          color: AppColors.red,
+                          fontSize: 8.5,
+                          letterSpacing: 1.6,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    context.go('/home', extra: {'initialTab': 1});
+                  },
+                  borderRadius: BorderRadius.circular(Rd.lg),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.red,
+                      borderRadius: BorderRadius.circular(Rd.lg),
+                      boxShadow: [BoxShadow(
+                        color: AppColors.red.withValues(alpha: 0.32),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      )],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'COMMIT TO STREAK',
+                          style: AppTypography.label.copyWith(
+                            color: Colors.black,
+                            fontSize: 12,
+                            letterSpacing: 2.2,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.arrow_forward_rounded,
+                            color: Colors.black, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               _Chip(label: fix.timeline, color: AppColors.textTertiary),
               const SizedBox(width: 8),
-              _Chip(label: 'RESCAN DAY ${fix.rescanDay}', color: AppColors.accent),
+              _Chip(label: 'RESCAN DAY ${fix.rescanDay}', color: AppColors.textTertiary),
             ],
           ),
         ],

@@ -13,6 +13,14 @@ class Fix {
   final String visualRequest;
   final String timeline;
   final int rescanDay;
+  /// Projected gain to the user's overall LOOKS score (out of 100)
+  /// from completing THIS fix. Set by GPT in analyse.js — the AI
+  /// estimates the delta from the geometry it just analysed plus the
+  /// fix it just proposed. Sum across all fixes should land in the
+  /// 12-22 range (realistic 60-day glow-up ceiling, not fantasy +40).
+  /// Defaults to 0 when the backend doesn't include the field — older
+  /// reports / pre-prompt-bump scans still display cleanly.
+  final int points;
 
   const Fix({
     required this.title,
@@ -21,6 +29,7 @@ class Fix {
     required this.visualRequest,
     required this.timeline,
     required this.rescanDay,
+    this.points = 0,
   });
 
   factory Fix.fromJson(Map<String, dynamic> j) => Fix(
@@ -30,6 +39,7 @@ class Fix {
     visualRequest: j['visualRequest'] as String? ?? '',
     timeline:      j['timeline']      as String? ?? '',
     rescanDay:    (j['rescanDay']     as num?)?.toInt() ?? 14,
+    points:       (j['points']        as num?)?.toInt() ?? 0,
   );
 }
 
