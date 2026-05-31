@@ -32,15 +32,15 @@ class FixationDots extends StatelessWidget {
   /// of truth — change here, every gaze lesson updates.
   static const String assetPath = 'assets/eyes/lesson_eyes.jpg';
 
-  /// Aspect ratio of the OPAQUE EYE BAND inside the source PNG —
-  /// not the full PNG canvas. The asset is 1536 × 1024 but the
-  /// actual eyes occupy ~1463 × 323 (vertical 30%-62%), so the
-  /// useful aspect is ~4.5:1. Sizing the display box to this
-  /// ratio + BoxFit.cover crops the transparent top/bottom away
-  /// and the eyes fill the band the way the user shot it. No
-  /// container, no gradient, no border — just the transparent
-  /// PNG on top of whatever the drill vignette renders behind it.
-  static const double _eyeBandAspect = 1463.0 / 323.0;
+  /// Display box aspect ratio. The full opaque band in the source
+  /// PNG is ~4.5:1 (lashes + eyeshadow + eyes), but the user only
+  /// wants the IRISES visible — the surrounding makeup was reading
+  /// as a "red square" around the eyes. A tighter 2.8:1 box with
+  /// BoxFit.cover crops the makeup wings from both sides; the iris
+  /// pair sits in the centre untouched. The vertical transparent
+  /// padding is still cropped away by cover so there\'s no box
+  /// edges, no gradient, no border — just two eyes.
+  static const double _eyeBandAspect = 2.8;
 
   @override
   Widget build(BuildContext context) {
@@ -52,12 +52,13 @@ class FixationDots extends StatelessWidget {
         builder: (_, constraints) {
           final w = constraints.maxWidth;
           final h = constraints.maxHeight;
-          // Smaller — the user wanted them tighter so the eye lock
-          // feels focused, not "filling the screen". 68% of width
-          // lands a compact, dead-centre target.
-          final imgW = w * 0.68;
+          // Compact lock target — 42% of screen width. User feedback:
+          // "make them way smaller so user can be closer." Big eyes
+          // read as a screensaver; small eyes pull the apprentice's
+          // gaze into a tight focal point — that\'s the whole drill.
+          final imgW = w * 0.42;
           final imgH = imgW / _eyeBandAspect;
-          final y    = h * 0.26;
+          final y    = h * 0.22;
           return Stack(
             children: [
               Positioned(

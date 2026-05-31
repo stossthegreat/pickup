@@ -1252,22 +1252,25 @@ class _DrillIntensityLayer extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         // ── Deep cinematic vignette. Black almost everywhere — only
-        //    the eyes band stays visible. The apprentice should see
-        //    HER EYES and almost nothing else; their own camera face
-        //    is suppressed to a barely-there silhouette so it doesn't
-        //    compete with the gaze target.
+        //    the eyes band stays visible. SUBTLE EDGE VIGNETTE ONLY —
+        //    the user kept asking why the screen was blacking out and
+        //    "doing some weird thing with the camera". Heavy fade had
+        //    pure-black inner ring suppressing the camera face. Now
+        //    just a soft edge darkening so the camera passthrough
+        //    stays fully visible (the way the original scripted
+        //    lesson always was), the eye target sits over the top.
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: RadialGradient(
-              center: const Alignment(0, -0.55),
-              radius: 0.85,
+              center: const Alignment(0, -0.40),
+              radius: 1.10,
               colors: [
                 Colors.transparent,
                 Colors.transparent,
-                Colors.black.withValues(alpha: 0.82),
-                Colors.black.withValues(alpha: 0.95),
+                Colors.black.withValues(alpha: 0.40),
+                Colors.black.withValues(alpha: 0.70),
               ],
-              stops: const [0.0, 0.30, 0.65, 1.0],
+              stops: const [0.0, 0.40, 0.80, 1.0],
             ),
           ),
         ),
