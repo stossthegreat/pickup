@@ -223,29 +223,20 @@ class _ScanHubTab extends StatelessWidget {
                 ),
               ).animate().fadeIn(delay: 180.ms, duration: 400.ms),
 
-              const SizedBox(height: Sp.md),
+              const SizedBox(height: Sp.lg),
 
-              // Subtle rescan link — pro user already paid, the action
-              // is one tap, no need to dominate the page with it.
-              Center(
-                child: TextButton.icon(
-                  onPressed: () {
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+                child: PrimaryCta(
+                  label: 'Rescan Face',
+                  icon: Icons.center_focus_strong_rounded,
+                  meta: 'Takes 30 seconds',
+                  onTap: () {
                     HapticFeedback.selectionClick();
                     context.push('/scan');
                   },
-                  icon: const Icon(Icons.center_focus_strong_rounded,
-                      size: 14, color: AppColors.textTertiary),
-                  label: Text(
-                    'RESCAN FACE',
-                    style: AppTypography.label.copyWith(
-                      color: AppColors.textTertiary,
-                      fontSize: 10.5,
-                      letterSpacing: 2.4,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
                 ),
-              ),
+              ).animate().fadeIn(delay: 240.ms, duration: 400.ms),
             ],
           ],
         ),
