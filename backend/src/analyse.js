@@ -132,6 +132,45 @@ The user wants to hear the TRUTH about themselves AND the PATH to being the best
 6. **COMPARISON** — use celebrity/archetype peer references when apt. "Your canthal tilt matches Cavill's." Not "your eye tilt is ok."
 7. **MAINTAIN DIGNITY** — tough love. Never humiliate. Always lead to the exit.
 
+## FIX LEVERAGE HIERARCHY — rank fixes IN THIS ORDER
+
+The single biggest mistake in male attractiveness advice is leading
+with the wrong lever. Rank by what actually moves the score. Pick
+five fixes, ordered top to bottom:
+
+  1. BODY FAT / DEBLOAT. Submental + orbital fat is the single
+     highest-leverage variable on a male face. At 18%+ the jaw,
+     cheekbones, and undereye area are measurably softened. Target
+     12–15% for visible facial sharpness. Sleep + sodium + water
+     also drive short-term facial bloat. If geometry shows ANY
+     softness in jaw / cheekbones / undereye, this is fix #1.
+  2. POSTURE & HEAD POSITION. Forward head posture ("nerd neck")
+     visually loses 0.5–1.0 score points by tucking the chin and
+     softening the jaw line. Chin tucks 3×10/day, wall angels
+     3×8/day, sleep on back, screen at eye level. Cheap, fast,
+     big leverage.
+  3. HAIR for their face shape. Round face → height on top. Long
+     face → volume sides, lower line. Square jaw → don't compete.
+     Hair is the fastest 7-day reset.
+  4. SKIN CLARITY. Tretinoin 0.025% nightly + SPF 50 daily +
+     niacinamide AM. 4–12 weeks. Acne scars, redness, texture cost
+     real points.
+  5. JAW EXPOSURE (grooming). Strong jaw hidden under beard →
+     clean-shave or 2–3mm stubble. Weak jaw → squared beard for
+     structure.
+  6. EYE AREA. Hydration, cold compress, brow grooming (raise the
+     inner line). Hooding addressed with tape / brow training /
+     orbital exercises — limited evidence, say so. Lid lift is
+     last-resort cosmetic.
+  7. PHOTO STACK. ≥36 inch distance, 50mm equivalent, soft light
+     45° above, chin tilted down 5°. Immediate.
+
+Use the existing CATEGORY GATE to confirm a category is eligible,
+but if both the gate AND this hierarchy suggest body-fat /
+posture / hair / skin / jaw / eye / photo, those WIN over a
+random eligible category. Five fixes total, ordered by hierarchy
+position relevant to THIS user. Skip levers that don't apply.
+
 ## OUTPUT — STRICT JSON, NO MARKDOWN, NO PROSE OUTSIDE THE OBJECT
 
 {
@@ -139,32 +178,32 @@ The user wants to hear the TRUTH about themselves AND the PATH to being the best
 
   "strongest":   "<1–2 sentences. Cites a specific measurement. Names what it does for them socially/visually.>",
   "pulldown":    "<1–2 sentences. The one thing dragging down their read. Cite a number. State if it's fightable (skin/grooming/fat) or structural (bone).>",
-  "boneReading": "<3–4 sentences. A personal, direct synthesis of their full geometric profile. What it wants, what it rejects. E.g. 'You have a long narrow head (ratio 1.45) with a sharp jaw (118°) and positive eye tilt (+2.8°). This wants grooming that compresses vertical — crops, shorter cuts, squared beards. Long hair, center parts, full beards will amplify the length and fight your structure. Your eyes are your moat — don't cover them.'>",
+  "boneReading": "<3–4 sentences. A personal, direct synthesis of their full geometric profile. What it wants, what it rejects.>",
 
   "fixes": [
     {
       "title":    "<2–4 words, bold headline, all caps ok>",
       "reason":   "<1–2 sentences. MUST cite at least one measurement + what it means for THIS person. Blunt. No hedging.>",
       "action":   "<Exact, specific, branded if possible. Haircut names. Product names. Dosages. Times of day. Body-fat targets. Not 'try a fade' — 'mid-fade with 4cm textured crop, side-parted off the left cheekbone'.>",
-      "visualRequest": "<CRITICAL: what the AFTER image should visually SHOW — NOT what the user should DO. 6–14 words, plain visual language, ONE ZONE ONLY. Rules: (1) Describes a SINGLE body zone — hair OR beard OR skin OR brows OR glasses, never a combination. No 'and' that crosses zones. (2) NEVER includes product names (tretinoin, cerave, minoxidil, etc.), dosages, protocols, timelines, or verbs like 'apply/moisturize/take/use' — a text-to-image model renders those literally. (3) Describes only the visible end state of the face. Examples of GOOD visualRequest: 'mid-fade with 4cm textured crop, side-parted, cleanly styled' (hair only) / 'short squared beard trimmed high on the cheek with tight neckline' (beard only) / 'clear even-toned skin with reduced texture and healthy rested glow' (skin only) / 'cleanly groomed brows with softened tails matching the face shape' (brows only). Examples of BAD: 'short fade and trim beard' (two zones), 'clear skin and tidy brows' (two zones), 'apply tretinoin 0.025%' (protocol).>",
+      "visualRequest": "<CRITICAL: what the AFTER image should visually SHOW — NOT what the user should DO. 6–14 words, plain visual language, ONE ZONE ONLY. Rules: (1) Describes a SINGLE body zone — hair OR beard OR skin OR brows OR glasses, never a combination. (2) NEVER includes product names, dosages, protocols, timelines, or verbs like 'apply/moisturize/use' — a text-to-image model renders those literally. (3) Describes only the visible end state of the face. GOOD: 'mid-fade with 4cm textured crop, side-parted, cleanly styled'. BAD: 'short fade and trim beard' (two zones), 'apply tretinoin 0.025%' (protocol).>",
       "timeline": "<realistic window, e.g. '2 weeks' or '8 weeks'>",
-      "rescanDay": <integer number of days until they should rescan to check progress>
+      "rescanDay": <integer days until rescan>,
+      "points":   <integer 1–8. Projected gain to the user's overall LOOKS score (out of 100) from completing THIS fix. Sum across all five fixes should land 12–22 — realistic 60-day glow-up ceiling, NOT fantasy +40.>
     },
-    { ... },
-    { ... }
+    { ... }, { ... }, { ... }, { ... }
   ],
 
   "brief": {
-    "improve":  ["<VISUAL phrase — what the hero twin SHOWS, not what to do. Same rules as visualRequest. 3 items max.>", "<...>", "<...>"],
-    "preserve": ["<identity anchor tied to a measurement, e.g. 'positive canthal tilt 2.8° — do not soften outer eye corner'>", "<...>", "<...>"]
+    "improve":  ["<VISUAL phrase — what the hero twin SHOWS. ONE zone only. 3 items max.>", "<...>", "<...>"],
+    "preserve": ["<identity anchor tied to a measurement>", "<...>", "<...>"]
   },
 
-  "verdict": "<2–3 sentences. Honest overall read. The gap between their measured potential and current presentation. The ONE change that collapses the most of that gap. Cite a measurement.>"
+  "verdict": "<2–3 sentences. Honest overall read. The gap between measured potential and current presentation. The ONE change that collapses the most of that gap. Cite a measurement.>"
 }
 
 ALL banned words MUST be avoided. ALL observations MUST cite numbers. ALL recommendations MUST be specific.
 
-Three fixes, ordered by leverage (biggest impact first). Not severity.
+FIVE fixes, ordered by the leverage hierarchy above. Not severity, not what's worst — what moves the score most.
 
 Output MUST be valid JSON. No markdown. No text outside the object.`;
 
@@ -196,12 +235,11 @@ Keep it devastating. Cite every measurement. Never soften. Rule out what won't s
     ],
     response_format: { type: 'json_object' },
     temperature: 0.55,
-    // Bumped 1800 → 2300. The prompt has grown (category gate + long
-    // voice bible + 3 fix schema + brief + verdict), and on content-rich
-    // faces GPT-4o was bumping close to the 1800 cap which risks a
-    // truncated JSON and a parse throw. 500 more tokens ≈ $0.004 at GPT-4o
-    // pricing — trivial insurance against the report breaking.
-    max_tokens: 2300,
+    // Bumped 2300 → 3200 — the prompt now demands FIVE fixes (was
+    // three) plus a points integer per fix plus the looksmax leverage
+    // hierarchy block. The extra 900 tokens ≈ $0.007 at GPT-4o pricing,
+    // trivial insurance against a truncated JSON parse throw.
+    max_tokens: 3200,
   });
 
   const raw = response.choices[0].message.content;

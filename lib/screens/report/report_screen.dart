@@ -1115,45 +1115,92 @@ class _FixTextCard extends StatelessWidget {
           Text(fix.action, style: AppTypography.body.copyWith(
             color: AppColors.textPrimary, fontSize: 14, height: 1.55)),
           const SizedBox(height: Sp.md),
-          // ── COMMIT button — sends the user to the Looks tab where
-          //    the daily streak / protocol lives. One tap = "yes I'll
-          //    do this fix every day."
-          InkWell(
-            onTap: () {
-              HapticFeedback.mediumImpact();
-              context.go('/home', extra: {'initialTab': 1});
-            },
-            borderRadius: BorderRadius.circular(Rd.lg),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: AppColors.red,
-                borderRadius: BorderRadius.circular(Rd.lg),
-                boxShadow: [BoxShadow(
-                  color: AppColors.red.withValues(alpha: 0.32),
-                  blurRadius: 18,
-                  offset: const Offset(0, 6),
-                )],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'COMMIT TO STREAK',
-                    style: AppTypography.label.copyWith(
-                      color: Colors.black,
-                      fontSize: 12,
-                      letterSpacing: 2.2,
-                      fontWeight: FontWeight.w900,
+          // ── Projected point gain + COMMIT row.
+          //    Backend (analyse.js) now returns a `points` integer per
+          //    fix — projected delta to the user's overall LOOKS score
+          //    from doing this fix. Older reports without the field
+          //    default to 0, so the gauge stays hidden until the
+          //    backend has shipped the prompt bump.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (fix.points > 0) ...[
+                Container(
+                  width: 76,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.red.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(Rd.lg),
+                    border: Border.all(
+                        color: AppColors.red.withValues(alpha: 0.55),
+                        width: 1),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '+${fix.points}',
+                        style: AppTypography.h1.copyWith(
+                          color: AppColors.red,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -1.0,
+                        ),
+                      ),
+                      Text(
+                        'POINTS',
+                        style: AppTypography.label.copyWith(
+                          color: AppColors.red,
+                          fontSize: 8.5,
+                          letterSpacing: 1.6,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    context.go('/home', extra: {'initialTab': 1});
+                  },
+                  borderRadius: BorderRadius.circular(Rd.lg),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.red,
+                      borderRadius: BorderRadius.circular(Rd.lg),
+                      boxShadow: [BoxShadow(
+                        color: AppColors.red.withValues(alpha: 0.32),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      )],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'COMMIT TO STREAK',
+                          style: AppTypography.label.copyWith(
+                            color: Colors.black,
+                            fontSize: 12,
+                            letterSpacing: 2.2,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.arrow_forward_rounded,
+                            color: Colors.black, size: 16),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.arrow_forward_rounded,
-                      color: Colors.black, size: 16),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
           const SizedBox(height: 10),
           Row(
