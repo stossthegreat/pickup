@@ -1,31 +1,20 @@
-import axios from 'axios';
+import OpenAI from 'openai';
 
-const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'zrHiDhphv9ZnVXBqCLjz';
-const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || 'eleven_turbo_v2_5';
-const API_KEY = process.env.ELEVENLABS_API_KEY!;
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const VOICE = process.env.SELENE_VOICE || 'coral';
+const MODEL = process.env.SELENE_TTS_MODEL || 'gpt-4o-mini-tts';
+
+const SELENE_VOICE_INSTRUCTIONS = `Speak as a 27-year-old woman with a low, slow, deliberate, intimate voice. Second circle — talk TO one person, not AT a room. Drop the last word of every sentence a third lower. Never uptalk. Pauses are real. Breath is audible but not effortful. You're not performing. You're present.`;
 
 export async function synthesizeSelene(text: string): Promise<Buffer> {
-  const res = await axios.post(
-    `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
-    {
-      text,
-      model_id: MODEL_ID,
-      voice_settings: {
-        stability: 0.45,
-        similarity_boost: 0.85,
-        style: 0.35,
-        use_speaker_boost: true,
-      },
-    },
-    {
-      headers: {
-        'xi-api-key': API_KEY,
-        'Content-Type': 'application/json',
-        'Accept': 'audio/mpeg',
-      },
-      responseType: 'arraybuffer',
-      timeout: 15000,
-    }
-  );
-  return Buffer.from(res.data);
+  const res = await openai.audio.speech.create({
+    model: MODEL,
+    voice: VOICE as any,
+    input: text,
+    instructions: SELENE_VOICE_INSTRUCTIONS,
+    response_format: 'mp3',
+  });
+  const arrayBuf = await res.arrayBuffer();
+  return Buffer.from(arrayBuf);
 }
