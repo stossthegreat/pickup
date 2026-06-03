@@ -38,6 +38,18 @@ abstract final class AudioSession {
     }
   }
 
+  /// Force the next [configureForPlayAndRecord] call to actually run
+  /// setAudioContext again instead of short-circuiting on the cached
+  /// flag. Use when tearing down a screen that owns the mic / speaker
+  /// so the next screen\'s configure re-asserts the session context.
+  /// Solves the AVAudioSessionError (OSStatus 561017449) we saw when
+  /// navigating NEXT LESSON from THE LOCK to THE DROP — the previous
+  /// recorder hadn\'t released the session, the new screen short-
+  /// circuited configure, and record_darwin\'s startStream blew up.
+  static void invalidate() {
+    _configured = false;
+  }
+
   /// Force the session into a clean record-capable state RIGHT BEFORE
   /// recorder.start(). The two-step (stop the player, give iOS ~250ms,
   /// re-assert the category) is what stops record_darwin writing a

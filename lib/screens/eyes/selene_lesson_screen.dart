@@ -125,12 +125,30 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
   /// beat\'s floorMs elapses. Cancelled and re-armed on every beat.
   Timer? _phaseFloorTimer;
 
-  /// The 12-second DRILL clock. Hard-gated: when Beat 4 fires this
-  /// starts, and only this timer is allowed to advance the lesson
-  /// to Beat 5 — ResponseDones during the drill are ignored entirely
-  /// (the model is firing short coaching lines via read_gaze and
-  /// each one would otherwise fire a ResponseDone).
+  /// The DRILL clock — now runs 3 reps of 3 seconds instead of one
+  /// 12-second hold. The 12s lock was wrong for an entry lesson:
+  /// Binetti 2016 puts comfortable mutual gaze at ~3.3s mean and
+  /// Moore 1985 documents the female-solicitation glance as 2-3s
+  /// in bouts of three. Twelve is intimate / pre-kiss territory,
+  /// not initial-contact training. Multi-rep also gives Selene the
+  /// real masterclass loop bro asked for: rep → correct → rep →
+  /// correct → rep → debrief, with Flutter-computed corrections
+  /// between reps that anchor in what just happened.
   Timer? _drillTimer;
+
+  /// Multi-rep drill state. THE LOCK runs as 3 reps × 3 seconds with
+  /// a Flutter-decided corrective line between each rep ("again.
+  /// half the blinks." / "again. tighten the lids." / ...). The
+  /// substate flips between rep (drill timer ticking) and
+  /// betweenReps (Selene speaking the corrective + the next rep
+  /// call, waiting for ResponseDone to start the next rep timer).
+  /// _drillRepStats accumulates per-rep snapshots so the final
+  /// debrief can read the cumulative average + the worst rep.
+  static const int      _drillRepCount = 3;
+  static const int      _repSeconds    = 3;
+  int                   _drillRepIdx   = 0;
+  _DrillSub             _drillSub      = _DrillSub.idle;
+  final List<_PriorAttempt> _drillRepStats = [];
 
   /// True while Beat 4 (the lock itself) is the active phase. Drives
   /// both the auto-advance suppression and the eyes overlay being
@@ -248,6 +266,12 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
     _detector.dispose();
     // ignore: discarded_futures
     _session.close();
+    // Reset the AudioSession.configureForPlayAndRecord guard so the
+    // NEXT screen that wants play+record actually re-asserts the
+    // context — solves the OSStatus 561017449 race when NEXT LESSON
+    // pushes a fresh Selene screen while this one\'s recorder is
+    // still releasing the AVAudioSession.
+    AudioSession.invalidate();
     super.dispose();
   }
 
@@ -417,14 +441,38 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
       //    handles turn-taking. The Selene persona never expects a
       //    push-to-talk gesture; the apprentice can simply ask a
       //    question and she answers.
-      final stream = await _recorder.startStream(const RecordConfig(
-        encoder:       AudioEncoder.pcm16bits,
-        sampleRate:    24000,
-        numChannels:   1,
-        echoCancel:    true,
-        noiseSuppress: true,
-        autoGain:      true,
-      ));
+      //
+      // Retry on AVAudioSession-busy: when NEXT LESSON pushes a
+      //    fresh Selene screen, the previous screen\'s recorder may
+      //    not have fully released the iOS audio session yet, and
+      //    record_darwin.startStream throws OSStatus 561017449
+      //    ("audio session activation failed"). Retry up to 3 times
+      //    with a 500ms breath between attempts — by attempt 2 the
+      //    old session has always released in testing. Re-assert the
+      //    AudioContext before each retry so the OS knows we want
+      //    play+record, not a leftover playback-only state.
+      Stream<Uint8List>? stream;
+      Object? lastErr;
+      for (int attempt = 0; attempt < 3; attempt++) {
+        try {
+          stream = await _recorder.startStream(const RecordConfig(
+            encoder:       AudioEncoder.pcm16bits,
+            sampleRate:    24000,
+            numChannels:   1,
+            echoCancel:    true,
+            noiseSuppress: true,
+            autoGain:      true,
+          ));
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          await Future.delayed(const Duration(milliseconds: 500));
+          AudioSession.invalidate();
+          await AudioSession.configureForPlayAndRecord();
+        }
+      }
+      if (stream == null) throw lastErr ?? Exception('recorder failed to start');
       _micSub = stream.listen((bytes) {
         if (_disposed) return;
         _session.sendAudioChunk(bytes);
@@ -530,35 +578,20 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
     }
 
     if (isDrill) {
-      // Hard 12-second wall-clock drill. ResponseDone during this
-      // phase is ignored; the timer is the only thing that advances.
+      // FIRST rep of the 3-rep drill. Selene speaks the OPEN
+      // ("First rep. Three seconds. Begin.") via the beat cue,
+      // then Flutter runs the 3-second timer. _onRepEnd handles
+      // the rest of the loop — snapshot stats, decide whether to
+      // fire the between-rep corrective (reps 1-2) or end the
+      // drill phase + advance to BEAT 5 (rep 3).
+      _drillRepIdx    = 0;
+      _drillRepStats.clear();
+      _drillSub       = _DrillSub.rep;
       _drillStartedAt = DateTime.now();
       _drillEcsSamples.clear();
+      _drillBlinks    = 0;
       _drillTimer?.cancel();
-      _drillTimer = Timer(Duration(seconds: _drillSeconds), () {
-        if (!mounted) return;
-        // Snapshot drill stats BEFORE we tear down the in-drill state
-        // so AGAIN can read them on the next rep. Average eye-contact
-        // score across the held samples + blink count is enough for
-        // Selene to anchor a corrective opening line on the rerun.
-        final samples = List<double>.from(_drillEcsSamples);
-        final avgEcs  = samples.isEmpty
-            ? 0.0
-            : samples.reduce((a, b) => a + b) / samples.length;
-        final minEcs  = samples.isEmpty
-            ? 0.0
-            : samples.reduce((a, b) => a < b ? a : b);
-        _priorAttempt = _PriorAttempt(
-          avgEyeContact: avgEcs,
-          minEyeContact: minEcs,
-          blinks:        _drillBlinks,
-        );
-        setState(() {
-          _inDrillPhase = false;
-          _showEyes     = false;
-        });
-        _sendNextBeat();
-      });
+      _drillTimer = Timer(const Duration(seconds: _repSeconds), _onRepEnd);
     } else {
       // Teaching beat. Floor timer is what enforces "this beat must
       // stay on screen at least floorMs." Combined with the
@@ -610,6 +643,100 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
     return '''[PRIOR REP CONTEXT] He just finished a rep. Before you deliver "Twelve seconds. Begin." on this Beat 4, FIRST say a single short coaching line that names what happened and what to fix. Use this exact corrective hint, in your voice, low and slow: "$hint" Then pause 1.5 seconds. THEN run Beat 4 normally.''';
   }
 
+  /// End of a single 3-second rep. Snapshots per-rep stats, then
+  /// either fires the between-rep corrective (reps 1 and 2) or
+  /// closes the drill phase and advances to BEAT 5 (after rep 3).
+  /// This is the real masterclass loop — rep → correct → rep →
+  /// correct → rep → debrief.
+  void _onRepEnd() {
+    if (!mounted) return;
+    final samples = List<double>.from(_drillEcsSamples);
+    final avgEcs  = samples.isEmpty
+        ? 0.0
+        : samples.reduce((a, b) => a + b) / samples.length;
+    final minEcs  = samples.isEmpty
+        ? 0.0
+        : samples.reduce((a, b) => a < b ? a : b);
+    final repStats = _PriorAttempt(
+      avgEyeContact: avgEcs,
+      minEyeContact: minEcs,
+      blinks:        _drillBlinks,
+    );
+    _drillRepStats.add(repStats);
+
+    if (_drillRepIdx < _drillRepCount - 1) {
+      // Between reps — Selene says the Flutter-decided corrective
+      // ("again. half the blinks." / "again. tighten the lids." /
+      // ...) followed by the next rep\'s call ("Second rep. Three
+      // seconds. Begin.") The next rep timer is started in the
+      // ResponseDone handler when she finishes speaking — see
+      // _onEvent.
+      _drillSub = _DrillSub.betweenReps;
+      _session.sendTextMessage(
+        _buildBetweenRepsCue(repStats, _drillRepIdx + 2),
+      );
+    } else {
+      // All 3 reps done. Aggregate the cumulative attempt so the
+      // Beat 5 debrief reads the right tier AND so AGAIN has stats
+      // to anchor the rerun off.
+      final cumAvg = _drillRepStats.isEmpty
+          ? 0.0
+          : _drillRepStats.map((s) => s.avgEyeContact).reduce((a, b) => a + b) /
+              _drillRepStats.length;
+      final cumMin = _drillRepStats.isEmpty
+          ? 1.0
+          : _drillRepStats.map((s) => s.minEyeContact)
+              .reduce((a, b) => a < b ? a : b);
+      final cumBlinks = _drillRepStats.fold<int>(0, (acc, s) => acc + s.blinks);
+      _priorAttempt = _PriorAttempt(
+        avgEyeContact: cumAvg,
+        minEyeContact: cumMin,
+        blinks:        cumBlinks,
+      );
+      setState(() {
+        _inDrillPhase = false;
+        _showEyes     = false;
+        _drillSub     = _DrillSub.idle;
+      });
+      _sendNextBeat(); // → BEAT 5 DEBRIEF
+    }
+  }
+
+  /// Flutter-decided corrective for the line Selene says BETWEEN
+  /// reps. ≤6 words, imperative, anchored in what just happened.
+  /// This is the live-coaching anchor bro called for — "go again
+  /// this time blink less or whatever — you know what I mean."
+  String _correctiveLine(_PriorAttempt prev) {
+    if (prev.avgEyeContact < 0.55) return 'again. find my iris.';
+    if (prev.blinks > 4)           return 'again. half the blinks.';
+    if (prev.avgEyeContact < 0.72) return 'again. tighten the lids.';
+    if (prev.minEyeContact < 0.45) return "again. don\'t drift this time.";
+    return 'again. heavier this time.';
+  }
+
+  /// Build the cue for Selene\'s between-reps line. She says ONE
+  /// short corrective (Flutter-picked), pauses one beat, then says
+  /// the next rep\'s call ("Second rep. Three seconds. Begin.").
+  /// After her ResponseDone fires Flutter starts the next 3-second
+  /// rep timer.
+  String _buildBetweenRepsCue(_PriorAttempt prev, int nextRepNum) {
+    final line = _correctiveLine(prev);
+    final repWord = nextRepNum == 2 ? 'Second' : 'Third';
+    return '''STAGE CUE — DO NOT REPEAT OR ACKNOWLEDGE.
+
+Say EXACTLY this short corrective in your low slow voice:
+
+"$line"
+
+Pause one full beat.
+
+Then say:
+
+"$repWord rep. Three seconds. Begin."
+
+Then call the read_gaze tool. coachingCue field is your script as before. After the 3 seconds, fall silent.''';
+  }
+
   /// Advance to the next beat IFF: model is done speaking the
   /// current cue AND the wall-clock floor for the current beat has
   /// elapsed. Called from the ResponseDone handler and from the
@@ -648,6 +775,9 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
       _drillStartedAt    = null;
       _drillBlinks       = 0;
       _drillEcsSamples.clear();
+      _drillRepStats.clear();
+      _drillRepIdx       = 0;
+      _drillSub          = _DrillSub.idle;
       _lastCoachingCue   = '';
       _inDrillPhase      = false;
       _showEyes          = false;
@@ -741,11 +871,36 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
       setState(() => _herSpeaking = false);
       // ResponseDone is ONE of the two conditions that allow advance.
       // The other is the per-beat floor timer. _tryAdvance gates on
-      // both. During the drill phase, ResponseDones come from the
-      // model\'s short coaching cues (one per read_gaze metric
-      // breach) and are entirely ignored — the drill timer owns
-      // advance there.
-      if (_lessonDone || _inDrillPhase) return;
+      // both. During the drill phase the meaning depends on sub-state:
+      //
+      //   _drillSub == rep         — model is firing short read_gaze
+      //                              coaching cues. Each one fires a
+      //                              ResponseDone we ignore; the rep
+      //                              timer owns advance.
+      //   _drillSub == betweenReps — model just finished the Flutter-
+      //                              decided corrective + the next-
+      //                              rep call. Wait 1s breath, then
+      //                              start the next rep timer.
+      if (_lessonDone) return;
+      if (_inDrillPhase) {
+        if (_drillSub == _DrillSub.betweenReps) {
+          Timer(const Duration(milliseconds: 1000), () {
+            if (!mounted) return;
+            if (!_inDrillPhase) return;
+            setState(() => _drillSub = _DrillSub.rep);
+            _drillRepIdx++;
+            _drillStartedAt = DateTime.now();
+            _drillEcsSamples.clear();
+            _drillBlinks    = 0;
+            _drillTimer?.cancel();
+            _drillTimer = Timer(
+              const Duration(seconds: _repSeconds),
+              _onRepEnd,
+            );
+          });
+        }
+        return;
+      }
       _phaseResponseDone = true;
       _tryAdvance();
     } else if (e is FunctionCallRequested) {
@@ -764,17 +919,18 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
   /// metric recovers and breaches again later.
   String _lastCoachingCue = '';
 
-  /// Resolve the most pressing coaching cue from the current face
-  /// metrics. Returns an empty string when no cue should fire
-  /// (silence is the lock). Tier ladder:
-  ///   T-1  no face / camera blind — must coach, can\'t practise without
-  ///   T0   sustained drift — eyes nowhere near the iris
-  ///   T1   anxious blinks
-  ///   T2   tense body
-  ///   T2.5 mid-range hold, push for the smolder
-  ///   T3   warm approval / time signal during a strong hold
-  /// Cues are imperative, ≤6 words, external-focus per the motor-
-  /// learning literature (Wulf 2013).
+  /// Resolve the most pressing coaching cue from live face metrics
+  /// for a SINGLE 3-second rep. Returns "" when silence is the
+  /// right answer. Cues are 1-3 words, imperative, external-focus
+  /// — the rep is too short for full sentences. Tier ladder:
+  ///   T-1  no face
+  ///   T0   drifted off the iris
+  ///   T1   anxious blinks (after grace window)
+  ///   T2   tense
+  ///   T2.5 mid-band, push tighter
+  ///   T3   approval on a strong hold
+  /// Thresholds re-tuned for the 3s window — the old 12s thresholds
+  /// fired too late inside a short rep.
   String _resolveCoachingCue({
     required double eyeContactScore,
     required double blinkRate,
@@ -782,59 +938,23 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
     required double secondsElapsed,
     required double secondsRemaining,
   }) {
-    // Final beat — call her break verdict (varied so the same
-    // phrasing doesn\'t fire every rep).
-    if (secondsRemaining <= 0.0) {
-      if (eyeContactScore >= 0.78) return ''; // strong → silence, let him break first
-      if (eyeContactScore >= 0.55) return 'and break. you found me at the end.';
-      return 'and break. you held what you could.';
-    }
-
-    // T-1 — MediaPipe sees no face at all (or near-zero score for
-    // sustained beats). Without this fallback Selene goes silent
-    // when the user holds their phone wrong, which reads as broken
-    // instead of corrective. Bro: "even if you don\'t get enough
-    // data from MediaPipe… she says we\'re going again, this time
-    // softer your eyes."
+    // T-1 — MediaPipe blind. Coach immediately past a tiny grace
+    // window so Selene isn\'t silent on a misframed phone.
     if (eyeContactScore < 0.20) {
-      if (secondsElapsed > 3.0) return 'center your face. let me see you.';
-      return 'phone at eye level. look at the lens.';
+      if (secondsElapsed > 0.8) return 'find my eye.';
+      return '';
     }
-
-    // T0 — completely off the iris.
-    if (eyeContactScore < 0.55) return 'you drifted. find my left eye.';
-
-    // T1 — anxious blinks (only meaningful past the first 2s of the
-    // drill, otherwise startle blinks fire and read as a problem
-    // when they\'re not).
-    if (secondsElapsed > 2.0) {
-      if (blinkRate > 28) return 'stop blinking. dead lid.';
-      if (blinkRate > 22) return 'slow your blinks.';
-    }
-
-    // T2 — tense body.
-    if (tensionScore < 0.55) return 'drop your shoulders.';
-
-    // T2.5 — mid-range hold, push for the smolder.
-    if (eyeContactScore < 0.75 && secondsElapsed > 4.0) {
-      return 'tighten. narrow your lids.';
-    }
-
-    // T3 — time-aware approval / final-stretch cues.
-    if (secondsRemaining < 3.0 && eyeContactScore > 0.7) {
-      return 'almost. don\'t move.';
-    }
-    if (eyeContactScore > 0.82 && secondsRemaining > 6.0 && secondsElapsed > 2.0) {
-      return 'good. that\'s the lock.';
-    }
-    // T4 — sustained mid-band hold that\'s NEITHER bad nor strong.
-    // Without a cue here Selene stays silent the whole drill on a
-    // mediocre rep, which reads as broken. A single mid-drill
-    // tightening nudge gives her presence without monologue.
-    if (eyeContactScore >= 0.6 && eyeContactScore <= 0.78 &&
-        secondsElapsed > 5.0 && secondsRemaining > 3.0) {
-      return 'half a millimetre tighter.';
-    }
+    // T0 — drifted off the iris.
+    if (eyeContactScore < 0.55) return 'find my iris.';
+    // T1 — anxious blinks. 0.5s grace so the startle blink at "begin"
+    // doesn\'t fire "still the lid" before he\'s even settled.
+    if (secondsElapsed > 0.5 && blinkRate > 24) return 'still the lid.';
+    // T2 — tense.
+    if (tensionScore < 0.55) return 'shoulders.';
+    // T2.5 — mid-rep mid-band, push tighter.
+    if (secondsElapsed > 1.5 && eyeContactScore < 0.78) return 'tighter.';
+    // T3 — approval on a strong hold, late in the rep.
+    if (secondsElapsed > 1.2 && eyeContactScore > 0.82) return 'good.';
     return '';
   }
 
@@ -847,11 +967,14 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
       );
       return;
     }
-    // First call → drill clock starts (idempotent — Beat 4 already
-    // set this when the beat fired; this is the fallback path).
+    // Rep clock — _drillStartedAt is reset by the conductor every
+    // time a new 3-second rep starts (Beat 4 fire for rep 1, the
+    // ResponseDone handler\'s delayed callback for reps 2 & 3).
+    // Elapsed / remaining are measured against the rep window, not
+    // against the lesson\'s legacy drillSeconds.
     _drillStartedAt ??= DateTime.now();
     final elapsed = DateTime.now().difference(_drillStartedAt!).inMilliseconds / 1000.0;
-    final remaining = (_drillSeconds - elapsed).clamp(0.0, _drillSeconds.toDouble());
+    final remaining = (_repSeconds - elapsed).clamp(0.0, _repSeconds.toDouble());
 
     // Round the metrics to two decimals so Selene never sees noise.
     final m = _metrics;
@@ -1211,6 +1334,14 @@ class _PriorAttempt {
     required this.blinks,
   });
 }
+
+/// Sub-state of the drill phase. THE LOCK runs as 3 × 3-second
+/// reps with a Flutter-decided corrective between each rep. The
+/// substate flips between [rep] (rep timer ticking, Selene
+/// firing short coachingCue lines from read_gaze) and
+/// [betweenReps] (Selene speaking the corrective + the next rep
+/// call). [idle] = the drill phase is not running.
+enum _DrillSub { idle, rep, betweenReps }
 
 /// Big bottom-row CTA — appears as the AGAIN / NEXT pair when
 /// Selene\'s lesson reaches the close beat. Filled accent for the
