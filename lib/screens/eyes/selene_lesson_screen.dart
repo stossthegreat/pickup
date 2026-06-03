@@ -181,13 +181,12 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
   // kickoff message sent. Guards against double-firing if
   // session.created arrives more than once.
   bool _seleneArmed = false;
-  // Beat-driven lesson runner. Selene was stopping after the first
-  // response because the realtime model decides when its OWN turn
-  // ends. Solution: each lesson beat is its own response.create
-  // call, fired sequentially on ResponseDone. She physically cannot
-  // stop short — Flutter keeps her going beat by beat until the arc
-  // is complete.
-  int _beatIdx = 0;
+  // _beatIdx is declared above in the lesson-conductor block; the
+  // duplicate previously sitting here was a leftover from the
+  // refactor and caused the iOS Release build to fail with "already
+  // declared in this scope." _lessonDone stays here — it\'s the only
+  // UI flag the build below reads to surface the AGAIN / NEXT LESSON
+  // CTAs after BEAT 7.
   bool _lessonDone = false;
   // Drives the breathing pulse on the AuralayFaceOverlayPainter so
   // the white lines on his eyelids feel alive — same animation the
@@ -305,7 +304,7 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
       // Sample eye-contact score during the drill so we can compute
       // the AURA pillar score at lesson close. Bound the buffer so
       // an extended replay session doesn\'t balloon memory.
-      if (_drillActive) {
+      if (_inDrillPhase) {
         _drillEcsSamples.add(m.eyeContactScore);
         if (_drillEcsSamples.length > 600) {
           _drillEcsSamples.removeRange(0, _drillEcsSamples.length - 600);
