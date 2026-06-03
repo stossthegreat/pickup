@@ -1,3 +1,5 @@
+import '../../models/gaze/gaze_lesson.dart';
+
 /// SELENE — live realtime persona for the gaze lessons.
 ///
 /// Selene is a 27-year-old WOMAN teaching the apprentice how to look
@@ -68,18 +70,169 @@ abstract final class SeleneGaze {
     },
   ];
 
-  /// Ordered, TIMED beats that drive Selene through the lesson. Each
-  /// beat is a [SeleneBeat] contract: a cue for the model + a Flutter
-  /// floor (minimum wall-clock duration the lesson must stay on the
-  /// beat) + whether the cinematic eyes overlay is shown.
+  /// Build Selene\'s 7-beat lesson arc from any [GazeLesson]\'s
+  /// structured pedagogy data. The syllabus already carries the
+  /// content — story (THE WHY), demo (THE MOVES), instruct (THE
+  /// CALL), correction (debrief lines), drillSeconds (drill length).
+  /// This method renders all 12 lessons into Selene\'s voice via
+  /// the same beat structure, with the same Flutter-enforced floors
+  /// and eyes-overlay phases. Returns a fresh list every call.
   ///
-  /// Pace is the entire point of the lesson — every cue below opens
-  /// with a TIME budget so the model paces itself, and Flutter holds
-  /// the lesson AT LEAST the floor regardless of how fast the model
-  /// finishes speaking. The model cannot rush past the floor; Flutter
-  /// won\'t advance until the floor elapses AND the model is done.
-  /// The drill beat is hard-gated on a 12-second wall-clock timer.
-  static const List<SeleneBeat> theLockBeats = [
+  /// [nextLesson] — the next entry in [GazeSyllabus.all] for the
+  /// close beat. If null, Beat 7 reads "you\'re ready" instead of
+  /// "we move to X."
+  static List<SeleneBeat> beatsFor(
+    GazeLesson lesson, {
+    GazeLesson? nextLesson,
+  }) {
+    final drillSec       = lesson.drillSeconds;
+    final lessonNameLow  = lesson.name.toLowerCase();
+    final firstHook      = lesson.story.first.split('.').first.trim();
+    final fullStory      = lesson.story.join(' ');
+    final fullDemo       = lesson.demo.join(' ');
+    final callPhrase     = lesson.instruct.isNotEmpty
+        ? lesson.instruct.first
+        : '${lesson.name}. Begin.';
+    final corrLine1      = lesson.correction.isNotEmpty ? lesson.correction[0] : '';
+    final corrLine2      = lesson.correction.length > 1 ? lesson.correction[1] : 'Again.';
+    final nextNameLow    = nextLesson?.name.toLowerCase();
+
+    return [
+      // BEAT 1 — OPEN  (~12s floor; eyes hidden)
+      SeleneBeat(
+        floorMs: 12000,
+        showEyes: false,
+        cue:
+'''Now deliver BEAT 1 — OPEN. TIME BUDGET: 12 to 15 seconds. THIS IS LONG ON PURPOSE. After each sentence you take a FULL 2-SECOND BREATH OF SILENCE before the next.
+
+In your low, slow, whisper-close voice — exactly these three lines:
+
+"Sit up… phone at eye level… look at me."
+
+"I\'m Selene. We are doing one thing tonight — ${lessonNameLow}. ${lesson.objective}"
+
+"${firstHook}."
+
+Then stop. Hold the silence. Do not run into the next beat.''',
+      ),
+
+      // BEAT 2 — THE WHY  (~25s floor; eyes hidden)
+      SeleneBeat(
+        floorMs: 25000,
+        showEyes: false,
+        cue:
+'''Now deliver BEAT 2 — THE WHY. TIME BUDGET: 25 to 32 seconds. RUSHING THIS RUINS THE LESSON. Pause 2 seconds between thoughts. Within each thought slow down on the key phrase and drop the last word in pitch.
+
+Explain in your voice why this move matters. Use this as your script, paced slow:
+
+"${fullStory}"
+
+Then stop. Hold the silence.''',
+      ),
+
+      // BEAT 3 — THE MOVES  (~18s floor; EYES ON — the overlay is
+      //                      her face so she can refer to "my left
+      //                      eye, the iris" and make the instruction
+      //                      concrete and visual)
+      SeleneBeat(
+        floorMs: 18000,
+        showEyes: true,
+        cue:
+'''Now deliver BEAT 3 — THE MOVES. TIME BUDGET: 18 to 22 seconds. My eyes are on his screen RIGHT NOW. Refer to them as if you are in front of him.
+
+Tell him what to do with his face before the drill — slow, deliberate, with at least 1 second of silence between each instruction:
+
+"${fullDemo}"
+
+Then stop. Hold the silence.''',
+      ),
+
+      // BEAT 4 — THE CALL + DRILL  (hard floor = lesson.drillSeconds,
+      //   eyes ON, advance gated by Flutter timer NOT by ResponseDone.
+      //   Selene calls read_gaze every ~1.5s; Flutter computes the
+      //   coachingCue field from live metrics and embeds it in the
+      //   tool response. Selene says EXACTLY what coachingCue says,
+      //   or stays silent if it is empty.)
+      SeleneBeat(
+        floorMs: drillSec * 1000,
+        showEyes: true,
+        cue:
+'''Now deliver BEAT 4 — THE CALL and the DRILL. ${drillSec}-SECOND DRILL.
+
+Step 1 — Say exactly: "${callPhrase}"
+
+Step 2 — THE INSTANT you say it, call the read_gaze tool. Keep calling it every 1.5 to 2 seconds for the full ${drillSec}-second drill.
+
+Step 3 — Each read_gaze response includes a "coachingCue" field. THIS IS FLUTTER TELLING YOU WHAT TO SAY based on live face metrics. Treat it as the script:
+  - If coachingCue is non-empty, say EXACTLY that line. ≤6 words. No embellishment. No paraphrasing. Imperative, not explanatory.
+  - If coachingCue is empty, say NOTHING. Silence is the lock.
+
+NEVER quote the raw metric numbers to him. NEVER monologue mid-drill. Most of the drill is silence broken by short coaching cues only when Flutter calls for them.
+
+After secondsRemaining hits 0, fall completely silent.''',
+      ),
+
+      // BEAT 5 — DEBRIEF  (~12s floor; eyes hidden)
+      SeleneBeat(
+        floorMs: 12000,
+        showEyes: false,
+        cue:
+'''Now deliver BEAT 5 — DEBRIEF. TIME BUDGET: 12 to 15 seconds. Slow. Deliberate. This is the moment the lesson lands.
+
+Call read_gaze ONE LAST TIME to see his final state. Based on the average eyeContactScore he held, pick ONE branch and deliver it with TWO long pauses inside:
+
+  • avg > 0.78 — Strong: "You held me. (pause) You broke when you decided. That is the move. Most men don\'t make it past second six."
+
+  • avg 0.60 to 0.78 — Mixed: "${corrLine1} (pause) ${corrLine2}"
+
+  • avg < 0.60 — Weak: "You couldn\'t find me. (pause) Your eyes were everywhere but my iris. (pause) Pick ONE thing next time. Lock it. Stay."
+
+Then stop. Hold the silence.''',
+      ),
+
+      // BEAT 6 — READ HER BACK  (~12s floor; eyes hidden)
+      SeleneBeat(
+        floorMs: 12000,
+        showEyes: false,
+        cue:
+'''Now deliver BEAT 6 — READ HER BACK. TIME BUDGET: 12 to 15 seconds.
+
+The move tonight was ${lesson.name}. Translate what a real woman would have done in response to what he just did. First-person ("my body…", "my breath…", "my eyes…"). Anatomy. At least one 2-second pause inside.
+
+Pick ONE based on his hold strength:
+
+  • Strong hold (avg > 0.7): describe the autonomic / mirror response a real woman would have when he held with command. Heart rate, breath, eyes.
+
+  • Weak hold (avg ≤ 0.7): describe how her body mirrored his — eyes drifted because his did. Mirror neurons. The man who keeps his eyes still keeps hers still.
+
+Then stop. Hold the silence.''',
+      ),
+
+      // BEAT 7 — PROGRESSION + CLOSE  (~7s floor; eyes hidden;
+      //                                 AGAIN / NEXT LESSON buttons
+      //                                 surface in Flutter)
+      SeleneBeat(
+        floorMs: 7000,
+        showEyes: false,
+        cue:
+'''Now deliver BEAT 7 — PROGRESSION + CLOSE. TIME BUDGET: 7 to 10 seconds. Two short lines with a 2-second pause between:
+
+"Master ${lessonNameLow} for a week. ${nextNameLow != null ? 'Then we move to ${nextNameLow}.' : 'Then you\'re ready for the field.'}"
+
+(pause)
+
+"Again. Or next."
+
+Then stop and listen. The apprentice will tap a button to choose.''',
+      ),
+    ];
+  }
+
+  /// LEGACY — kept only so any stale reference compiles. New code
+  /// should call [beatsFor] with the active [GazeLesson]. This is a
+  /// thin wrapper that builds beats for THE LOCK specifically.
+  static List<SeleneBeat> get theLockBeats {
+    return [
     // Beat 1 — OPEN  (~12s floor; eyes hidden — apprentice sees his
     //                 own face, hears Selene calling him to attention)
     SeleneBeat(
@@ -221,8 +374,9 @@ Then stop. Hold the silence.''',
 "Again. Or next."
 
 Then stop and listen. The apprentice will tap a button to choose.''',
-    ),
-  ];
+      ),
+    ];
+  }
 
   /// Identity + voice + hard rules. Pushed via session.update once on
   /// connect. The beat cues above are then fired as individual

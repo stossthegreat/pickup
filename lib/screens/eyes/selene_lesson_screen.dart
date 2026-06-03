@@ -85,12 +85,13 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
   static const int _feedFrames = 2400;        // 100ms @ 24kHz
   static const int _pcmStallMs = 500;
 
-  // Drill clock — starts the FIRST time Selene calls read_gaze, OR
-  // when Beat 4 fires (whichever comes first). Used by _onFunctionCall
+  // Drill clock — starts when Beat 4 fires. Used by _onFunctionCall
   // to compute secondsElapsed / secondsRemaining for Selene\'s
-  // coaching cues during the lock.
+  // coaching cues during the lock. Per-lesson because different
+  // lessons run different drill lengths (THE LOCK = 12s, THE SILENT
+  // HOLD = 25s, etc).
   DateTime? _drillStartedAt;
-  static const int _drillSeconds = 12;
+  int get _drillSeconds => widget.lesson.drillSeconds;
 
   // ─── Lesson conductor — Flutter directs, model performs ──────────
   //
@@ -152,6 +153,16 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
   Timer? _advanceTimer;
   static const int _interBeatBreathMs = 1500;
 
+  /// The Selene beats for THIS lesson, generated once on
+  /// connect from [SeleneGaze.beatsFor]. Every lesson in
+  /// [GazeSyllabus] now flows through the same beat structure with
+  /// content rendered from its own pedagogy (story / demo / instruct
+  /// / correction / drillSeconds), so THE LOCK, THE DROP, SOFT EYES,
+  /// CAUGHT, etc. all run on the identical conductor without per-
+  /// lesson code branches here.
+  late final List<SeleneBeat> _beats;
+  late final GazeLesson? _nextLesson;
+
   /// Per-frame samples of eyeContactScore captured during the 12s
   /// drill. Averaged on lesson close to produce the AURA pillar
   /// score the Today\'s Ascension card reads. Without this Selene
@@ -188,6 +199,13 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
   @override
   void initState() {
     super.initState();
+    // Build the Selene beat arc for THIS lesson + look up the next
+    // lesson in the syllabus so Beat 7\'s close line references it.
+    final all = GazeSyllabus.all;
+    final idx = all.indexWhere((l) => l.id == widget.lesson.id);
+    _nextLesson = (idx >= 0 && idx < all.length - 1) ? all[idx + 1] : null;
+    _beats = SeleneGaze.beatsFor(widget.lesson, nextLesson: _nextLesson);
+
     _loopAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2400),
@@ -474,7 +492,7 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
   /// Beat 4 is the exception: it\'s a hard 12-second wall-clock
   /// drill, advanced by [_drillTimer] only.
   void _sendNextBeat() {
-    final beats = SeleneGaze.theLockBeats;
+    final beats = _beats;
     if (_beatIdx >= beats.length) {
       if (mounted) setState(() => _lessonDone = true);
       // Lesson reached close → stamp AURA completion so the home
@@ -509,7 +527,7 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
       _drillStartedAt = DateTime.now();
       _drillEcsSamples.clear();
       _drillTimer?.cancel();
-      _drillTimer = Timer(const Duration(seconds: _drillSeconds), () {
+      _drillTimer = Timer(Duration(seconds: _drillSeconds), () {
         if (!mounted) return;
         setState(() {
           _inDrillPhase = false;
@@ -574,6 +592,7 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
       _drillStartedAt    = null;
       _drillBlinks       = 0;
       _drillEcsSamples.clear();
+      _lastCoachingCue   = '';
       _inDrillPhase      = false;
       _showEyes          = false;
       _phaseStartedAt    = null;
@@ -678,6 +697,51 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
     }
   }
 
+  /// Tracks the last coaching cue Flutter handed to Selene so we
+  /// don\'t repeat the same line multiple times in a single drill —
+  /// once she says "you drifted", we don\'t fire it again until the
+  /// metric recovers and breaches again later.
+  String _lastCoachingCue = '';
+
+  /// Resolve the most pressing coaching cue from the current face
+  /// metrics. Returns an empty string when no cue should fire
+  /// (silence is the lock). Priority order is TIER 0 (drift) → TIER
+  /// 1 (blinks) → TIER 2 (tension) → TIER 3 (warm approval / time
+  /// signal). Cues are imperative, ≤6 words, external-focus per the
+  /// motor-learning literature (Wulf 2013).
+  String _resolveCoachingCue({
+    required double eyeContactScore,
+    required double blinkRate,
+    required double tensionScore,
+    required double secondsElapsed,
+    required double secondsRemaining,
+  }) {
+    // Final beat — call her break verdict.
+    if (secondsRemaining <= 0.0) {
+      if (eyeContactScore < 0.5) return 'and break. you held what you could.';
+      return ''; // strong hold → silence, let him break first
+    }
+    // T0 — has he completely drifted off?
+    if (eyeContactScore < 0.55) return 'you drifted. find my left eye.';
+    // T1 — anxious blinks
+    if (blinkRate > 28) return 'stop blinking. dead lid.';
+    if (blinkRate > 22) return 'slow your blinks.';
+    // T2 — tense body
+    if (tensionScore < 0.55) return 'drop your shoulders.';
+    // T2.5 — mid-range hold, push for the smolder
+    if (eyeContactScore < 0.75 && secondsElapsed > 4.0) {
+      return 'tighten. narrow your lids.';
+    }
+    // T3 — strong hold, late in the drill
+    if (secondsRemaining < 4.0 && eyeContactScore > 0.7) {
+      return 'almost. hold it.';
+    }
+    if (eyeContactScore > 0.82 && secondsRemaining > 6.0) {
+      return "good. don\'t move.";
+    }
+    return '';
+  }
+
   void _onFunctionCall(FunctionCallRequested e) {
     if (e.name != 'read_gaze') {
       // Unknown tool — reply with empty so Selene doesn't stall.
@@ -687,7 +751,8 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
       );
       return;
     }
-    // First call → drill clock starts.
+    // First call → drill clock starts (idempotent — Beat 4 already
+    // set this when the beat fired; this is the fallback path).
     _drillStartedAt ??= DateTime.now();
     final elapsed = DateTime.now().difference(_drillStartedAt!).inMilliseconds / 1000.0;
     final remaining = (_drillSeconds - elapsed).clamp(0.0, _drillSeconds.toDouble());
@@ -695,15 +760,37 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
     // Round the metrics to two decimals so Selene never sees noise.
     final m = _metrics;
     final tensionScore = ((m.headStability + m.composureScore) / 2.0).clamp(0.0, 1.0);
+
+    // Resolve the live coaching cue from Flutter — the model uses
+    // this directly (Beat 4 cue tells it: "say exactly coachingCue
+    // or stay silent"). Flutter is the brain, Selene is the voice.
+    // Debounce so the same cue doesn\'t repeat within the same
+    // drill — once she says "you drifted" we don\'t fire it again
+    // until the metric recovers and breaches again later.
+    String cue = _resolveCoachingCue(
+      eyeContactScore:  m.eyeContactScore,
+      blinkRate:        m.blinkRate,
+      tensionScore:     tensionScore,
+      secondsElapsed:   elapsed,
+      secondsRemaining: remaining,
+    );
+    if (cue == _lastCoachingCue) cue = '';
+    if (cue.isNotEmpty) _lastCoachingCue = cue;
+
     final result = <String, dynamic>{
-      'eyeContactScore':  double.parse(m.eyeContactScore.toStringAsFixed(2)),
-      'blinkRate':        double.parse(m.blinkRate.toStringAsFixed(1)),
-      'tensionScore':     double.parse(tensionScore.toStringAsFixed(2)),
-      'headStability':    double.parse(m.headStability.toStringAsFixed(2)),
+      'eyeContactScore':   double.parse(m.eyeContactScore.toStringAsFixed(2)),
+      'blinkRate':         double.parse(m.blinkRate.toStringAsFixed(1)),
+      'tensionScore':      double.parse(tensionScore.toStringAsFixed(2)),
+      'headStability':     double.parse(m.headStability.toStringAsFixed(2)),
       'smileAuthenticity': double.parse(m.smileAuthenticity.toStringAsFixed(2)),
-      'secondsElapsed':   double.parse(elapsed.toStringAsFixed(1)),
-      'secondsRemaining': double.parse(remaining.toStringAsFixed(1)),
-      'drillBlinks':      _drillBlinks,
+      'secondsElapsed':    double.parse(elapsed.toStringAsFixed(1)),
+      'secondsRemaining':  double.parse(remaining.toStringAsFixed(1)),
+      'drillBlinks':       _drillBlinks,
+      // FLUTTER → SELENE coaching directive. Beat 4\'s cue instructs
+      // Selene to say this line verbatim if non-empty, otherwise to
+      // stay silent. This is the closed-loop reactive coaching path
+      // — metrics in, cue out, voiced immediately.
+      'coachingCue':       cue,
     };
     _session.sendFunctionCallOutput(
       callId: e.callId,
@@ -887,7 +974,10 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
                     const SizedBox(width: 12),
                     Expanded(
                       child: _SeleneCta(
-                        label: 'NEXT',
+                        // Label tells the apprentice WHERE the next
+                        // tap goes — to the next lesson in the
+                        // syllabus, not just out of the screen.
+                        label: _nextLesson != null ? 'NEXT LESSON' : 'DONE',
                         filled: false,
                         onTap: _goToNextLesson,
                       ),
