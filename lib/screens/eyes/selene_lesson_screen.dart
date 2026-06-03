@@ -248,6 +248,12 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
     _detector.dispose();
     // ignore: discarded_futures
     _session.close();
+    // Reset the AudioSession.configureForPlayAndRecord guard so the
+    // NEXT screen that wants play+record actually re-asserts the
+    // context — solves the OSStatus 561017449 race when NEXT LESSON
+    // pushes a fresh Selene screen while this one\'s recorder is
+    // still releasing the AVAudioSession.
+    AudioSession.invalidate();
     super.dispose();
   }
 
@@ -417,14 +423,38 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
       //    handles turn-taking. The Selene persona never expects a
       //    push-to-talk gesture; the apprentice can simply ask a
       //    question and she answers.
-      final stream = await _recorder.startStream(const RecordConfig(
-        encoder:       AudioEncoder.pcm16bits,
-        sampleRate:    24000,
-        numChannels:   1,
-        echoCancel:    true,
-        noiseSuppress: true,
-        autoGain:      true,
-      ));
+      //
+      // Retry on AVAudioSession-busy: when NEXT LESSON pushes a
+      //    fresh Selene screen, the previous screen\'s recorder may
+      //    not have fully released the iOS audio session yet, and
+      //    record_darwin.startStream throws OSStatus 561017449
+      //    ("audio session activation failed"). Retry up to 3 times
+      //    with a 500ms breath between attempts — by attempt 2 the
+      //    old session has always released in testing. Re-assert the
+      //    AudioContext before each retry so the OS knows we want
+      //    play+record, not a leftover playback-only state.
+      Stream<Uint8List>? stream;
+      Object? lastErr;
+      for (int attempt = 0; attempt < 3; attempt++) {
+        try {
+          stream = await _recorder.startStream(const RecordConfig(
+            encoder:       AudioEncoder.pcm16bits,
+            sampleRate:    24000,
+            numChannels:   1,
+            echoCancel:    true,
+            noiseSuppress: true,
+            autoGain:      true,
+          ));
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          await Future.delayed(const Duration(milliseconds: 500));
+          AudioSession.invalidate();
+          await AudioSession.configureForPlayAndRecord();
+        }
+      }
+      if (stream == null) throw lastErr ?? Exception('recorder failed to start');
       _micSub = stream.listen((bytes) {
         if (_disposed) return;
         _session.sendAudioChunk(bytes);
