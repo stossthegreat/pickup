@@ -543,90 +543,13 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 }
 
-// ── Full breakdown — always open, always rendered ───────────────────────────
-//
-// Was a tap-to-expand disclosure. User's call: "instead of drop down, open
-// them so it's one big page. That's our thing — we can give all those
-// details no one else can. So release it all." Header + animation removed;
-// content rendered directly. Try-on chips removed too (per the same note:
-// the presets were feeling like a gimmick on the results card, and the
-// Mirror chat is where on-demand renders live now).
-class _DeeperAnalysisPanel extends StatelessWidget {
-  final MirrorAnalysis analysis;
-  final FaceGeometry geometry;
-  final ArchetypeMatch match;
-  final String? savedImagePath;
-  const _DeeperAnalysisPanel({
-    required this.analysis, required this.geometry, required this.match,
-    this.savedImagePath,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final a = analysis;
-    final scoreComputed = ScoringService.compute(geometry);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Small section masthead so the breakdown reads as its own block,
-        // not a random pile of cards.
-        Text('FULL BREAKDOWN',
-          style: AppTypography.label.copyWith(
-            color: AppColors.measure,
-            letterSpacing: 2.8, fontSize: 10.5,
-            fontWeight: FontWeight.w900)),
-        const SizedBox(height: 3),
-        Text('All 16 measurements · archetype · feature-by-feature read',
-          style: AppTypography.bodySmall.copyWith(
-            color: AppColors.textTertiary, fontSize: 11.5, height: 1.4)),
-        const SizedBox(height: Sp.md),
-
-        // Archetype details
-        ArchetypeCard(match: match),
-        const SizedBox(height: Sp.md),
-
-        // Feature-by-feature deep read
-        FeatureGrid(
-          reads: FeatureAnalysisService.analyse(geometry),
-          onSeeIt: (read) => context.push(
-            '/chat',
-            extra: {
-              'geometry':  geometry,
-              'imagePath': savedImagePath,
-              'autoSend':  read.tryonPrompt,
-            },
-          ),
-        ),
-        const SizedBox(height: Sp.md),
-
-        // 16-metric grid — previously behind a second tap, now inline
-        HiddenDepthPanel(geometry: geometry),
-        const SizedBox(height: Sp.md),
-
-        // GPT prose blocks
-        if (a.report.oneLineVerdict.isNotEmpty) ...[
-          VerdictCard(
-            verdict:   a.report.oneLineVerdict,
-            score:     scoreComputed.value,
-            tier:      scoreComputed.tierLabel,
-            archetype: match.archetype.name),
-          const SizedBox(height: Sp.md),
-        ],
-
-        if (a.report.boneReading.isNotEmpty) ...[
-          _Block(label: 'THE READ', color: AppColors.measure,
-            body: a.report.boneReading),
-          const SizedBox(height: Sp.md),
-        ],
-        _Block(label: 'WHAT\'S ALREADY WORKING', color: AppColors.signalGreen,
-          body: a.report.strongest),
-        const SizedBox(height: Sp.md),
-        _Block(label: 'WHAT\'S HOLDING IT BACK', color: AppColors.signalAmber,
-          body: a.report.pulldown),
-      ],
-    );
-  }
-}
+// _DeeperAnalysisPanel deleted — it referenced ArchetypeCard /
+// FeatureGrid / HiddenDepthPanel / VerdictCard imports that were
+// removed in the report-screen redesign, so the iOS Release build
+// failed compiling its body even though nothing rendered it. The
+// archetype + 16-metric + GPT prose sections moved off the main
+// report per bro's "clean per-trait, one geometry breakdown, then
+// 60-day protocols" spec — they're not coming back to this screen.
 
 // ── APPLY ALL FIXES — the primary transformation moment ─────────────────────
 class _ApplyAllFixesButton extends StatefulWidget {
