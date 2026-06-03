@@ -12,7 +12,6 @@ import '../../services/protocol_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/common/mirrorly_components.dart';
-import '../../widgets/report/aspect_protocol_cards.dart';
 import '../eyes/eyes_tab_screen.dart';
 import '../game/game_tab_screen.dart';
 import 'ascend_screen.dart';
@@ -298,48 +297,12 @@ class _ScanHubTab extends StatelessWidget {
                 child: _LatestSnapshot(scan: latest!),
               ).animate().fadeIn(duration: 400.ms),
 
-              if (protocol != null) ...[
-                const SizedBox(height: Sp.md),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-                  child: _ActiveProtocolCard(protocol: protocol!),
-                ).animate().fadeIn(delay: 100.ms, duration: 400.ms),
-              ],
-
               const SizedBox(height: Sp.lg),
 
-              // ── 60-day aspect protocols — SKIN / JAW / DEBLOAT /
-              //    HAIR. Bro: "where are the streak protocols, they
-              //    should show on my looks tab under scan button."
-              //    These were only on the report page before. Adding
-              //    them to the Looks tab so a returning user can pick
-              //    a protocol any time without needing to re-scan.
-              //    Each card has the same daily-plan teaser + START
-              //    THIS PLAN CTA as the report version; tapping
-              //    routes to /protocol with the right axis and
-              //    auto-starts via ProtocolService.
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-                child: AspectProtocolCards(
-                  geometry:       latest!.geometry,
-                  savedImagePath: latest!.capturedImagePath,
-                ),
-              ).animate().fadeIn(delay: 140.ms, duration: 400.ms),
-
-              const SizedBox(height: Sp.md),
-
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-                child: _AdvisorLink(
-                  onTap: () => context.push('/chat', extra: {
-                    'geometry':  latest!.geometry,
-                    'imagePath': latest!.capturedImagePath,
-                  }),
-                ),
-              ).animate().fadeIn(delay: 180.ms, duration: 400.ms),
-
-              const SizedBox(height: Sp.lg),
-
+              // RESCAN FACE moved UP so it is the obvious primary
+              // action a returning user sees — not buried under
+              // protocol cards. Bro: "you've hidden the scan button
+              // under these cards."
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
                 child: PrimaryCta(
@@ -351,7 +314,33 @@ class _ScanHubTab extends StatelessWidget {
                     context.push('/scan');
                   },
                 ),
-              ).animate().fadeIn(delay: 240.ms, duration: 400.ms),
+              ).animate().fadeIn(delay: 80.ms, duration: 400.ms),
+
+              // Active protocol — small clean tile UNDER the scan
+              // button. Only surfaces when the user has actually
+              // committed to a plan (tapped START THIS PLAN on a
+              // report-page aspect card). The big marketing aspect
+              // cards live on the report ONLY — once you commit,
+              // this is what represents the plan on the Looks tab.
+              if (protocol != null) ...[
+                const SizedBox(height: Sp.md),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+                  child: _ActiveProtocolCard(protocol: protocol!),
+                ).animate().fadeIn(delay: 140.ms, duration: 400.ms),
+              ],
+
+              const SizedBox(height: Sp.md),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+                child: _AdvisorLink(
+                  onTap: () => context.push('/chat', extra: {
+                    'geometry':  latest!.geometry,
+                    'imagePath': latest!.capturedImagePath,
+                  }),
+                ),
+              ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
             ],
           ],
         ),
