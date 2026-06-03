@@ -16,10 +16,27 @@ class HonestRating {
                         // below_average|weak|struggling
   final String note;    // one-line observation citing what was visible
 
+  /// Per-domain sub-scores from GPT vision. Optional — present when the
+  /// /rate backend has been updated to return them, absent otherwise
+  /// (the report page derives fallbacks from geometry so it never
+  /// renders empty). Expected keys: skin, hair, jawline, masculinity,
+  /// eyes, face. Each value is 0..100. Backend prompt extension:
+  /// add to the JSON schema: "subScores": { "skin": 0-100, "hair":
+  /// 0-100, "jawline": 0-100, "masculinity": 0-100, "eyes": 0-100,
+  /// "face": 0-100 }.
+  final Map<String, int>? subScores;
+
+  /// Per-domain short qualifier from GPT — e.g. "Clear healthy skin",
+  /// "Full Hair", "Hunter Eyes", "High Dimorphism". Optional, falls
+  /// back to a computed tier word per axis when null.
+  final Map<String, String>? subTiers;
+
   const HonestRating({
     required this.score,
     required this.tier,
     required this.note,
+    this.subScores,
+    this.subTiers,
   });
 
   String get tierLabel => switch (tier) {
@@ -61,10 +78,33 @@ class HonestRatingService {
       final score = decoded['score'];
       if (score is! num) return null;
 
+      // Optional sub-scores / sub-tiers from the GPT vision call. Present
+      // once the backend rate prompt has been extended to ask for them;
+      // null otherwise (the report page falls back to geometry-derived
+      // scores so the per-trait panel always renders something honest).
+      Map<String, int>? subScores;
+      Map<String, String>? subTiers;
+      final rawSub = decoded['subScores'];
+      if (rawSub is Map) {
+        subScores = <String, int>{};
+        rawSub.forEach((k, v) {
+          if (v is num) subScores![k.toString()] = v.round().clamp(0, 100);
+        });
+      }
+      final rawTiers = decoded['subTiers'];
+      if (rawTiers is Map) {
+        subTiers = <String, String>{};
+        rawTiers.forEach((k, v) {
+          if (v is String) subTiers![k.toString()] = v;
+        });
+      }
+
       return HonestRating(
-        score: score.round().clamp(0, 100),
-        tier:  (decoded['tier'] as String?) ?? 'average',
-        note:  (decoded['note'] as String?) ?? '',
+        score:     score.round().clamp(0, 100),
+        tier:      (decoded['tier'] as String?) ?? 'average',
+        note:      (decoded['note'] as String?) ?? '',
+        subScores: subScores,
+        subTiers:  subTiers,
       );
     } catch (_) {
       return null;
