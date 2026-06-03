@@ -23,13 +23,10 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../services/share_service.dart';
 import '../../widgets/common/fullscreen_image.dart';
-import '../../widgets/report/archetype_card.dart';
-import '../../widgets/report/feature_grid.dart';
+import '../../widgets/report/aspect_protocol_cards.dart';
 import '../../widgets/report/hero_card.dart';
-import '../../widgets/report/hidden_depth_panel.dart';
-import '../../widgets/report/radar_chart.dart';
+import '../../widgets/report/per_trait_scores.dart';
 import '../../widgets/report/trait_grid.dart';
-import '../../widgets/report/verdict_card.dart';
 
 class ReportScreen extends StatefulWidget {
   final Uint8List imageBytes;
@@ -330,7 +327,6 @@ class _ReportScreenState extends State<ReportScreen> {
 
   Widget _buildReport(MirrorAnalysis a) {
     final score = ScoringService.compute(widget.geometry);
-    final match = ArchetypeService.bestMatch(widget.geometry);
     final traits = TraitBuilderService.build(widget.geometry);
     final percentile = _percentile(score.value);
     final potential = _potentialDelta(score.value);
@@ -359,19 +355,14 @@ class _ReportScreenState extends State<ReportScreen> {
             ? a.report.oneLineVerdict
             : '${score.strongestAxis.$1} carries the frame.');
 
-    // 6-axis radar values (each 0..1) built from the same measurements
-    // used by the trait system.
-    final radarValues = [
-      ((widget.geometry.canthalTilt + 2) / 7).clamp(0.0, 1.0),        // EYES
-      (1.0 - ((widget.geometry.jawAngle - 110) / 30)).clamp(0.0, 1.0), // JAW
-      (widget.geometry.symmetryScore / 100).clamp(0.0, 1.0),           // SYMMETRY
-      (widget.geometry.lipFullness).clamp(0.0, 1.0),                   // LIPS
-      ((2.0 - (widget.geometry.fwhr - 1.9).abs()) / 2.0).clamp(0.0, 1.0),// FWHR
-      (1.0 - ((((widget.geometry.facialThirdTop - 33.33).abs()
-                + (widget.geometry.facialThirdMid - 33.33).abs()
-                + (widget.geometry.facialThirdLow - 33.33).abs()) / 3) / 10))
-          .clamp(0.0, 1.0),                                            // BALANCE
-    ];
+    // ArchetypeService.bestMatch + the 6-axis radar values block were
+    // removed from this builder along with the report screen redesign
+    // — they only fed into the old confusing middle "mash"
+    // (RadarChart, ArchetypeCard, HiddenDepthPanel, FeatureGrid
+    // duplicate, VerdictCard and GPT prose blocks). The new layout
+    // surfaces analytical, comparative and prescriptive content via
+    // PerTraitScores, TraitGrid and AspectProtocolCards respectively,
+    // none of which need those locals.
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.md, Sp.lg, Sp.lg),
@@ -454,28 +445,31 @@ class _ReportScreenState extends State<ReportScreen> {
 
           const SizedBox(height: Sp.md),
 
-          // ── 2 · TRAITS GRID ─ Umax secret sauce, ours backed by mesh ───
-          TraitGrid(traits: traits)
-            .animate().fadeIn(delay: 1600.ms, duration: 500.ms),
+          // ── 2 · PER-TRAIT SCORES ─ the clean stack competitors lead with
+          // Six rows (Skin, Hair, Jawline, Masculinity, Eyes, Face) each
+          // scored /10 with a tier word. Uses HonestRating.subScores when
+          // the /rate backend has been extended to return them, geometry-
+          // derived fallback when it hasn\'t — never goes empty.
+          PerTraitScores(
+            honest:   _honest,
+            geometry: widget.geometry,
+          ).animate().fadeIn(delay: 1500.ms, duration: 500.ms),
 
           const SizedBox(height: Sp.md),
 
-          // ── 3 · RADAR ─ "measured, not guessed" proof ──────────────────
-          RadarChart(
-            values: radarValues,
-            labels: const ['EYES', 'JAW', 'SYMMETRY', 'LIPS', 'FWHR', 'BALANCE'],
-          ).animate().fadeIn(delay: 1900.ms, duration: 500.ms),
+          // ── 3 · GEOMETRY BREAKDOWN ─ the one on-device math grid ───────
+          // Was the Umax-style trait grid surfaced alongside three other
+          // mash sections (radar, archetype, hidden-depth). Those are
+          // gone now; this is THE geometry section, period.
+          TraitGrid(traits: traits)
+            .animate().fadeIn(delay: 1700.ms, duration: 500.ms),
 
           const SizedBox(height: Sp.md),
 
           // ── 4 · APPLY ALL FIXES ────────────────────────────────────────
-          // BeforeAfterCard removed — the hero card now carries the B/A
-          // moment, and showing it twice diluted the impact.
-          //
-          // When the hero URL is empty (Replicate was down during /scan and
-          // we returned report-only), the button's state morphs to a
-          // "Generate hero image" retry that hits /maximize directly. No
-          // re-scan required.
+          // The transformation moment. Tapping reveals the Final Form
+          // composite if the /scan returned one, otherwise retries the
+          // maximize render inline. No re-scan required.
           _ApplyAllFixesButton(
             maximizedImageUrl: a.maximizedImageUrl,
             imageBytes:        widget.imageBytes,
@@ -483,69 +477,20 @@ class _ReportScreenState extends State<ReportScreen> {
                 .map((f) => f.visualRequest.trim())
                 .where((s) => s.isNotEmpty)
                 .toList(),
-          ).animate().fadeIn(delay: 2400.ms, duration: 400.ms),
+          ).animate().fadeIn(delay: 1900.ms, duration: 400.ms),
 
           const SizedBox(height: Sp.xl),
 
-          // ── 5 · FIX HEADLINES (text only — no per-fix Flux render) ─────
-          // We deliberately don't render per-fix inline try-ons any more
-          // (each tap on "See it" fired a fresh /tryon → 3 extra Nano
-          // Banana calls per scan). The hero "Final form" already shows
-          // the combined maximized twin, and the Mirror chat can render
-          // one-at-a-time if the user wants to drill in. This is a pure
-          // cost reduction — text advice stays, generation is centralised.
-          Text('THE FIXES',
-            style: AppTypography.label.copyWith(
-              color: AppColors.textTertiary, letterSpacing: 3.0, fontSize: 10)),
-          const SizedBox(height: Sp.sm),
-          ...a.report.fixes.asMap().entries.map((e) =>
-            _FixTextCard(index: e.key + 1, fix: e.value)
-              .animate().fadeIn(delay: Duration(milliseconds: 2600 + e.key * 120))),
-
-          const SizedBox(height: Sp.xl),
-
-          // ── 6 · CONSULT CTA ────────────────────────────────────────────
-          _ConsultCard(
-            onTap: () => context.push(
-              '/chat',
-              extra: {'geometry': widget.geometry, 'imagePath': _savedImagePath},
-            ),
-          ).animate().fadeIn(delay: 2900.ms, duration: 400.ms),
-
-          const SizedBox(height: Sp.xl),
-
-          // ── 7 · DEEPER ANALYSIS ─ always-open full breakdown ───────────
-          // Previously the two nested dropdowns (this panel + the inner
-          // HiddenDepthPanel) gated content behind two taps. That's our
-          // moat — 16 measurements, archetype match, feature-by-feature
-          // read, GPT prose — no other app surfaces it. Release it all.
-          _DeeperAnalysisPanel(
-            analysis:   a,
-            geometry:   widget.geometry,
-            match:      match,
+          // ── 5 · 60-DAY ASPECT PROTOCOLS ────────────────────────────────
+          // Replaces the old free-text "FIXES" cards. Three named axes
+          // — SKIN, JAW, HAIR — each with a 14/30/60-day phase plan
+          // anchored to verified-evidence interventions. Tapping any
+          // card routes to /protocol with that axis as the chosen
+          // pulldown so ProtocolService picks the matching template.
+          AspectProtocolCards(
+            geometry:       widget.geometry,
             savedImagePath: _savedImagePath,
-          ).animate().fadeIn(delay: 3000.ms, duration: 400.ms),
-
-          const SizedBox(height: Sp.xl),
-
-          // Verdict
-          _Verdict(text: a.report.verdict)
-            .animate().fadeIn(delay: 1500.ms, duration: 500.ms)
-            .slideY(begin: 0.05, end: 0,
-                delay: 1500.ms, duration: 500.ms, curve: Curves.easeOut),
-
-          const SizedBox(height: Sp.xl),
-
-          // ── 8 · PROTOCOL CTA ─ the final commit moment ─────────────────
-          // Moved to sit just above the Done/Consult row so it's the last
-          // thing the user sees as they finish reading. Auto-prescribed
-          // 60-day routine keyed to the scan's pulldown axis. If a
-          // protocol is already active the card morphs to "Continue day
-          // X" rather than overwriting it.
-          _ProtocolCtaCard(
-            pulldown: a.report.pulldown,
-            geometry: widget.geometry,
-          ).animate().fadeIn(delay: 3200.ms, duration: 400.ms),
+          ).animate().fadeIn(delay: 2100.ms, duration: 400.ms),
 
           const SizedBox(height: Sp.xl),
 
