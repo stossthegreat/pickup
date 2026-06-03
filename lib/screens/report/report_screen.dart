@@ -312,10 +312,12 @@ class _ReportScreenState extends State<ReportScreen> {
               color: AppColors.textTertiary,
             ),
           ),
-          // Slow-response escape hatch — after 60s of waiting the
-          // user gets a "still working, take longer than usual" band
-          // and a Try Again button. Lets them choose between waiting
-          // out a slow backend or retrying.
+          // Slow-response notice — after 60s, surface a small amber
+          // band that just says "this is taking longer than usual,
+          // keep waiting." No retry button (bro: "don\'t put retry
+          // on the scan rendering loading screen, just tell them
+          // to keep waiting"). Letting users hammer retry on a slow
+          // backend only piles up more work for the same queue.
           if (_slowResponse) ...[
             const SizedBox(height: 24),
             Container(
@@ -337,31 +339,15 @@ class _ReportScreenState extends State<ReportScreen> {
                     )),
                   const SizedBox(height: 6),
                   Text(
-                    'Backend is slow but we\'re still working. '
-                    'Wait it out, or tap to retry.',
+                    'Backend is slow right now — we\'re still '
+                    'working on your scan. Hold tight, it\'s on '
+                    'the way.',
                     textAlign: TextAlign.center,
                     style: AppTypography.body.copyWith(
                       fontSize: 11.5,
                       height: 1.4,
                       color: AppColors.textSecondary,
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _slowResponse = false;
-                        _copyIdx      = 0;
-                      });
-                      _watchForSlowResponse();
-                      _run();
-                    },
-                    child: Text('RETRY',
-                      style: AppTypography.label.copyWith(
-                        color: AppColors.signalAmber,
-                        letterSpacing: 2.6, fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                      )),
                   ),
                 ],
               ),
