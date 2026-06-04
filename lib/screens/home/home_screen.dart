@@ -139,8 +139,17 @@ class _HomeScreenState extends State<HomeScreen> {
       _activeProtocols = all;
       _loading         = false;
       // /100 → /10 across the board so the Ascend pillars read the
-      // same scale the Eyes / Game share cards do.
-      _looksScore = ((latest?.score ?? 0) / 10).round().clamp(0, 10);
+      // same scale the Eyes / Game share cards do. Each pillar reads
+      // its SharedPreferences key written by the corresponding flow
+      // — looks_score (report screen, GPT honest headline), aura_score
+      // (scripted or Selene gaze sessions), game_score (Free Flow).
+      // Bro: pillars must reflect the LATEST attempt. The persist
+      // sites now always overwrite with the most recent score, so
+      // here we just read and divide. latest?.score is the legacy
+      // fallback for users whose first scan landed before the
+      // looks_score key existed.
+      final looksRaw = prefs.getInt('looks_score') ?? latest?.score ?? 0;
+      _looksScore = (looksRaw / 10).round().clamp(0, 10);
       _auraScore  = ((prefs.getInt('aura_score')  ?? 0) / 10).round().clamp(0, 10);
       _gameScore  = ((prefs.getInt('game_score')  ?? 0) / 10).round().clamp(0, 10);
       // _dayStreak is the bigger of the protocol streak and the

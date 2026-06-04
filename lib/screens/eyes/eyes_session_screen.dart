@@ -398,15 +398,22 @@ class _EyesSessionScreenState extends State<EyesSessionScreen>
     setState(() => _phase = _Phase.score);
   }
 
-  /// Update the persisted AURA pillar score (Ascend) with the best
-  /// score we've seen across all gaze sessions, and stamp today as
-  /// the last AURA completion day so the Today\'s Ascension card
-  /// ticks AURA off.
+  /// Update the persisted AURA pillar score (Ascend) with the score
+  /// from the most recent gaze session, and stamp today as the last
+  /// AURA completion day so the Today\'s Ascension card ticks AURA
+  /// off. Bro: pillar scores must reflect the LATEST attempt so the
+  /// home page is alive — previously this only wrote when the new
+  /// score beat the previous best, which made the home pillar stuck
+  /// on whatever the user\'s best-ever score was. Best is kept under
+  /// a separate `aura_score_best` key for any future share / progress
+  /// surface that needs it.
   Future<void> _persistAura(int gazeScore) async {
     final prefs = await SharedPreferences.getInstance();
-    final prev = prefs.getInt('aura_score') ?? 0;
-    if (gazeScore > prev) {
-      await prefs.setInt('aura_score', gazeScore.clamp(0, 100));
+    final score = gazeScore.clamp(0, 100);
+    await prefs.setInt('aura_score', score);
+    final prev = prefs.getInt('aura_score_best') ?? 0;
+    if (score > prev) {
+      await prefs.setInt('aura_score_best', score);
     }
     final now = DateTime.now();
     await prefs.setInt(
