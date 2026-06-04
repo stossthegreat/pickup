@@ -635,8 +635,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   Future<void> _persistGame(int scoreOutOfTen) async {
     final prefs = await SharedPreferences.getInstance();
     final next = (scoreOutOfTen * 10).clamp(0, 100);
-    final prev = prefs.getInt('game_score') ?? 0;
-    if (next > prev) await prefs.setInt('game_score', next);
+    // Always write the LATEST score so the home pillar reflects this
+    // session — not the user\'s all-time best, which made the home
+    // page feel stuck. Best is kept under a separate key for any
+    // future share / progress surface.
+    await prefs.setInt('game_score', next);
+    final prev = prefs.getInt('game_score_best') ?? 0;
+    if (next > prev) await prefs.setInt('game_score_best', next);
     final now = DateTime.now();
     await prefs.setInt(
       'game_done_ymd',

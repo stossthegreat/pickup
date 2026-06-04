@@ -363,8 +363,12 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
     final score = (avgEcs * 100).round().clamp(0, 100);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final prev = prefs.getInt('aura_score') ?? 0;
-      if (score > prev) await prefs.setInt('aura_score', score);
+      // Always write the LATEST score so the home page reflects the
+      // user\'s most recent attempt. Best is kept under a separate
+      // key for any future share / progress surface that needs it.
+      await prefs.setInt('aura_score', score);
+      final prev = prefs.getInt('aura_score_best') ?? 0;
+      if (score > prev) await prefs.setInt('aura_score_best', score);
       final now = DateTime.now();
       await prefs.setInt(
         'aura_done_ymd',

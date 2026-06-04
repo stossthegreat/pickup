@@ -187,6 +187,21 @@ class _ReportScreenState extends State<ReportScreen> {
     );
     await LocalStoreService.saveScan(record);
 
+    // Write the LOOKS pillar score so the home Ascend tab updates the
+    // moment this scan persists. We prefer the GPT vision (HONEST
+    // LOOKS) score since that\'s the headline number the user just
+    // saw on the report — falling back to the geometry score when
+    // vision refused. Bro: the home pillar must reflect the latest
+    // attempt, not stay stuck on a stale value. Best is kept in
+    // looks_score_best for any future progress chart that needs it.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final headline = _honest?.score ?? score.value;
+      await prefs.setInt('looks_score', headline);
+      final prev = prefs.getInt('looks_score_best') ?? 0;
+      if (headline > prev) await prefs.setInt('looks_score_best', headline);
+    } catch (_) {}
+
     // Stamp today as the LOOKS completion day so the Ascend tab\'s
     // Today\'s Ascension card ticks LOOKS off the moment a fresh
     // scan persists. Pure side-effect — no layout change.
