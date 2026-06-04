@@ -69,35 +69,36 @@ class AspectProtocolCards extends StatelessWidget {
     );
   }
 
-  // The four aspect protocols. One-liner is what shows on the tile;
-  // the full daily plan is inside /protocol.
+  // The four aspect protocols. One-liner is what shows on the tile —
+  // plain English, no jargon. The full daily plan (morning / midday
+  // / evening) is inside /protocol.
   List<_Aspect> get _aspects => const [
     _Aspect(
       axisKey:        'skin',
       pulldownString: 'Skin',
       title:          'Skin',
-      oneLiner:       'Fastest visible win. 4 weeks.',
+      oneLiner:       'Cleaner skin in 4 weeks.',
       color:          AppColors.signalGreen,
     ),
     _Aspect(
       axisKey:        'jaw',
       pulldownString: 'Jaw definition',
       title:          'Jaw',
-      oneLiner:       'Composition + training. Biggest face lever.',
+      oneLiner:       'Sharper jaw in 60 days.',
       color:          AppColors.red,
     ),
     _Aspect(
       axisKey:        'debloat',
       pulldownString: 'Puffiness',
       title:          'Debloat',
-      oneLiner:       'Visible tomorrow. Cheapest fix.',
+      oneLiner:       'Less puffy face by tomorrow.',
       color:          AppColors.signalAmber,
     ),
     _Aspect(
       axisKey:        'hair',
       pulldownString: 'Hair',
       title:          'Hair',
-      oneLiner:       'Long game. Judge at 6 months.',
+      oneLiner:       'Hold the hairline. 6-month plan.',
       color:          AppColors.measure,
     ),
   ];
