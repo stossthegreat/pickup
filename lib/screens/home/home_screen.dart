@@ -12,6 +12,7 @@ import '../../services/protocol_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/common/mirrorly_components.dart';
+import '../../widgets/report/aspect_protocol_cards.dart';
 import '../eyes/eyes_tab_screen.dart';
 import '../game/game_tab_screen.dart';
 import 'ascend_screen.dart';
@@ -317,11 +318,8 @@ class _ScanHubTab extends StatelessWidget {
               ).animate().fadeIn(delay: 80.ms, duration: 400.ms),
 
               // Active protocol — small clean tile UNDER the scan
-              // button. Only surfaces when the user has actually
-              // committed to a plan (tapped START THIS PLAN on a
-              // report-page aspect card). The big marketing aspect
-              // cards live on the report ONLY — once you commit,
-              // this is what represents the plan on the Looks tab.
+              // button. Surfaces only when the user has actually
+              // committed to a plan.
               if (protocol != null) ...[
                 const SizedBox(height: Sp.md),
                 Padding(
@@ -329,6 +327,24 @@ class _ScanHubTab extends StatelessWidget {
                   child: _ActiveProtocolCard(protocol: protocol!),
                 ).animate().fadeIn(delay: 140.ms, duration: 400.ms),
               ],
+
+              const SizedBox(height: Sp.lg),
+
+              // 60-day aspect tiles — SKIN / JAW / DEBLOAT / HAIR.
+              // Bro: "all these protocols you created none of them
+              // are commitable. They should show in the scan tab
+              // and need to be clearer." Tiles are now compact
+              // single-line summaries matching _ActiveProtocolCard\'s
+              // visual language. Tapping any one starts that protocol
+              // (or silently swaps from a different active one — see
+              // protocol_screen.dart _load).
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+                child: AspectProtocolCards(
+                  geometry:       latest!.geometry,
+                  savedImagePath: latest!.capturedImagePath,
+                ),
+              ).animate().fadeIn(delay: 180.ms, duration: 400.ms),
 
               const SizedBox(height: Sp.md),
 
@@ -340,7 +356,7 @@ class _ScanHubTab extends StatelessWidget {
                     'imagePath': latest!.capturedImagePath,
                   }),
                 ),
-              ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
+              ).animate().fadeIn(delay: 240.ms, duration: 400.ms),
             ],
           ],
         ),

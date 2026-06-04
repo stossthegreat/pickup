@@ -33,29 +33,52 @@ class _ProtocolScreenState extends State<ProtocolScreen> {
     _load();
   }
 
-  /// Resolve / auto-start the active protocol. Order of precedence:
-  ///   1. Already-active protocol → use it. Never overwrite a run
-  ///      in progress.
-  ///   2. [startPulldown] passed in (aspect-card tap on the report) →
-  ///      start a fresh protocol on that axis.
-  ///   3. Latest scan\'s pulldown prose → derive an axis and start.
-  ///   4. Latest scan with no pulldown → start a Foundations protocol
-  ///      so the user always lands on something actionable instead of
-  ///      a dead empty state.
-  /// Bro: "even on home where it says potential open protocol there\'s
-  /// no protocol there" — this is the fix path.
+  /// Resolve / auto-start the active protocol.
+  /// Bro: "all these protocols you created none of them are
+  /// commitable. Need to be able to commit them all." Previous
+  /// behaviour: if ANY protocol was active, tapping a different
+  /// aspect tile (SKIN / JAW / DEBLOAT / HAIR) just showed the
+  /// existing active one instead of starting the new one. Now,
+  /// when [startPulldown] is passed AND it maps to a different
+  /// axis than the currently-active protocol, we silently end
+  /// the old and start the requested one. The user\'s tap on
+  /// the new tile IS the commit.
   Future<void> _load() async {
     var p = await ProtocolService.loadActive();
-    if (p == null) {
+
+    // Did the user tap a specific aspect tile? Resolve the canonical
+    // axis from the pulldown string so we can compare against any
+    // existing active protocol.
+    String? requestedAxis;
+    if (widget.startPulldown != null &&
+        widget.startPulldown!.trim().isNotEmpty) {
       try {
         final scan = await LocalStoreService.latestScan();
         if (scan != null) {
-          // Aspect cards pass the axis they map to ("Skin", "Jaw
-          // definition", "Hair", "Puffiness"). Without that we default
-          // to "Foundations" — the catch-all template covering sleep,
-          // SPF, posture and lifting, which suits any user as a
-          // starting point and is the safest auto-start choice.
+          requestedAxis = ProtocolService.resolveAxis(
+            pulldown: widget.startPulldown!,
+            geometry: scan.geometry,
+          );
+        }
+      } catch (_) {/* fall through */}
+    }
+
+    final shouldSwap = p != null &&
+        requestedAxis != null &&
+        p.targetAxis != requestedAxis;
+
+    if (p == null || shouldSwap) {
+      try {
+        final scan = await LocalStoreService.latestScan();
+        if (scan != null) {
+          // Tile tap with no active protocol → start the requested
+          // axis. Tile tap with a different active protocol → swap
+          // (silently end the old, start the new). Without a tile
+          // tap → fall back to Foundations.
           final pulldown = (widget.startPulldown ?? 'Foundations').trim();
+          if (shouldSwap) {
+            await ProtocolService.save(null); // end the old run
+          }
           p = await ProtocolService.startForScan(
             scan,
             pulldown: pulldown,

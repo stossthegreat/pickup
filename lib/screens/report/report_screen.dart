@@ -532,7 +532,15 @@ class _ReportScreenState extends State<ReportScreen> {
                 onTap: () => ShareService.shareComposed(
                   context:        context,
                   beforeBytes:    widget.imageBytes,
-                  afterUrl:       a.maximizedImageUrl,
+                  // Use the local maxed URL when the user has hit
+                  // GENERATE since the /scan. Falls back to the
+                  // original /scan url when present. Bro: "after
+                  // they\'ve generated their maxed image the image
+                  // is still not in the share card. That\'s our
+                  // main thing."
+                  afterUrl:       _localMaximizedUrl.isNotEmpty
+                                      ? _localMaximizedUrl
+                                      : a.maximizedImageUrl,
                   // Share card leads with the honest (vision) score when
                   // available, so the shared image tells the same truth
                   // as the results page. Projected still comes from the
