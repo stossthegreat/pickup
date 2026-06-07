@@ -751,7 +751,7 @@ class _Pitch extends StatelessWidget {
         const SizedBox(height: 18),
         _line('PRESENCE', 'HOLDS ATTENTION.',    delayMs: 460),
         const SizedBox(height: 18),
-        _line('GAME',     'CLOSES IT.',          delayMs: 600),
+        _line('GAME',     'ALWAYS DECIDES.',     delayMs: 600),
       ],
     );
   }
