@@ -24,6 +24,7 @@ import '../../../theme/auralay_app_typography.dart';
 import '../../../widgets/common/mirrorly_components.dart';
 import '../../../widgets/debug_panel.dart';
 import '../../../widgets/safe_close_button.dart';
+import '../arena/arena_scenes_screen.dart';
 
 /// FREE FLOW — live, streaming voice roleplay (OpenAI Realtime API).
 ///
@@ -43,7 +44,13 @@ import '../../../widgets/safe_close_button.dart';
 /// herself; if barge-in feels off we tune silence_duration / threshold
 /// server-side.
 class FreeFlowScreen extends StatefulWidget {
-  const FreeFlowScreen({super.key});
+  /// When true, the screen renders as the GAME tab body — no close
+  /// button, no picker phase. INTO YOU is auto-loaded as the default
+  /// persona; a "CHANGE CHARACTER" chip + "ARENA" button replace the
+  /// default chrome. The session lifecycle (tap-and-hold, scoring,
+  /// Lucien step-in) behaves identically to the standalone push.
+  final bool tabMode;
+  const FreeFlowScreen({super.key, this.tabMode = false});
 
   @override
   State<FreeFlowScreen> createState() => _FreeFlowScreenState();
@@ -199,6 +206,20 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     super.initState();
     // ignore: discarded_futures
     WakelockPlus.enable();
+    // GAME-tab mode: auto-pick INTO YOU and go straight into the live
+    // circle so the user lands on the recording orb the moment they
+    // open the tab. They can switch character via the top-left chip.
+    if (widget.tabMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final defaultVibe = _vibes.firstWhere(
+          (v) => v.key == 'into_you',
+          orElse: () => _vibes.first,
+        );
+        // ignore: discarded_futures
+        _goLive(defaultVibe);
+      });
+    }
   }
 
   @override
@@ -694,6 +715,65 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     safePop(context);
   }
 
+  /// GAME tab — open the arena scene picker. Pushes on top of the
+  /// tab so the Free Flow session stays alive in the background; on
+  /// pop the user lands back on the live circle.
+  void _openArena() {
+    HapticFeedback.selectionClick();
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => const ArenaScenesScreen(),
+    ));
+  }
+
+  /// GAME tab — character switcher. Shows a modal bottom sheet
+  /// listing every vibe; on selection we tear the current session
+  /// down and start a fresh one with the new persona, so the user
+  /// can swap mid-conversation without leaving the tab.
+  Future<void> _showCharacterSheet() async {
+    HapticFeedback.selectionClick();
+    final picked = await showModalBottomSheet<_Vibe>(
+      context: context,
+      backgroundColor: AppColors.surface1,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _CharacterPickerSheet(
+        current: _vibe,
+        onPicked: (v) => Navigator.of(ctx).pop(v),
+      ),
+    );
+    if (!mounted || picked == null) return;
+    if (_vibe?.key == picked.key) return; // no change
+    await _switchCharacter(picked);
+  }
+
+  /// Tear the running session down + spin up a new one as [vibe].
+  /// Used by the tab-mode change-character flow only.
+  Future<void> _switchCharacter(_Vibe vibe) async {
+    _clock?.cancel();
+    _createTimer?.cancel();
+    _eventSub?.cancel();
+    _micSub?.cancel();
+    // ignore: discarded_futures
+    _recorder.stop();
+    // ignore: discarded_futures
+    _session.close();
+    if (!mounted) return;
+    setState(() {
+      _vibe = vibe;
+      _phase = _Phase.connecting;
+      _transcript.clear();
+      _herCaption = '';
+      _youCaption = '';
+      _herSpeaking = false;
+      _holding = false;
+      _result = null;
+      _remaining = 180;
+    });
+    await _goLive(vibe);
+  }
+
   // ─── UI ──────────────────────────────────────────────────────────────
 
   @override
@@ -791,14 +871,27 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
           child: Row(
             children: [
               const SizedBox(width: 8),
-              Text(_vibe?.label ?? '',
-                  style: AppTypography.label.copyWith(
-                    color: AppColors.accent,
-                    fontSize: 11,
-                    letterSpacing: 2.8,
-                    fontWeight: FontWeight.w900,
-                  )),
+              // CHANGE CHARACTER chip in tab mode, plain label in push mode.
+              widget.tabMode
+                  ? _ChangeCharacterChip(
+                      current: _vibe?.label ?? '',
+                      onTap: _showCharacterSheet,
+                    )
+                  : Text(_vibe?.label ?? '',
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.accent,
+                        fontSize: 11,
+                        letterSpacing: 2.8,
+                        fontWeight: FontWeight.w900,
+                      )),
               const Spacer(),
+              // ARENA quick-route in tab mode — sits between the timer
+              // and the (hidden) close button so the layout is
+              // balanced and the arena is one tap away.
+              if (widget.tabMode) ...[
+                _ArenaPill(onTap: _openArena),
+                const SizedBox(width: 8),
+              ],
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -815,21 +908,24 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                       fontWeight: FontWeight.w900,
                     )),
               ),
-              Material(
-                color: Colors.transparent,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  onTap: () { HapticFeedback.lightImpact(); _closeScreen(); },
-                  customBorder: const CircleBorder(),
-                  child: const SizedBox(
-                    width: 44, height: 44,
-                    child: Center(
-                      child: Icon(Icons.close_rounded,
-                          color: AppColors.textPrimary, size: 24),
+              // Close button only when the screen was pushed — in tab
+              // mode there is nothing to close to (the tab is the page).
+              if (!widget.tabMode)
+                Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: () { HapticFeedback.lightImpact(); _closeScreen(); },
+                    customBorder: const CircleBorder(),
+                    child: const SizedBox(
+                      width: 44, height: 44,
+                      child: Center(
+                        child: Icon(Icons.close_rounded,
+                            color: AppColors.textPrimary, size: 24),
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -1560,5 +1656,219 @@ class _Orb extends StatelessWidget {
           duration: (speaking ? 520 : 1400).ms,
           curve: Curves.easeInOut,
         );
+  }
+}
+
+// ─── Tab-mode chrome widgets ─────────────────────────────────────────
+
+/// The "CHANGE CHARACTER" chip that replaces the persona-name label
+/// in tab mode. Pill-shaped, persona name + caret, opens the picker
+/// bottom sheet on tap.
+class _ChangeCharacterChip extends StatelessWidget {
+  final String current;
+  final VoidCallback onTap;
+  const _ChangeCharacterChip({required this.current, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(100),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(100),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: AppColors.red.withValues(alpha: 0.45), width: 0.8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(current.isEmpty ? 'CHOOSE CHARACTER' : current,
+                style: AppTypography.label.copyWith(
+                  color: AppColors.red,
+                  fontSize: 11, letterSpacing: 2.6,
+                  fontWeight: FontWeight.w900,
+                )),
+              const SizedBox(width: 4),
+              const Icon(Icons.keyboard_arrow_down_rounded,
+                color: AppColors.red, size: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The ARENA pill — a clean one-tap route into the scripted-scene
+/// picker without leaving the tab. Sits next to the timer in tab
+/// mode where the close button used to live.
+class _ArenaPill extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ArenaPill({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(100),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(100),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(color: AppColors.divider, width: 0.6),
+          ),
+          child: Text('ARENA',
+            style: AppTypography.label.copyWith(
+              color: AppColors.textPrimary,
+              fontSize: 11, letterSpacing: 2.4,
+              fontWeight: FontWeight.w900,
+            )),
+        ),
+      ),
+    );
+  }
+}
+
+/// Modal sheet listing every persona. Tap one → returns it via pop;
+/// the screen tears down the current session and starts a fresh one
+/// without leaving the tab.
+class _CharacterPickerSheet extends StatelessWidget {
+  final _Vibe? current;
+  final ValueChanged<_Vibe> onPicked;
+  const _CharacterPickerSheet({
+    required this.current,
+    required this.onPicked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.surface3,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('CHANGE CHARACTER',
+              style: AppTypography.label.copyWith(
+                color: AppColors.red,
+                fontSize: 11, letterSpacing: 2.8,
+                fontWeight: FontWeight.w800,
+              )),
+            const SizedBox(height: 10),
+            for (final v in _vibes) ...[
+              _CharacterPickerRow(
+                vibe:     v,
+                selected: v.key == current?.key,
+                onTap:    () => onPicked(v),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CharacterPickerRow extends StatelessWidget {
+  final _Vibe vibe;
+  final bool  selected;
+  final VoidCallback onTap;
+  const _CharacterPickerRow({
+    required this.vibe,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface2,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected
+                  ? AppColors.red.withValues(alpha: 0.6)
+                  : AppColors.surface3,
+              width: selected ? 1.2 : 0.6,
+            ),
+          ),
+          child: Row(
+            children: [
+              ClipOval(
+                child: SizedBox(
+                  width: 44, height: 44,
+                  child: Image.asset(vibe.assetPath,
+                    fit: BoxFit.cover,
+                    alignment: const Alignment(0, -0.2),
+                    errorBuilder: (_, __, ___) => Container(
+                      color: AppColors.surface3,
+                      child: const Icon(Icons.person_rounded,
+                          color: AppColors.textTertiary, size: 22),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(vibe.label,
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.textPrimary,
+                        fontSize: 13, letterSpacing: 2.4,
+                        fontWeight: FontWeight.w900,
+                      )),
+                    const SizedBox(height: 3),
+                    Text(vibe.tagline,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 12, height: 1.35,
+                      )),
+                  ],
+                ),
+              ),
+              if (selected)
+                const Icon(Icons.check_circle_rounded,
+                    color: AppColors.red, size: 20)
+              else
+                const Icon(Icons.chevron_right_rounded,
+                    color: AppColors.textTertiary, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
