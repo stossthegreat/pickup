@@ -18,7 +18,8 @@ import '../screens/debug/diagnostic_screen.dart';
 import '../screens/eyes/selene_lesson_screen.dart';
 import '../screens/game/lines/lines_screen.dart';
 import '../screens/game/rizz/rizz_reply_screen.dart';
-import '../screens/rizz/rizz_tab_screen.dart' show RizzLaunchArgs;
+import '../screens/rizz/rizz_chat_screen.dart';
+import '../screens/rizz/rizz_tab_screen.dart' show RizzCardAction;
 import '../models/gaze/gaze_syllabus.dart';
 import '../screens/lessons/lesson_detail_screen.dart';
 import '../screens/test/charisma_test_screen.dart';
@@ -72,10 +73,13 @@ final appRouter = GoRouter(
       path: '/rizz',
       builder: (_, state) {
         final extra = state.extra;
-        return RizzReplyScreen(
-          args: extra is RizzLaunchArgs ? extra : null,
-        );
+        final launchUpload = extra is RizzCardAction && extra.launchUpload;
+        return RizzReplyScreen(launchUpload: launchUpload);
       },
+    ),
+    GoRoute(
+      path: '/rizz-chat',
+      builder: (_, __) => const RizzChatScreen(),
     ),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
     GoRoute(

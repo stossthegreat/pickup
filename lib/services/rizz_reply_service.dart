@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 import '../config/api_config.dart';
 import '../data/rizz_lines.dart';
+import 'screenshot_ocr_service.dart';
 
 /// One rewritten reply suggestion. [tag] is the small-caps move
 /// label that explains WHY the line works — SELF-AWARE OPEN,
@@ -57,11 +60,23 @@ class RizzReplyService {
     String context = '',
     String scenario = '',
   }) async {
-    final her = herMessage.trim();
+    var her = herMessage.trim();
     final ctx = context.trim();
     final scn = scenario.trim();
     final hasImage = screenshotBytes != null && screenshotBytes.isNotEmpty;
     if (her.isEmpty && !hasImage && scn.isEmpty) return _fallbackFromArsenal(vibe);
+
+    // ── SILENT OCR ────────────────────────────────────────────────────
+    // When a screenshot is supplied, extract the chat text on-device
+    // via ML Kit BEFORE hitting the backend. The user never sees this
+    // step (no "running OCR…" pill) — they just see results. Sending
+    // the extracted text instead of the raw image bytes means the
+    // backend doesn't need GPT vision; the existing /chat endpoint
+    // (text in, JSON out) handles it natively.
+    if (hasImage && her.isEmpty) {
+      final ocrText = await _ocrSilently(screenshotBytes);
+      if (ocrText.isNotEmpty) her = ocrText;
+    }
 
     final imageB64 = hasImage ? base64Encode(screenshotBytes) : null;
 
@@ -120,6 +135,31 @@ class RizzReplyService {
   }
 
   // ── Internals ─────────────────────────────────────────────────────────
+
+  /// Write the in-memory screenshot bytes to a tmp file (ML Kit needs
+  /// a path, not bytes), run text recognition on the tmp file, then
+  /// delete it. Returns the joined text from the last few chat
+  /// bubbles, ready to feed straight into the RIZZ GOD prompt. Any
+  /// failure (no text, ML Kit error, file write fails) returns ''
+  /// so the caller can fall through to the image-bytes path.
+  static Future<String> _ocrSilently(Uint8List bytes) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/rizz_ocr_'
+          '${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File(path);
+      await file.writeAsBytes(bytes, flush: true);
+      try {
+        final text = await ScreenshotOcrService.extractRecent(path);
+        return text;
+      } finally {
+        // Best-effort cleanup; don't block on failure.
+        try { await file.delete(); } catch (_) {}
+      }
+    } catch (_) {
+      return '';
+    }
+  }
 
   static List<RizzReply> _parseReplies(String raw) {
     if (raw.trim().isEmpty) return const [];

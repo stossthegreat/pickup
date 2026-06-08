@@ -8,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../services/rizz_reply_service.dart';
 import '../../../theme/app_colors.dart';
-import '../../rizz/rizz_tab_screen.dart' show RizzLaunchArgs;
 
 /// RIZZ — clean one-page generator. ONE input area, two entry modes
 /// (paste her text or upload a screenshot — picked from a single tile
@@ -17,12 +16,11 @@ import '../../rizz/rizz_tab_screen.dart' show RizzLaunchArgs;
 /// itself is sent to the backend so GPT-4o reads the chat natively —
 /// no scattered OCR preview, no extra steps for the user.
 class RizzReplyScreen extends StatefulWidget {
-  /// Optional launch args from the Rizz tab landing — scenario preset,
-  /// pre-filled situation text, or "open straight into the photo
-  /// picker" flag. Lets the user tap a preset on the tab and land on
-  /// the generator with the prompt already biased + the UI ready.
-  final RizzLaunchArgs? args;
-  const RizzReplyScreen({super.key, this.args});
+  /// True when the screen is opened from the "Upload a screenshot"
+  /// card — fires the image picker on first frame so the user lands
+  /// straight inside the iOS photo sheet without an extra tap.
+  final bool launchUpload;
+  const RizzReplyScreen({super.key, this.launchUpload = false});
 
   @override
   State<RizzReplyScreen> createState() => _RizzReplyScreenState();
@@ -43,11 +41,7 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
   @override
   void initState() {
     super.initState();
-    final args = widget.args;
-    if (args == null) return;
-    _scenario = args.scenario;
-    if (args.situation.isNotEmpty) _herCtrl.text = args.situation;
-    if (args.launchUpload) {
+    if (widget.launchUpload) {
       // Open the gallery picker on first frame so the user lands on
       // the iOS photo sheet without an extra tap.
       WidgetsBinding.instance.addPostFrameCallback((_) {
