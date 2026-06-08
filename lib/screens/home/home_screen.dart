@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,6 +17,7 @@ import '../../widgets/common/mirrorly_components.dart';
 import '../../widgets/report/aspect_protocol_cards.dart';
 import '../eyes/eyes_tab_screen.dart';
 import '../game/game_tab_screen.dart';
+import '../rizz/rizz_tab_screen.dart';
 import 'ascend_screen.dart';
 
 /// The hub. Four surfaces, one promise per tab:
@@ -208,8 +210,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   activeProtocols:  _activeProtocols,
                   onRefresh:        _reload,
                 ),
-                const EyesTabScreen(),
+                // EYES / AURA tab — temporarily commented out per the
+                // looks + game + rizz refocus. The screen + all its
+                // services stay in tree so re-enabling is a one-line
+                // restore. Re-add `const EyesTabScreen(),` here and
+                // un-comment the Aura entry in _NavBar.items.
+                // const EyesTabScreen(),
                 const GameTabScreen(),
+                const RizzTabScreen(),
               ],
             ),
       bottomNavigationBar: _NavBar(
@@ -386,11 +394,16 @@ class _ScanHubTab extends StatelessWidget {
                 ),
               ).animate().fadeIn(delay: 140.ms, duration: 400.ms),
 
-              const SizedBox(height: Sp.md),
+              const SizedBox(height: Sp.lg),
 
+              // THE MIRROR — promoted from the old tiny grey row to a
+              // prominent solid-red hero card so the chat advisor is
+              // the obvious second action after RESCAN. Same visual
+              // weight as the Rizz generator card so the two AI
+              // surfaces feel like one family.
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-                child: _AdvisorLink(
+                child: _MirrorHeroCard(
                   onTap: () => context.push('/chat', extra: {
                     'geometry':  latest!.geometry,
                     'imagePath': latest!.capturedImagePath,
@@ -411,61 +424,69 @@ class _ScanHubTab extends StatelessWidget {
 // ── 1-2-3 path used on the Scan tab — numbered circles, current
 // step painted red, subsequent steps muted. Vertical column, sits
 // beside _OptimisedSplitCard.
-// ── Mirror chat link — sits on the Looks tab so the Mirror surface
-// is reachable without its own bottom-nav tab. Subtle row, taps
-// route to /chat which loads the embedded ChatScreen primed with
-// the latest scan geometry.
-class _AdvisorLink extends StatelessWidget {
+// ── Mirror hero card — promoted from a thin grey row to a solid red
+// card so the chat advisor is the obvious second action on Looks.
+// Same visual weight as the Rizz generator card (the other AI hero
+// surface) so the two read as one family across tabs.
+class _MirrorHeroCard extends StatelessWidget {
   final VoidCallback onTap;
-  const _AdvisorLink({required this.onTap});
+  const _MirrorHeroCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () { HapticFeedback.selectionClick(); onTap(); },
+    return Material(
+      color: AppColors.red,
       borderRadius: BorderRadius.circular(Rd.lg),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: Sp.md, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.surface1,
-          borderRadius: BorderRadius.circular(Rd.lg),
-          border: Border.all(color: AppColors.surface3, width: 1),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.auto_awesome_rounded,
-                size: 18, color: AppColors.red),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'THE MIRROR',
-                    style: AppTypography.label.copyWith(
-                      color: AppColors.red,
-                      fontSize: 10,
-                      letterSpacing: 2.4,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'Talk to your advisor about your scan',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textPrimary,
-                      fontSize: 13,
-                      height: 1.3,
-                    ),
-                  ),
-                ],
+      child: InkWell(
+        onTap: () { HapticFeedback.selectionClick(); onTap(); },
+        borderRadius: BorderRadius.circular(Rd.lg),
+        splashColor: Colors.white.withValues(alpha: 0.08),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(Rd.lg),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.red.withValues(alpha: 0.4),
+                blurRadius: 32, spreadRadius: 1,
               ),
-            ),
-            const Icon(Icons.arrow_forward_rounded,
-                size: 16, color: AppColors.textTertiary),
-          ],
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('THE MIRROR',
+                      style: AppTypography.label.copyWith(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 11, letterSpacing: 3.0,
+                        fontWeight: FontWeight.w800,
+                      )),
+                    const SizedBox(height: 8),
+                    Text('Talk to your\nadvisor.',
+                      style: GoogleFonts.playfairDisplay(
+                        color: Colors.white,
+                        fontSize: 26, height: 1.1,
+                        letterSpacing: -0.5,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w800,
+                      )),
+                    const SizedBox(height: 8),
+                    Text('Ask anything about your scan.',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: Colors.white.withValues(alpha: 0.82),
+                        fontSize: 13.5, height: 1.4,
+                      )),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Icon(Icons.auto_awesome_rounded,
+                color: Colors.white, size: 32),
+            ],
+          ),
         ),
       ),
     );
@@ -877,11 +898,18 @@ class _NavBar extends StatelessWidget {
     // LOOKS is the renamed Scan tab (Mirror chat folded inside it).
     // PRESENCE is the renamed Eyes tab. GAME is unchanged. Each tab does
     // ONE thing — no five-tab sprawl, no shouting for attention.
+    // Four tabs: ASCEND / LOOKS / GAME / RIZZ.
+    //   · AURA (eye contact) hidden for now — code lives in
+    //     EyesTabScreen, add back here + as IndexedStack child to
+    //     re-enable.
+    //   · RIZZ is the new pillar — paste her text or screenshot a
+    //     chat, get three replies + the curated 125-line arsenal.
     final items = const <({String label, IconData icon, bool italic})>[
       (label: 'Ascend',   icon: Icons.keyboard_double_arrow_up_rounded, italic: false),
-      (label: 'Looks',    icon: Icons.face_retouching_natural_outlined, italic: false),
-      (label: 'Aura',     icon: Icons.visibility_outlined,               italic: false),
+      (label: 'Looks',    icon: Icons.face_retouching_natural_outlined, italic: true),
+      // (label: 'Aura',  icon: Icons.visibility_outlined,               italic: false),
       (label: 'Game',     icon: Icons.chat_bubble_outline_rounded,       italic: true),
+      (label: 'Rizz',     icon: Icons.bolt_rounded,                      italic: true),
     ];
     return Container(
       decoration: BoxDecoration(

@@ -364,16 +364,20 @@ class _TodaysAscension extends StatelessWidget {
               }
             },
           ),
-          const _MissionDivider(),
-          _MissionRow(
-            color: AppColors.accent,
-            icon: Icons.remove_red_eye_outlined,
-            category: 'AURA',
-            title: 'Eye Contact Drill',
-            minutes: 5,
-            done: auraDone,
-            onTap: () => onJumpToTab(2),
-          ),
+          // AURA mission temporarily hidden — eye-contact tab is
+          // commented out in home_screen.dart while the app refocuses
+          // on LOOKS + GAME + RIZZ. Re-enable here when the tab
+          // returns.
+          // const _MissionDivider(),
+          // _MissionRow(
+          //   color: AppColors.accent,
+          //   icon: Icons.remove_red_eye_outlined,
+          //   category: 'AURA',
+          //   title: 'Eye Contact Drill',
+          //   minutes: 5,
+          //   done: auraDone,
+          //   onTap: () => onJumpToTab(2),
+          // ),
           const _MissionDivider(),
           _MissionRow(
             color: AppColors.signalAmber,
@@ -382,6 +386,18 @@ class _TodaysAscension extends StatelessWidget {
             title: 'Free Flow',
             minutes: 3,
             done: gameDone,
+            // Game is now tab index 2 (Aura's old slot removed).
+            onTap: () => onJumpToTab(2),
+          ),
+          const _MissionDivider(),
+          _MissionRow(
+            color: AppColors.red,
+            icon: Icons.bolt_rounded,
+            category: 'RIZZ',
+            title: 'Reply Generator',
+            minutes: 2,
+            done: false,
+            // Rizz is the new pillar — tab index 3.
             onTap: () => onJumpToTab(3),
           ),
         ],

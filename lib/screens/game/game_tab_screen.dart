@@ -9,16 +9,18 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/common/mirrorly_components.dart';
 import 'arena/arena_scenes_screen.dart';
-import 'council/council_chat_screen.dart';
 import 'freeflow/free_flow_screen.dart';
 
-/// THE CONSIGLIERE — tab landing.
+/// GAME tab — minimal IA. Editorial masthead + two cards:
 ///
-/// The conversion column: Lucien hero portrait, Free Flow live training,
-/// a row of roleplay archetypes (each takes the user into a scene), then
-/// Lucien's feedback strip at the bottom. Council still routable from the
-/// footer, but no longer eats primary real estate — the mockup is built
-/// around characters, not categories.
+///   1. FREE FLOW — open-ended live voice conversation, the main event
+///   2. ARENA      — opens the scene picker (was a 6-girl grid, now one
+///                    card so the page reads as cards, not portraits)
+///
+/// "Chat with Lucien" and the 6-girl portrait row were intentionally
+/// removed — the Game tab now sells cleanly with two actions, not a
+/// scroll of character art that competed for attention. The screens
+/// themselves stay live (ArenaScenesScreen, FreeFlowScreen).
 class GameTabScreen extends StatefulWidget {
   const GameTabScreen({super.key});
 
@@ -53,10 +55,8 @@ class _GameTabScreenState extends State<GameTabScreen> {
   }
 
   // Free Flow: pro = unlimited; free = exactly one convo (consumed on
-  // open), then paywall. The card itself never paints as locked
-  // (handler does the gating) so we don't need a _freeFlowLocked
-  // getter. Arenas + Council are pro-only and DO paint as locked.
-  bool get _proOnlyLocked => _loaded && !_pro;
+  // open), then paywall. Cards never paint as locked — the handlers
+  // do all gating, so the surface stays clean across pro and free.
 
   Future<void> _toPaywall() async {
     await context.push('/paywall');
@@ -89,11 +89,6 @@ class _GameTabScreenState extends State<GameTabScreen> {
     _toPaywall();
   }
 
-  void _onCouncil() {
-    if (_pro) { _open(const CouncilChatScreen()); return; }
-    _toPaywall();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -102,21 +97,26 @@ class _GameTabScreenState extends State<GameTabScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: Sp.xxl),
           children: [
-            // ── Masthead — Lucien hero portrait, eyebrow + display title
-            //    + subhead on the left, action chips top-right. Short
-            //    height (200) so the title sits high on the screen and
-            //    the Free Flow card is reachable without scrolling.
-            _GameMasthead(
-              onSettings: () => context.push('/settings'),
+            // Editorial masthead — italic Playfair "Game" + brand dot.
+            // No Lucien portrait, no chip strip, no extra chrome — the
+            // page sells with the cards, not the hero. Free Flow card
+            // sits high enough that ARENA is visible above the fold.
+            MirrorlyMasthead(
+              title: 'Game',
+              actions: [
+                MastheadAction(
+                  icon: Icons.tune,
+                  onTap: () => context.push('/settings'),
+                ),
+              ],
             ),
 
-            const SizedBox(height: Sp.md),
+            const SizedBox(height: Sp.sm),
 
-            // ── Body line under the hero.
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
               child: Text(
-                'Real situations. Real feedback. Become the man she '
+                'Talk to women. Read the room. Become the man she '
                 'can\'t ignore.',
                 style: AppTypography.body.copyWith(
                   color: AppColors.textPrimary,
@@ -125,20 +125,14 @@ class _GameTabScreenState extends State<GameTabScreen> {
               ),
             ),
 
-            const SizedBox(height: Sp.md),
+            const SizedBox(height: Sp.lg),
 
-            // ── FREE FLOW — the main event. Always tappable (free
-            //    user gets one consumed-on-open, then paywalled). The
-            //    card pulses subtly so the eye lands on it as the
-            //    primary action on this tab. CTA always reads "Go
-            //    Live" — never "Unlock With Pro" — because the action
-            //    is always to enter Free Flow, the gating happens
-            //    inside the handler.
+            // FREE FLOW — main event. Always tappable; paywall gating
+            // happens inside the handler. Pulses softly so the eye
+            // lands on it first.
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-              child: _FreeFlowCard(
-                onTap: _onFreeFlow,
-              ),
+              child: _FreeFlowCard(onTap: _onFreeFlow),
             )
                 .animate(onPlay: (c) => c.repeat(reverse: true))
                 .scale(
@@ -150,152 +144,14 @@ class _GameTabScreenState extends State<GameTabScreen> {
 
             const SizedBox(height: Sp.md),
 
-            // RIZZ — paste her text or drop a screenshot, get 3 replies.
-            // The Rizz God endpoint. Sits above the curated arsenal
-            // because the AI generation is the headline action.
+            // ARENA — ONE card, not the 6-woman portrait grid. Same
+            // editorial composition as the rest of the new IA: italic
+            // headline, small-caps eyebrow, chevron CTA. Opens the
+            // arena picker on tap (where the woman selection still
+            // lives — just hidden until the user explicitly enters).
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-              child: _RizzReplyCard(onTap: () => context.push('/rizz')),
-            ),
-
-            const SizedBox(height: Sp.md),
-
-            // LINES — the arsenal. Curated rizz catalogue, tap-to-copy.
-            // Five categories: openers, tease, heat, cold, close.
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-              child: _LinesCard(onTap: () => context.push('/lines')),
-            ),
-
-            const SizedBox(height: Sp.lg),
-
-            // ── ROLEPLAY ARENAS — section header + horizontal row.
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-              child: Row(
-                children: [
-                  Text(
-                    'Roleplay arenas'.toUpperCase(),
-                    style: AppTypography.label.copyWith(
-                      color: AppColors.textPrimary,
-                      fontSize: 11,
-                      letterSpacing: 2.6,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const Spacer(),
-                  TextButton.icon(
-                    onPressed: _onArena,
-                    icon: Text(
-                      'See all',
-                      style: AppTypography.label.copyWith(
-                        color: AppColors.red,
-                        fontSize: 11,
-                        letterSpacing: 1.6,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    label: const Icon(Icons.arrow_forward_rounded,
-                        size: 14, color: AppColors.red),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            SizedBox(
-              height: 280,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-                children: [
-                  RoleplayTile(
-                    name: 'The Arena',
-                    line: 'She tests you. You stay calm.',
-                    assetPath: MirrorlyAssets.arenaWoman,
-                    locked: _proOnlyLocked,
-                    onTap: _onArena,
-                  ),
-                  const SizedBox(width: 12),
-                  RoleplayTile(
-                    name: 'Ice Queen',
-                    line: 'Cold. Distant. Earn her warmth.',
-                    assetPath: MirrorlyAssets.iceQueen,
-                    locked: _proOnlyLocked,
-                    onTap: _onArena,
-                  ),
-                  const SizedBox(width: 12),
-                  RoleplayTile(
-                    name: 'Shy Girl',
-                    line: 'Help her open up. Lead gently.',
-                    assetPath: MirrorlyAssets.shyGirl,
-                    locked: _proOnlyLocked,
-                    onTap: _onArena,
-                  ),
-                  const SizedBox(width: 12),
-                  RoleplayTile(
-                    name: 'Chaos Girl',
-                    line: 'Unpredictable. Keep control.',
-                    assetPath: MirrorlyAssets.chaosGirl,
-                    locked: _proOnlyLocked,
-                    onTap: _onArena,
-                  ),
-                  const SizedBox(width: 12),
-                  RoleplayTile(
-                    name: 'The Socialite',
-                    line: 'High status. Filtering hard.',
-                    assetPath: MirrorlyAssets.socialite,
-                    locked: _proOnlyLocked,
-                    onTap: _onArena,
-                  ),
-                  const SizedBox(width: 12),
-                  RoleplayTile(
-                    name: 'The Intellectual',
-                    line: 'Sharp. Skeptical. Earns it slow.',
-                    assetPath: MirrorlyAssets.intellectual,
-                    locked: _proOnlyLocked,
-                    onTap: _onArena,
-                  ),
-                ],
-              ),
-            ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
-
-            const SizedBox(height: Sp.lg),
-
-            // ── Lucien's Feedback strip.
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-              child: const FeedbackStrip(
-                eyebrow: "Lucien's feedback",
-                headline: 'You talk. I watch.',
-                body: 'I correct what kills your chances. Short. Sharp. '
-                      'Uncomfortable.',
-                close: "That's how you level up.",
-                assetPath: MirrorlyAssets.lucienFeedback,
-              ),
-            ).animate().fadeIn(delay: 280.ms, duration: 400.ms),
-
-            const SizedBox(height: Sp.md),
-
-            // ── Council — preserved as a low-key footer entry so the
-            //    private line to Lucien stays reachable without
-            //    competing with the conversion column above.
-            Center(
-              child: TextButton.icon(
-                onPressed: _onCouncil,
-                icon: const Icon(Icons.forum_outlined,
-                    size: 14, color: AppColors.textTertiary),
-                label: Text(
-                  'Open the Council',
-                  style: AppTypography.label.copyWith(
-                    color: AppColors.textTertiary,
-                    fontSize: 10.5,
-                    letterSpacing: 2.0,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+              child: _ArenaCard(onTap: _onArena),
             ),
           ],
         ),
@@ -304,242 +160,13 @@ class _GameTabScreenState extends State<GameTabScreen> {
   }
 }
 
-// ─── Masthead ───────────────────────────────────────────────────────
-// Lucien hero portrait on the right (~55% width), eyebrow + italic
-// display title + red italic subhead on the left, action chips
-// (paywall + tune) layered top-right over the photo.
-
-class _GameMasthead extends StatelessWidget {
-  final VoidCallback onSettings;
-  const _GameMasthead({
-    required this.onSettings,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      // Compact masthead so the title sits high on the screen and the
-      // Free Flow card (the main event) is reachable without scrolling.
-      // Lucien still bleeds into the right side but with a tighter crop.
-      height: 150,
-      child: Stack(
-        children: [
-          // ── Lucien portrait, right half, full bleed.
-          Positioned.fill(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: FractionallySizedBox(
-                widthFactor: 0.55,
-                heightFactor: 1.0,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.asset(
-                      MirrorlyAssets.lucienHero,
-                      fit: BoxFit.cover,
-                      alignment: const Alignment(0.15, -0.4),
-                      errorBuilder: (_, __, ___) => Container(
-                        color: AppColors.surface1,
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.person_rounded,
-                            size: 64, color: AppColors.surface3),
-                      ),
-                    ),
-                    // Left-edge fade so the title block reads against
-                    // the photo regardless of brightness.
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [
-                              AppColors.base,
-                              AppColors.base.withOpacity(0.30),
-                              Colors.transparent,
-                            ],
-                            stops: const [0.0, 0.18, 0.45],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // ── Title block (left). Eyebrow + italic display title with
-          //    red dot + italic red subhead — same vocabulary as
-          //    MirrorlyMasthead so every tab reads in one voice. Pushed
-          //    high (top: 12) so it doesn't sit dead-centre in empty
-          //    space.
-          // Title block — uses the SAME vocabulary as MirrorlyMasthead
-          // on the other tabs so Game reads in one voice with the rest
-          // of the app. No "THE CONSIGLIERE" eyebrow above the title
-          // (no other tab has one), no premium icon in the action row
-          // (the chrome stays light).
-          Positioned(
-            left: Sp.lg,
-            top: 16,
-            right: 70,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                RichText(
-                  text: TextSpan(
-                    style: GoogleFonts.playfairDisplay(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w700,
-                      fontStyle: FontStyle.italic,
-                      color: AppColors.textPrimary,
-                      letterSpacing: -0.6,
-                      height: 1.0,
-                    ),
-                    children: [
-                      const TextSpan(text: 'Game'),
-                      const TextSpan(text: '  '),
-                      WidgetSpan(
-                        alignment: PlaceholderAlignment.middle,
-                        child: Container(
-                          width: 9,
-                          height: 9,
-                          decoration: const BoxDecoration(
-                            color: AppColors.red,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'She tests you.',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontStyle: FontStyle.italic,
-                    color: AppColors.red,
-                    height: 1.35,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                Text(
-                  'Lucien corrects you.',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontStyle: FontStyle.italic,
-                    color: AppColors.red,
-                    height: 1.35,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Action chip top-right — settings only. The paywall
-          // shortcut lives on Scan + Mirror where new users land; the
-          // Game tab is for users already inside the experience.
-          Positioned(
-            top: 12, right: Sp.lg,
-            child: Row(
-              children: [
-                MastheadAction(
-                  icon: Icons.tune,
-                  onTap: onSettings,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Free Flow card ─────────────────────────────────────────────────
-// Horizontal layout: left column carries the eyebrow + title + body
-// + CTA; right column carries the woman portrait. Locked state shows
-// "UNLOCK WITH PRO" in the CTA slot.
-
-// ─── Rizz reply card ────────────────────────────────────────────
-// The AI generator entry — type her text or screenshot a chat, get 3
-// replies ranked safest → boldest. Stronger visual weight than LINES
-// because this is where the real magic happens (live generation vs
-// static library).
-class _RizzReplyCard extends StatelessWidget {
+// ─── Arena card ─────────────────────────────────────────────────────
+// One clean card that opens the scene picker. Replaces the old
+// 6-portrait horizontal grid that competed with the Free Flow card
+// for attention.
+class _ArenaCard extends StatelessWidget {
   final VoidCallback onTap;
-  const _RizzReplyCard({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.red,
-      borderRadius: BorderRadius.circular(Rd.lg),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(Rd.lg),
-        splashColor: Colors.white.withValues(alpha: 0.08),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(Rd.lg),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.red.withValues(alpha: 0.35),
-                blurRadius: 28, spreadRadius: 1,
-              ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('RIZZ — THE GENERATOR',
-                      style: AppTypography.label.copyWith(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontSize: 11, letterSpacing: 3.0,
-                        fontWeight: FontWeight.w800,
-                      )),
-                    const SizedBox(height: 6),
-                    Text('Drop her text.\nGet 3 hits.',
-                      style: AppTypography.h1.copyWith(
-                        color: Colors.white,
-                        fontSize: 22, height: 1.15,
-                        letterSpacing: -0.4,
-                        fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w800,
-                      )),
-                    const SizedBox(height: 6),
-                    Text('Type it, or drop a screenshot.',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: Colors.white.withValues(alpha: 0.78),
-                        fontSize: 13, height: 1.4,
-                      )),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
-              const Icon(Icons.bolt_rounded,
-                color: Colors.white, size: 28),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Lines card ─────────────────────────────────────────────────
-// Editorial card: small-caps red eyebrow, italic Playfair headline,
-// short subtitle, red chevron CTA. Pure typography, no portrait.
-class _LinesCard extends StatelessWidget {
-  final VoidCallback onTap;
-  const _LinesCard({required this.onTap});
+  const _ArenaCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -551,45 +178,44 @@ class _LinesCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(Rd.lg),
         splashColor: AppColors.red.withValues(alpha: 0.06),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+          padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(Rd.lg),
             border: Border.all(
-              color: AppColors.red.withValues(alpha: 0.22), width: 0.8),
+              color: AppColors.red.withValues(alpha: 0.32), width: 0.9),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('THE ARSENAL',
+                    Text('THE ARENA',
                       style: AppTypography.label.copyWith(
                         color: AppColors.red,
                         fontSize: 11, letterSpacing: 3.0,
                         fontWeight: FontWeight.w800,
                       )),
-                    const SizedBox(height: 6),
-                    Text('125 lines.\nThe ones that pull.',
-                      style: AppTypography.h1.copyWith(
+                    const SizedBox(height: 8),
+                    Text('Scripted scenes.\nReal pressure.',
+                      style: GoogleFonts.playfairDisplay(
                         color: AppColors.textPrimary,
-                        fontSize: 22, height: 1.15,
-                        letterSpacing: -0.4,
+                        fontSize: 26, height: 1.1,
+                        letterSpacing: -0.5,
                         fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                       )),
-                    const SizedBox(height: 6),
-                    Text('Openers · tease · heat · cold · close.',
+                    const SizedBox(height: 8),
+                    Text('Pick a scene. Hold the frame.',
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.textSecondary,
-                        fontSize: 13, height: 1.4,
+                        fontSize: 13.5, height: 1.4,
                       )),
                   ],
                 ),
               ),
               const SizedBox(width: 14),
-              Icon(Icons.arrow_forward_ios_rounded,
+              const Icon(Icons.arrow_forward_ios_rounded,
                 color: AppColors.red, size: 16),
             ],
           ),
@@ -598,6 +224,11 @@ class _LinesCard extends StatelessWidget {
     );
   }
 }
+
+// ─── Free Flow card ─────────────────────────────────────────────────
+// Horizontal layout: left column carries the eyebrow + title + body
+// + CTA; right column carries the woman portrait. Locked state shows
+// "UNLOCK WITH PRO" in the CTA slot.
 
 class _FreeFlowCard extends StatelessWidget {
   final VoidCallback onTap;
