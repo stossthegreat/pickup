@@ -148,6 +148,15 @@ class _GameTabScreenState extends State<GameTabScreen> {
                   curve: Curves.easeInOut,
                 ),
 
+            const SizedBox(height: Sp.md),
+
+            // LINES — the arsenal. Curated rizz catalogue, tap-to-copy.
+            // Five categories: openers, tease, heat, cold, close.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+              child: _LinesCard(onTap: () => context.push('/lines')),
+            ),
+
             const SizedBox(height: Sp.lg),
 
             // ── ROLEPLAY ARENAS — section header + horizontal row.
@@ -443,6 +452,71 @@ class _GameMasthead extends StatelessWidget {
 // Horizontal layout: left column carries the eyebrow + title + body
 // + CTA; right column carries the woman portrait. Locked state shows
 // "UNLOCK WITH PRO" in the CTA slot.
+
+// ─── Lines card ─────────────────────────────────────────────────
+// Editorial card: small-caps red eyebrow, italic Playfair headline,
+// short subtitle, red chevron CTA. Pure typography, no portrait.
+class _LinesCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _LinesCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface1,
+      borderRadius: BorderRadius.circular(Rd.lg),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Rd.lg),
+        splashColor: AppColors.red.withValues(alpha: 0.06),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(Rd.lg),
+            border: Border.all(
+              color: AppColors.red.withValues(alpha: 0.22), width: 0.8),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('THE ARSENAL',
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.red,
+                        fontSize: 11, letterSpacing: 3.0,
+                        fontWeight: FontWeight.w800,
+                      )),
+                    const SizedBox(height: 6),
+                    Text('125 lines.\nThe ones that pull.',
+                      style: AppTypography.h1.copyWith(
+                        color: AppColors.textPrimary,
+                        fontSize: 22, height: 1.15,
+                        letterSpacing: -0.4,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w700,
+                      )),
+                    const SizedBox(height: 6),
+                    Text('Openers · tease · heat · cold · close.',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 13, height: 1.4,
+                      )),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              Icon(Icons.arrow_forward_ios_rounded,
+                color: AppColors.red, size: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _FreeFlowCard extends StatelessWidget {
   final VoidCallback onTap;

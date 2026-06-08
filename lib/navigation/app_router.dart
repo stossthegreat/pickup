@@ -16,6 +16,7 @@ import '../screens/splash/splash_screen.dart';
 // ── Auralay graft (Eyes + Game tabs) ───────────────────────────────────────
 import '../screens/debug/diagnostic_screen.dart';
 import '../screens/eyes/selene_lesson_screen.dart';
+import '../screens/game/lines/lines_screen.dart';
 import '../models/gaze/gaze_syllabus.dart';
 import '../screens/lessons/lesson_detail_screen.dart';
 import '../screens/test/charisma_test_screen.dart';
@@ -64,6 +65,7 @@ final appRouter = GoRouter(
       },
     ),
     GoRoute(path: '/scan',     builder: (_, __) => const ScanScreen()),
+    GoRoute(path: '/lines',    builder: (_, __) => const LinesScreen()),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
     GoRoute(
       path: '/protocol',
