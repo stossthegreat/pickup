@@ -256,8 +256,10 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
                 ),
                 const SizedBox(height: 10),
               ],
-              if (_debugLog.isNotEmpty)
-                _ChatDebugPane(entries: _debugLog),
+              // Debug pane commented out — flip back on by uncommenting
+              // when something next stops working.
+              // if (_debugLog.isNotEmpty)
+              //   _ChatDebugPane(entries: _debugLog),
               _InputBar(
                 controller: _ctrl,
                 sending:    _sending,
