@@ -44,27 +44,31 @@
 ///   · REFRAME                  — flips her energy to your advantage
 ///   · TEASE                    — playful jab, light needle
 class RizzLine {
-  /// Single-line form. For multi-line sequences this is the full
-  /// joined text (parts joined with " — "), so clipboard copy still
-  /// gives the user a sendable paste. The card UI prefers `parts`
-  /// when set so the setup → payoff reads as separate sentences.
-  final String text;
+  /// Raw single-line text. Null for sequence entries — those compute
+  /// [text] lazily from [parts] joined with " — ".
+  final String? _rawText;
   final String tag;
 
   /// Multi-line sequences — the question-then-killshot format. Each
   /// element renders as its own line inside the card. First entry is
-  /// usually the setup ("Be honest with me…"), second is the payoff
-  /// ("…do you actually try or does it just come naturally?"). On tap
-  /// the clipboard gets the joined text so the user pastes it whole.
+  /// the setup ("Be honest with me…"), second is the payoff. Clipboard
+  /// copy uses the [text] getter (joined) so the user pastes the
+  /// whole thing in one go.
   final List<String>? parts;
 
-  const RizzLine(this.text, this.tag, {this.parts});
+  const RizzLine(String text, this.tag, {this.parts}) : _rawText = text;
 
-  /// Multi-part constructor. Joins the parts with " — " for the
-  /// flat [text] form so copy-paste still works.
-  factory RizzLine.seq(List<String> parts, String tag) {
-    return RizzLine(parts.join(' — '), tag, parts: parts);
-  }
+  /// Multi-part sequence — must be a const NAMED constructor (not a
+  /// factory) so the const RizzCategory tree can hold it. Initializer
+  /// list assigns directly because we can't call .join() in a const
+  /// expression — [text] computes the joined form lazily on read.
+  const RizzLine.seq(List<String> sequence, this.tag)
+      : _rawText = null,
+        parts = sequence;
+
+  /// The line's flat text — explicit for single lines, joined for
+  /// sequences. Used by clipboard copy + analytics.
+  String get text => _rawText ?? (parts ?? const []).join(' — ');
 
   bool get isSequence => parts != null && parts!.length > 1;
 }
