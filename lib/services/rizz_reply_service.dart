@@ -71,20 +71,28 @@ class RizzReplyService {
       return _fallbackFromArsenal(vibe);
     }
 
-    // ── SILENT OCR ────────────────────────────────────────────────────
-    // When a screenshot is supplied, extract the chat text on-device
-    // via ML Kit BEFORE hitting the backend. The user never sees this
-    // step (no "running OCR…" pill) — they just see results. Sending
-    // the extracted text instead of the raw image bytes means the
-    // backend doesn't need GPT vision; the existing /chat endpoint
-    // (text in, JSON out) handles it natively.
+    // ── SILENT OCR — text path, not vision path ───────────────────────
+    // Backend /chat is text-in, JSON-out — no vision support. We OCR
+    // the screenshot ON-DEVICE via ML Kit, then send the extracted
+    // text as the user message. When OCR succeeds we DROP the image
+    // from the payload entirely + tell _buildPrompt this is a text
+    // case (hasScreenshot: false). That's the difference between the
+    // model answering "I can't read images" and actually writing
+    // three replies to what she said.
+    bool ocrUsed = false;
     if (hasImage && her.isEmpty) {
       final ocrText = await _ocrSilently(screenshotBytes);
       print('[RIZZ-GEN] ocr extracted ${ocrText.length} chars');
-      if (ocrText.isNotEmpty) her = ocrText;
+      if (ocrText.isNotEmpty) {
+        her = ocrText;
+        ocrUsed = true;
+      }
     }
 
-    final imageB64 = hasImage ? base64Encode(screenshotBytes) : null;
+    // Only send the image bytes when OCR failed AND we still have an
+    // image — that's our only shot at a reply. Otherwise the text we
+    // just extracted is far more useful than the raw image.
+    final imageB64 = (hasImage && !ocrUsed) ? base64Encode(screenshotBytes) : null;
 
     // 1) Try the dedicated rizz endpoint first. Future-route; the
     // payload here is the clean shape that backend ought to expose.
@@ -116,8 +124,11 @@ class RizzReplyService {
     // (the Mirror advisor that works). Backend expects {role, content},
     // not {role, text}, and a face object containing imageBase64.
     try {
+      // hasScreenshot reflects whether we're sending IMAGE BYTES, not
+      // whether the user uploaded one. After successful OCR the AI
+      // sees TEXT, so we use the text-path branch of the prompt.
       final messageText = _buildPrompt(her, vibe, ctx,
-          scenario: scn, hasScreenshot: hasImage);
+          scenario: scn, hasScreenshot: imageB64 != null);
       final res = await http
           .post(
             Uri.parse('${ApiConfig.backendBaseUrl}/chat'),
@@ -386,6 +397,14 @@ HARD RULES — the no-trash rule (your reputation is at stake):
 - BOLDEST line should pass this test: "if she screenshotted this to
   her group chat, would they say 'answer him RIGHT NOW' or 'block'?"
   It must be the first.
+
+BANNED OPENINGS — never start a line with these. They scream
+"corporate dating coach", not friend who pulls:
+- "Hey, I've really enjoyed"     - "It's important to"
+- "Let's grab coffee this week"  - "Just be yourself"
+- "Confidence is key"             - "Keep it simple and direct"
+- "Show her you're"               - "Let her know"
+- "Hi/Hey [name]," (greetings)    - "I was wondering if you'd"
 
 VIBE the user chose: ${vibe.directive}
 

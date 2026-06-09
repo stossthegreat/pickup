@@ -790,12 +790,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     );
     _clock?.cancel();
     _createTimer?.cancel();
-    await _eventSub?.cancel();
-    await _micSub?.cancel();
-    // Same await-the-teardown rule as _switchCharacter — otherwise
-    // the new _goLive races the old session for the audio engine.
-    try { await _recorder.stop(); } catch (_) {}
-    try { await _session.close(); } catch (_) {}
+    _eventSub?.cancel();
+    _micSub?.cancel();
+    // Fire-and-forget teardown — see _switchCharacter for why.
+    // ignore: discarded_futures
+    _recorder.stop();
+    // ignore: discarded_futures
+    _session.close();
     _pcmQueue.clear();
     if (!mounted) return;
     setState(() {
@@ -850,18 +851,17 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   Future<void> _switchCharacter(_Vibe vibe) async {
     _clock?.cancel();
     _createTimer?.cancel();
-    await _eventSub?.cancel();
-    await _micSub?.cancel();
-    // AWAIT the recorder + session teardown. Firing-and-forgetting
-    // these meant the new _goLive could start before the OLD WS
-    // connection had finished closing — the new session would then
-    // race the old one for the audio engine and one of them would
-    // come up silent. Awaiting is the difference between "voice
-    // works on the new character" and "nothing comes out".
-    try { await _recorder.stop(); } catch (_) {}
-    try { await _session.close(); } catch (_) {}
-    // Drain the playback queue so the new persona doesn't inherit
-    // tail audio bytes from the previous one.
+    _eventSub?.cancel();
+    _micSub?.cancel();
+    // Fire-and-forget the teardown. Awaiting close() on a RealtimeSession
+    // that's still mid-connect can hang forever (the WS handshake never
+    // completes because we just told it to die) — that's what broke even
+    // INTO YOU in build 126. Just clear the playback queue so the new
+    // persona doesn't inherit tail bytes.
+    // ignore: discarded_futures
+    _recorder.stop();
+    // ignore: discarded_futures
+    _session.close();
     _pcmQueue.clear();
     if (!mounted) return;
     setState(() {
