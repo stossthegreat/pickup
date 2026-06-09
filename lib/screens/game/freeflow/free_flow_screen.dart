@@ -204,6 +204,11 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   /// session clock only starts ticking on that first press — sitting
   /// on the screen reading the scenario shouldn't burn seconds.
   bool _clockStarted = false;
+  /// True once the tab-mode auto-start has fired. Prevents the
+  /// addPostFrameCallback from firing _goLive twice if the framework
+  /// rebuilds the screen before the first frame settles (the source
+  /// of the "now it works, now it doesn't" intermittent breakage).
+  bool _tabAutoStartFired = false;
 
   @override
   void initState() {
@@ -215,7 +220,8 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     // open the tab. They can switch character via the top-left chip.
     if (widget.tabMode) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted || _tabAutoStartFired) return;
+        _tabAutoStartFired = true;
         final defaultVibe = _vibes.firstWhere(
           (v) => v.key == 'into_you',
           orElse: () => _vibes.first,
@@ -254,6 +260,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   // ─── Go live ────────────────────────────────────────────────────────
 
   Future<void> _goLive(_Vibe vibe) async {
+    // No in-flight guard here — _switchCharacter explicitly tears
+    // the previous session down before calling this, and blocking
+    // a legitimate restart while the OLD _goLive is still awaiting
+    // its network round-trip was what made CHANGE CHARACTER
+    // silently leave the user in connecting state (build 124
+    // regression). Tab-mode auto-start double-fire is handled by
+    // _tabAutoStartFired in initState.
     setState(() {
       _vibe = vibe;
       _phase = _Phase.connecting;
@@ -1067,25 +1080,31 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
-              // Press-and-hold instruction directly under the orb so a
-              // brand-new user knows immediately HOW to talk to her.
-              // Visible only while the live phase is idle (not while
-              // she's mid-reply, not while Lucien is reading / scoring).
-              // Sized up and brightened — it's the single most
-              // important affordance on the screen.
+              // Negative top margin pulls HOLD TO SPEAK back up under
+              // the orb where it reads as the orb's caption, not a
+              // separate row. White text + pulse animation so it
+              // actively asks for attention without competing with
+              // the red orb for the same colour slot.
               if (_phase == _Phase.live && !_holding && !_herSpeaking)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 12),
-                  child: Text(
-                    'HOLD TO SPEAK',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.label.copyWith(
-                      color: AppColors.red,
-                      fontSize: 18,
-                      letterSpacing: 4.6,
-                      fontWeight: FontWeight.w900,
-                    ),
+                Transform.translate(
+                  offset: const Offset(0, -8),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      'HOLD TO SPEAK',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.label.copyWith(
+                        color: Colors.white,
+                        fontSize: 18,
+                        letterSpacing: 4.6,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    )
+                        .animate(onPlay: (c) => c.repeat(reverse: true))
+                        .fadeIn(duration: 900.ms, curve: Curves.easeInOut)
+                        .then()
+                        .fade(begin: 1.0, end: 0.55,
+                            duration: 900.ms, curve: Curves.easeInOut),
                   ),
                 ),
               if (_holding)
@@ -1804,11 +1823,10 @@ class _ChangeCharacterChip extends StatelessWidget {
 /// The ARENA pill — a clean one-tap route into the scripted-scene
 /// picker without leaving the tab. Sits next to the timer in tab
 /// mode where the close button used to live.
-/// ARENA — a real proper button. Solid red pill, fire icon on the
-/// left, ARENA label, arrow on the right. Sized to read as an
-/// action, not a status chip. Sits in the top chrome where the
-/// close button used to live so it's the first thing the eye lands
-/// on after the orb.
+/// ARENA — paired with the CHANGE CHARACTER chip on the left.
+/// Exact same size + outlined-red style so the two chips read as a
+/// matched pair across the top chrome. Fire icon + label + arrow,
+/// all red, on the dark surface1 background.
 class _ArenaPill extends StatelessWidget {
   final VoidCallback onTap;
   const _ArenaPill({required this.onTap});
@@ -1816,39 +1834,34 @@ class _ArenaPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.red,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(100),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(100),
-        splashColor: Colors.white.withValues(alpha: 0.12),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
+            color: AppColors.surface1,
             borderRadius: BorderRadius.circular(100),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.red.withValues(alpha: 0.45),
-                blurRadius: 22, spreadRadius: 0,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            border: Border.all(
+              color: AppColors.red.withValues(alpha: 0.45), width: 0.8),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.local_fire_department_rounded,
-                  color: Colors.white, size: 18),
-              const SizedBox(width: 8),
+                  color: AppColors.red, size: 14),
+              const SizedBox(width: 4),
               Text('ARENA',
                 style: AppTypography.label.copyWith(
-                  color: Colors.white,
-                  fontSize: 14, letterSpacing: 3.0,
+                  color: AppColors.red,
+                  fontSize: 11, letterSpacing: 2.6,
                   fontWeight: FontWeight.w900,
                 )),
-              const SizedBox(width: 8),
+              const SizedBox(width: 2),
               const Icon(Icons.arrow_forward_rounded,
-                  color: Colors.white, size: 16),
+                  color: AppColors.red, size: 14),
             ],
           ),
         ),

@@ -64,7 +64,12 @@ class RizzReplyService {
     final ctx = context.trim();
     final scn = scenario.trim();
     final hasImage = screenshotBytes != null && screenshotBytes.isNotEmpty;
-    if (her.isEmpty && !hasImage && scn.isEmpty) return _fallbackFromArsenal(vibe);
+    print('[RIZZ-GEN] start her="${her.length > 60 ? "${her.substring(0, 60)}…" : her}" '
+        'hasImage=$hasImage scn="$scn"');
+    if (her.isEmpty && !hasImage && scn.isEmpty) {
+      print('[RIZZ-GEN] nothing to send, falling back to arsenal');
+      return _fallbackFromArsenal(vibe);
+    }
 
     // ── SILENT OCR ────────────────────────────────────────────────────
     // When a screenshot is supplied, extract the chat text on-device
@@ -75,6 +80,7 @@ class RizzReplyService {
     // (text in, JSON out) handles it natively.
     if (hasImage && her.isEmpty) {
       final ocrText = await _ocrSilently(screenshotBytes);
+      print('[RIZZ-GEN] ocr extracted ${ocrText.length} chars');
       if (ocrText.isNotEmpty) her = ocrText;
     }
 
@@ -96,11 +102,15 @@ class RizzReplyService {
             }),
           )
           .timeout(const Duration(seconds: 40));
+      print('[RIZZ-GEN] /rizz/reply status=${res.statusCode}');
       if (res.statusCode == 200) {
         final parsed = _parseReplies(res.body);
+        print('[RIZZ-GEN] /rizz/reply parsed ${parsed.length} replies');
         if (parsed.length >= 3) return parsed.take(3).toList();
       }
-    } catch (_) {/* fall through */}
+    } catch (e) {
+      print('[RIZZ-GEN] /rizz/reply throw $e');
+    }
 
     // 2) Fall back to /chat — same payload shape as ChatService.send
     // (the Mirror advisor that works). Backend expects {role, content},
@@ -127,16 +137,24 @@ class RizzReplyService {
             }),
           )
           .timeout(const Duration(seconds: 40));
+      print('[RIZZ-GEN] /chat status=${res.statusCode}');
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         final reply = (body['reply'] as String?) ?? '';
+        print('[RIZZ-GEN] /chat reply len=${reply.length}');
         final parsed = _parseReplies(reply);
+        print('[RIZZ-GEN] /chat parsed ${parsed.length} replies');
         if (parsed.length >= 3) return parsed.take(3).toList();
+      } else {
+        print('[RIZZ-GEN] /chat non-200 body=${res.body}');
       }
-    } catch (_) {/* fall through */}
+    } catch (e) {
+      print('[RIZZ-GEN] /chat throw $e');
+    }
 
     // 3) Final fallback — curated lines that match the vibe so the
     // user is never stranded on a dead backend.
+    print('[RIZZ-GEN] all paths failed, returning arsenal fallback');
     return _fallbackFromArsenal(vibe);
   }
 
@@ -148,21 +166,32 @@ class RizzReplyService {
   /// bubbles, ready to feed straight into the RIZZ GOD prompt. Any
   /// failure (no text, ML Kit error, file write fails) returns ''
   /// so the caller can fall through to the image-bytes path.
+  ///
+  /// Wrapped with a 12s timeout so ML Kit hanging on a bad image
+  /// can't lock the whole generator UI in a spinner. The user sees
+  /// the AI step kick in after at most 12s either way.
   static Future<String> _ocrSilently(Uint8List bytes) async {
+    print('[RIZZ-OCR] start bytes=${bytes.length}');
     try {
       final dir = await getTemporaryDirectory();
       final path = '${dir.path}/rizz_ocr_'
           '${DateTime.now().millisecondsSinceEpoch}.png';
       final file = File(path);
       await file.writeAsBytes(bytes, flush: true);
+      print('[RIZZ-OCR] wrote tmp file ${file.path}');
       try {
-        final text = await ScreenshotOcrService.extractRecent(path);
+        final text = await ScreenshotOcrService.extractRecent(path)
+            .timeout(const Duration(seconds: 12), onTimeout: () {
+              print('[RIZZ-OCR] ML Kit timed out');
+              return '';
+            });
+        print('[RIZZ-OCR] ok extracted=${text.length} chars');
         return text;
       } finally {
-        // Best-effort cleanup; don't block on failure.
         try { await file.delete(); } catch (_) {}
       }
-    } catch (_) {
+    } catch (e) {
+      print('[RIZZ-OCR] throw $e');
       return '';
     }
   }
