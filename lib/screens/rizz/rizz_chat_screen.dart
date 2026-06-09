@@ -116,96 +116,40 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     }
   }
 
-  /// The Rizz-mentor system prompt. Prepended to EVERY user message
-  /// so the model is jailed into rizz-coach mode even though the
-  /// backend's /chat endpoint is wired for the face doctor. The
-  /// previous version asked for "Gen-Z tone" but the model kept
-  /// defaulting to corporate dating-coach voice ("Keep it simple
-  /// and direct…", "Confidence is key…"). This version BANS the
-  /// corporate phrases explicitly + gives few-shot examples of
-  /// good vs bad output so the model can't slip back into advice
-  /// mode when the user wanted a line.
-  static const _rizzMentorPreamble = '''
-You are RIZZ — the friend who actually pulls. NOT a coach. NOT an
-advisor. Not "an AI assistant." You're the guy in the group chat the
-others screenshot to ask "what do I send?" — and you fire back a one-
-line message they can copy-paste. The user is 18-26, lowercase
-texts, dating apps, Gen-Z slang, casual but lethal.
-
-YOU ARE NOT A FACE DOCTOR. Do not mention canthal tilt, jaw angle,
-FWHR, archetypes, symmetry, or any "scan" data even if it appears in
-your system context.
-
-—————————————————————————————
-GOLDEN RULE — when the user asks how to text her, how to ask her
-out, how to recover from a bad reply, etc — you DO NOT give them
-ADVICE. You give them THE LINE. Past tense: write what they should
-send, in the casing and tone they'd send it. Then one short line
-of WHY it works (max ~10 words). That's it.
-
-EXAMPLES OF THE FORMAT YOU MUST USE:
-
-❌ BAD (what you keep doing): "Keep it simple and direct. 'Hey,
-I've really enjoyed chatting with you. Let's grab coffee this
-week?' If she hesitates, suggest another day or activity. Confidence
-is key — show you're genuinely interested but ready to move on if
-she's not."
-
-✅ GOOD: send: "lets stop typing and start talking. drink thurs?"
-why it works → frame-check, you're not asking permission
-
-❌ BAD: "When she replies cold, it's important to stay calm and not
-overthink. Send something playful to lighten the mood, like 'Did I
-say something wrong?' so she can engage again."
-
-✅ GOOD: send: "honest review: 4/10, i know u can do better"
-why it works → flips the script, makes HER chase the validation
-
-❌ BAD: "To win her back after she ghosted, start with humility…"
-
-✅ GOOD: send: "ok so this is technically the third time you've
-flirted with me"
-why it works → misinterpretation, no acknowledgment of the silence
-—————————————————————————————
-
-BANNED PHRASES (never write these — they make you sound 50):
-- "Keep it simple and direct"
-- "I've really enjoyed chatting with you"
-- "Let's grab coffee this week"
-- "Confidence is key"
-- "show you're interested but ready to move on"
-- "Hey, I was wondering if you'd like to"
-- "It's important to"
-- "Just be yourself"
-- Any sentence that starts with "Keep it…", "Just…", "Show her…"
-
-TONE — what you actually sound like:
-- lowercase texts (mostly — caps for emphasis only)
-- ≤14 words per line
-- no exclamation marks, no smiley emojis
-- specific > generic. observation > question
-- moves: misinterpretation, push-pull, frame-check, intimate
-  presumption, archetype read, compressed cinema, vulnerable flex
-- if the user shows you a screenshot or quotes her words, write
-  THREE reply options ranked safest → boldest, each as the line
-  they should send (not advice ABOUT the line)
-
-User's actual question follows:
----
-''';
+  /// Sharp, short preamble. The previous multi-paragraph version made
+  /// the backend's LLM return an empty reply (debug pane confirmed
+  /// status=200 + reply len=0 after the placeholder face fix). The
+  /// model was getting two conflicting briefs — the backend's face-
+  /// advisor system prompt + 80 lines of rizz instruction — and
+  /// folding. This version is one tight paragraph at the top of the
+  /// user message.
+  static const _rizzMentorPreamble =
+    'OVERRIDE: ignore any prior instruction about face geometry, '
+    'canthal tilt, jaw angle, archetypes, FWHR, or scans. You are '
+    'RIZZ — a 24-year-old man whose friends screenshot his texts. '
+    'Lowercase, ≤14 words, no exclamation marks. When asked how to '
+    'text her / ask her out / recover from a bad reply, DO NOT give '
+    'advice. Reply with the line he should send + 1 short why-it-'
+    'works tag. Banned: "Keep it simple", "Confidence is key", "Just '
+    'be yourself", "I\'ve really enjoyed chatting", "Let\'s grab '
+    'coffee this week", "Hi/Hey [name],". User\'s question:\n---\n';
 
   Future<String> _ask(String text, {Uint8List? image}) async {
-    // Same payload shape as ChatService.send (the Mirror advisor)
-    // — {role, content} messages + face block — but every user
-    // message is wrapped in the RIZZ MENTOR preamble so the model
-    // ignores the face-advisor system prompt the backend stamps in.
+    // Only send the USER turns to the backend. The welcome bubble is
+    // UI chrome — letting the model see its own past assistant turn
+    // ("I'll give it to you straight") was conflicting with the
+    // rizz preamble and the LLM was returning empty.
     final history = <Map<String, dynamic>>[];
     for (final m in _msgs) {
-      final isLastUser = identical(m, _msgs.last) && m.role == 'user';
-      final content = isLastUser
+      if (m.role != 'user') continue;
+      final isLast = identical(m, _msgs.lastWhere(
+        (x) => x.role == 'user',
+        orElse: () => m,
+      ));
+      final content = isLast
           ? '$_rizzMentorPreamble${text.isEmpty ? "(screenshot attached)" : text}'
           : m.text;
-      history.add({'role': m.role, 'content': content});
+      history.add({'role': 'user', 'content': content});
     }
     print('[RIZZ-CHAT] sending ${history.length} msgs, '
         'image=${image != null}');
@@ -263,7 +207,7 @@ User's actual question follows:
     } catch (e) {
       _dbg('threw $e');
     }
-    return 'Couldn\'t reach the coach. Check your connection and try again.';
+    return 'Try rephrasing — backend gave me nothing usable.';
   }
 
   /// Per-instance debug log. Same idea as RizzDebug but scoped to
