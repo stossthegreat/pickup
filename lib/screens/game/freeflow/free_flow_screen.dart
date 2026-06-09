@@ -717,16 +717,85 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
 
   void _closeScreen() {
     if (!mounted) return;
-    // Pop only — dispose() runs on pop and performs all teardown
-    // (mic, session, pcm engine), so we never double-close anything.
     _clock?.cancel();
     _createTimer?.cancel();
-    // Mark Game milestone for the App Store review prompt. The
-    // dialog itself fires on the next home-screen mount once all
-    // three pillars (scan + Free Flow + eye lesson) are ticked.
+    // Mark Game milestone for the App Store review prompt.
     // ignore: discarded_futures
     ReviewPromptService.markFreeFlowDone();
+    if (widget.tabMode) {
+      // In tab mode there's no route to pop. From a DONE / scored
+      // state we restart with the same vibe so the user lands back
+      // on the live orb ready to go. From an ERROR / stuck state we
+      // tear the session down and fall back to the picker so the
+      // user can choose a different character instead of looping
+      // _goLive on a vibe that just failed.
+      if (_phase == _Phase.error) {
+        _resetToPicker();
+      } else {
+        _restartTabSession();
+      }
+      return;
+    }
     safePop(context);
+  }
+
+  /// Tab-mode safety net — tear the session down and drop the user on
+  /// the picker. Used when an error / stuck connect leaves them with
+  /// nothing to interact with. The picker is the existing _buildPicker
+  /// rendered by setting phase = _Phase.pick.
+  void _resetToPicker() {
+    _eventSub?.cancel();
+    _micSub?.cancel();
+    // ignore: discarded_futures
+    _recorder.stop();
+    // ignore: discarded_futures
+    _session.close();
+    if (!mounted) return;
+    setState(() {
+      _phase         = _Phase.pick;
+      _vibe          = null;
+      _error         = '';
+      _transcript.clear();
+      _herCaption    = '';
+      _youCaption    = '';
+      _herSpeaking   = false;
+      _holding       = false;
+      _result        = null;
+      _remaining     = _sessionSeconds;
+      _clockStarted  = false;
+    });
+  }
+
+  /// Tab-mode reset — tear the current session down and spin up a
+  /// fresh INTO YOU session so the orb is ready again. Used by DONE
+  /// + RUN IT BACK on the scorecard since neither has a screen to
+  /// pop to when the GAME tab IS Free Flow.
+  Future<void> _restartTabSession() async {
+    final v = _vibe ?? _vibes.firstWhere(
+      (x) => x.key == 'into_you',
+      orElse: () => _vibes.first,
+    );
+    _clock?.cancel();
+    _createTimer?.cancel();
+    _eventSub?.cancel();
+    _micSub?.cancel();
+    // ignore: discarded_futures
+    _recorder.stop();
+    // ignore: discarded_futures
+    _session.close();
+    if (!mounted) return;
+    setState(() {
+      _phase = _Phase.connecting;
+      _transcript.clear();
+      _herCaption  = '';
+      _youCaption  = '';
+      _herSpeaking = false;
+      _holding     = false;
+      _result      = null;
+      _remaining   = _sessionSeconds;
+      _clockStarted = false;
+    });
+    await _goLive(v);
   }
 
   /// GAME tab — open the arena scene picker. Pushes on top of the
@@ -825,7 +894,9 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                           fontWeight: FontWeight.w900,
                         )),
                     const Spacer(),
-                    const SafeCloseButton(),
+                    // Picker close button is hidden in tab mode (the
+                    // tab IS the page — there's nowhere to close to).
+                    if (!widget.tabMode) const SafeCloseButton(),
                   ],
                 ),
               ),
@@ -1412,13 +1483,19 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                             ? true
                             : await LocalStoreService.isSubscribed();
                         if (!mounted) return;
-                        if (pro) {
+                        if (!pro) {
+                          _closeScreen();
+                          return;
+                        }
+                        // Tab mode resets inline so the user stays in
+                        // the GAME tab. Standalone push replaces.
+                        if (widget.tabMode) {
+                          _restartTabSession();
+                        } else {
                           Navigator.of(context, rootNavigator: true)
                               .pushReplacement(MaterialPageRoute(
                             builder: (_) => const FreeFlowScreen(),
                           ));
-                        } else {
-                          _closeScreen();
                         }
                       },
                     ),
@@ -1727,10 +1804,11 @@ class _ChangeCharacterChip extends StatelessWidget {
 /// The ARENA pill — a clean one-tap route into the scripted-scene
 /// picker without leaving the tab. Sits next to the timer in tab
 /// mode where the close button used to live.
-/// ARENA — a proper button (solid red pill with a sword-emoji icon
-/// in front of the label). Replaces the previous tiny outlined pill
-/// so the route into the scripted-scene picker reads as an action,
-/// not an afterthought.
+/// ARENA — a real proper button. Solid red pill, fire icon on the
+/// left, ARENA label, arrow on the right. Sized to read as an
+/// action, not a status chip. Sits in the top chrome where the
+/// close button used to live so it's the first thing the eye lands
+/// on after the orb.
 class _ArenaPill extends StatelessWidget {
   final VoidCallback onTap;
   const _ArenaPill({required this.onTap});
@@ -1743,15 +1821,16 @@ class _ArenaPill extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(100),
-        splashColor: Colors.white.withValues(alpha: 0.1),
+        splashColor: Colors.white.withValues(alpha: 0.12),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(100),
             boxShadow: [
               BoxShadow(
-                color: AppColors.red.withValues(alpha: 0.35),
-                blurRadius: 14, spreadRadius: 0,
+                color: AppColors.red.withValues(alpha: 0.45),
+                blurRadius: 22, spreadRadius: 0,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -1759,14 +1838,17 @@ class _ArenaPill extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.local_fire_department_rounded,
-                  color: Colors.white, size: 14),
-              const SizedBox(width: 6),
+                  color: Colors.white, size: 18),
+              const SizedBox(width: 8),
               Text('ARENA',
                 style: AppTypography.label.copyWith(
                   color: Colors.white,
-                  fontSize: 12, letterSpacing: 2.6,
+                  fontSize: 14, letterSpacing: 3.0,
                   fontWeight: FontWeight.w900,
                 )),
+              const SizedBox(width: 8),
+              const Icon(Icons.arrow_forward_rounded,
+                  color: Colors.white, size: 16),
             ],
           ),
         ),
@@ -1806,12 +1888,32 @@ class _CharacterPickerSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Text('CHANGE CHARACTER',
-              style: AppTypography.label.copyWith(
-                color: AppColors.red,
-                fontSize: 11, letterSpacing: 2.8,
-                fontWeight: FontWeight.w800,
-              )),
+            Row(
+              children: [
+                Text('CHANGE CHARACTER',
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.red,
+                    fontSize: 11, letterSpacing: 2.8,
+                    fontWeight: FontWeight.w800,
+                  )),
+                const Spacer(),
+                // CANCEL — escape route for users who opened the sheet
+                // by mistake. Returning null keeps the current session.
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Text('CANCEL',
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 11, letterSpacing: 2.4,
+                        fontWeight: FontWeight.w800,
+                      )),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 10),
             for (final v in _vibes) ...[
               _CharacterPickerRow(

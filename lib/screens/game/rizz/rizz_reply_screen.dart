@@ -9,16 +9,23 @@ import 'package:image_picker/image_picker.dart';
 import '../../../services/rizz_reply_service.dart';
 import '../../../theme/app_colors.dart';
 
-/// RIZZ — clean one-page generator. ONE input area, two entry modes
-/// (paste her text or upload a screenshot — picked from a single tile
-/// row not a tab toggle), vibe chips, generate, iMessage-style result
-/// bubbles. Vision-direct: when a screenshot is supplied, the image
-/// itself is sent to the backend so GPT-4o reads the chat natively —
-/// no scattered OCR preview, no extra steps for the user.
+/// RIZZ — clean, two-state generator.
+///
+/// INPUT STATE — no results yet:
+///   · italic Playfair headline + back arrow
+///   · single tap UPLOAD A SCREENSHOT pill (auto-fires on entry
+///     when the screen was launched from the Rizz tab "Upload" card)
+///   · "or type her message" expand → text field + GENERATE
+///
+/// RESULTS STATE — once the AI has spoken:
+///   · screenshot rendered FULL-WIDTH at the top so the user can see
+///     what got read (and that OCR worked)
+///   · three red iMessage bubbles below, tap to copy each
+///   · GIMME MORE pill at the bottom to re-roll
+///   · ⊕ icon in the top-right to start a fresh image / clear state
 class RizzReplyScreen extends StatefulWidget {
-  /// True when the screen is opened from the "Upload a screenshot"
-  /// card — fires the image picker on first frame so the user lands
-  /// straight inside the iOS photo sheet without an extra tap.
+  /// True when opened from the "Upload a screenshot" tab card — fires
+  /// the photo picker immediately so the user lands in the iOS sheet.
   final bool launchUpload;
   const RizzReplyScreen({super.key, this.launchUpload = false});
 
@@ -28,22 +35,15 @@ class RizzReplyScreen extends StatefulWidget {
 
 class _RizzReplyScreenState extends State<RizzReplyScreen> {
   final _herCtrl = TextEditingController();
-  RizzVibe _vibe = RizzVibe.auto;
   bool _generating = false;
   Uint8List? _screenshotBytes;
   List<RizzReply>? _replies;
-  /// Locked-in scenario from a Rizz-tab preset (e.g. "Playful comeback"
-  /// → "She just teased you and you need to volley with…"). Threaded
-  /// into the RIZZ GOD prompt so the AI biases its three replies
-  /// toward the user's actual intent.
-  String _scenario = '';
+  bool _showTextEntry = false;
 
   @override
   void initState() {
     super.initState();
     if (widget.launchUpload) {
-      // Open the gallery picker on first frame so the user lands on
-      // the iOS photo sheet without an extra tap.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _pick(ImageSource.gallery);
       });
@@ -66,10 +66,7 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
     HapticFeedback.selectionClick();
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: source,
-        maxWidth: 1800,
-      );
+      final picked = await picker.pickImage(source: source, maxWidth: 1800);
       if (picked == null || !mounted) return;
       final bytes = await File(picked.path).readAsBytes();
       if (!mounted) return;
@@ -77,16 +74,25 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
         _screenshotBytes = bytes;
         _replies = null;
         _herCtrl.clear();
+        _showTextEntry = false;
       });
+      // Auto-generate the moment the image lands — saves a tap. The
+      // user picked a screenshot precisely because they want rizz.
+      await _generate();
     } catch (_) {
       if (!mounted) return;
       _snack('Couldn\'t load that image. Try another.');
     }
   }
 
-  void _clearImage() {
+  void _reset() {
     HapticFeedback.selectionClick();
-    setState(() => _screenshotBytes = null);
+    setState(() {
+      _screenshotBytes = null;
+      _replies = null;
+      _herCtrl.clear();
+      _showTextEntry = false;
+    });
   }
 
   Future<void> _generate() async {
@@ -99,8 +105,7 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
     final result = await RizzReplyService.generate(
       herMessage:       _herCtrl.text.trim(),
       screenshotBytes:  _screenshotBytes,
-      vibe:             _vibe,
-      scenario:         _scenario,
+      vibe:             RizzVibe.auto,
     );
     if (!mounted) return;
     setState(() {
@@ -137,144 +142,355 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = _screenshotBytes != null;
+    final hasResults = _replies != null;
+    final hasImage   = _screenshotBytes != null;
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 32),
+      // Tap anywhere outside the text field to dismiss the keyboard.
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: SafeArea(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header.
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 28, minHeight: 28),
+              _Header(
+                onBack:  () => Navigator.of(context).maybePop(),
+                onReset: hasImage || hasResults ? _reset : null,
+              ),
+              Expanded(
+                child: hasResults
+                    ? _resultsLayout()
+                    : _inputLayout(hasImage),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── INPUT STATE ────────────────────────────────────────────────────
+  Widget _inputLayout(bool hasImage) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(22, 6, 22, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Drop her chat.',
+            style: GoogleFonts.playfairDisplay(
+              color: Colors.white,
+              fontSize: 36, height: 1.05,
+              letterSpacing: -0.7,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w800,
+            )),
+          Text('Get 3 hits.',
+            style: GoogleFonts.playfairDisplay(
+              color: AppColors.red,
+              fontSize: 36, height: 1.05,
+              letterSpacing: -0.7,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w800,
+            )),
+
+          const SizedBox(height: 28),
+
+          if (_generating)
+            _GeneratingPanel(bytes: _screenshotBytes)
+          else ...[
+            _BigUploadButton(
+              onTap: () => _pick(ImageSource.gallery),
+              icon: Icons.photo_library_outlined,
+              label: 'UPLOAD A SCREENSHOT',
+              filled: true,
+            ),
+            const SizedBox(height: 12),
+            _BigUploadButton(
+              onTap: () => _pick(ImageSource.camera),
+              icon: Icons.camera_alt_outlined,
+              label: 'TAKE A NEW PHOTO',
+              filled: false,
+            ),
+            const SizedBox(height: 18),
+            if (!_showTextEntry)
+              Center(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _showTextEntry = true);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text('or type her message  ›',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textSecondary,
+                        fontSize: 13, letterSpacing: 0.4,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w600,
+                      )),
                   ),
-                  const SizedBox(width: 6),
-                  Text('RIZZ',
-                    style: GoogleFonts.inter(
-                      color: AppColors.red,
-                      fontSize: 12, letterSpacing: 3.6,
-                      fontWeight: FontWeight.w800,
-                    )),
-                ],
+                ),
+              )
+            else ...[
+              _TextInput(
+                controller: _herCtrl,
+                onChanged: (_) => setState(() {}),
               ),
-              const SizedBox(height: 10),
-              Text('Drop her text.\nGet 3 hits.',
-                style: GoogleFonts.playfairDisplay(
-                  color: Colors.white,
-                  fontSize: 38, height: 1.05,
-                  letterSpacing: -0.8,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w800,
-                )),
-
-              if (_scenario.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                _ScenarioPill(
-                  scenario: _scenario,
-                  onClear: () => setState(() => _scenario = ''),
-                ),
-              ],
-
-              const SizedBox(height: 24),
-
-              // Input area — single unified card. When no image is
-              // attached: a multiline text field on top + an "upload
-              // screenshot" tile row beneath. When an image is
-              // attached: the image preview replaces the text area
-              // and the row collapses to a single "change image" tile.
-              if (hasImage)
-                _ScreenshotPreview(
-                  bytes: _screenshotBytes!,
-                  onClear: _clearImage,
-                  onChange: () => _pick(ImageSource.gallery),
-                )
-              else
-                _TextInput(controller: _herCtrl, onChanged: (_) => setState(() {})),
-
-              const SizedBox(height: 12),
-
-              // OR + screenshot tiles. The OR divider only renders
-              // when no image is attached; once the user has uploaded
-              // a screenshot the text field is hidden so the OR is
-              // redundant.
-              if (!hasImage) ...[
-                _OrDivider(),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _UploadTile(
-                      icon: Icons.photo_library_outlined,
-                      label: 'UPLOAD',
-                      onTap: () => _pick(ImageSource.gallery),
-                    )),
-                    const SizedBox(width: 10),
-                    Expanded(child: _UploadTile(
-                      icon: Icons.camera_alt_outlined,
-                      label: 'TAKE PHOTO',
-                      onTap: () => _pick(ImageSource.camera),
-                    )),
-                  ],
-                ),
-              ],
-
-              const SizedBox(height: 24),
-
-              // Vibe chips.
-              SizedBox(
-                height: 38,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: RizzVibe.values
-                      .map((v) => _VibeChip(
-                            label: v.label,
-                            selected: _vibe == v,
-                            onTap: () {
-                              HapticFeedback.selectionClick();
-                              setState(() => _vibe = v);
-                            },
-                          ))
-                      .toList(),
-                ),
-              ),
-
-              const SizedBox(height: 22),
-
+              const SizedBox(height: 14),
               _GenerateButton(
                 enabled:    _canGenerate,
                 generating: _generating,
                 onTap:      _generate,
               ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
 
-              const SizedBox(height: 24),
+  // ── RESULTS STATE ──────────────────────────────────────────────────
+  Widget _resultsLayout() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Full screenshot preview (or typed-text card if no image).
+          if (_screenshotBytes != null)
+            _ScreenshotFull(bytes: _screenshotBytes!)
+          else if (_herCtrl.text.trim().isNotEmpty)
+            _TypedHerCard(text: _herCtrl.text.trim()),
 
-              // Results — iMessage-style bubble cards.
-              if (_replies != null) ...[
-                Text('TAP A BUBBLE TO COPY',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                    color: AppColors.textTertiary,
-                    fontSize: 11, letterSpacing: 2.8,
-                    fontWeight: FontWeight.w800,
-                  )),
-                const SizedBox(height: 16),
-                for (var i = 0; i < _replies!.length; i++) ...[
-                  _ReplyBubble(
-                    reply:    _replies![i],
-                    safeness: i,
-                    onTap:    () => _copy(_replies![i]),
-                  ),
-                  const SizedBox(height: 14),
-                ],
-              ],
+          const SizedBox(height: 18),
+
+          Center(
+            child: Text('TAP A REPLY TO COPY',
+              style: GoogleFonts.inter(
+                color: AppColors.textTertiary,
+                fontSize: 11, letterSpacing: 2.8,
+                fontWeight: FontWeight.w800,
+              )),
+          ),
+          const SizedBox(height: 14),
+
+          for (var i = 0; i < _replies!.length; i++) ...[
+            _ReplyBubble(
+              reply:    _replies![i],
+              safeness: i,
+              onTap:    () => _copy(_replies![i]),
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          const SizedBox(height: 8),
+
+          _GimmeMoreButton(
+            generating: _generating,
+            onTap:      _generate,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  final VoidCallback onBack;
+  final VoidCallback? onReset;
+  const _Header({required this.onBack, required this.onReset});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 14, 8),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                color: Colors.white, size: 18),
+          ),
+          const SizedBox(width: 4),
+          Text('RIZZ',
+            style: GoogleFonts.inter(
+              color: AppColors.red,
+              fontSize: 12, letterSpacing: 3.6,
+              fontWeight: FontWeight.w800,
+            )),
+          const Spacer(),
+          if (onReset != null)
+            Material(
+              color: AppColors.red,
+              shape: const CircleBorder(),
+              child: InkWell(
+                onTap: onReset,
+                customBorder: const CircleBorder(),
+                child: Container(
+                  width: 38, height: 38,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.add_rounded,
+                      color: Colors.white, size: 22),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScreenshotFull extends StatelessWidget {
+  final Uint8List bytes;
+  const _ScreenshotFull({required this.bytes});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: AppColors.red.withValues(alpha: 0.32), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.red.withValues(alpha: 0.14),
+            blurRadius: 22, offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.memory(
+          bytes,
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
+  }
+}
+
+class _TypedHerCard extends StatelessWidget {
+  final String text;
+  const _TypedHerCard({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.surface3, width: 0.6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('HER',
+            style: GoogleFonts.inter(
+              color: AppColors.red,
+              fontSize: 10, letterSpacing: 2.6,
+              fontWeight: FontWeight.w800,
+            )),
+          const SizedBox(height: 6),
+          Text('"$text"',
+            style: GoogleFonts.inter(
+              color: AppColors.textPrimary,
+              fontSize: 15, height: 1.4,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w500,
+            )),
+        ],
+      ),
+    );
+  }
+}
+
+class _GeneratingPanel extends StatelessWidget {
+  final Uint8List? bytes;
+  const _GeneratingPanel({required this.bytes});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (bytes != null)
+          _ScreenshotFull(bytes: bytes!),
+        const SizedBox(height: 22),
+        Center(
+          child: Column(
+            children: [
+              const SizedBox(
+                width: 28, height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.6, color: AppColors.red),
+              ),
+              const SizedBox(height: 14),
+              Text('READING THE CHAT…',
+                style: GoogleFonts.inter(
+                  color: AppColors.textSecondary,
+                  fontSize: 12, letterSpacing: 2.8,
+                  fontWeight: FontWeight.w800,
+                )),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BigUploadButton extends StatelessWidget {
+  final VoidCallback onTap;
+  final IconData icon;
+  final String label;
+  final bool filled;
+  const _BigUploadButton({
+    required this.onTap,
+    required this.icon,
+    required this.label,
+    required this.filled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: filled ? AppColors.red : Colors.transparent,
+      borderRadius: BorderRadius.circular(99),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(99),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(99),
+            border: filled
+                ? null
+                : Border.all(
+                    color: AppColors.red.withValues(alpha: 0.6), width: 1.2),
+            boxShadow: filled
+                ? [
+                    BoxShadow(
+                      color: AppColors.red.withValues(alpha: 0.4),
+                      blurRadius: 24, offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                color: filled ? Colors.white : AppColors.red, size: 20),
+              const SizedBox(width: 10),
+              Text(label,
+                style: GoogleFonts.inter(
+                  color: filled ? Colors.white : AppColors.red,
+                  fontSize: 13.5, letterSpacing: 2.6,
+                  fontWeight: FontWeight.w900,
+                )),
             ],
           ),
         ),
@@ -300,8 +516,8 @@ class _TextInput extends StatelessWidget {
       child: TextField(
         controller: controller,
         onChanged: onChanged,
-        maxLines: 5,
-        minLines: 4,
+        maxLines: 4,
+        minLines: 3,
         maxLength: 420,
         cursorColor: AppColors.red,
         style: GoogleFonts.inter(
@@ -311,7 +527,7 @@ class _TextInput extends StatelessWidget {
           fontStyle: FontStyle.italic,
         ),
         decoration: InputDecoration(
-          hintText: 'Type what she said …',
+          hintText: 'What did she say?',
           hintStyle: GoogleFonts.inter(
             color: AppColors.textTertiary,
             fontSize: 16, height: 1.45,
@@ -324,183 +540,6 @@ class _TextInput extends StatelessWidget {
           focusedBorder:    InputBorder.none,
           contentPadding:   EdgeInsets.zero,
           isDense:          true,
-        ),
-      ),
-    );
-  }
-}
-
-class _ScreenshotPreview extends StatelessWidget {
-  final Uint8List   bytes;
-  final VoidCallback onClear;
-  final VoidCallback onChange;
-  const _ScreenshotPreview({
-    required this.bytes,
-    required this.onClear,
-    required this.onChange,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.red.withValues(alpha: 0.4), width: 0.9),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.image_rounded,
-                  color: AppColors.red, size: 16),
-              const SizedBox(width: 8),
-              Text('SCREENSHOT READY',
-                style: GoogleFonts.inter(
-                  color: AppColors.red,
-                  fontSize: 11, letterSpacing: 2.6,
-                  fontWeight: FontWeight.w800,
-                )),
-              const Spacer(),
-              GestureDetector(
-                onTap: onChange,
-                child: Text('CHANGE',
-                  style: GoogleFonts.inter(
-                    color: AppColors.textSecondary,
-                    fontSize: 11, letterSpacing: 2.4,
-                    fontWeight: FontWeight.w800,
-                  )),
-              ),
-              const SizedBox(width: 14),
-              GestureDetector(
-                onTap: onClear,
-                child: const Icon(Icons.close_rounded,
-                    color: AppColors.textSecondary, size: 18),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Center(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 220),
-                child: Image.memory(bytes,
-                  fit: BoxFit.contain),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OrDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: Container(
-          height: 0.6, color: AppColors.surface3)),
-        const SizedBox(width: 10),
-        Text('OR',
-          style: GoogleFonts.inter(
-            color: AppColors.textTertiary,
-            fontSize: 10.5, letterSpacing: 2.4,
-            fontWeight: FontWeight.w800,
-          )),
-        const SizedBox(width: 10),
-        Expanded(child: Container(
-          height: 0.6, color: AppColors.surface3)),
-      ],
-    );
-  }
-}
-
-class _UploadTile extends StatelessWidget {
-  final IconData icon;
-  final String   label;
-  final VoidCallback onTap;
-  const _UploadTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface1,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        splashColor: AppColors.red.withValues(alpha: 0.08),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppColors.red.withValues(alpha: 0.4), width: 0.9),
-          ),
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: AppColors.red, size: 22),
-              const SizedBox(height: 8),
-              Text(label,
-                style: GoogleFonts.inter(
-                  color: AppColors.red,
-                  fontSize: 11, letterSpacing: 2.4,
-                  fontWeight: FontWeight.w800,
-                )),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _VibeChip extends StatelessWidget {
-  final String label;
-  final bool   selected;
-  final VoidCallback onTap;
-  const _VibeChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 10),
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? AppColors.red : AppColors.surface1,
-            borderRadius: BorderRadius.circular(99),
-            border: Border.all(
-              color: selected ? AppColors.red : AppColors.surface3,
-              width: 0.8,
-            ),
-          ),
-          child: Text(label,
-            style: GoogleFonts.inter(
-              color: selected ? Colors.white : AppColors.textSecondary,
-              fontSize: 12, letterSpacing: 2.4,
-              fontWeight: FontWeight.w800,
-            )),
         ),
       ),
     );
@@ -521,12 +560,12 @@ class _GenerateButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: enabled ? AppColors.red : AppColors.surface3,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(99),
       child: InkWell(
         onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(99),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 20),
+          padding: const EdgeInsets.symmetric(vertical: 18),
           alignment: Alignment.center,
           child: generating
               ? const SizedBox(
@@ -558,64 +597,64 @@ class _GenerateButton extends StatelessWidget {
   }
 }
 
-/// The locked-in scenario pill shown under the headline when the user
-/// arrived from a preset on the Rizz tab landing. Lets them see the
-/// active scenario at a glance and clear it without leaving.
-class _ScenarioPill extends StatelessWidget {
-  final String scenario;
-  final VoidCallback onClear;
-  const _ScenarioPill({required this.scenario, required this.onClear});
+class _GimmeMoreButton extends StatelessWidget {
+  final bool generating;
+  final VoidCallback onTap;
+  const _GimmeMoreButton({
+    required this.generating,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
-      decoration: BoxDecoration(
-        color: AppColors.red.withValues(alpha: 0.14),
+    return Material(
+      color: AppColors.red,
+      borderRadius: BorderRadius.circular(99),
+      child: InkWell(
+        onTap: generating ? null : onTap,
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(
-          color: AppColors.red.withValues(alpha: 0.45), width: 0.8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.bolt_rounded,
-              color: AppColors.red, size: 14),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(scenario,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
-                color: AppColors.red,
-                fontSize: 12, height: 1.25,
-                letterSpacing: 0.2,
-                fontWeight: FontWeight.w700,
-              )),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(99),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.red.withValues(alpha: 0.4),
+                blurRadius: 24, offset: const Offset(0, 6),
+              ),
+            ],
           ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: onClear,
-            behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.all(4),
-              child: Icon(Icons.close_rounded,
-                  color: AppColors.red, size: 14),
-            ),
-          ),
-        ],
+          alignment: Alignment.center,
+          child: generating
+              ? const SizedBox(
+                  width: 20, height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.refresh_rounded,
+                        color: Colors.white, size: 20),
+                    const SizedBox(width: 8),
+                    Text('GIMME MORE',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14, letterSpacing: 2.8,
+                        fontWeight: FontWeight.w900,
+                      )),
+                  ],
+                ),
+        ),
       ),
     );
   }
 }
 
-/// iMessage-style result bubble. Each reply renders as a chat bubble
-/// pointed right (i.e. "from you"), in Mirrorly red. The MOVE LABEL
-/// + SAFENESS tier sits as a small footer beneath each bubble so the
-/// teaching layer stays visible without competing with the line.
+/// iMessage-style result bubble — right-aligned red, with a small
+/// footer pair "SAFEST · MOVE LABEL" beneath each.
 class _ReplyBubble extends StatelessWidget {
   final RizzReply reply;
-  final int safeness; // 0 = safest, 1 = mid, 2 = boldest
+  final int safeness;
   final VoidCallback onTap;
   const _ReplyBubble({
     required this.reply,
@@ -637,10 +676,9 @@ class _ReplyBubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // Right-aligned bubble.
           ConstrainedBox(
             constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.78,
+              maxWidth: MediaQuery.of(context).size.width * 0.82,
             ),
             child: Container(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
