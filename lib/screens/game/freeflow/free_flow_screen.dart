@@ -1804,10 +1804,11 @@ class _ChangeCharacterChip extends StatelessWidget {
 /// The ARENA pill — a clean one-tap route into the scripted-scene
 /// picker without leaving the tab. Sits next to the timer in tab
 /// mode where the close button used to live.
-/// ARENA — a proper button (solid red pill with a sword-emoji icon
-/// in front of the label). Replaces the previous tiny outlined pill
-/// so the route into the scripted-scene picker reads as an action,
-/// not an afterthought.
+/// ARENA — a real proper button. Solid red pill, fire icon on the
+/// left, ARENA label, arrow on the right. Sized to read as an
+/// action, not a status chip. Sits in the top chrome where the
+/// close button used to live so it's the first thing the eye lands
+/// on after the orb.
 class _ArenaPill extends StatelessWidget {
   final VoidCallback onTap;
   const _ArenaPill({required this.onTap});
@@ -1820,15 +1821,16 @@ class _ArenaPill extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(100),
-        splashColor: Colors.white.withValues(alpha: 0.1),
+        splashColor: Colors.white.withValues(alpha: 0.12),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(100),
             boxShadow: [
               BoxShadow(
-                color: AppColors.red.withValues(alpha: 0.35),
-                blurRadius: 14, spreadRadius: 0,
+                color: AppColors.red.withValues(alpha: 0.45),
+                blurRadius: 22, spreadRadius: 0,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -1836,14 +1838,17 @@ class _ArenaPill extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.local_fire_department_rounded,
-                  color: Colors.white, size: 14),
-              const SizedBox(width: 6),
+                  color: Colors.white, size: 18),
+              const SizedBox(width: 8),
               Text('ARENA',
                 style: AppTypography.label.copyWith(
                   color: Colors.white,
-                  fontSize: 12, letterSpacing: 2.6,
+                  fontSize: 14, letterSpacing: 3.0,
                   fontWeight: FontWeight.w900,
                 )),
+              const SizedBox(width: 8),
+              const Icon(Icons.arrow_forward_rounded,
+                  color: Colors.white, size: 16),
             ],
           ),
         ),
