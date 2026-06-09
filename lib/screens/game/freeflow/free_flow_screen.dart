@@ -717,16 +717,53 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
 
   void _closeScreen() {
     if (!mounted) return;
-    // Pop only — dispose() runs on pop and performs all teardown
-    // (mic, session, pcm engine), so we never double-close anything.
     _clock?.cancel();
     _createTimer?.cancel();
-    // Mark Game milestone for the App Store review prompt. The
-    // dialog itself fires on the next home-screen mount once all
-    // three pillars (scan + Free Flow + eye lesson) are ticked.
+    // Mark Game milestone for the App Store review prompt.
     // ignore: discarded_futures
     ReviewPromptService.markFreeFlowDone();
+    // In tab mode there's no route to pop — safePop would either
+    // no-op (best case) or break the tab. Instead, restart the
+    // session: tear down the realtime + reset state back to the
+    // live circle so the user can run it back without leaving the
+    // GAME tab. The default persona is picked again.
+    if (widget.tabMode) {
+      _restartTabSession();
+      return;
+    }
     safePop(context);
+  }
+
+  /// Tab-mode reset — tear the current session down and spin up a
+  /// fresh INTO YOU session so the orb is ready again. Used by DONE
+  /// + RUN IT BACK on the scorecard since neither has a screen to
+  /// pop to when the GAME tab IS Free Flow.
+  Future<void> _restartTabSession() async {
+    final v = _vibe ?? _vibes.firstWhere(
+      (x) => x.key == 'into_you',
+      orElse: () => _vibes.first,
+    );
+    _clock?.cancel();
+    _createTimer?.cancel();
+    _eventSub?.cancel();
+    _micSub?.cancel();
+    // ignore: discarded_futures
+    _recorder.stop();
+    // ignore: discarded_futures
+    _session.close();
+    if (!mounted) return;
+    setState(() {
+      _phase = _Phase.connecting;
+      _transcript.clear();
+      _herCaption  = '';
+      _youCaption  = '';
+      _herSpeaking = false;
+      _holding     = false;
+      _result      = null;
+      _remaining   = _sessionSeconds;
+      _clockStarted = false;
+    });
+    await _goLive(v);
   }
 
   /// GAME tab — open the arena scene picker. Pushes on top of the
@@ -1412,13 +1449,19 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                             ? true
                             : await LocalStoreService.isSubscribed();
                         if (!mounted) return;
-                        if (pro) {
+                        if (!pro) {
+                          _closeScreen();
+                          return;
+                        }
+                        // Tab mode resets inline so the user stays in
+                        // the GAME tab. Standalone push replaces.
+                        if (widget.tabMode) {
+                          _restartTabSession();
+                        } else {
                           Navigator.of(context, rootNavigator: true)
                               .pushReplacement(MaterialPageRoute(
                             builder: (_) => const FreeFlowScreen(),
                           ));
-                        } else {
-                          _closeScreen();
                         }
                       },
                     ),

@@ -161,10 +161,30 @@ class RizzReplyService {
     }
   }
 
+  /// Parse the model's reply into [RizzReply]s. The /chat endpoint is
+  /// a general chat surface, not a structured-output API, so models
+  /// sometimes wrap the JSON in fences ("```json…```"), chat preamble
+  /// ("Sure! Here are three options: …"), or fall out of JSON entirely
+  /// and return a numbered list. We try every format we've seen so the
+  /// UI always lands real rizz instead of falling through to the
+  /// curated arsenal fallback.
   static List<RizzReply> _parseReplies(String raw) {
     if (raw.trim().isEmpty) return const [];
-    // The backend may wrap the JSON in fences or chatty text. Find the
-    // first `[` and last `]` and try parsing just that slice.
+
+    // 1) Try strict JSON array — the format we ask for in the prompt.
+    final jsonResult = _tryParseJsonArray(raw);
+    if (jsonResult.length >= 3) return jsonResult;
+
+    // 2) Try line-by-line — numbered list, bullets, or plain lines.
+    final lineResult = _tryParseLines(raw);
+    if (lineResult.length >= 3) return lineResult;
+
+    // Return whatever we got even if < 3 — the caller falls back to
+    // the curated arsenal when this list is shorter than 3.
+    return jsonResult.isNotEmpty ? jsonResult : lineResult;
+  }
+
+  static List<RizzReply> _tryParseJsonArray(String raw) {
     final start = raw.indexOf('[');
     final end   = raw.lastIndexOf(']');
     if (start < 0 || end <= start) return const [];
@@ -187,6 +207,49 @@ class RizzReplyService {
     } catch (_) {
       return const [];
     }
+  }
+
+  /// Last-ditch parser — pull up to 3 reply lines out of:
+  ///   1. "ngl your aura is unforgivable"
+  ///   2. "we'd date six months..."
+  ///   3. ...
+  /// or
+  ///   • line one
+  ///   • line two
+  /// or just plain newline-separated quoted strings.
+  static List<RizzReply> _tryParseLines(String raw) {
+    final out = <RizzReply>[];
+    final stripped = raw
+        .replaceAll('```json', '')
+        .replaceAll('```', '')
+        .trim();
+    // Strip leading list-marker characters and any trailing tag/punc.
+    final numbered = RegExp(r'^(?:\s*(?:\d+[\.\)]|[-*•])\s*)?');
+    for (final rawLine in stripped.split('\n')) {
+      var line = rawLine.trim();
+      if (line.isEmpty) continue;
+      line = line.replaceFirst(numbered, '');
+      // Drop wrapping quotes.
+      if ((line.startsWith('"') && line.endsWith('"')) ||
+          (line.startsWith('"') && line.endsWith('"'))) {
+        line = line.substring(1, line.length - 1).trim();
+      }
+      // Skip lines that look like chat preamble or labels.
+      final lower = line.toLowerCase();
+      if (lower.length > 140) continue;
+      if (lower.startsWith('here') ||
+          lower.startsWith('sure') ||
+          lower.startsWith('option') ||
+          lower.startsWith('safest') ||
+          lower.startsWith('boldest') ||
+          lower.startsWith('reply')) {
+        continue;
+      }
+      if (line.isEmpty) continue;
+      out.add(RizzReply(text: line, tag: 'RIZZ'));
+      if (out.length == 3) break;
+    }
+    return out;
   }
 
   /// THE RIZZ GOD — elite system prompt embedded as a user message
