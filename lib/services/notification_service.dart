@@ -30,6 +30,10 @@ import '../providers/auralay_app_provider.dart';
 /// lose retention features — the rest of the app still works.
 class NotificationService {
   static final _plugin = FlutterLocalNotificationsPlugin();
+
+  /// Exposed for DailyNudgeService — which schedules its own
+  /// id alongside the legacy IDs this service still manages.
+  static FlutterLocalNotificationsPlugin get plugin => _plugin;
   static bool _initialized = false;
   static bool _permissionRequested = false;
 

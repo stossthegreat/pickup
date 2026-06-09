@@ -6,6 +6,7 @@ import 'config/dev_flags.dart';
 import 'navigation/app_router.dart';
 import 'providers/auralay_app_provider.dart';
 import 'services/analytics_service.dart';
+import 'services/daily_nudge_service.dart';
 import 'services/local_store_service.dart';
 import 'services/notification_service.dart';
 import 'services/purchase_service.dart';
@@ -37,6 +38,12 @@ void main() async {
   // it's deferred to the first protocol start so the prompt has context
   // ("your streak reminder").
   await NotificationService.init();
+
+  // Daily retention nudge — single 7:30pm notification, state-picked
+  // copy. Marks app-open + reschedules; this replaces the legacy
+  // streak/training/rescan schedulers which fired too often.
+  // ignore: discarded_futures
+  DailyNudgeService.markAppOpened();
 
   // ── Auralay training-streak nudge ──────────────────────────────────────
   // Reschedule the 9pm training nudge with the latest streak state every
