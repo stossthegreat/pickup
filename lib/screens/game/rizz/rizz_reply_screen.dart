@@ -216,13 +216,6 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
               label: 'UPLOAD A SCREENSHOT',
               filled: true,
             ),
-            const SizedBox(height: 12),
-            _BigUploadButton(
-              onTap: () => _pick(ImageSource.camera),
-              icon: Icons.camera_alt_outlined,
-              label: 'TAKE A NEW PHOTO',
-              filled: false,
-            ),
             const SizedBox(height: 18),
             if (!_showTextEntry)
               Center(
