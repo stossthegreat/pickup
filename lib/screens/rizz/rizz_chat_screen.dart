@@ -1,15 +1,13 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
-import '../../config/api_config.dart';
 import '../../services/screenshot_ocr_service.dart';
+import '../../services/villain/villain_api.dart';
 import '../../theme/app_colors.dart';
 
 /// CHAT WITH MIRRORLY — clean, sexy, no-bullshit dating + self-improvement
@@ -151,61 +149,38 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
           : m.text;
       history.add({'role': 'user', 'content': content});
     }
-    print('[RIZZ-CHAT] sending ${history.length} msgs, '
-        'image=${image != null}');
+    // CRITICAL: use VillainApi.council on the Auralay backend, NOT
+    // /chat on the Mirrorly backend. /chat is hard-wired to the face
+    // doctor and short-circuits / overrides our rizz preamble.
+    // council is its own LLM pipe with no face context — the rizz
+    // preamble actually drives the response.
+    //
+    // Auralay's council expects {role, text} history + a text field
+    // for the current turn (not OpenAI-style {role, content}).
+    final lastUserText = history.isEmpty
+        ? text
+        : history.last['content'] as String;
+    final priorHistory = history.length > 1
+        ? history
+            .sublist(0, history.length - 1)
+            .map((m) => VillainHistoryEntry(
+                  role: 'user',
+                  text: m['content'] as String,
+                ))
+            .toList()
+        : const <VillainHistoryEntry>[];
     try {
-      _dbg('POST /chat with ${history.length} msgs');
-      final res = await http
-          .post(
-            Uri.parse('${ApiConfig.backendBaseUrl}/chat'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'messages': history,
-              // Realistic-looking placeholder face — gets past the
-              // backend's "No measurements provided — tell user to
-              // rescan" short-circuit so the LLM actually runs and
-              // sees our rizz mentor preamble.
-              'face': {
-                'geometry': const {
-                  'canthalTilt':          0.0,
-                  'symmetryScore':        82.0,
-                  'facialThirdTop':       33.0,
-                  'facialThirdMid':       33.0,
-                  'facialThirdLow':       34.0,
-                  'fwhr':                 1.9,
-                  'eyeSpacingRatio':      0.46,
-                  'jawAngle':             125.0,
-                  'chinProjection':       0.0,
-                  'faceLengthRatio':      1.30,
-                  'noseLengthRatio':      0.40,
-                  'lipFullness':          0.10,
-                  'brow2EyeGap':          0.05,
-                  'philtrumRatio':        0.30,
-                  'interpupillaryRatio':  0.43,
-                  'headShape':            'oval',
-                  'jawWidthRatio':        0.80,
-                },
-                'score':     78,
-                'tier':      'Strong',
-                'archetype': 'The Modern Man',
-                if (image != null) 'imageBase64': base64Encode(image),
-              },
-              'mode': 'rizz_mentor',
-            }),
-          )
-          .timeout(const Duration(seconds: 45));
-      _dbg('status=${res.statusCode}');
-      if (res.statusCode == 200) {
-        final body = jsonDecode(res.body) as Map<String, dynamic>;
-        final reply = (body['reply'] as String?)?.trim() ?? '';
-        _dbg('reply len=${reply.length}');
-        if (reply.isNotEmpty) return reply;
-        _dbg('empty reply field');
-      } else {
-        _dbg('non-200 body="${res.body.length > 200 ? "${res.body.substring(0, 200)}…" : res.body}"');
-      }
+      _dbg('POST council with ${history.length} msgs');
+      final turn = await VillainApi.council(
+        text:    lastUserText,
+        history: priorHistory,
+      ).timeout(const Duration(seconds: 45));
+      _dbg('reply len=${turn.reply.length}');
+      final reply = turn.reply.trim();
+      if (reply.isNotEmpty) return reply;
+      _dbg('empty reply');
     } catch (e) {
-      _dbg('threw $e');
+      _dbg('council threw $e');
     }
     return 'Try rephrasing — backend gave me nothing usable.';
   }
