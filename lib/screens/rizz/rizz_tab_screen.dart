@@ -67,7 +67,7 @@ class RizzTabScreen extends StatelessWidget {
               .slideY(begin: 0.02, end: 0, duration: 360.ms,
                   curve: Curves.easeOut),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 28),
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -81,7 +81,7 @@ class RizzTabScreen extends StatelessWidget {
               .slideY(begin: 0.02, end: 0, duration: 360.ms,
                   curve: Curves.easeOut),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 28),
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
