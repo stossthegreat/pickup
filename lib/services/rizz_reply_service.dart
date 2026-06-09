@@ -44,7 +44,38 @@ class RizzDebug {
   }
 }
 
-/// Five tonal vibes the user can request. AUTO lets the model pick
+/// Default placeholder face block that gets the backend past its
+/// "no measurements provided" guard. The /chat endpoint short-
+/// circuits on empty geometry/archetype, never reaching the LLM —
+/// the debug trace showed that hardcoded reply on every rizz call.
+/// These numbers don't matter (the rizz preamble in the user message
+/// overrides the face-doctor framing once the model sees them); we
+/// just need them PRESENT and shaped like the real Mirror payload.
+Map<String, dynamic> _placeholderFace({String? imageBase64}) => {
+  'geometry': const <String, dynamic>{
+    'canthalTilt':          0.0,
+    'symmetryScore':        82.0,
+    'facialThirdTop':       33.0,
+    'facialThirdMid':       33.0,
+    'facialThirdLow':       34.0,
+    'fwhr':                 1.9,
+    'eyeSpacingRatio':      0.46,
+    'jawAngle':             125.0,
+    'chinProjection':       0.0,
+    'faceLengthRatio':      1.30,
+    'noseLengthRatio':      0.40,
+    'lipFullness':          0.10,
+    'brow2EyeGap':          0.05,
+    'philtrumRatio':        0.30,
+    'interpupillaryRatio':  0.43,
+    'headShape':            'oval',
+    'jawWidthRatio':        0.80,
+  },
+  'score':     78,
+  'tier':      'Strong',
+  'archetype': 'The Modern Man',
+  if (imageBase64 != null) 'imageBase64': imageBase64,
+};
 /// based on her cadence. The other four are hard pulls.
 enum RizzVibe { auto, funny, flirty, smooth, bold }
 
@@ -162,13 +193,7 @@ class RizzReplyService {
               'messages': [
                 {'role': 'user', 'content': messageText},
               ],
-              'face': {
-                'geometry':  const <String, dynamic>{},
-                'score':     0,
-                'tier':      '',
-                'archetype': '',
-                if (imageB64 != null) 'imageBase64': imageB64,
-              },
+              'face': _placeholderFace(imageBase64: imageB64),
               'mode': 'rizz_reply',
             }),
           )
