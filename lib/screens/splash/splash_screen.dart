@@ -21,13 +21,16 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _boot() async {
-    // Minimum splash duration so the brand moment registers.
     final onboarded   = await LocalStoreService.isOnboarded();
     final hasGender   = (await LocalStoreService.userGender()) != null;
     await Future.delayed(const Duration(milliseconds: 2400));
     if (!mounted) return;
 
     // Gating order:
+    //
+    // 0) FIRST EVER LAUNCH (no gender, never onboarded) → play the
+    //    cinematic INTRO REEL. It pushes /onboarding/gender after BEGIN
+    //    so the rest of the funnel proceeds as designed.
     //
     // 1) Has the user picked Men's / Women's? If NOT — even if they've
     //    already completed onboarding on a previous version of the app
@@ -41,7 +44,9 @@ class _SplashScreenState extends State<SplashScreen> {
     //    /onboarding/gender too. Same destination as case 1 but the
     //    gender screen also serves as the entry funnel for first
     //    launches.
-    if (!hasGender) {
+    if (!hasGender && !onboarded) {
+      context.go('/intro');
+    } else if (!hasGender) {
       context.go('/onboarding/gender');
     } else {
       context.go(onboarded ? '/home' : '/scan');
