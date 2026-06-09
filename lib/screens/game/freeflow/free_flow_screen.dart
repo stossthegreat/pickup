@@ -204,6 +204,18 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   /// session clock only starts ticking on that first press — sitting
   /// on the screen reading the scenario shouldn't burn seconds.
   bool _clockStarted = false;
+  /// True once the tab-mode auto-start has fired. Prevents the
+  /// addPostFrameCallback from firing _goLive twice if the framework
+  /// rebuilds the screen before the first frame settles (the source
+  /// of the "now it works, now it doesn't" intermittent breakage).
+  bool _tabAutoStartFired = false;
+
+  /// True while _goLive is in flight. Stops competing entry points
+  /// (CHANGE CHARACTER, RUN IT BACK, auto-start) from queuing a
+  /// second connect on top of an in-progress one — which produced
+  /// the silent/stuck state where the orb appeared live but the
+  /// realtime session had been torn down by the second call.
+  bool _connectInFlight = false;
 
   @override
   void initState() {
@@ -215,7 +227,8 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     // open the tab. They can switch character via the top-left chip.
     if (widget.tabMode) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted || _tabAutoStartFired) return;
+        _tabAutoStartFired = true;
         final defaultVibe = _vibes.firstWhere(
           (v) => v.key == 'into_you',
           orElse: () => _vibes.first,
@@ -254,6 +267,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   // ─── Go live ────────────────────────────────────────────────────────
 
   Future<void> _goLive(_Vibe vibe) async {
+    // Guard against double-entry. The tab-mode auto-start, CHANGE
+    // CHARACTER picks, and RUN IT BACK all call _goLive — when two
+    // fire close together the WS connect races and the second tears
+    // the first's session down silently, which is "now it works,
+    // now it doesn't".
+    if (_connectInFlight) return;
+    _connectInFlight = true;
     setState(() {
       _vibe = vibe;
       _phase = _Phase.connecting;
@@ -341,6 +361,8 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       HapticFeedback.mediumImpact();
     } catch (e) {
       _fail(e.toString());
+    } finally {
+      _connectInFlight = false;
     }
   }
 

@@ -116,21 +116,51 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     }
   }
 
+  /// The Rizz-mentor system prompt. Prepended to EVERY user message
+  /// so the model is jailed into rizz-coach mode even though the
+  /// backend's /chat endpoint is wired for the face doctor. The
+  /// server prompt biases toward "advise on the user's face scan";
+  /// this preamble overrides by stating the new role + banning the
+  /// off-topic moves explicitly.
+  static const _rizzMentorPreamble = '''
+You are RIZZ MENTOR — an elite dating + self-improvement coach for
+men 18-30. You speak in short, direct, screenshot-worthy lines. You
+are NOT a face advisor: do NOT mention canthal tilt, jaw angle,
+facial measurements, FWHR, archetypes, or any "scan" data, even if
+some appears in your system context. The user is asking about
+women, dating apps, social skills, style, frame, confidence, or
+self-improvement. Stay there.
+
+Ground rules:
+- 2026 Gen-Z tone, not 2014 PUA
+- Confident, not arrogant. Direct, not desperate
+- Short answers by default. 2-4 sentences. Lists when comparing
+  options
+- When the user shows you a chat screenshot or quotes her words,
+  read THE LAST THING SHE SAID and write three concrete reply
+  options ranked safest → boldest
+- Concrete advice always > abstract pep-talk
+- No emojis unless they're load-bearing
+
+User's actual question follows:
+---
+''';
+
   Future<String> _ask(String text, {Uint8List? image}) async {
-    // IMPORTANT — same payload shape as ChatService.send (the Mirror
-    // chat that works). Backend expects {role, content}, NOT {role,
-    // text}, and a `face` object with at least an archetype +
-    // imageBase64 slot. Sending the wrong shape was why this chat
-    // returned the generic network-error string every time.
+    // Same payload shape as ChatService.send (the Mirror advisor)
+    // — {role, content} messages + face block — but every user
+    // message is wrapped in the RIZZ MENTOR preamble so the model
+    // ignores the face-advisor system prompt the backend stamps in.
     final history = <Map<String, dynamic>>[];
     for (final m in _msgs) {
-      history.add({'role': m.role, 'content': m.text});
+      final isLastUser = identical(m, _msgs.last) && m.role == 'user';
+      final content = isLastUser
+          ? '$_rizzMentorPreamble${text.isEmpty ? "(screenshot attached)" : text}'
+          : m.text;
+      history.add({'role': m.role, 'content': content});
     }
-    if (history.isNotEmpty && history.last['role'] == 'user') {
-      history.last['content'] = text.isEmpty
-          ? '(screenshot attached)'
-          : text;
-    }
+    print('[RIZZ-CHAT] sending ${history.length} msgs, '
+        'image=${image != null}');
     try {
       final res = await http
           .post(
@@ -138,11 +168,10 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'messages': history,
-              // Face block — keep the same keys ChatService sends so
-              // the backend can route this through the same code path
-              // as the Mirror chat without rejecting the request. No
-              // real scan data is needed for rizz advice; placeholder
-              // values keep the schema valid.
+              // Face block — same keys ChatService sends so the backend
+              // routes us through the working code path. Placeholder
+              // values keep the schema valid; the preamble overrides
+              // the face-doctor framing.
               'face': {
                 'geometry':  const <String, dynamic>{},
                 'score':     0,
@@ -154,12 +183,18 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
             }),
           )
           .timeout(const Duration(seconds: 45));
+      print('[RIZZ-CHAT] status=${res.statusCode}');
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         final reply = (body['reply'] as String?)?.trim() ?? '';
         if (reply.isNotEmpty) return reply;
+        print('[RIZZ-CHAT] empty reply field');
+      } else {
+        print('[RIZZ-CHAT] non-200 body=${res.body}');
       }
-    } catch (_) {/* fall through */}
+    } catch (e) {
+      print('[RIZZ-CHAT] throw $e');
+    }
     return 'Couldn\'t reach the coach. Check your connection and try again.';
   }
 

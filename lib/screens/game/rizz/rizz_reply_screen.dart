@@ -102,16 +102,28 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
       _generating = true;
       _replies = null;
     });
-    final result = await RizzReplyService.generate(
-      herMessage:       _herCtrl.text.trim(),
-      screenshotBytes:  _screenshotBytes,
-      vibe:             RizzVibe.auto,
-    );
-    if (!mounted) return;
-    setState(() {
-      _replies = result;
-      _generating = false;
-    });
+    print('[RIZZ-SCREEN] _generate start hasImage=${_screenshotBytes != null} '
+        'textLen=${_herCtrl.text.trim().length}');
+    // Try-finally guarantees the spinner is reset even if generate
+    // throws — the screen never gets stuck in "loading" forever.
+    try {
+      final result = await RizzReplyService.generate(
+        herMessage:       _herCtrl.text.trim(),
+        screenshotBytes:  _screenshotBytes,
+        vibe:             RizzVibe.auto,
+      ).timeout(const Duration(seconds: 60));
+      print('[RIZZ-SCREEN] _generate got ${result.length} replies');
+      if (!mounted) return;
+      setState(() {
+        _replies = result;
+        _generating = false;
+      });
+    } catch (e) {
+      print('[RIZZ-SCREEN] _generate throw $e');
+      if (!mounted) return;
+      setState(() => _generating = false);
+      _snack('Couldn\'t generate — try again.');
+    }
   }
 
   Future<void> _copy(RizzReply r) async {
@@ -346,6 +358,11 @@ class _ScreenshotFull extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Cap the screenshot at HALF the screen height. The rest of the
+    // page (rizz bubbles + GIMME MORE) needs room to breathe; an
+    // unconstrained Image.memory was filling the whole viewport and
+    // pushing the results off the bottom.
+    final maxH = MediaQuery.of(context).size.height * 0.42;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface1,
@@ -360,11 +377,15 @@ class _ScreenshotFull extends StatelessWidget {
         ],
       ),
       padding: const EdgeInsets.all(8),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.memory(
-          bytes,
-          fit: BoxFit.contain,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxH),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.memory(
+            bytes,
+            fit: BoxFit.contain,
+            alignment: Alignment.topCenter,
+          ),
         ),
       ),
     );
