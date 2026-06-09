@@ -217,11 +217,33 @@ User's actual question follows:
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'messages': history,
+              // Realistic-looking placeholder face — gets past the
+              // backend's "No measurements provided — tell user to
+              // rescan" short-circuit so the LLM actually runs and
+              // sees our rizz mentor preamble.
               'face': {
-                'geometry':  const <String, dynamic>{},
-                'score':     0,
-                'tier':      '',
-                'archetype': '',
+                'geometry': const {
+                  'canthalTilt':          0.0,
+                  'symmetryScore':        82.0,
+                  'facialThirdTop':       33.0,
+                  'facialThirdMid':       33.0,
+                  'facialThirdLow':       34.0,
+                  'fwhr':                 1.9,
+                  'eyeSpacingRatio':      0.46,
+                  'jawAngle':             125.0,
+                  'chinProjection':       0.0,
+                  'faceLengthRatio':      1.30,
+                  'noseLengthRatio':      0.40,
+                  'lipFullness':          0.10,
+                  'brow2EyeGap':          0.05,
+                  'philtrumRatio':        0.30,
+                  'interpupillaryRatio':  0.43,
+                  'headShape':            'oval',
+                  'jawWidthRatio':        0.80,
+                },
+                'score':     78,
+                'tier':      'Strong',
+                'archetype': 'The Modern Man',
                 if (image != null) 'imageBase64': base64Encode(image),
               },
               'mode': 'rizz_mentor',
