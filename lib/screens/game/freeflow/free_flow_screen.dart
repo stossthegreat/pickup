@@ -722,16 +722,48 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     // Mark Game milestone for the App Store review prompt.
     // ignore: discarded_futures
     ReviewPromptService.markFreeFlowDone();
-    // In tab mode there's no route to pop — safePop would either
-    // no-op (best case) or break the tab. Instead, restart the
-    // session: tear down the realtime + reset state back to the
-    // live circle so the user can run it back without leaving the
-    // GAME tab. The default persona is picked again.
     if (widget.tabMode) {
-      _restartTabSession();
+      // In tab mode there's no route to pop. From a DONE / scored
+      // state we restart with the same vibe so the user lands back
+      // on the live orb ready to go. From an ERROR / stuck state we
+      // tear the session down and fall back to the picker so the
+      // user can choose a different character instead of looping
+      // _goLive on a vibe that just failed.
+      if (_phase == _Phase.error) {
+        _resetToPicker();
+      } else {
+        _restartTabSession();
+      }
       return;
     }
     safePop(context);
+  }
+
+  /// Tab-mode safety net — tear the session down and drop the user on
+  /// the picker. Used when an error / stuck connect leaves them with
+  /// nothing to interact with. The picker is the existing _buildPicker
+  /// rendered by setting phase = _Phase.pick.
+  void _resetToPicker() {
+    _eventSub?.cancel();
+    _micSub?.cancel();
+    // ignore: discarded_futures
+    _recorder.stop();
+    // ignore: discarded_futures
+    _session.close();
+    if (!mounted) return;
+    setState(() {
+      _phase         = _Phase.pick;
+      _vibe          = null;
+      _error         = '';
+      _transcript.clear();
+      _herCaption    = '';
+      _youCaption    = '';
+      _herSpeaking   = false;
+      _holding       = false;
+      _result        = null;
+      _remaining     = _sessionSeconds;
+      _clockStarted  = false;
+    });
   }
 
   /// Tab-mode reset — tear the current session down and spin up a
@@ -862,7 +894,9 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                           fontWeight: FontWeight.w900,
                         )),
                     const Spacer(),
-                    const SafeCloseButton(),
+                    // Picker close button is hidden in tab mode (the
+                    // tab IS the page — there's nowhere to close to).
+                    if (!widget.tabMode) const SafeCloseButton(),
                   ],
                 ),
               ),
@@ -1849,12 +1883,32 @@ class _CharacterPickerSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Text('CHANGE CHARACTER',
-              style: AppTypography.label.copyWith(
-                color: AppColors.red,
-                fontSize: 11, letterSpacing: 2.8,
-                fontWeight: FontWeight.w800,
-              )),
+            Row(
+              children: [
+                Text('CHANGE CHARACTER',
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.red,
+                    fontSize: 11, letterSpacing: 2.8,
+                    fontWeight: FontWeight.w800,
+                  )),
+                const Spacer(),
+                // CANCEL — escape route for users who opened the sheet
+                // by mistake. Returning null keeps the current session.
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Text('CANCEL',
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 11, letterSpacing: 2.4,
+                        fontWeight: FontWeight.w800,
+                      )),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 10),
             for (final v in _vibes) ...[
               _CharacterPickerRow(

@@ -102,8 +102,9 @@ class RizzReplyService {
       }
     } catch (_) {/* fall through */}
 
-    // 2) Fall back to /chat. GPT-4o vision reads the screenshot
-    // directly when imageBase64 is included — no OCR step needed.
+    // 2) Fall back to /chat — same payload shape as ChatService.send
+    // (the Mirror advisor that works). Backend expects {role, content},
+    // not {role, text}, and a face object containing imageBase64.
     try {
       final messageText = _buildPrompt(her, vibe, ctx,
           scenario: scn, hasScreenshot: hasImage);
@@ -113,11 +114,16 @@ class RizzReplyService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'messages': [
-                {'role': 'user', 'text': messageText},
+                {'role': 'user', 'content': messageText},
               ],
-              'face': const <String, dynamic>{},
+              'face': {
+                'geometry':  const <String, dynamic>{},
+                'score':     0,
+                'tier':      '',
+                'archetype': '',
+                if (imageB64 != null) 'imageBase64': imageB64,
+              },
               'mode': 'rizz_reply',
-              if (imageB64 != null) 'imageBase64': imageB64,
             }),
           )
           .timeout(const Duration(seconds: 40));

@@ -117,14 +117,17 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
   }
 
   Future<String> _ask(String text, {Uint8List? image}) async {
+    // IMPORTANT — same payload shape as ChatService.send (the Mirror
+    // chat that works). Backend expects {role, content}, NOT {role,
+    // text}, and a `face` object with at least an archetype +
+    // imageBase64 slot. Sending the wrong shape was why this chat
+    // returned the generic network-error string every time.
     final history = <Map<String, dynamic>>[];
     for (final m in _msgs) {
-      history.add({'role': m.role, 'text': m.text});
+      history.add({'role': m.role, 'content': m.text});
     }
-    // Replace the last user message with the effective (OCR-enriched)
-    // text so the model gets the chat context.
     if (history.isNotEmpty && history.last['role'] == 'user') {
-      history.last['text'] = text.isEmpty
+      history.last['content'] = text.isEmpty
           ? '(screenshot attached)'
           : text;
     }
@@ -135,9 +138,19 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'messages': history,
-              'face': const <String, dynamic>{},
+              // Face block — keep the same keys ChatService sends so
+              // the backend can route this through the same code path
+              // as the Mirror chat without rejecting the request. No
+              // real scan data is needed for rizz advice; placeholder
+              // values keep the schema valid.
+              'face': {
+                'geometry':  const <String, dynamic>{},
+                'score':     0,
+                'tier':      '',
+                'archetype': '',
+                if (image != null) 'imageBase64': base64Encode(image),
+              },
               'mode': 'rizz_mentor',
-              if (image != null) 'imageBase64': base64Encode(image),
             }),
           )
           .timeout(const Duration(seconds: 45));

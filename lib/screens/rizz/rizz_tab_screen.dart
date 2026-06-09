@@ -35,7 +35,24 @@ class RizzTabScreen extends StatelessWidget {
           children: [
             const MirrorlyMasthead(title: 'Rizz'),
 
-            const SizedBox(height: 24),
+            // Subtitle — a few words to frame the tab without crowding
+            // the cards.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: Text(
+                'Hit her phone. Every time.',
+                style: GoogleFonts.inter(
+                  color: AppColors.textSecondary,
+                  fontSize: 15, height: 1.4,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+
+            // Push the three cards down a couple cm so they breathe
+            // below the masthead + subtitle.
+            const SizedBox(height: 72),
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
