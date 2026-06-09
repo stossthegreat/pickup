@@ -4,6 +4,7 @@ import '../models/face_geometry.dart';
 import '../models/mirror_analysis.dart';
 import '../models/protocol.dart';
 import '../models/scan_record.dart';
+import 'daily_nudge_service.dart';
 import 'local_store_service.dart';
 import 'notification_service.dart';
 
@@ -119,6 +120,10 @@ class ProtocolService {
     // broken copy changes, and "completed today" pushes the next nudge to
     // tomorrow automatically.
     await NotificationService.scheduleStreakNudge(updated);
+    // Reschedule the unified daily nudge — a check-in flips state
+    // from PROTOCOL_BROKEN back into PROTOCOL_ACTIVE, so tonight's
+    // 7:30pm copy needs to switch.
+    await DailyNudgeService.reschedule();
     return updated;
   }
 

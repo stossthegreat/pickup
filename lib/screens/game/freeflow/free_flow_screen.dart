@@ -15,6 +15,7 @@ import '../../../services/audio_session.dart';
 import '../../../services/creator_mode_store.dart';
 import '../../../services/local_store_service.dart';
 import '../../../services/realtime_session.dart';
+import '../../../services/daily_nudge_service.dart';
 import '../../../services/review_prompt_service.dart';
 import '../../../services/share_service.dart';
 import '../../../services/user_memory.dart';
@@ -749,6 +750,11 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     // Mark Game milestone for the App Store review prompt.
     // ignore: discarded_futures
     ReviewPromptService.markFreeFlowDone();
+    // Reset the daily-nudge GAME_STALE clock. Tonight's 7:30pm copy
+    // will pick from the active-default pool instead of the stale-3d
+    // or stale-7d pool.
+    // ignore: discarded_futures
+    DailyNudgeService.markFreeFlowSession();
     if (widget.tabMode) {
       // In tab mode there's no route to pop. From a DONE / scored
       // state we restart with the same vibe so the user lands back

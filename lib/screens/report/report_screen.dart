@@ -11,6 +11,7 @@ import '../../models/mirror_analysis.dart';
 import '../../models/scan_record.dart';
 import '../../models/protocol.dart';
 import '../../services/archetype_service.dart';
+import '../../services/daily_nudge_service.dart';
 import '../../services/face_asset_service.dart';
 import '../../services/feature_analysis_service.dart';
 import '../../services/honest_rating_service.dart';
@@ -147,6 +148,11 @@ class _ReportScreenState extends State<ReportScreen> {
       // The dialog itself fires on the next home-screen mount once all
       // three pillars (scan + Free Flow + eye lesson) are ticked.
       await ReviewPromptService.markScanDone();
+      // Reschedule the daily nudge — after a fresh scan the state
+      // moves from NO_SCAN to POST_SCAN_NO_GAME (or stays in an
+      // active streak), so today's 7:30pm copy needs to update.
+      // ignore: discarded_futures
+      DailyNudgeService.reschedule();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
