@@ -2,6 +2,8 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 
+import '../firebase_options.dart';
+
 /// Conversion-funnel telemetry. Single chokepoint for every event we
 /// log so renames / parameter changes happen in one place. Initialised
 /// from main.dart on app start.
@@ -25,20 +27,26 @@ class AnalyticsService {
   /// Lets local builds compile without the secrets in tree.
   static Future<void> init() async {
     try {
-      await Firebase.initializeApp();
+      // Pass FirebaseOptions explicitly. The iOS plist exists on disk
+      // but isn't registered in the Xcode project as a bundle resource,
+      // so the implicit Firebase.initializeApp() throws "no default
+      // app configured" on iOS and analytics never wakes up. Passing
+      // options matches what FlutterFire CLI generates and bypasses
+      // the plist registration entirely.
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
       _fa = FirebaseAnalytics.instance;
       // iOS GoogleService-Info.plist ships with IS_ANALYTICS_ENABLED=false
-      // (Firebase Console default when GA isn't toggled on at project setup).
-      // Force collection on at runtime so events actually flow without
-      // needing to re-download the plist.
+      // (default when GA isn't toggled on at project setup). The plist
+      // flag is irrelevant once Firebase initialises via FirebaseOptions,
+      // but flipping the runtime flag belt-and-braces is harmless.
       await _fa!.setAnalyticsCollectionEnabled(true);
-      if (kDebugMode) {
-        // ignore: avoid_print
-        print('[Analytics] Firebase initialised + collection enabled.');
-      }
+      // ignore: avoid_print
+      print('[Analytics] Firebase initialised + collection enabled.');
     } catch (err) {
       // ignore: avoid_print
-      print('[Analytics] Firebase not configured yet: $err');
+      print('[Analytics] Firebase init failed: $err');
       _fa = null;
     }
   }
