@@ -157,7 +157,9 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
         vibe:             _tone,
         scenario:         scenarioForCall,
         previous:         previousForCall,
-      ).timeout(const Duration(seconds: 45));
+      // 55s ceiling — vision adds ~1-2s vs text path; this gives the
+      // service-level 50s some headroom before the spinner clears.
+      ).timeout(const Duration(seconds: 55));
       print('[RIZZ-SCREEN] _generate got ${result.length} replies');
       if (!mounted) return;
       setState(() {

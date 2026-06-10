@@ -148,7 +148,7 @@ app.post('/chat', async (req, res) => {
 // no archetypes, no tryon — just text in, text out.
 app.post('/rizz/reply', async (req, res) => {
   try {
-    const { her, vibe, ctx, scenario, previous } = req.body || {};
+    const { her, vibe, ctx, scenario, previous, imageBase64 } = req.body || {};
     // `previous` is an optional array of {text, tag} objects sent by
     // the quick-action chips ("More heat", "Funnier", "Make a move").
     // When present, rizzReply switches into TRANSFORM MODE and
@@ -159,12 +159,16 @@ app.post('/rizz/reply', async (req, res) => {
           .slice(0, 3)
           .map(p => ({ text: p.text, tag: typeof p.tag === 'string' ? p.tag : '' }))
       : [];
+    // `imageBase64` is the bare-bytes-as-base64 of a chat screenshot.
+    // When present, rizzReply uses the gpt-4o-vision path — the model
+    // reads the iMessage UI directly, no OCR involved.
     const result = await rizzReply({
-      her:      typeof her      === 'string' ? her      : '',
-      vibe:     typeof vibe     === 'string' ? vibe     : 'auto',
-      ctx:      typeof ctx      === 'string' ? ctx      : '',
-      scenario: typeof scenario === 'string' ? scenario : '',
-      previous: prev,
+      her:         typeof her      === 'string' ? her      : '',
+      vibe:        typeof vibe     === 'string' ? vibe     : 'auto',
+      ctx:         typeof ctx      === 'string' ? ctx      : '',
+      scenario:    typeof scenario === 'string' ? scenario : '',
+      previous:    prev,
+      imageBase64: typeof imageBase64 === 'string' ? imageBase64 : undefined,
     });
     res.json(result);
   } catch (err) {
@@ -178,8 +182,11 @@ app.post('/rizz/reply', async (req, res) => {
 // Mirrorly surface. Returns { reply: string }.
 app.post('/rizz/chat', async (req, res) => {
   try {
-    const { messages } = req.body || {};
-    const result = await rizzChat({ messages });
+    const { messages, imageBase64 } = req.body || {};
+    const result = await rizzChat({
+      messages,
+      imageBase64: typeof imageBase64 === 'string' ? imageBase64 : undefined,
+    });
     res.json(result);
   } catch (err) {
     console.error('[/rizz/chat] error:', err);
