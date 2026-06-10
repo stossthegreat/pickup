@@ -579,13 +579,13 @@ class _PaywallScreenState extends State<PaywallScreen> {
       case _Tier.monthly:
         text = '$price billed monthly. Auto-renews until cancelled. '
                'Mirrorly Pro subscription required for scans, AI '
-               'renders, and Eyes + Game training.';
+               'renders, AI roleplay, and all rizz features.';
         break;
       case _Tier.annual:
         text = '$price billed once per year (${_perMonthForAnnual()}/'
                'mo equivalent). Auto-renews yearly until cancelled. '
                'Mirrorly Pro subscription required for scans, AI '
-               'renders, and Eyes + Game training.';
+               'renders, AI roleplay, and all rizz features.';
         break;
       case _Tier.rescue:
         text = '$price one-time charge. NOT a subscription. '
@@ -677,19 +677,22 @@ class _PaywallScreenState extends State<PaywallScreen> {
     switch (t) {
       case _Tier.monthly:
       case _Tier.annual:
-        // Same length as before (6 lines). Two old bullets — "Honest-
-        // looks score (GPT-4o Vision)" and "Geometry score (on-device,
-        // 16 metrics)" — merged into one tight line, freeing room for
-        // the Eyes-and-Game training disclosure under the CTA without
-        // pushing the cancel line further down the scroll.
+        // Bro v3: "we need eye contact out but we need to put AI
+        // roleplay and all rizz features." Eyes-tab line dropped
+        // (Eyes tab isn't surfaced in the IndexedStack anyway), and
+        // split into two: AI roleplay (Lucien + free-flow) on its
+        // own line, all rizz features (screenshot reply, Lines
+        // arsenal, chat coach) on its own line. The list reads as
+        // the product map for what Pro actually unlocks.
         return [
           '2 scans per week',
           '10 AI-rendered images per month',
           'The Mirror — unlimited chat advice',
           'Two-score rating — geometry (on-device, 16 metrics) + '
               'honest-looks (GPT-4o Vision)',
-          'Eyes + Game training — gaze drills, voice coach, Lucien '
-              'arena & council, free-flow voice AI',
+          'AI roleplay — Lucien arena & council, free-flow voice AI',
+          'All rizz features — screenshot replies, Lines arsenal, '
+              'chat coach',
           cancelLine,
         ];
       case _Tier.rescue:
