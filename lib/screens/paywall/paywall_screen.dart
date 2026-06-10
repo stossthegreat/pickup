@@ -543,26 +543,26 @@ class _PaywallScreenState extends State<PaywallScreen> {
           ),
         ).animate().fadeIn(delay: 180.ms, duration: 360.ms),
         const SizedBox(height: 4),
-        Text('BECOME UNAVOIDABLE',
+        Text('Become the guy she can\'t ignore',
           textAlign: TextAlign.center,
-          style: AppTypography.label.copyWith(
-            color: AppColors.red,
-            fontSize: 12, letterSpacing: 4.0,
-            fontWeight: FontWeight.w900,
+          style: AppTypography.h1.copyWith(
+            color: Colors.white,
+            fontSize: 20, letterSpacing: -0.3,
+            height: 1.2,
+            fontStyle: FontStyle.italic,
+            fontWeight: FontWeight.w800,
           ),
         ).animate().fadeIn(delay: 240.ms, duration: 360.ms),
       ],
     );
   }
 
-  String _ctaLabel() {
-    final price = _priceFor(_selected);
-    switch (_selected) {
-      case _Tier.monthly: return 'SUBSCRIBE · $price / MO';
-      case _Tier.annual:  return 'SUBSCRIBE · $price / YR';
-      case _Tier.rescue:  return 'BUY · $price';
-    }
-  }
+  /// Bro v3: "On the CTA button put BECOME UNAVOIDABLE." The price
+  /// + cadence still live on the package cards directly above and in
+  /// the legally-required summary line directly below, so dropping
+  /// them from the button itself doesn't violate Google Play / Apple
+  /// disclosure rules.
+  String _ctaLabel() => 'BECOME UNAVOIDABLE';
 
   /// Short above-the-fold summary required by the Google Play
   /// Subscriptions Policy. Must clearly state, in one line:
@@ -579,13 +579,13 @@ class _PaywallScreenState extends State<PaywallScreen> {
       case _Tier.monthly:
         text = '$price billed monthly. Auto-renews until cancelled. '
                'Mirrorly Pro subscription required for scans, AI '
-               'renders, and Eyes + Game training.';
+               'renders, AI roleplay, and all rizz features.';
         break;
       case _Tier.annual:
         text = '$price billed once per year (${_perMonthForAnnual()}/'
                'mo equivalent). Auto-renews yearly until cancelled. '
                'Mirrorly Pro subscription required for scans, AI '
-               'renders, and Eyes + Game training.';
+               'renders, AI roleplay, and all rizz features.';
         break;
       case _Tier.rescue:
         text = '$price one-time charge. NOT a subscription. '
@@ -677,19 +677,22 @@ class _PaywallScreenState extends State<PaywallScreen> {
     switch (t) {
       case _Tier.monthly:
       case _Tier.annual:
-        // Same length as before (6 lines). Two old bullets — "Honest-
-        // looks score (GPT-4o Vision)" and "Geometry score (on-device,
-        // 16 metrics)" — merged into one tight line, freeing room for
-        // the Eyes-and-Game training disclosure under the CTA without
-        // pushing the cancel line further down the scroll.
+        // Bro v3: "we need eye contact out but we need to put AI
+        // roleplay and all rizz features." Eyes-tab line dropped
+        // (Eyes tab isn't surfaced in the IndexedStack anyway), and
+        // split into two: AI roleplay (Lucien + free-flow) on its
+        // own line, all rizz features (screenshot reply, Lines
+        // arsenal, chat coach) on its own line. The list reads as
+        // the product map for what Pro actually unlocks.
         return [
           '2 scans per week',
           '10 AI-rendered images per month',
           'The Mirror — unlimited chat advice',
           'Two-score rating — geometry (on-device, 16 metrics) + '
               'honest-looks (GPT-4o Vision)',
-          'Eyes + Game training — gaze drills, voice coach, Lucien '
-              'arena & council, free-flow voice AI',
+          'AI roleplay — Lucien arena & council, free-flow voice AI',
+          'All rizz features — screenshot replies, Lines arsenal, '
+              'chat coach',
           cancelLine,
         ];
       case _Tier.rescue:
@@ -735,10 +738,11 @@ class _CloseX extends StatelessWidget {
   }
 }
 
-/// The paywall pitch. Three big outcome lines under the wordmark.
-/// No body copy, no feature spec, no surgical measurements — those
-/// are HOW we deliver. The user pays for the WHAT: notice, hold,
-/// close. Three lines they can read on a bus in three seconds.
+/// The paywall pitch. Three outcome lines under the wordmark.
+/// Bro v3 copy: "Looks get you noticed / Game makes her fall /
+/// Mirrorly gives you both." Drops the old PRESENCE line — the
+/// product is two halves now (Looks + Game), and the third line
+/// is the synthesis that names the brand as the answer.
 class _Pitch extends StatelessWidget {
   const _Pitch();
 
@@ -747,11 +751,11 @@ class _Pitch extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _line('LOOKS',    'GET YOU NOTICED.',    delayMs: 320),
+        _line('LOOKS',    'GET YOU NOTICED.',  delayMs: 320),
         const SizedBox(height: 18),
-        _line('PRESENCE', 'HOLDS ATTENTION.',    delayMs: 460),
+        _line('GAME',     'MAKES HER FALL.',   delayMs: 460),
         const SizedBox(height: 18),
-        _line('GAME',     'ALWAYS DECIDES.',     delayMs: 600),
+        _line('MIRRORLY', 'GIVES YOU BOTH.',   delayMs: 600),
       ],
     );
   }

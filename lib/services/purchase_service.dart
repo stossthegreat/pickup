@@ -306,6 +306,31 @@ class PurchaseService {
     }
   }
 
+  /// Hit RevenueCat live for the *current* entitlement state. The
+  /// cached `LocalStoreService.isSubscribed` flag exists for fast
+  /// synchronous reads, but it can lag behind RevenueCat — sandbox /
+  /// TestFlight purchases sometimes flip the entitlement only after a
+  /// retry, and a paid user who opens the app on a cold network goes
+  /// through the catch path in init(). Bro: "I've got a sub and it's
+  /// locking me out." This call queries RC directly and as a side
+  /// effect repaints the local cache so subsequent synchronous reads
+  /// agree.
+  ///
+  /// Returns null when RC isn't initialised or the call failed — the
+  /// caller falls back to the cached flag in that case.
+  static Future<bool?> isProLive() async {
+    if (!_initialized) return null;
+    try {
+      final info = await Purchases.getCustomerInfo();
+      final isPro = info.entitlements.all[PurchaseConfig.proEntitlementId]
+          ?.isActive ?? false;
+      await LocalStoreService.setSubscribed(isPro);
+      return isPro;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Map a RevenueCat error code + raw message into something a user
   /// (and a reviewer, and us) can read. Store names are
   /// platform-gated — Apple rejects copy that names "Google Play"
