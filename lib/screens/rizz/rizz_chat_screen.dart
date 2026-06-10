@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../config/api_config.dart';
 import '../../services/paywall_gate.dart';
+import '../../services/rizz_reply_service.dart' show RizzVibe, RizzVibeLabel;
 import '../../services/screenshot_ocr_service.dart';
 import '../../theme/app_colors.dart';
 
@@ -41,6 +42,11 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
         'line in quotes to copy it.'),
   ];
   bool _sending = false;
+  /// Active tone preset. Matches the rizz reply screen so picking
+  /// SENSUAL / PLAYFUL / etc here behaves identically — the next
+  /// user turn (or transform tap) routes through the chosen tone
+  /// register. Default FLIRTY.
+  RizzVibe _tone = RizzVibe.flirty;
 
   static const _presets = <String>[
     'Playful comeback',
@@ -258,9 +264,47 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     );
   }
 
+  /// Open the tone picker. Same five rows as the rizz reply screen.
+  /// Switching tone fires a transform turn so the AI rewrites its
+  /// last suggestion in the new register without the user having to
+  /// re-type the question.
+  Future<void> _openTonePicker() async {
+    HapticFeedback.selectionClick();
+    final picked = await showModalBottomSheet<RizzVibe>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: false,
+      builder: (_) => _ChatTonePickerSheet(current: _tone),
+    );
+    if (picked == null || picked == _tone || !mounted) return;
+    setState(() => _tone = picked);
+    // If there's an existing AI reply, ask it to rewrite in the new
+    // tone. Otherwise wait for the user's next turn.
+    if (_msgs.length > 1 && !_sending) {
+      await _send('Switch to ${picked.label} tone — rewrite your '
+          'last suggestion in that register.');
+    }
+  }
+
+  /// Quick-action chip handler — sends a transform turn so the AI
+  /// rewrites its last suggestion with the requested flavor. Matches
+  /// the screenshot screen's _ScenarioStrip behavior.
+  Future<void> _useChatScenario(String scenario) async {
+    if (_sending) return;
+    HapticFeedback.selectionClick();
+    await _send('Rewrite your last suggestion: $scenario');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final fresh = _msgs.length == 1;
+    final fresh         = _msgs.length == 1;
+    // Show the transform chips + tone pill the moment an assistant
+    // reply has landed (i.e. not on the welcome bubble alone). They
+    // hide while a request is in flight to avoid double-fires.
+    final hasReply      = _msgs.length > 1 && !_sending;
+    final lastIsAssist  = _msgs.last.role == 'assistant';
+    final showTransform = hasReply && lastIsAssist;
+
     return Scaffold(
       backgroundColor: AppColors.base,
       // Tap anywhere outside the input to dismiss the keyboard.
@@ -283,10 +327,33 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
                   },
                 ),
               ),
+              // ── FRESH STATE: situation primers (Flirty first message
+              //   / Ask her out / etc). Mirrors the rizz reply screen's
+              //   "what's the situation" entry.
               if (fresh) ...[
                 _PresetStrip(
                   presets: _presets,
                   onPick: (p) => _send(p),
+                ),
+                const SizedBox(height: 10),
+              ],
+              // ── POST-REPLY STATE: the transform chips that take the
+              //   last suggestion and add a flavor (More heat, Funnier,
+              //   Make a move, etc). Same chip set as the screenshot
+              //   screen's _ScenarioStrip.
+              if (showTransform) ...[
+                _ChatTransformStrip(
+                  onTap: _useChatScenario,
+                  disabled: _sending,
+                ),
+                const SizedBox(height: 8),
+                // Tone pill — tap → picker → re-fires a transform
+                // turn in the new register.
+                Center(
+                  child: _ChatTonePill(
+                    tone: _tone,
+                    onTap: _sending ? null : _openTonePicker,
+                  ),
                 ),
                 const SizedBox(height: 10),
               ],
@@ -898,6 +965,266 @@ class _InputBar extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  TONE PILL · TRANSFORM CHIPS · PICKER SHEET — chat surface mirror of
+//  the rizz reply screen. Bro: "make the chat with mirrorly look and
+//  work like wat you've done with the screenshot one. but the chat one
+//  had extra little prompts" — kept the existing _PresetStrip on the
+//  fresh state for those primers, and added these three widgets to
+//  carry the tone + transform UX after a reply lands.
+// ═══════════════════════════════════════════════════════════════════════
+
+class _ChatTonePill extends StatelessWidget {
+  final RizzVibe tone;
+  final VoidCallback? onTap;
+  const _ChatTonePill({required this.tone, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(100),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: AppColors.red.withValues(alpha: 0.55), width: 0.9),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(tone.emoji,
+                style: const TextStyle(fontSize: 15, height: 1)),
+              const SizedBox(width: 8),
+              Text(tone.label,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 13.5, height: 1,
+                  letterSpacing: 0.4,
+                  fontWeight: FontWeight.w800,
+                )),
+              const SizedBox(width: 6),
+              const Icon(Icons.keyboard_arrow_down_rounded,
+                color: AppColors.textSecondary, size: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatTonePickerSheet extends StatelessWidget {
+  final RizzVibe current;
+  const _ChatTonePickerSheet({required this.current});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF111111),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 38, height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.surface3,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Text('SELECT TONE',
+                style: GoogleFonts.inter(
+                  color: AppColors.red,
+                  fontSize: 12, letterSpacing: 3.0,
+                  fontWeight: FontWeight.w800,
+                )),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close_rounded,
+                  color: AppColors.textSecondary, size: 22),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          for (final v in RizzVibeLabel.canonical) ...[
+            _ChatTonePickerRow(
+              tone:     v,
+              selected: v == current,
+              onTap:    () => Navigator.of(context).pop(v),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatTonePickerRow extends StatelessWidget {
+  final RizzVibe     tone;
+  final bool         selected;
+  final VoidCallback onTap;
+  const _ChatTonePickerRow({
+    required this.tone,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final border = selected ? AppColors.red : AppColors.surface3;
+    return Material(
+      color: selected
+          ? AppColors.red.withValues(alpha: 0.10)
+          : AppColors.surface1,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: border, width: selected ? 1.2 : 0.6),
+          ),
+          child: Row(
+            children: [
+              Text(tone.emoji,
+                style: const TextStyle(fontSize: 22, height: 1)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(tone.label,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 16, height: 1.2,
+                        letterSpacing: -0.2,
+                        fontWeight: FontWeight.w900,
+                      )),
+                    const SizedBox(height: 3),
+                    Text(tone.blurb,
+                      style: GoogleFonts.inter(
+                        color: AppColors.textSecondary,
+                        fontSize: 12.5, height: 1.35,
+                        fontWeight: FontWeight.w500,
+                      )),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                width: 22, height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected ? AppColors.red : AppColors.textTertiary,
+                    width: 1.6),
+                ),
+                alignment: Alignment.center,
+                child: selected
+                    ? Container(
+                        width: 11, height: 11,
+                        decoration: const BoxDecoration(
+                          color: AppColors.red,
+                          shape: BoxShape.circle,
+                        ),
+                      )
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Horizontal transform-chip strip — identical chip set to the
+/// screenshot screen so the two surfaces feel like one product. Each
+/// chip sends a rewrite turn to the AI rather than starting a new
+/// conversation, so the previous suggestion is reshaped in place.
+class _ChatTransformStrip extends StatelessWidget {
+  final Future<void> Function(String scenario) onTap;
+  final bool disabled;
+  const _ChatTransformStrip({required this.onTap, required this.disabled});
+
+  static const _chips = <({String label, String emoji, String scenario})>[
+    (label: 'More heat',     emoji: '🔥', scenario: 'turn up the heat — push every line one notch hotter, more cinematic, more suggestive. Keep the structure, raise the temperature.'),
+    (label: 'Flirty tease',  emoji: '😏', scenario: 'flirty tease — push-pull, light needle, make her chase. Cheeky but warm.'),
+    (label: 'Make a move',   emoji: '🎯', scenario: 'make a move — pivot toward a specific, confident date proposal without sounding pushy.'),
+    (label: 'Funnier',       emoji: '😂', scenario: 'funnier — keep the situation, add comedy. Screenshot-to-group-chat funny. Self-aware over earnest.'),
+    (label: 'Be playful',    emoji: '😜', scenario: 'be playful — light, cheeky, low-stakes. Drop the heavy moves.'),
+    (label: 'Be bolder',     emoji: '⚡️', scenario: 'be bolder — high-agency, declarative, scarce. Frame the outcome as already decided.'),
+    (label: 'Sexier',        emoji: '💋', scenario: 'sexier — slow-burn sensual, suggestive without spilling. Eye-contact energy.'),
+    (label: 'Keep it light', emoji: '🟡', scenario: 'keep it light and easy — no heavy moves, low-stakes charm. Friendly with a hint of flirt.'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _chips.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final c = _chips[i];
+          return Material(
+            color: AppColors.surface1,
+            borderRadius: BorderRadius.circular(100),
+            child: InkWell(
+              onTap: disabled ? null : () => onTap(c.scenario),
+              borderRadius: BorderRadius.circular(100),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(color: AppColors.surface3, width: 0.8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(c.emoji,
+                      style: const TextStyle(fontSize: 14, height: 1)),
+                    const SizedBox(width: 7),
+                    Text(c.label,
+                      style: GoogleFonts.inter(
+                        color: disabled
+                            ? AppColors.textTertiary
+                            : Colors.white,
+                        fontSize: 13, height: 1,
+                        letterSpacing: 0.1,
+                        fontWeight: FontWeight.w700,
+                      )),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

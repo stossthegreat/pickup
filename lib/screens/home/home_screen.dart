@@ -573,21 +573,30 @@ class _HopeCard extends StatelessWidget {
             fontWeight: FontWeight.w900,
           )),
         const SizedBox(height: 2),
-        Text('$value',
-          style: GoogleFonts.playfairDisplay(
-            color: color,
-            fontSize: 48, height: 0.95,
-            letterSpacing: -2.0,
-            fontStyle: FontStyle.italic,
-            fontWeight: FontWeight.w900,
-            shadows: isNow
-                ? null
-                : [
-                    Shadow(
-                      color: AppColors.signalGreen.withValues(alpha: 0.4),
-                      blurRadius: 18),
-                  ],
-          )),
+        // Bro: "push the left number up slightly so it's in line with
+        // the right number." Italic Playfair has uneven visual tops
+        // across digits — 8 / 6 reach higher than 7 / 0 even at the
+        // same font size — so NOW visually sits lower than POTENTIAL.
+        // A 4px upward translate on the NOW glyph re-aligns the
+        // visual tops without touching POTENTIAL's glow shadow.
+        Transform.translate(
+          offset: Offset(0, isNow ? -4 : 0),
+          child: Text('$value',
+            style: GoogleFonts.playfairDisplay(
+              color: color,
+              fontSize: 48, height: 0.95,
+              letterSpacing: -2.0,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w900,
+              shadows: isNow
+                  ? null
+                  : [
+                      Shadow(
+                        color: AppColors.signalGreen.withValues(alpha: 0.4),
+                        blurRadius: 18),
+                    ],
+            )),
+        ),
       ],
     );
   }
