@@ -194,35 +194,17 @@ class RizzReplyService {
       return _fallbackFromArsenal(vibe);
     }
 
-    // ── SILENT OCR — text path, not vision path ───────────────────────
-    // Backend /chat is text-in, JSON-out — no vision support. We OCR
-    // the screenshot ON-DEVICE via ML Kit, then send the extracted
-    // text as the user message. When OCR succeeds we DROP the image
-    // from the payload entirely + tell _buildPrompt this is a text
-    // case (hasScreenshot: false). That's the difference between the
-    // model answering "I can't read images" and actually writing
-    // three replies to what she said.
-    bool ocrUsed = false;
-    if (hasImage && her.isEmpty) {
-      final ocrText = await _ocrSilently(screenshotBytes);
-      RizzDebug.ocrText = ocrText;
-      RizzDebug.add('ocr extracted ${ocrText.length} chars');
-      if (ocrText.isNotEmpty) {
-        // Label the transcript with alternating HER:/ME: tags from
-        // the bottom up so the model doesn't have to guess who said
-        // what. Bro: "it needs to know who's who" — without speaker
-        // labels gpt-4o was reading the OCR as a single block of
-        // "her" messages and inferring it was "encrypted code".
-        her = _labelTranscript(ocrText);
-        ocrUsed = true;
-        RizzDebug.add('labeled transcript ${her.length} chars');
-      }
+    // ── VISION PATH (the real fix) ────────────────────────────────────
+    // Bro: "what's the real fix — is it a vision model?" Yes. Send
+    // the raw screenshot bytes to gpt-4o-vision; the model SEES the
+    // iMessage / Hinge UI directly and reads it as a chat instead of
+    // guessing at an OCR wall of text. ML Kit OCR stays in tree as
+    // a dead fallback (we don't call it when an image is present)
+    // so we can revert in one flag if the vision route ever breaks.
+    final imageB64 = hasImage ? base64Encode(screenshotBytes) : null;
+    if (hasImage) {
+      RizzDebug.add('vision path active — sending ${imageB64!.length}c b64');
     }
-
-    // Only send the image bytes when OCR failed AND we still have an
-    // image — that's our only shot at a reply. Otherwise the text we
-    // just extracted is far more useful than the raw image.
-    final imageB64 = (hasImage && !ocrUsed) ? base64Encode(screenshotBytes) : null;
 
     // 1) Mirrorly backend /rizz/reply — the dedicated dating-text
     // coach endpoint. Separate from /chat (the face doctor). Returns
@@ -239,13 +221,15 @@ class RizzReplyService {
               'vibe':     vibe.name,
               'ctx':      ctx,
               'scenario': scn,
+              if (imageB64 != null) 'imageBase64': imageB64,
               if (previous.isNotEmpty)
                 'previous': previous
                     .map((r) => {'text': r.text, 'tag': r.tag})
                     .toList(),
             }),
           )
-          .timeout(const Duration(seconds: 40));
+          // 50s ceiling — vision is a bit slower than text-only.
+          .timeout(const Duration(seconds: 50));
       RizzDebug.lastStatus = res.statusCode;
       RizzDebug.add('/rizz/reply status=${res.statusCode}');
       if (res.statusCode == 200) {
@@ -325,18 +309,13 @@ class RizzReplyService {
 
   // ── Internals ─────────────────────────────────────────────────────────
 
-  /// Tag an OCR'd transcript with alternating HER:/ME: labels from
-  /// the BOTTOM up, since the LAST line in a screenshot is what she
-  /// just sent (the line we need a reply to). This single hint is
-  /// what kills the "is this an encrypted code?" failure mode the
-  /// model fell into when it saw a raw wall of OCR text.
+  /// Tag an OCR'd transcript with alternating HER:/ME: labels.
   ///
-  /// We assume strict alternation. Real chats sometimes have two
-  /// consecutive bubbles from the same person, but: (a) ML Kit
-  /// usually fuses them onto adjacent lines and the model handles
-  /// it from context, (b) even a wrong label is better than no
-  /// label because it grounds the model in "this is a conversation,
-  /// not a cipher."
+  /// DEAD-CODE FALLBACK as of v155 — the live path now sends the
+  /// screenshot bytes to gpt-4o-vision instead of OCR'ing first.
+  /// Kept so a single flag flip can revert to the OCR route if the
+  /// vision route breaks.
+  // ignore: unused_element
   static String _labelTranscript(String raw) {
     final lines = raw
         .split(RegExp(r'\r?\n'))

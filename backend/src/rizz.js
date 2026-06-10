@@ -231,7 +231,7 @@ function vibeDirective(vibe) {
   }
 }
 
-function buildUserMessage({ her, vibe, ctx, scenario, previous }) {
+function buildUserMessage({ her, vibe, ctx, scenario, previous, hasVision }) {
   const lines = [vibeDirective(vibe)];
   if (scenario && scenario.trim()) {
     lines.push(`Scenario: ${scenario.trim()} — bias the replies toward this.`);
@@ -257,6 +257,22 @@ function buildUserMessage({ her, vibe, ctx, scenario, previous }) {
       const t = (r && r.text ? r.text : '').toString().trim();
       if (t) lines.push(`${i + 1}. "${t}"`);
     });
+  }
+
+  // VISION PATH — the user uploaded a screenshot and the backend is
+  // sending the actual image to gpt-4o-vision (NOT an OCR dump).
+  // The model can see the iMessage / Hinge / Tinder UI directly, so
+  // there's no transcript framing to do. Just tell it to read the
+  // image as a chat and reply to her last bubble.
+  if (hasVision) {
+    lines.push('');
+    lines.push('I attached a screenshot of my chat with her. READ IT LIKE A REAL CHAT — messages aligned to MY side (usually right, colored / accent bubble) are mine; messages on HER side (usually left, gray or default bubble) are hers. The MOST RECENT bubble on HER side — typically the last one at the bottom — is what I need a reply for.');
+    lines.push('Treat any chat abbreviations as plain English (wbu = what about you, wyd = what you doing, ngl = not gonna lie, etc). Do NOT describe the chat back to me. Do NOT call it cryptic / a puzzle / a code / mysterious / secret / encrypted — it is just a chat.');
+    lines.push('');
+    lines.push(hasPrev
+      ? 'Rewrite the three replies above so they hit harder in the requested tone + scenario, specific to what she actually sent in the screenshot.'
+      : 'Write three reply messages I should send her, ranked SAFEST → MIDDLE → BOLDEST. Each must be specific to her last bubble and continue THIS conversation.');
+    return lines.join('\n');
   }
 
   if (her && her.trim()) {
@@ -339,21 +355,47 @@ function repliesContainBannedWord(replies) {
     && RIZZ_BANNED_RX.test(r.text));
 }
 
-export async function rizzReply({ her, vibe, ctx, scenario, previous } = {}) {
+export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase64 } = {}) {
+  // Vision path activates when the frontend ships a screenshot. The
+  // model sees the iMessage / Hinge / Tinder UI directly — no OCR
+  // wall of text, no transcript labeling, no abbreviation guesswork.
+  // This is the real fix: read the chat as a human reads it.
+  const hasVision = typeof imageBase64 === 'string' && imageBase64.length > 100;
+
   const userMessage = buildUserMessage({
-    her:      her      || '',
-    vibe:     vibe     || 'auto',
-    ctx:      ctx      || '',
-    scenario: scenario || '',
-    previous: Array.isArray(previous) ? previous : [],
+    her:       her      || '',
+    vibe:      vibe     || 'auto',
+    ctx:       ctx      || '',
+    scenario:  scenario || '',
+    previous:  Array.isArray(previous) ? previous : [],
+    hasVision,
   });
 
   async function runOnce(extraSystem = '') {
+    // gpt-4o supports a content array of {type:'text'} + {type:'image_url'}
+    // on the user role. When we have an image we POST that shape; when
+    // we don't, the plain-string content stays.
+    const userContent = hasVision
+      ? [
+          { type: 'text', text: userMessage },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:image/jpeg;base64,${imageBase64}`,
+              // 'high' tiles the image at higher res so the model can
+              // read small chat text reliably. Cost ~$0.005-0.015 per
+              // call at 1600px — paywall-tier feature, worth it.
+              detail: 'high',
+            },
+          },
+        ]
+      : userMessage;
+
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: SYSTEM + (extraSystem ? '\n\n' + extraSystem : '') },
-        { role: 'user',   content: userMessage },
+        { role: 'user',   content: userContent },
       ],
       response_format: { type: 'json_object' },
       temperature: 0.9,
@@ -534,7 +576,7 @@ chat.
 If the OCR is empty / garbled / unreadable, say one short sentence
 asking him to paste what she said. Do not invent a situation.`;
 
-export async function rizzChat({ messages } = {}) {
+export async function rizzChat({ messages, imageBase64 } = {}) {
   const list = Array.isArray(messages) ? messages : [];
   const safe = list
     .filter(m => m && typeof m.content === 'string' && m.content.trim())
@@ -547,12 +589,41 @@ export async function rizzChat({ messages } = {}) {
     return { reply: 'drop the question.' };
   }
 
+  // Vision path — when the frontend ships a screenshot, attach it to
+  // the LATEST user turn as a content array. gpt-4o then reads the
+  // chat image directly instead of guessing from OCR text.
+  const hasVision = typeof imageBase64 === 'string' && imageBase64.length > 100;
+  let apiMessages = safe;
+  if (hasVision) {
+    let lastUserIdx = -1;
+    for (let i = safe.length - 1; i >= 0; i--) {
+      if (safe[i].role === 'user') { lastUserIdx = i; break; }
+    }
+    if (lastUserIdx >= 0) {
+      apiMessages = safe.map((m, i) => i === lastUserIdx
+        ? {
+            role: 'user',
+            content: [
+              { type: 'text', text: m.content },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/jpeg;base64,${imageBase64}`,
+                  detail: 'high',
+                },
+              },
+            ],
+          }
+        : m);
+    }
+  }
+
   async function runOnce(extraSystem = '') {
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: CHAT_SYSTEM + (extraSystem ? '\n\n' + extraSystem : '') },
-        ...safe,
+        ...apiMessages,
       ],
       temperature: 0.9,
       max_tokens: 500,

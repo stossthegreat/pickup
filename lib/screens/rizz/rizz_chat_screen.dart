@@ -112,42 +112,22 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     // to the last thing said, using the rest as context."
     var effective = msg;
     if (image != null) {
-      final ocr = await _ocr(image);
-      _dbg('ocr returned ${ocr.length} chars');
-      if (ocr.isNotEmpty) {
-        // Label the OCR transcript with HER:/ME: alternating from the
-        // bottom up. This single hint is what stops the model reading
-        // a chat as "encrypted code" — without speaker labels gpt-4o
-        // can't tell who said what and falls back to nonsense like
-        // "deciphering your mysterious message".
-        final labeled = _labelTranscript(ocr.trim());
-        if (effective.isEmpty) {
-          effective =
-              'Below is the recent chat between me and her, labeled '
-              'HER: / ME: per line. The LAST line is what SHE just '
-              'sent — that\'s what I need a reply for. Write me ONE '
-              'reply specific to that last line, continuing the '
-              'conversation naturally. Treat chat abbreviations as '
-              'normal English (wbu = what about you, wyd = what you '
-              'doing, hbu = how about you, ngl = not gonna lie, etc) '
-              '— they are NOT a code. Do NOT call any of the messages '
-              'cryptic / a puzzle / mysterious / secret / encrypted '
-              '— it is just a chat.\n\n'
-              'CHAT TRANSCRIPT:\n$labeled';
-        } else {
-          effective =
-              '$effective\n\nChat transcript labeled HER:/ME: per line '
-              '(LAST line is what she just sent — write a reply specific '
-              'to that, treat chat abbreviations like wbu/wyd as plain '
-              'English):\n$labeled';
-        }
+      // Vision path — backend gpt-4o-vision reads the iMessage / Hinge
+      // UI directly from the attached imageBase64. No OCR, no
+      // transcript labeling. We just frame the request and pass the
+      // image bytes through _ask. Bro: "the real fix is vision —
+      // let's go." This is that path.
+      _dbg('vision path — sending image bytes (${image.length}) to backend');
+      if (effective.isEmpty) {
+        effective = 'Here\'s a screenshot of my chat with her. Read it '
+            'as a chat — messages on my side are mine, hers are hers, '
+            'the most recent bubble on her side is what I need a reply '
+            'for. Write me ONE line to send back, specific to her last '
+            'message, continuing the convo naturally. Chat abbreviations '
+            '(wbu, wyd, ngl, etc.) are plain English — not a code.';
       } else {
-        // OCR returned empty — tell the AI explicitly so it doesn't
-        // hallucinate a "cryptic message" reply.
-        effective = effective.isEmpty
-            ? 'I just uploaded a screenshot of her chat but the text '
-              'didn\'t scan cleanly. Ask me to paste what she said.'
-            : effective;
+        effective = '$effective\n\n(I attached a chat screenshot — read '
+            'it directly; her latest bubble is what to reply to.)';
       }
     }
     final reply = await _ask(effective, image: image);
@@ -160,8 +140,11 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
   }
 
   /// Label the OCR transcript with alternating HER:/ME: tags from
-  /// the bottom up. Matches the screenshot-rizz helper line for
-  /// line so both surfaces hand the model the same shape.
+  /// the bottom up. Kept as a DEAD-CODE FALLBACK — we now ship the
+  /// screenshot directly to gpt-4o-vision instead, so this isn't
+  /// called in the live path. Leaving it lets us revert to the OCR
+  /// route in a single flag if the vision route ever breaks.
+  // ignore: unused_element
   String _labelTranscript(String raw) {
     final lines = raw
         .split(RegExp(r'\r?\n'))
@@ -178,11 +161,11 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     return labeled.join('\n');
   }
 
-  /// On-device OCR — same path the screenshot screen uses.
-  /// ScreenshotOcrService.extractFromBytes is the ONE shared
-  /// implementation, so a fix in one place can't drift from the
-  /// other. Bro: "use same logic as fucking screenshot ad tab" —
-  /// now literally the same function call.
+  /// On-device OCR — DEAD-CODE FALLBACK now that the live path is
+  /// vision (the backend reads the screenshot directly via
+  /// gpt-4o-vision). Kept in tree so a single flag flip can revert
+  /// to the OCR route if vision breaks.
+  // ignore: unused_element
   Future<String> _ocr(Uint8List bytes) async {
     _dbg('ocr start bytes=${bytes.length}');
     final text = await ScreenshotOcrService.extractFromBytes(bytes);
