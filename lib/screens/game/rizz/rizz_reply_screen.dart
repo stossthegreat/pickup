@@ -393,7 +393,11 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
     final picked = await showModalBottomSheet<RizzVibe>(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: false,
+      // Bro: "needs to be scrollable, looks like one at the bottom
+      // can't get to it." isScrollControlled lifts the default 50%
+      // height cap; the sheet's inner Column is wrapped in a
+      // SingleChildScrollView so 5 rows always reach.
+      isScrollControlled: true,
       builder: (_) => _TonePickerSheet(current: _tone),
     );
     if (picked == null || picked == _tone || !mounted) return;
@@ -1081,52 +1085,71 @@ class _TonePickerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenH = MediaQuery.of(context).size.height;
     return Container(
+      // Cap the sheet at 78% of the viewport so the inner scroll
+      // can always reach the last row + the bottom safe-area padding.
+      constraints: BoxConstraints(maxHeight: screenH * 0.78),
       decoration: const BoxDecoration(
         color: Color(0xFF111111),
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(
-            child: Container(
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
               width: 38, height: 4,
               decoration: BoxDecoration(
                 color: AppColors.surface3,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Text('SELECT TONE',
-                style: GoogleFonts.inter(
-                  color: AppColors.red,
-                  fontSize: 12, letterSpacing: 3.0,
-                  fontWeight: FontWeight.w800,
-                )),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.close_rounded,
-                  color: AppColors.textSecondary, size: 22),
-                onPressed: () => Navigator.of(context).pop(),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Text('SELECT TONE',
+                    style: GoogleFonts.inter(
+                      color: AppColors.red,
+                      fontSize: 12, letterSpacing: 3.0,
+                      fontWeight: FontWeight.w800,
+                    )),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded,
+                      color: AppColors.textSecondary, size: 22),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          for (final v in RizzVibeLabel.canonical) ...[
-            _TonePickerRow(
-              tone:     v,
-              selected: v == current,
-              onTap:    () => Navigator.of(context).pop(v),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
+            // Rows scroll inside the bounded box — guarantees the
+            // 5th row (Sincere) is always reachable on small phones.
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final v in RizzVibeLabel.canonical) ...[
+                      _TonePickerRow(
+                        tone:     v,
+                        selected: v == current,
+                        onTap:    () => Navigator.of(context).pop(v),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ],
-        ],
+        ),
       ),
     );
   }

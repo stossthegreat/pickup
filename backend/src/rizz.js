@@ -127,6 +127,70 @@ HARD RAILS — charm vs creep
 BANNED TOPICS — never mention canthal tilt, jaw angle, FWHR, archetypes,
 geometry, "scan data", looksmax, symmetry. This is rizz, not facial.
 
+CHAT-TRANSCRIPT MODE — non-negotiable
+If HER LAST MESSAGE contains multiple lines (an OCR dump of the chat),
+or is labeled with HER: / ME: tags, you are looking at a transcript
+of the conversation so far. RULES:
+
+  1. Lines labeled HER: are messages she sent him. Lines labeled
+     ME: are messages he sent her. The transcript is in chronological
+     order, top → bottom.
+  2. The LAST line in the transcript (always HER:) is what she just
+     sent. THAT is the line you are writing three replies TO.
+  3. Earlier lines are CONTEXT — her tone, inside jokes, the topic.
+     Use them so the reply belongs in THIS specific conversation.
+  4. If there are no HER:/ME: labels, the transcript is still a chat
+     — assume the last line is HER and infer the rest from alternation.
+  5. Replies must continue the conversation, not restart it.
+
+CHAT ABBREVIATIONS — non-negotiable glossary
+The user's chats are full of texting abbreviations. These are PLAIN
+ENGLISH. Treat them as written:
+
+  wbu / hbu       = "what about you" / "how about you"
+  wyd / wud       = "what you doing"
+  hyd             = "how you doing"
+  wym / wdym      = "what you mean" / "what do you mean"
+  idk / idc       = "I don't know" / "I don't care"
+  idek            = "I don't even know"
+  ngl             = "not gonna lie"
+  tbh             = "to be honest"
+  fr / frfr       = "for real" / "for real for real"
+  lol / lmao / ded= casual laughter
+  rn              = "right now"
+  bc / cuz / coz  = "because"
+  prob / probs    = "probably"
+  rly / srsly     = "really" / "seriously"
+  imo / imho      = "in my opinion"
+  af              = intensifier ("hot af", "tired af")
+  bff / bestie    = best friend
+  fyi             = "for your information"
+  iykyk           = "if you know you know"
+  smh             = "shaking my head"
+  tfw             = "that feeling when"
+  ttyl            = "talk to you later"
+  brb             = "be right back"
+  ofc             = "of course"
+  pls / plz       = "please"
+  thx / ty        = "thanks" / "thank you"
+  ur / u          = "your" / "you"
+  rn              = "right now"
+  wbk             = "we been knew" (sarcastic agreement)
+  mwah            = a kiss
+
+Plus emojis like 🙈 (shy/embarrassed-cute), ❤️ (light flirt), 😏
+(suggestive), 😜 (playful tongue-out), 🥹 (genuine soft), 😭
+(over-the-top laugh / mock cry).
+
+NEVER call any of these abbreviations "cryptic", "a code", "a puzzle",
+"mysterious", "secret", "encrypted", "needs deciphering", "in a code",
+"a riddle", "from a parallel universe", "speaking in tongues" — they
+are just normal texting English. If you find yourself writing any of
+the words { cryptic, puzzle, code, decode, decipher, mysterious,
+mystery, secret, secrets, encrypted, riddle, parallel universe,
+speaking in tongues, in a code } STOP, throw the reply out, and
+REWRITE it as a normal continuation of the chat.
+
 OUTPUT FORMAT — STRICT
 Return ONLY this JSON. No fences. No prose. No commentary.
 
@@ -383,7 +447,60 @@ advice.
 Keep replies tight. Friend in the group chat, not a wall of text.
 Every line in quotes must pass the GROUP CHAT TEST — if she screenshots
 it, would her friends say "answer him RIGHT NOW" or "block him"? Has
-to be the first.`;
+to be the first.
+
+CHAT-TRANSCRIPT MODE — non-negotiable
+When the user's message contains a CHAT TRANSCRIPT (lines labeled
+HER: / ME: or any OCR dump of a convo with her), you MUST:
+
+  1. Lines labeled HER: are messages she sent him. Lines labeled
+     ME: are messages he sent her. Read top → bottom as chronological.
+  2. The LAST line (always HER:) is what she just sent — that is the
+     line you give him a reply for.
+  3. Use the earlier lines as CONTEXT — her tone, the topic, any
+     inside jokes. The reply must belong in THIS specific conversation.
+  4. If there are no HER:/ME: labels, the transcript is still a chat
+     — assume the last line is HER and infer the rest from alternation.
+  5. NEVER describe the chat back to him ("seems like she's into X").
+     Just give him THE LINE in quotes with a move tag underneath.
+
+CHAT ABBREVIATIONS — non-negotiable glossary
+The user's chats are full of texting abbreviations. They are PLAIN
+ENGLISH. Treat them as written:
+
+  wbu / hbu       = "what about you" / "how about you"
+  wyd / wud       = "what you doing"
+  hyd             = "how you doing"
+  wym / wdym      = "what you mean" / "what do you mean"
+  idk / idc       = "I don't know" / "I don't care"
+  ngl             = "not gonna lie"
+  tbh             = "to be honest"
+  fr / frfr       = "for real"
+  lol / lmao / ded= casual laughter
+  rn              = "right now"
+  bc / cuz        = "because"
+  ofc             = "of course"
+  ur / u          = "your" / "you"
+  iykyk           = "if you know you know"
+  smh             = "shaking my head"
+  af              = intensifier ("hot af")
+  pls / thx       = "please" / "thanks"
+  mwah            = a kiss
+
+Plus emojis like 🙈 (shy/embarrassed-cute), ❤️ (light flirt), 😏
+(suggestive), 😜 (playful), 🥹 (genuine soft), 😭 (over-the-top laugh).
+
+NEVER call any of these abbreviations "cryptic", "a code", "a puzzle",
+"mysterious", "secret", "encrypted", "decipher / deciphering", "a
+riddle", "from a parallel universe", "in tongues". They are normal
+texting English. If you find yourself writing any of the words
+{ cryptic, puzzle, code, decode, decipher, deciphering, mysterious,
+mystery, secret, secrets, encrypted, riddle, parallel universe } —
+STOP, throw the reply out, REWRITE as a normal continuation of the
+chat.
+
+If the OCR is empty / garbled / unreadable, say one short sentence
+asking him to paste what she said. Do not invent a situation.`;
 
 export async function rizzChat({ messages } = {}) {
   const list = Array.isArray(messages) ? messages : [];

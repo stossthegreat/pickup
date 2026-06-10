@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../config/api_config.dart';
 import '../../services/paywall_gate.dart';
@@ -105,16 +106,49 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     });
     _ctrl.clear();
     _scrollToBottom();
-    // If we have a screenshot, run OCR silently and append the
-    // extracted text to the user message so the model has something
-    // textual to work with even if the backend isn't vision-capable.
+    // If we have a screenshot, run OCR and frame the extracted text so
+    // the AI treats the LAST line as what she just sent (the reply
+    // target) and the rest as conversational context. Bro: "it's
+    // completely off topic — needs to finish off the convo, specific
+    // to the last thing said, using the rest as context."
     var effective = msg;
     if (image != null) {
       final ocr = await _ocr(image);
+      _dbg('ocr returned ${ocr.length} chars');
       if (ocr.isNotEmpty) {
-        effective = (effective.isEmpty
-            ? 'This is what she just sent me. Help me reply:\n\n$ocr'
-            : '$effective\n\nContext from the chat screenshot:\n$ocr');
+        // Label the OCR transcript with HER:/ME: alternating from the
+        // bottom up. This single hint is what stops the model reading
+        // a chat as "encrypted code" — without speaker labels gpt-4o
+        // can't tell who said what and falls back to nonsense like
+        // "deciphering your mysterious message".
+        final labeled = _labelTranscript(ocr.trim());
+        if (effective.isEmpty) {
+          effective =
+              'Below is the recent chat between me and her, labeled '
+              'HER: / ME: per line. The LAST line is what SHE just '
+              'sent — that\'s what I need a reply for. Write me ONE '
+              'reply specific to that last line, continuing the '
+              'conversation naturally. Treat chat abbreviations as '
+              'normal English (wbu = what about you, wyd = what you '
+              'doing, hbu = how about you, ngl = not gonna lie, etc) '
+              '— they are NOT a code. Do NOT call any of the messages '
+              'cryptic / a puzzle / mysterious / secret / encrypted '
+              '— it is just a chat.\n\n'
+              'CHAT TRANSCRIPT:\n$labeled';
+        } else {
+          effective =
+              '$effective\n\nChat transcript labeled HER:/ME: per line '
+              '(LAST line is what she just sent — write a reply specific '
+              'to that, treat chat abbreviations like wbu/wyd as plain '
+              'English):\n$labeled';
+        }
+      } else {
+        // OCR returned empty — tell the AI explicitly so it doesn't
+        // hallucinate a "cryptic message" reply.
+        effective = effective.isEmpty
+            ? 'I just uploaded a screenshot of her chat but the text '
+              'didn\'t scan cleanly. Ask me to paste what she said.'
+            : effective;
       }
     }
     final reply = await _ask(effective, image: image);
@@ -126,18 +160,54 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     _scrollToBottom();
   }
 
+  /// Label the OCR transcript with alternating HER:/ME: tags from
+  /// the bottom up. Matches the screenshot-rizz helper line for
+  /// line so both surfaces hand the model the same shape.
+  String _labelTranscript(String raw) {
+    final lines = raw
+        .split(RegExp(r'\r?\n'))
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    if (lines.isEmpty) return raw.trim();
+    final labeled = <String>[];
+    var isHer = true;
+    for (var i = lines.length - 1; i >= 0; i--) {
+      labeled.insert(0, '${isHer ? "HER" : "ME"}: ${lines[i]}');
+      isHer = !isHer;
+    }
+    return labeled.join('\n');
+  }
+
+  /// On-device OCR — mirrors the working _ocrSilently in
+  /// RizzReplyService. The previous implementation used
+  /// Directory.systemTemp which fails inside the iOS sandbox; the
+  /// screenshot screen works because it goes through
+  /// path_provider.getTemporaryDirectory(). Bro: "use same logic as
+  /// fucking screenshot ad tab" — verbatim copy of that path.
   Future<String> _ocr(Uint8List bytes) async {
+    _dbg('ocr start bytes=${bytes.length}');
     try {
-      final dir = Directory.systemTemp;
-      final f = File('${dir.path}/rizz_chat_'
-          '${DateTime.now().millisecondsSinceEpoch}.png');
-      await f.writeAsBytes(bytes, flush: true);
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/rizz_chat_'
+          '${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File(path);
+      await file.writeAsBytes(bytes, flush: true);
+      _dbg('ocr wrote tmp file');
       try {
-        return await ScreenshotOcrService.extractRecent(f.path);
+        final text = await ScreenshotOcrService.extractRecent(path)
+            .timeout(const Duration(seconds: 12), onTimeout: () {
+              _dbg('ML Kit TIMED OUT after 12s');
+              return '';
+            });
+        _dbg('ocr ok extracted=${text.length} chars '
+            'sample="${text.length > 60 ? "${text.substring(0, 60)}…" : text}"');
+        return text;
       } finally {
-        try { await f.delete(); } catch (_) {}
+        try { await file.delete(); } catch (_) {}
       }
-    } catch (_) {
+    } catch (e) {
+      _dbg('ocr THREW $e');
       return '';
     }
   }
@@ -273,7 +343,9 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     final picked = await showModalBottomSheet<RizzVibe>(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: false,
+      // Same scrollable fix as the screenshot screen — lift the
+      // default height cap so all five tone rows are reachable.
+      isScrollControlled: true,
       builder: (_) => _ChatTonePickerSheet(current: _tone),
     );
     if (picked == null || picked == _tone || !mounted) return;
@@ -1029,52 +1101,67 @@ class _ChatTonePickerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenH = MediaQuery.of(context).size.height;
     return Container(
+      constraints: BoxConstraints(maxHeight: screenH * 0.78),
       decoration: const BoxDecoration(
         color: Color(0xFF111111),
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(
-            child: Container(
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
               width: 38, height: 4,
               decoration: BoxDecoration(
                 color: AppColors.surface3,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Text('SELECT TONE',
-                style: GoogleFonts.inter(
-                  color: AppColors.red,
-                  fontSize: 12, letterSpacing: 3.0,
-                  fontWeight: FontWeight.w800,
-                )),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.close_rounded,
-                  color: AppColors.textSecondary, size: 22),
-                onPressed: () => Navigator.of(context).pop(),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Text('SELECT TONE',
+                    style: GoogleFonts.inter(
+                      color: AppColors.red,
+                      fontSize: 12, letterSpacing: 3.0,
+                      fontWeight: FontWeight.w800,
+                    )),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded,
+                      color: AppColors.textSecondary, size: 22),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          for (final v in RizzVibeLabel.canonical) ...[
-            _ChatTonePickerRow(
-              tone:     v,
-              selected: v == current,
-              onTap:    () => Navigator.of(context).pop(v),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final v in RizzVibeLabel.canonical) ...[
+                      _ChatTonePickerRow(
+                        tone:     v,
+                        selected: v == current,
+                        onTap:    () => Navigator.of(context).pop(v),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ],
-        ],
+        ),
       ),
     );
   }
