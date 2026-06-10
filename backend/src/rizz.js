@@ -167,7 +167,7 @@ function vibeDirective(vibe) {
   }
 }
 
-function buildUserMessage({ her, vibe, ctx, scenario }) {
+function buildUserMessage({ her, vibe, ctx, scenario, previous }) {
   const lines = [vibeDirective(vibe)];
   if (scenario && scenario.trim()) {
     lines.push(`Scenario: ${scenario.trim()} — bias the replies toward this.`);
@@ -175,16 +175,42 @@ function buildUserMessage({ her, vibe, ctx, scenario }) {
   if (ctx && ctx.trim()) {
     lines.push(`Context: ${ctx.trim()}`);
   }
+
+  // PREVIOUS REPLIES — when the user taps a quick-action chip
+  // ("More heat", "Funnier", "Make a move", etc), the frontend
+  // passes the three replies currently on screen. The model rewrites
+  // THOSE — preserving the core idea + safest→middle→boldest
+  // ranking — but applying the requested tone + scenario shift.
+  // This is "take the already-good rizz and ADD something to it"
+  // mode, not "throw away and start over".
+  const hasPrev = Array.isArray(previous) && previous.length > 0;
+  if (hasPrev) {
+    lines.push('');
+    lines.push('TRANSFORM MODE — the user already has three replies on screen and wants them rewritten with the requested tone + scenario applied. Preserve the core idea of each line and the safest → middle → boldest ranking, but shift the register / push the heat / add the move per the directives above. Do NOT invent a brand-new situation.');
+    lines.push('');
+    lines.push('CURRENT REPLIES (rewrite these three):');
+    previous.slice(0, 3).forEach((r, i) => {
+      const t = (r && r.text ? r.text : '').toString().trim();
+      if (t) lines.push(`${i + 1}. "${t}"`);
+    });
+  }
+
   if (her && her.trim()) {
     lines.push('');
     lines.push('Her last message:');
     lines.push(`"""${her.trim()}"""`);
     lines.push('');
-    lines.push('Write three reply messages he should send her.');
+    lines.push(hasPrev
+      ? 'Rewrite the three replies above so they hit harder in the requested tone + scenario.'
+      : 'Write three reply messages he should send her.');
   } else {
     lines.push('');
-    lines.push('No specific message yet — he is opening cold or planning his first move.');
-    lines.push('Write three opener messages he should send.');
+    if (hasPrev) {
+      lines.push('Rewrite the three replies above so they hit harder in the requested tone + scenario.');
+    } else {
+      lines.push('No specific message yet — he is opening cold or planning his first move.');
+      lines.push('Write three opener messages he should send.');
+    }
   }
   return lines.join('\n');
 }
@@ -234,12 +260,13 @@ function parseReplies(raw) {
   return [];
 }
 
-export async function rizzReply({ her, vibe, ctx, scenario } = {}) {
+export async function rizzReply({ her, vibe, ctx, scenario, previous } = {}) {
   const userMessage = buildUserMessage({
     her:      her      || '',
     vibe:     vibe     || 'auto',
     ctx:      ctx      || '',
     scenario: scenario || '',
+    previous: Array.isArray(previous) ? previous : [],
   });
 
   const response = await openai.chat.completions.create({

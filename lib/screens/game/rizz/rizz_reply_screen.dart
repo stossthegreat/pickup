@@ -137,8 +137,16 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
     // doesn't leave the chip-bias sticky for the next re-roll.
     final scenarioForCall = _scenario;
     _scenario = '';
+    // When a quick-action chip fires, we pass the existing on-screen
+    // replies as `previous` so the backend TRANSFORMS them (preserves
+    // each idea, shifts tone/heat) rather than starting cold. A blank
+    // scenario means fresh generation — no `previous` sent.
+    final previousForCall = (scenarioForCall.isNotEmpty && _replies != null)
+        ? List<RizzReply>.from(_replies!)
+        : const <RizzReply>[];
     print('[RIZZ-SCREEN] _generate start hasImage=${_screenshotBytes != null} '
-        'textLen=${_herCtrl.text.trim().length} scn="$scenarioForCall"');
+        'textLen=${_herCtrl.text.trim().length} scn="$scenarioForCall" '
+        'transform=${previousForCall.isNotEmpty}');
     // Hard 45s ceiling — even if the backend hangs, the spinner
     // clears + the user sees a clear "try again" snack instead of
     // forever-stuck "READING THE CHAT…".
@@ -148,6 +156,7 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
         screenshotBytes:  _screenshotBytes,
         vibe:             _tone,
         scenario:         scenarioForCall,
+        previous:         previousForCall,
       ).timeout(const Duration(seconds: 45));
       print('[RIZZ-SCREEN] _generate got ${result.length} replies');
       if (!mounted) return;
@@ -1207,22 +1216,26 @@ class _TonePickerRow extends StatelessWidget {
   }
 }
 
-/// Horizontal-scroll situation chips. Each chip is a single-string
-/// scenario that gets POSTed as `scenario` to /rizz/reply, biasing
-/// the next three replies. Bro: "fire rizz that can get extra rizz
-/// added to it" — these chips are the "add more rizz" mechanism.
+/// Horizontal-scroll quick-action chips. Each chip rewrites the
+/// three replies currently on screen in that flavor — the backend
+/// switches into TRANSFORM MODE (keeps each idea, shifts the
+/// register). Bro: "they take the already good rizz and add
+/// something to make it like sexual flirty or very bold" — exactly
+/// this surface.
 class _ScenarioStrip extends StatelessWidget {
   final Future<void> Function(String scenario) onTap;
   final bool disabled;
   const _ScenarioStrip({required this.onTap, required this.disabled});
 
   static const _chips = <({String label, String emoji, String scenario})>[
-    (label: 'More rizz',     emoji: '🔥', scenario: 'turn up the rizz — make every line one notch hotter, more cinematic, more future-paced'),
-    (label: 'Tease a bit',   emoji: '😏', scenario: 'tease her playfully — push-pull, light needle, make her chase a little'),
-    (label: 'Keep it light', emoji: '🟡', scenario: 'keep the convo light and easy — no heavy moves, low-stakes charm'),
-    (label: 'Plan a date',   emoji: '📅', scenario: 'move it offline — propose a specific date in a confident, low-pressure way'),
-    (label: 'Win her back',  emoji: '🥹', scenario: 'she went cold — write a re-engagement line that pulls her back without begging'),
-    (label: 'Make her laugh',emoji: '😜', scenario: 'lead with comedy — screenshot-worthy funny, cheeky, self-aware'),
+    (label: 'More heat',     emoji: '🔥', scenario: 'turn up the heat — push every line one notch hotter, more cinematic, more suggestive. Keep the structure, raise the temperature.'),
+    (label: 'Flirty tease',  emoji: '😏', scenario: 'flirty tease — push-pull, light needle, make her chase. Cheeky but warm.'),
+    (label: 'Make a move',   emoji: '🎯', scenario: 'make a move — pivot each line toward a specific, confident date proposal without sounding pushy.'),
+    (label: 'Funnier',       emoji: '😂', scenario: 'funnier — keep the situation, add comedy. Screenshot-to-group-chat funny. Self-aware over earnest.'),
+    (label: 'Be playful',    emoji: '😜', scenario: 'be playful — light, cheeky, low-stakes. Drop the heavy moves.'),
+    (label: 'Be bolder',     emoji: '⚡️', scenario: 'be bolder — high-agency, declarative, scarce. Frame the outcome as already decided.'),
+    (label: 'Sexier',        emoji: '💋', scenario: 'sexier — slow-burn sensual, suggestive without spilling. Eye-contact energy. Use a 😏 or 😮‍💨 at the end of a clause.'),
+    (label: 'Keep it light', emoji: '🟡', scenario: 'keep it light and easy — no heavy moves, low-stakes charm. Friendly with a hint of flirt.'),
   ];
 
   @override

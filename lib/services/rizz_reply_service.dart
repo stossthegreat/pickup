@@ -177,6 +177,13 @@ class RizzReplyService {
     required RizzVibe vibe,
     String context = '',
     String scenario = '',
+    /// The three replies currently on screen. When set, the backend
+    /// switches into TRANSFORM MODE — it rewrites these three lines
+    /// in the requested tone + scenario instead of generating cold.
+    /// This is what powers the quick-action chips ("Funnier", "Make
+    /// a move", "More heat") — they take the already-good rizz and
+    /// add a flavor without throwing it away.
+    List<RizzReply> previous = const [],
   }) async {
     RizzDebug.reset();
     var her = herMessage.trim();
@@ -228,6 +235,10 @@ class RizzReplyService {
               'vibe':     vibe.name,
               'ctx':      ctx,
               'scenario': scn,
+              if (previous.isNotEmpty)
+                'previous': previous
+                    .map((r) => {'text': r.text, 'tag': r.tag})
+                    .toList(),
             }),
           )
           .timeout(const Duration(seconds: 40));
