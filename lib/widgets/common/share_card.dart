@@ -184,7 +184,7 @@ class ShareCard extends StatelessWidget {
                           fontWeight: FontWeight.w900, height: 1,
                         )),
                       const SizedBox(height: 8),
-                      Text('MIRRORLY.APP',
+                      Text('IMHIM.APP',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           color: Colors.white.withValues(alpha: 0.92),

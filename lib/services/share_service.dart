@@ -265,7 +265,7 @@ class ShareService {
         await _shareBytes(
           bytes,
           'mirrorly-${DateTime.now().millisecondsSinceEpoch}.png',
-          text ?? '$kindLabel · $score/10 on MIRRORLY',
+          text ?? '$kindLabel · $score/10 on IMHIM',
           origin: origin,
         );
         return;
