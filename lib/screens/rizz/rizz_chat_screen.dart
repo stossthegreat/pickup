@@ -116,27 +116,31 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
       final ocr = await _ocr(image);
       _dbg('ocr returned ${ocr.length} chars');
       if (ocr.isNotEmpty) {
-        // Explicit framing so the model can't drift into "deciphering
-        // a cryptic message" mode when it sees a wall of OCR text.
-        // The LAST non-empty line that's not from me is what to reply
-        // to — everything else is context.
-        final transcript = ocr.trim();
+        // Label the OCR transcript with HER:/ME: alternating from the
+        // bottom up. This single hint is what stops the model reading
+        // a chat as "encrypted code" — without speaker labels gpt-4o
+        // can't tell who said what and falls back to nonsense like
+        // "deciphering your mysterious message".
+        final labeled = _labelTranscript(ocr.trim());
         if (effective.isEmpty) {
           effective =
-              'Below is the recent chat between me and her, read top → '
-              'bottom. The LAST line in the transcript is what SHE just '
-              'sent me. Write me ONE reply specific to that last line, '
-              'continuing the conversation naturally. Use the earlier '
-              'lines as context for her tone, inside jokes and where '
-              'we\'re at. Do NOT pretend the messages are cryptic, do '
-              'NOT comment on them being puzzles — just give me the '
-              'line I should send back.\n\n'
-              'CHAT TRANSCRIPT:\n$transcript';
+              'Below is the recent chat between me and her, labeled '
+              'HER: / ME: per line. The LAST line is what SHE just '
+              'sent — that\'s what I need a reply for. Write me ONE '
+              'reply specific to that last line, continuing the '
+              'conversation naturally. Treat chat abbreviations as '
+              'normal English (wbu = what about you, wyd = what you '
+              'doing, hbu = how about you, ngl = not gonna lie, etc) '
+              '— they are NOT a code. Do NOT call any of the messages '
+              'cryptic / a puzzle / mysterious / secret / encrypted '
+              '— it is just a chat.\n\n'
+              'CHAT TRANSCRIPT:\n$labeled';
         } else {
           effective =
-              '$effective\n\nChat transcript for context (the LAST line '
-              'is what she just sent — write a reply specific to that):'
-              '\n$transcript';
+              '$effective\n\nChat transcript labeled HER:/ME: per line '
+              '(LAST line is what she just sent — write a reply specific '
+              'to that, treat chat abbreviations like wbu/wyd as plain '
+              'English):\n$labeled';
         }
       } else {
         // OCR returned empty — tell the AI explicitly so it doesn't
@@ -154,6 +158,25 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
       _sending = false;
     });
     _scrollToBottom();
+  }
+
+  /// Label the OCR transcript with alternating HER:/ME: tags from
+  /// the bottom up. Matches the screenshot-rizz helper line for
+  /// line so both surfaces hand the model the same shape.
+  String _labelTranscript(String raw) {
+    final lines = raw
+        .split(RegExp(r'\r?\n'))
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    if (lines.isEmpty) return raw.trim();
+    final labeled = <String>[];
+    var isHer = true;
+    for (var i = lines.length - 1; i >= 0; i--) {
+      labeled.insert(0, '${isHer ? "HER" : "ME"}: ${lines[i]}');
+      isHer = !isHer;
+    }
+    return labeled.join('\n');
   }
 
   /// On-device OCR — mirrors the working _ocrSilently in

@@ -210,8 +210,14 @@ class RizzReplyService {
       RizzDebug.ocrText = ocrText;
       RizzDebug.add('ocr extracted ${ocrText.length} chars');
       if (ocrText.isNotEmpty) {
-        her = ocrText;
+        // Label the transcript with alternating HER:/ME: tags from
+        // the bottom up so the model doesn't have to guess who said
+        // what. Bro: "it needs to know who's who" — without speaker
+        // labels gpt-4o was reading the OCR as a single block of
+        // "her" messages and inferring it was "encrypted code".
+        her = _labelTranscript(ocrText);
         ocrUsed = true;
+        RizzDebug.add('labeled transcript ${her.length} chars');
       }
     }
 
@@ -320,6 +326,34 @@ class RizzReplyService {
   }
 
   // ── Internals ─────────────────────────────────────────────────────────
+
+  /// Tag an OCR'd transcript with alternating HER:/ME: labels from
+  /// the BOTTOM up, since the LAST line in a screenshot is what she
+  /// just sent (the line we need a reply to). This single hint is
+  /// what kills the "is this an encrypted code?" failure mode the
+  /// model fell into when it saw a raw wall of OCR text.
+  ///
+  /// We assume strict alternation. Real chats sometimes have two
+  /// consecutive bubbles from the same person, but: (a) ML Kit
+  /// usually fuses them onto adjacent lines and the model handles
+  /// it from context, (b) even a wrong label is better than no
+  /// label because it grounds the model in "this is a conversation,
+  /// not a cipher."
+  static String _labelTranscript(String raw) {
+    final lines = raw
+        .split(RegExp(r'\r?\n'))
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    if (lines.isEmpty) return raw.trim();
+    final labeled = <String>[];
+    var isHer = true; // last line is HER
+    for (var i = lines.length - 1; i >= 0; i--) {
+      labeled.insert(0, '${isHer ? "HER" : "ME"}: ${lines[i]}');
+      isHer = !isHer;
+    }
+    return labeled.join('\n');
+  }
 
   /// Write the in-memory screenshot bytes to a tmp file (ML Kit needs
   /// a path, not bytes), run text recognition on the tmp file, then
