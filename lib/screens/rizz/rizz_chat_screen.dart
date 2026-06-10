@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../config/api_config.dart';
 import '../../services/paywall_gate.dart';
@@ -105,16 +106,45 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     });
     _ctrl.clear();
     _scrollToBottom();
-    // If we have a screenshot, run OCR silently and append the
-    // extracted text to the user message so the model has something
-    // textual to work with even if the backend isn't vision-capable.
+    // If we have a screenshot, run OCR and frame the extracted text so
+    // the AI treats the LAST line as what she just sent (the reply
+    // target) and the rest as conversational context. Bro: "it's
+    // completely off topic — needs to finish off the convo, specific
+    // to the last thing said, using the rest as context."
     var effective = msg;
     if (image != null) {
       final ocr = await _ocr(image);
+      _dbg('ocr returned ${ocr.length} chars');
       if (ocr.isNotEmpty) {
-        effective = (effective.isEmpty
-            ? 'This is what she just sent me. Help me reply:\n\n$ocr'
-            : '$effective\n\nContext from the chat screenshot:\n$ocr');
+        // Explicit framing so the model can't drift into "deciphering
+        // a cryptic message" mode when it sees a wall of OCR text.
+        // The LAST non-empty line that's not from me is what to reply
+        // to — everything else is context.
+        final transcript = ocr.trim();
+        if (effective.isEmpty) {
+          effective =
+              'Below is the recent chat between me and her, read top → '
+              'bottom. The LAST line in the transcript is what SHE just '
+              'sent me. Write me ONE reply specific to that last line, '
+              'continuing the conversation naturally. Use the earlier '
+              'lines as context for her tone, inside jokes and where '
+              'we\'re at. Do NOT pretend the messages are cryptic, do '
+              'NOT comment on them being puzzles — just give me the '
+              'line I should send back.\n\n'
+              'CHAT TRANSCRIPT:\n$transcript';
+        } else {
+          effective =
+              '$effective\n\nChat transcript for context (the LAST line '
+              'is what she just sent — write a reply specific to that):'
+              '\n$transcript';
+        }
+      } else {
+        // OCR returned empty — tell the AI explicitly so it doesn't
+        // hallucinate a "cryptic message" reply.
+        effective = effective.isEmpty
+            ? 'I just uploaded a screenshot of her chat but the text '
+              'didn\'t scan cleanly. Ask me to paste what she said.'
+            : effective;
       }
     }
     final reply = await _ask(effective, image: image);
@@ -126,18 +156,35 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     _scrollToBottom();
   }
 
+  /// On-device OCR — mirrors the working _ocrSilently in
+  /// RizzReplyService. The previous implementation used
+  /// Directory.systemTemp which fails inside the iOS sandbox; the
+  /// screenshot screen works because it goes through
+  /// path_provider.getTemporaryDirectory(). Bro: "use same logic as
+  /// fucking screenshot ad tab" — verbatim copy of that path.
   Future<String> _ocr(Uint8List bytes) async {
+    _dbg('ocr start bytes=${bytes.length}');
     try {
-      final dir = Directory.systemTemp;
-      final f = File('${dir.path}/rizz_chat_'
-          '${DateTime.now().millisecondsSinceEpoch}.png');
-      await f.writeAsBytes(bytes, flush: true);
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/rizz_chat_'
+          '${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File(path);
+      await file.writeAsBytes(bytes, flush: true);
+      _dbg('ocr wrote tmp file');
       try {
-        return await ScreenshotOcrService.extractRecent(f.path);
+        final text = await ScreenshotOcrService.extractRecent(path)
+            .timeout(const Duration(seconds: 12), onTimeout: () {
+              _dbg('ML Kit TIMED OUT after 12s');
+              return '';
+            });
+        _dbg('ocr ok extracted=${text.length} chars '
+            'sample="${text.length > 60 ? "${text.substring(0, 60)}…" : text}"');
+        return text;
       } finally {
-        try { await f.delete(); } catch (_) {}
+        try { await file.delete(); } catch (_) {}
       }
-    } catch (_) {
+    } catch (e) {
+      _dbg('ocr THREW $e');
       return '';
     }
   }
@@ -273,7 +320,9 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     final picked = await showModalBottomSheet<RizzVibe>(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: false,
+      // Same scrollable fix as the screenshot screen — lift the
+      // default height cap so all five tone rows are reachable.
+      isScrollControlled: true,
       builder: (_) => _ChatTonePickerSheet(current: _tone),
     );
     if (picked == null || picked == _tone || !mounted) return;
@@ -1029,52 +1078,67 @@ class _ChatTonePickerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenH = MediaQuery.of(context).size.height;
     return Container(
+      constraints: BoxConstraints(maxHeight: screenH * 0.78),
       decoration: const BoxDecoration(
         color: Color(0xFF111111),
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(
-            child: Container(
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
               width: 38, height: 4,
               decoration: BoxDecoration(
                 color: AppColors.surface3,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Text('SELECT TONE',
-                style: GoogleFonts.inter(
-                  color: AppColors.red,
-                  fontSize: 12, letterSpacing: 3.0,
-                  fontWeight: FontWeight.w800,
-                )),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.close_rounded,
-                  color: AppColors.textSecondary, size: 22),
-                onPressed: () => Navigator.of(context).pop(),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Text('SELECT TONE',
+                    style: GoogleFonts.inter(
+                      color: AppColors.red,
+                      fontSize: 12, letterSpacing: 3.0,
+                      fontWeight: FontWeight.w800,
+                    )),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded,
+                      color: AppColors.textSecondary, size: 22),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          for (final v in RizzVibeLabel.canonical) ...[
-            _ChatTonePickerRow(
-              tone:     v,
-              selected: v == current,
-              onTap:    () => Navigator.of(context).pop(v),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final v in RizzVibeLabel.canonical) ...[
+                      _ChatTonePickerRow(
+                        tone:     v,
+                        selected: v == current,
+                        onTap:    () => Navigator.of(context).pop(v),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ],
-        ],
+        ),
       ),
     );
   }
