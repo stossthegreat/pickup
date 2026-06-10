@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
+import 'package:go_router/go_router.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -14,6 +15,7 @@ import '../../../config/dev_flags.dart';
 import '../../../services/audio_session.dart';
 import '../../../services/creator_mode_store.dart';
 import '../../../services/local_store_service.dart';
+import '../../../services/paywall_gate.dart';
 import '../../../services/realtime_session.dart';
 import '../../../services/daily_nudge_service.dart';
 import '../../../services/review_prompt_service.dart';
@@ -228,8 +230,20 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     // circle so the user lands on the recording orb the moment they
     // open the tab. They can switch character via the top-left chip.
     if (widget.tabMode) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted || _tabAutoStartFired) return;
+        // Bro: "I used roleplay then it seems to stop working — but
+        // I've got sub so it should still work, and otherwise paywall
+        // should show when they press the speak icon." A returning
+        // free user who's burnt their pass would have the auto-fire
+        // dump them straight onto the paywall — instead, only auto-
+        // start when there's still a pass to burn. Pro users always
+        // auto-start. Once landed in pick mode, ANY chip tap routes
+        // through _goLive which carries the real gate.
+        final pro     = await PaywallGate.isPro();
+        final used    = await LocalStoreService.gameFreeUsed();
+        if (!mounted) return;
+        if (!pro && used) return; // stay on the picker.
         _tabAutoStartFired = true;
         final defaultVibe = _vibes.firstWhere(
           (v) => v.key == 'into_you',
@@ -276,6 +290,33 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     // silently leave the user in connecting state (build 124
     // regression). Tab-mode auto-start double-fire is handled by
     // _tabAutoStartFired in initState.
+    //
+    // ── PAYWALL GATE (bro v2: "show paywall when they press the
+    //     speak icon in roleplay"). Every speak action — auto-fire
+    //     on tab open, CHANGE CHARACTER chip, manual vibe pick,
+    //     retry — flows through this method, so this is the single
+    //     chokepoint. Pro users skip entirely. Free users burn ONE
+    //     free session the first time; every subsequent call to
+    //     _goLive lands on the paywall instead of connecting.
+    final pro = await PaywallGate.isPro();
+    if (!pro) {
+      final used = await LocalStoreService.gameFreeUsed();
+      if (used) {
+        if (!mounted) return;
+        // Reset the phase so the screen doesn't sit in connecting
+        // forever after the user dismisses the paywall.
+        setState(() {
+          _phase = _Phase.pick;
+          _error = '';
+        });
+        HapticFeedback.mediumImpact();
+        await context.push('/paywall',
+            extra: {'source': 'game_speak_capped'});
+        return;
+      }
+      // Burn the free pass. The session itself still runs below.
+      await LocalStoreService.markGameFreeUsed();
+    }
     setState(() {
       _vibe = vibe;
       _phase = _Phase.connecting;
