@@ -239,6 +239,17 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   /// session clock only starts ticking on that first press — sitting
   /// on the screen reading the scenario shouldn't burn seconds.
   bool _clockStarted = false;
+  /// Flips true the moment her FIRST reply finishes playing through
+  /// the speaker. The Lucien step-in nudge bubble (the glowing red
+  /// "TAP — LUCIEN WILL TAKE THE FLOOR" overlay above the step-in
+  /// button) only shows once this is true — i.e. the user has had
+  /// one full exchange (he speaks → she replies) and is now sitting
+  /// in the natural beat where Lucien's intervention lands hardest.
+  bool _hadFirstSheReply = false;
+  /// Set once the user has tapped LUCIEN — STEP IN (or otherwise
+  /// dismissed the nudge). Stops the nudge from re-appearing on
+  /// every subsequent reply within the same session.
+  bool _lucienNudgeDismissed = false;
   /// True once the tab-mode auto-start has fired. Prevents the
   /// addPostFrameCallback from firing _goLive twice if the framework
   /// rebuilds the screen before the first frame settles (the source
@@ -460,7 +471,14 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       if (_herSpeaking && !_responseActive) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!_disposed && mounted && _pcmQueue.isEmpty && !_responseActive) {
-            setState(() => _herSpeaking = false);
+            setState(() {
+              _herSpeaking = false;
+              // First-exchange beat — the moment her opening reply
+              // finishes, arm the Lucien step-in nudge. The bubble
+              // shows on the next frame and stays visible until the
+              // user taps LUCIEN — STEP IN or starts another hold.
+              if (!_hadFirstSheReply) _hadFirstSheReply = true;
+            });
           }
         });
       }
@@ -695,6 +713,9 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   Future<void> _lucienStepIn() async {
     if (_phase != _Phase.live) return;
     HapticFeedback.heavyImpact();
+    // Dismiss the nudge bubble — the user found the button, no
+    // need to keep pointing at it for the rest of the session.
+    if (mounted) setState(() => _lucienNudgeDismissed = true);
     // Capture the exchange BEFORE we clear the caption.
     final her = _herCaption.trim();
     final you = _youCaption.trim();
@@ -1323,62 +1344,22 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
               // Make it clean, beautiful, clear, pulsing."
               //
               // FIRST EVER (free user, haven't held to talk yet) —
-              // the conversion line ABOVE the orb's caption, italic
-              // Playfair, pulsing scale + opacity. Disappears as soon
-              // as they hold once.
+              // glass bubble overlay under the orb. Bro v8: not just
+              // text floating in space, but a proper bubble with a
+              // surface, soft red glow, and a clear pulsing CTA at
+              // the bottom edge so the user reads HEADLINE → SUB →
+              // ACTION in one beat. Disappears as soon as they hold
+              // once.
               //
               // EVERY OTHER session — plain "HOLD TO SPEAK" caption,
               // same pulse as before.
               if (_phase == _Phase.live && !_holding && !_herSpeaking) ...[
                 if (_firstEverSession && !_clockStarted)
                   Transform.translate(
-                    offset: const Offset(0, -16),
+                    offset: const Offset(0, -12),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Column(
-                        children: [
-                          Text(
-                            'Become the guy who\nalways knows what to say.',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.playfairDisplay(
-                              color: Colors.white,
-                              fontSize: 22, height: 1.2,
-                              letterSpacing: -0.4,
-                              fontStyle: FontStyle.italic,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          )
-                              .animate(onPlay: (c) => c.repeat(reverse: true))
-                              .fadeIn(duration: 1100.ms,
-                                  curve: Curves.easeInOut)
-                              .scaleXY(begin: 1.0, end: 1.025,
-                                  duration: 1400.ms,
-                                  curve: Curves.easeInOut)
-                              .then()
-                              .fade(begin: 1.0, end: 0.62,
-                                  duration: 1100.ms,
-                                  curve: Curves.easeInOut)
-                              .scaleXY(begin: 1.025, end: 1.0,
-                                  duration: 1400.ms,
-                                  curve: Curves.easeInOut),
-                          const SizedBox(height: 14),
-                          Text('HOLD THE ORB TO BEGIN',
-                            textAlign: TextAlign.center,
-                            style: AppTypography.label.copyWith(
-                              color: AppColors.red,
-                              fontSize: 11, letterSpacing: 3.6,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          )
-                              .animate(onPlay: (c) => c.repeat(reverse: true))
-                              .fadeIn(duration: 900.ms,
-                                  curve: Curves.easeInOut)
-                              .then()
-                              .fade(begin: 1.0, end: 0.55,
-                                  duration: 900.ms,
-                                  curve: Curves.easeInOut),
-                        ],
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _FirstTimeBubble(),
                     ),
                   )
                 else
@@ -1499,6 +1480,18 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              // Lucien step-in nudge — appears the moment her first
+              // reply has played. Italic Playfair on a glass card
+              // with a downward arrow pointing at the button. Stays
+              // until the user taps Lucien (or finishes the session).
+              // First-session only: a returning user already knows.
+              if (_phase == _Phase.live
+                  && _firstEverSession
+                  && _hadFirstSheReply
+                  && !_lucienNudgeDismissed) ...[
+                const _LucienNudgeBubble(),
+                const SizedBox(height: 6),
+              ],
               Material(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
@@ -1513,6 +1506,16 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                           ? AppColors.accent
                           : AppColors.surface3,
                       borderRadius: BorderRadius.circular(12),
+                      // Soft accent glow ONLY when the nudge is up so
+                      // the button itself becomes the obvious target.
+                      boxShadow: (_firstEverSession
+                              && _hadFirstSheReply
+                              && !_lucienNudgeDismissed
+                              && _phase == _Phase.live)
+                          ? [BoxShadow(
+                              color: AppColors.accent.withValues(alpha: 0.55),
+                              blurRadius: 24, spreadRadius: 1)]
+                          : null,
                     ),
                     child: Text('LUCIEN — STEP IN',
                         style: AppTypography.label.copyWith(
@@ -2513,4 +2516,206 @@ class _CharacterPickerRow extends StatelessWidget {
       ),
     );
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  First-time roleplay CTA bubble — the conversion overlay that sits under
+//  the orb on the user's very first Free Flow session. Glass surface +
+//  soft accent glow + pulsing red "HOLD TO SPEAK" foot. Replaces the v170
+//  plain-text headline so the moment doesn't read as a chrome label.
+//
+//  Composition:
+//    HEADLINE  italic Playfair, big — "Become the guy who always knows
+//                                       what to say."
+//    SUBTEXT   inter, muted — "Live conversations. Real pressure.
+//                              Instant coaching from Lucien."
+//    CTA       pulsing red — "HOLD TO SPEAK"
+// ═══════════════════════════════════════════════════════════════════════════
+class _FirstTimeBubble extends StatelessWidget {
+  const _FirstTimeBubble();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [
+            Color(0x14FFFFFF),
+            Color(0x05000000),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: AppColors.red.withValues(alpha: 0.32),
+          width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.red.withValues(alpha: 0.18),
+            blurRadius: 28,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Become the guy who\nalways knows what to say.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.playfairDisplay(
+              color: Colors.white,
+              fontSize: 21, height: 1.18,
+              letterSpacing: -0.5,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Live conversations. Real pressure.\nInstant coaching from Lucien.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: AppColors.textSecondary,
+              fontSize: 12.5, height: 1.4,
+              letterSpacing: 0.1,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.red.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(
+                color: AppColors.red.withValues(alpha: 0.65),
+                width: 0.9),
+            ),
+            child: Text('HOLD TO SPEAK',
+              style: AppTypography.label.copyWith(
+                color: AppColors.red,
+                fontSize: 11, letterSpacing: 3.6,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          )
+              .animate(onPlay: (c) => c.repeat(reverse: true))
+              .fadeIn(duration: 900.ms, curve: Curves.easeInOut)
+              .then()
+              .fade(begin: 1.0, end: 0.6,
+                  duration: 900.ms, curve: Curves.easeInOut)
+              .scaleXY(begin: 1.0, end: 1.04,
+                  duration: 900.ms, curve: Curves.easeInOut),
+        ],
+      ),
+    )
+        .animate()
+        .fadeIn(duration: 480.ms, curve: Curves.easeOut)
+        .slideY(begin: 0.04, end: 0,
+            duration: 480.ms, curve: Curves.easeOut);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Lucien step-in nudge — small speech bubble that appears the moment her
+//  first reply has played. Points at the LUCIEN — STEP IN button below.
+//  Italic Playfair line + label tail. Pulsing accent glow so the eye
+//  jumps from "her turn finished" → "tap the button to summon Lucien".
+//
+//  Bro v8: "we need Lucien to definitely say something — that's the
+//  magic. After the first thing he says then she says back then we
+//  trigger Lucien, or add a bubble overlay that has a route to the
+//  Lucien button. Something strong, to the point, that shows his
+//  level and really makes them want to press it."
+// ═══════════════════════════════════════════════════════════════════════════
+class _LucienNudgeBubble extends StatelessWidget {
+  const _LucienNudgeBubble();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          decoration: BoxDecoration(
+            color: const Color(0xCC0E0E10),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppColors.accent.withValues(alpha: 0.55),
+              width: 0.9),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.accent.withValues(alpha: 0.28),
+                blurRadius: 22, spreadRadius: 1),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Tap the master.',
+                style: GoogleFonts.playfairDisplay(
+                  color: Colors.white,
+                  fontSize: 15, height: 1.1,
+                  letterSpacing: -0.2,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text('LUCIEN WILL TAKE THE FLOOR',
+                style: AppTypography.label.copyWith(
+                  color: AppColors.accent,
+                  fontSize: 9, letterSpacing: 2.6,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Downward arrow pointing at the LUCIEN — STEP IN button.
+        CustomPaint(
+          size: const Size(14, 8),
+          painter: _BubbleArrowPainter(),
+        ),
+      ],
+    )
+        .animate(onPlay: (c) => c.repeat(reverse: true))
+        .fadeIn(duration: 380.ms, curve: Curves.easeOut)
+        .slideY(begin: 0.10, end: 0,
+            duration: 380.ms, curve: Curves.easeOut)
+        .then()
+        .scaleXY(begin: 1.0, end: 1.04,
+            duration: 800.ms, curve: Curves.easeInOut)
+        .fade(begin: 1.0, end: 0.78,
+            duration: 800.ms, curve: Curves.easeInOut);
+  }
+}
+
+class _BubbleArrowPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fill = Paint()
+      ..color = const Color(0xCC0E0E10)
+      ..style = PaintingStyle.fill;
+    final stroke = Paint()
+      ..color = AppColors.accent.withValues(alpha: 0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.9;
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+    canvas.drawPath(path, fill);
+    // Draw only the two slanted sides — the top edge is glued to the
+    // bubble body so it shouldn't paint a horizontal stroke through it.
+    canvas.drawLine(const Offset(0, 0), Offset(size.width / 2, size.height), stroke);
+    canvas.drawLine(Offset(size.width, 0), Offset(size.width / 2, size.height), stroke);
+  }
+
+  @override
+  bool shouldRepaint(_BubbleArrowPainter old) => false;
 }

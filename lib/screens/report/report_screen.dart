@@ -947,27 +947,43 @@ class _ReportScreenState extends State<ReportScreen> {
           ),
           const SizedBox(height: Sp.xl),
 
-          // Bro v6: "you can't get out of the locked teaser — I had
-          // to close the app to get out. Add an out button at the
-          // bottom." Discreet text-button so it doesn't compete
-          // with the UNLOCK CTA above. Routes back to /home.
+          // Bro v8: "make the done button at the bottom a little
+          // bigger you can barely see it" + "user presses done →
+          // routes to roleplay so they land on the main Free Flow
+          // screen with the big CTA." Discreet text-only button
+          // upgraded to a pill with enough presence to be a true
+          // exit, still subordinate to the UNLOCK CTA above
+          // (outlined accent, not filled red). Routes /home tab 1
+          // = GAME, dropping the user straight into the Lucien
+          // free-roleplay surface.
           Center(
-            child: TextButton(
-              onPressed: () {
-                HapticFeedback.selectionClick();
-                context.go('/home');
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.textTertiary,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 18, vertical: 12),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(99),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(99),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  context.go('/home', extra: {'initialTab': 1});
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 28, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface1,
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(
+                      color: AppColors.textSecondary.withValues(alpha: 0.55),
+                      width: 1.0),
+                  ),
+                  child: Text('DONE',
+                    style: AppTypography.label.copyWith(
+                      color: AppColors.textPrimary,
+                      fontSize: 13, letterSpacing: 3.4,
+                      fontWeight: FontWeight.w900,
+                    )),
+                ),
               ),
-              child: Text('NOT NOW',
-                style: AppTypography.label.copyWith(
-                  color: AppColors.textTertiary,
-                  fontSize: 11, letterSpacing: 3.2,
-                  fontWeight: FontWeight.w800,
-                )),
             ),
           ),
           const SizedBox(height: Sp.md),
