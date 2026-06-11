@@ -282,15 +282,37 @@ class LocalStoreService {
   }
 
   /// True once the free Free Flow live conversation has been opened.
+  ///
+  /// v179 fix — the source of truth is now the SCORED-SESSION list,
+  /// not a bool flag. Background: v171 moved the "mark used" off the
+  /// first hold (multi-hold bug) and onto session-end + dispose. But
+  /// the dispose() path fires the marker as soon as the user has
+  /// held the orb for even a millisecond and then leaves the screen
+  /// — back tap, tab switch on iOS where IndexedStack disposes, mid-
+  /// session bail. That burnt the free pass for users who never
+  /// actually completed a scored session, which is the "I press and
+  /// it goes to paywall" regression.
+  ///
+  /// The truthful test: "did the user complete a scored session?"
+  /// That writes to game.scores.v1 (via saveGameScore at the end of
+  /// _endAndScore). An empty score list means no session ever ran
+  /// to completion → the free pass is still alive.
+  ///
+  /// Legacy bool flag is intentionally ignored — TestFlight builds
+  /// pre-v179 set it on dispose, so honouring it would leave existing
+  /// testers stuck. The score list is the canonical record going
+  /// forward; the bool flag is dead.
   static Future<bool> gameFreeUsed() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_kGameFreeUsed) ?? false;
+    final scores = await loadGameScores();
+    return scores.isNotEmpty;
   }
 
-  static Future<void> markGameFreeUsed() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kGameFreeUsed, true);
-  }
+  /// No-op since v179 — gameFreeUsed() now reads from the score list,
+  /// not this bool. Kept on the API surface so existing call sites in
+  /// free_flow_screen.dart still compile without surgery; the actual
+  /// "consume the free session" effect happens when saveGameScore
+  /// writes the scorecard at the end of _endAndScore.
+  static Future<void> markGameFreeUsed() async {}
 
   /// True once the free Rizz screenshot generation has been consumed.
   /// One free screenshot rizz per non-pro user; LINES and CHAT cards

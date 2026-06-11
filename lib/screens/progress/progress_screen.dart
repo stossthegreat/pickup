@@ -107,7 +107,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.lg, Sp.lg, Sp.xxl),
       children: [
-        // Masthead
+        // Masthead — title + heartbeat dot, with a CLOSE X on the
+        // right so the user can always bail back to whatever pushed
+        // them here (Looks masthead chart icon, Rizz masthead chart
+        // icon). Without it, /progress had no exit beyond the OS
+        // back gesture, which on iOS feels broken.
         Row(
           children: [
             Text('Progress',
@@ -119,6 +123,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
               decoration: const BoxDecoration(
                 color: AppColors.red, shape: BoxShape.circle),
             ),
+            const Spacer(),
+            _ProgressCloseButton(onTap: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home');
+              }
+            }),
           ],
         ),
         const SizedBox(height: 2),
@@ -232,15 +244,34 @@ class _ProgressLocked extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.xl, Sp.lg, Sp.xxl),
       children: [
-        Text('Progress',
-          style: AppTypography.h1.copyWith(
-            fontSize: 32, letterSpacing: -0.8, height: 1)),
-        const SizedBox(height: 4),
-        Text('DELTAS · STREAKS · PROTOCOL',
-          style: AppTypography.label.copyWith(
-            color: AppColors.red,
-            fontSize: 9, letterSpacing: 3.0,
-            fontWeight: FontWeight.w800)),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Progress',
+                    style: AppTypography.h1.copyWith(
+                      fontSize: 32, letterSpacing: -0.8, height: 1)),
+                  const SizedBox(height: 4),
+                  Text('DELTAS · STREAKS · PROTOCOL',
+                    style: AppTypography.label.copyWith(
+                      color: AppColors.red,
+                      fontSize: 9, letterSpacing: 3.0,
+                      fontWeight: FontWeight.w800)),
+                ],
+              ),
+            ),
+            _ProgressCloseButton(onTap: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home');
+              }
+            }),
+          ],
+        ),
 
         const SizedBox(height: Sp.xxl),
 
@@ -1234,4 +1265,38 @@ class _GameChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_GameChartPainter old) => old.scores != scores;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Close X — small circular button mirroring the masthead cog styling,
+//  used in BOTH the populated body header and the locked empty-state
+//  header so /progress always has an exit, regardless of which sub-tree
+//  the user is staring at.
+// ═══════════════════════════════════════════════════════════════════════════
+class _ProgressCloseButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ProgressCloseButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: () { HapticFeedback.selectionClick(); onTap(); },
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 38, height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.surface3, width: 0.6),
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.close_rounded,
+              size: 20, color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
 }
