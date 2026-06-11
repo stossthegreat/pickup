@@ -966,31 +966,29 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     // Pro users: enforce the 2/week quota. Under quota → mark slot,
     // proceed. Over quota → paywall with the same payload so the
     // resubscribe path still preserves the scan.
+    // Bro v6 — conversion flow rewrite:
+    //   Every successful scan lands on /report. Free users see the
+    //   TEASER variant (score reveal + blurred glow-up + locked
+    //   sections + paywall CTAs everywhere). Pro users see the full
+    //   report under their weekly quota; over-quota Pro lands on
+    //   the paywall with the payload preserved so resubscribe still
+    //   keeps their MediaPipe capture.
     final pro = await PaywallGate.isPro();
-    if (!pro) {
-      if (!mounted) return;
-      context.go('/paywall', extra: {
-        'afterPurchase': '/report',
-        'imageBytes':    imageBytes,
-        'geometry':      primaryGeom,
-        'extraImages':   extraImages,
-        'source':        'scan_locked',
-      });
-      return;
+    if (pro) {
+      final usedThisWeek = await LocalStoreService.scansThisWeek();
+      if (usedThisWeek >= LocalStoreService.kScansPerWeek) {
+        if (!mounted) return;
+        context.go('/paywall', extra: {
+          'afterPurchase': '/report',
+          'imageBytes':    imageBytes,
+          'geometry':      primaryGeom,
+          'extraImages':   extraImages,
+          'source':        'scan_quota_capped',
+        });
+        return;
+      }
+      await LocalStoreService.markScanUsed();
     }
-    final usedThisWeek = await LocalStoreService.scansThisWeek();
-    if (usedThisWeek >= LocalStoreService.kScansPerWeek) {
-      if (!mounted) return;
-      context.go('/paywall', extra: {
-        'afterPurchase': '/report',
-        'imageBytes':    imageBytes,
-        'geometry':      primaryGeom,
-        'extraImages':   extraImages,
-        'source':        'scan_quota_capped',
-      });
-      return;
-    }
-    await LocalStoreService.markScanUsed();
     if (!mounted) return;
 
     context.go('/report', extra: {

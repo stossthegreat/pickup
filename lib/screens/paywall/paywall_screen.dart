@@ -345,7 +345,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   // We sell what the user becomes, not the surgical
                   // measurements that get them there. Looksmax → notice;
                   // gaze → hold; game → close. Read in 3 seconds.
-                  const _Pitch(),
+                  _Pitch(glowup: _isGlowupVariant),
 
                   const SizedBox(height: 26),
 
@@ -539,7 +539,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
           child: ImHimWordmark(fontSize: 38, letterSpacing: -1.2),
         ).animate().fadeIn(delay: 180.ms, duration: 360.ms),
         const SizedBox(height: 4),
-        Text('Become the guy she can\'t ignore',
+        Text(_isGlowupVariant
+              ? 'Your glow-up is ready.'
+              : 'Become the guy she can\'t ignore',
           textAlign: TextAlign.center,
           style: AppTypography.h1.copyWith(
             color: Colors.white,
@@ -558,7 +560,17 @@ class _PaywallScreenState extends State<PaywallScreen> {
   /// the legally-required summary line directly below, so dropping
   /// them from the button itself doesn't violate Google Play / Apple
   /// disclosure rules.
-  String _ctaLabel() => 'BECOME UNAVOIDABLE';
+  /// True when the user landed here from the post-scan locked teaser
+  /// — any 'source' starting with 'glowup'. Drives a different
+  /// subtitle ("Your glow-up is ready."), the four-line glow-up
+  /// pitch, and a "UNLOCK PRO" CTA label.
+  bool get _isGlowupVariant {
+    final src = (widget.context?['source'] as String?)?.toLowerCase() ?? '';
+    return src.startsWith('glowup');
+  }
+
+  String _ctaLabel() =>
+      _isGlowupVariant ? 'UNLOCK PRO' : 'BECOME UNAVOIDABLE';
 
   /// Short above-the-fold summary required by the Google Play
   /// Subscriptions Policy. Must clearly state, in one line:
@@ -735,21 +747,58 @@ class _CloseX extends StatelessWidget {
 /// Mirrorly gives you both." Drops the old PRESENCE line — the
 /// product is two halves now (Looks + Game), and the third line
 /// is the synthesis that names the brand as the answer.
+///
+/// Bro v6 — when [glowup] is true, the pitch swaps in the four
+/// post-scan conversion lines instead. Same vertical real estate;
+/// the per-line font size + spacing shrinks proportionally so the
+/// paywall doesn't grow.
 class _Pitch extends StatelessWidget {
-  const _Pitch();
+  final bool glowup;
+  const _Pitch({this.glowup = false});
 
   @override
   Widget build(BuildContext context) {
+    if (glowup) {
+      // Four full-sentence lines — no LEAD/TAIL split. Italic Playfair
+      // for the editorial register that matches the score reveal the
+      // user just came from.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _full('AI shows you your future look.',     delayMs: 320),
+          const SizedBox(height: 12),
+          _full('Discover exactly what to fix.',      delayMs: 420),
+          const SizedBox(height: 12),
+          _full('Practice roleplay until it lands.',  delayMs: 520),
+          const SizedBox(height: 12),
+          _full('Never run out of things to say.',    delayMs: 620),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _line('LOOKS',    'GET YOU NOTICED.',  delayMs: 320),
+        _line('LOOKS', 'GET YOU NOTICED.', delayMs: 320),
         const SizedBox(height: 18),
-        _line('GAME',     'MAKES HER FALL.',   delayMs: 460),
+        _line('GAME',  'MAKES HER FALL.',  delayMs: 460),
         const SizedBox(height: 18),
-        _line('MIRRORLY', 'GIVES YOU BOTH.',   delayMs: 600),
+        _line('IMHIM', 'GIVES YOU BOTH.',  delayMs: 600),
       ],
     );
+  }
+
+  Widget _full(String text, {required int delayMs}) {
+    return Text(text,
+      style: GoogleFonts.playfairDisplay(
+        color: Colors.white,
+        fontSize: 20, height: 1.25,
+        letterSpacing: -0.3,
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w700,
+      ),
+    ).animate(delay: Duration(milliseconds: delayMs))
+      .fadeIn(duration: 420.ms)
+      .slideX(begin: -0.04, end: 0, curve: Curves.easeOut);
   }
 
   Widget _line(String lead, String tail, {required int delayMs}) {
