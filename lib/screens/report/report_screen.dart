@@ -946,6 +946,31 @@ class _ReportScreenState extends State<ReportScreen> {
             onTap:   () => openPaywall('glowup_protocols_locked'),
           ),
           const SizedBox(height: Sp.xl),
+
+          // Bro v6: "you can't get out of the locked teaser — I had
+          // to close the app to get out. Add an out button at the
+          // bottom." Discreet text-button so it doesn't compete
+          // with the UNLOCK CTA above. Routes back to /home.
+          Center(
+            child: TextButton(
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                context.go('/home');
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.textTertiary,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 18, vertical: 12),
+              ),
+              child: Text('NOT NOW',
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textTertiary,
+                  fontSize: 11, letterSpacing: 3.2,
+                  fontWeight: FontWeight.w800,
+                )),
+            ),
+          ),
+          const SizedBox(height: Sp.md),
         ],
       ),
     );

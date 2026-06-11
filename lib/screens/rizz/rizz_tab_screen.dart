@@ -112,7 +112,11 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 18),
+            // Bro v6: "push the three cards down a bit, they're too
+            // high — not massively just a cm or two." 18 → 64px so
+            // the trio sits below the optical centre rather than
+            // hugging the settings cog.
+            const SizedBox(height: 64),
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
