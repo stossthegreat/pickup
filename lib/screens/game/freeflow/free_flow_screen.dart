@@ -1712,6 +1712,45 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       ],
     );
   }
+
+  /// Slide a full-screen Lucien upsell modal in at the end of a free
+  /// session. Lucien's portrait dominates the screen — italic Playfair
+  /// headline "Tap Lucien for your legendary teacher" + UNLOCK PRO CTA
+  /// at the bottom. Dismissable via the X but every dismiss / tap on
+  /// the portrait routes to the glow-up paywall.
+  Future<void> _showLucienUpsell() async {
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: Colors.black.withValues(alpha: 0.55),
+        transitionDuration: const Duration(milliseconds: 420),
+        pageBuilder: (_, __, ___) => const _LucienUpsellSheet(),
+        transitionsBuilder: (_, anim, __, child) {
+          final curved = CurvedAnimation(
+              parent: anim, curve: Curves.easeOutCubic);
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween(
+                begin: const Offset(0, 0.08),
+                end:   Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+    // When the user comes back from the modal (with or without
+    // upgrading) reset the screen to the picker so the next tab
+    // entry behaves cleanly.
+    if (!mounted) return;
+    setState(() {
+      _phase = _Phase.pick;
+      _tabAutoStartFired = false;
+    });
+  }
 }
 
 class _VibeCard extends StatelessWidget {
@@ -2044,45 +2083,6 @@ class _ArenaPill extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  /// Slide a full-screen Lucien upsell modal in at the end of a free
-  /// session. Lucien's portrait dominates the screen — italic Playfair
-  /// headline "Tap Lucien for your legendary teacher" + UNLOCK PRO CTA
-  /// at the bottom. Dismissable via the X but every dismiss / tap on
-  /// the portrait routes to the glow-up paywall.
-  Future<void> _showLucienUpsell() async {
-    if (!mounted) return;
-    await Navigator.of(context).push(
-      PageRouteBuilder<void>(
-        opaque: false,
-        barrierColor: Colors.black.withValues(alpha: 0.55),
-        transitionDuration: const Duration(milliseconds: 420),
-        pageBuilder: (_, __, ___) => const _LucienUpsellSheet(),
-        transitionsBuilder: (_, anim, __, child) {
-          final curved = CurvedAnimation(
-              parent: anim, curve: Curves.easeOutCubic);
-          return FadeTransition(
-            opacity: curved,
-            child: SlideTransition(
-              position: Tween(
-                begin: const Offset(0, 0.08),
-                end:   Offset.zero,
-              ).animate(curved),
-              child: child,
-            ),
-          );
-        },
-      ),
-    );
-    // When the user comes back from the modal (with or without
-    // upgrading) reset the screen to the picker so the next tab
-    // entry behaves cleanly.
-    if (!mounted) return;
-    setState(() {
-      _phase = _Phase.pick;
-      _tabAutoStartFired = false;
-    });
   }
 }
 
