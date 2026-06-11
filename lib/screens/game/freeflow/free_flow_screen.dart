@@ -224,6 +224,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   /// (and the Lucien upsell modal at session end) only fires for
   /// free users.
   bool _freeSession = false;
+  /// True ONLY for the user's very first session ever — i.e. they
+  /// haven't burned their free pass yet. Drives the pulsing
+  /// "Become the guy who always knows what to say" CTA over the orb
+  /// before they've held to talk. Disappears as soon as they actually
+  /// start a turn (clockStarted flips true).
+  bool _firstEverSession = false;
   /// Did we already fire the post-session Lucien upsell on this
   /// instance? Guard so the modal doesn't double-stack if the
   /// session ends via more than one path (timer expiry + manual
@@ -269,6 +275,18 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   @override
   void dispose() {
     _disposed = true;
+    // Persist gameFreeUsed if a free user actually used their
+    // session (clockStarted is the truthful "they held to talk"
+    // marker). Bro v6 fix: marking on first hold caused
+    // mid-session paywalls; deferring to dispose ensures the
+    // flag flips when they LEAVE the session, not on the first
+    // hold within it. _lucienUpsellShown already calls
+    // markGameFreeUsed on the timer-expiry path, so this is the
+    // "you bailed mid-session" path.
+    if (_firstEverSession && _clockStarted && !_lucienUpsellShown) {
+      // ignore: discarded_futures
+      LocalStoreService.markGameFreeUsed();
+    }
     // ignore: discarded_futures
     WakelockPlus.disable();
     _clock?.cancel();
@@ -314,12 +332,18 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     // every _goLive so a mid-session upgrade flips the user to the Pro
     // 3-minute ceiling on their next vibe-switch.
     final pro = await PaywallGate.isPro();
+    // First-ever check — gameFreeUsed is set by _startHold the moment
+    // the user actually presses to talk for the first time. If it's
+    // still false here AND they're non-pro, this is the user's very
+    // first session and the pulsing CTA over the orb is warranted.
+    final gameUsedAlready = pro ? true : await LocalStoreService.gameFreeUsed();
     if (!mounted) return;
     setState(() {
       _vibe = vibe;
       _phase = _Phase.connecting;
       _error = '';
       _freeSession = !pro;
+      _firstEverSession = !pro && !gameUsedAlready;
       _lucienUpsellShown = false;
       _remaining = pro ? _sessionSeconds : _freeSessionSeconds;
     });
@@ -553,12 +577,25 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
 
   void _startHold() {
     if (_phase != _Phase.live || _holding) return;
-    // Bro v4 + v5:
-    //   · Free user: ONE free hold per account. Second hold → paywall.
-    //   · Pro user: 40 minutes of voice per calendar month. Hold while
-    //     under the cap; once exhausted → paywall on next hold.
-    // The free pass is marked on FIRST hold (not on _goLive) so a user
-    // who opens the tab and leaves still has their use intact.
+    // Bro v6: "1 min ain't working — I used it, pressed Lucien, he
+    // answered, I tried to talk to her, may be my signal bad, but I
+    // still had 30 seconds then I pressed record again and it went
+    // to paywall. This is the type of thing that can't happen."
+    //
+    // ROOT CAUSE: the v5 version marked gameFreeUsed on FIRST hold.
+    // Second hold in the same session then re-read gameFreeUsed,
+    // found it true, fired the paywall. Multiple holds per session
+    // are not "second sessions" — they're the user using their one
+    // free session normally.
+    //
+    // FIX: in-session gating now uses the in-memory _firstEverSession
+    // flag (resolved once at _goLive time). gameFreeUsed gets
+    // committed to disk only when the session actually ENDS (see
+    // _endAndScore + dispose). That way:
+    //   · First hold of fresh session → allowed.
+    //   · Second hold of fresh session → ALSO allowed (the bug fix).
+    //   · 60-second clock expiry → upsell + mark used.
+    //   · Tab open after session ended → paywall on first hold.
     // ignore: discarded_futures
     PaywallGate.isPro().then((pro) async {
       if (!mounted) return;
@@ -575,16 +612,17 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         _beginHold();
         return;
       }
-      // Free path — one free session ever.
-      final used = await LocalStoreService.gameFreeUsed();
-      if (!mounted) return;
-      if (used) {
+      // Free path — current session is allowed if it's the user's
+      // free one. Returning free users (i.e. _firstEverSession is
+      // false because gameFreeUsed was already true at _goLive)
+      // hit the paywall on every hold.
+      if (!_firstEverSession) {
+        if (!mounted) return;
         HapticFeedback.mediumImpact();
         await context.push('/paywall',
             extra: {'source': 'game_speak_capped'});
         return;
       }
-      await LocalStoreService.markGameFreeUsed();
       if (!mounted) return;
       _beginHold();
     });
@@ -790,6 +828,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       await _micSub?.cancel();
       // ignore: discarded_futures
       _recorder.stop().catchError((_) {});
+      // Persist gameFreeUsed = true now that the free session is
+      // truly over. Bro v6: marking used inside _startHold caused
+      // multi-hold-in-same-session paywalls; the persistent flag
+      // only flips when the clock actually expires (here) or on
+      // dispose() if they held at all (see dispose()).
+      // ignore: discarded_futures
+      LocalStoreService.markGameFreeUsed();
       if (!mounted) return;
       setState(() {
         _phase = _Phase.scored; // freeze the live UI so the modal sits on top
@@ -1257,33 +1302,94 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                   ),
                 ),
               ),
-              // Negative top margin pulls HOLD TO SPEAK back up under
-              // the orb where it reads as the orb's caption, not a
-              // separate row. White text + pulse animation so it
-              // actively asks for attention without competing with
-              // the red orb for the same colour slot.
-              if (_phase == _Phase.live && !_holding && !_herSpeaking)
-                Transform.translate(
-                  offset: const Offset(0, -8),
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      'HOLD TO SPEAK',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.label.copyWith(
-                        color: Colors.white,
-                        fontSize: 18,
-                        letterSpacing: 4.6,
-                        fontWeight: FontWeight.w900,
+              // Caption under the orb. Bro v6: "we need a clear CTA
+              // on the roleplay screen when it's at a stalemate, the
+              // first-time one. Something to make them want to press
+              // it. Become the guy who always knows what to say.
+              // Make it clean, beautiful, clear, pulsing."
+              //
+              // FIRST EVER (free user, haven't held to talk yet) —
+              // the conversion line ABOVE the orb's caption, italic
+              // Playfair, pulsing scale + opacity. Disappears as soon
+              // as they hold once.
+              //
+              // EVERY OTHER session — plain "HOLD TO SPEAK" caption,
+              // same pulse as before.
+              if (_phase == _Phase.live && !_holding && !_herSpeaking) ...[
+                if (_firstEverSession && !_clockStarted)
+                  Transform.translate(
+                    offset: const Offset(0, -16),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Become the guy who\nalways knows what to say.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.playfairDisplay(
+                              color: Colors.white,
+                              fontSize: 22, height: 1.2,
+                              letterSpacing: -0.4,
+                              fontStyle: FontStyle.italic,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          )
+                              .animate(onPlay: (c) => c.repeat(reverse: true))
+                              .fadeIn(duration: 1100.ms,
+                                  curve: Curves.easeInOut)
+                              .scaleXY(begin: 1.0, end: 1.025,
+                                  duration: 1400.ms,
+                                  curve: Curves.easeInOut)
+                              .then()
+                              .fade(begin: 1.0, end: 0.62,
+                                  duration: 1100.ms,
+                                  curve: Curves.easeInOut)
+                              .scaleXY(begin: 1.025, end: 1.0,
+                                  duration: 1400.ms,
+                                  curve: Curves.easeInOut),
+                          const SizedBox(height: 14),
+                          Text('HOLD THE ORB TO BEGIN',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.label.copyWith(
+                              color: AppColors.red,
+                              fontSize: 11, letterSpacing: 3.6,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          )
+                              .animate(onPlay: (c) => c.repeat(reverse: true))
+                              .fadeIn(duration: 900.ms,
+                                  curve: Curves.easeInOut)
+                              .then()
+                              .fade(begin: 1.0, end: 0.55,
+                                  duration: 900.ms,
+                                  curve: Curves.easeInOut),
+                        ],
                       ),
-                    )
-                        .animate(onPlay: (c) => c.repeat(reverse: true))
-                        .fadeIn(duration: 900.ms, curve: Curves.easeInOut)
-                        .then()
-                        .fade(begin: 1.0, end: 0.55,
-                            duration: 900.ms, curve: Curves.easeInOut),
+                    ),
+                  )
+                else
+                  Transform.translate(
+                    offset: const Offset(0, -8),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'HOLD TO SPEAK',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.label.copyWith(
+                          color: Colors.white,
+                          fontSize: 18,
+                          letterSpacing: 4.6,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      )
+                          .animate(onPlay: (c) => c.repeat(reverse: true))
+                          .fadeIn(duration: 900.ms, curve: Curves.easeInOut)
+                          .then()
+                          .fade(begin: 1.0, end: 0.55,
+                              duration: 900.ms, curve: Curves.easeInOut),
+                    ),
                   ),
-                ),
+              ],
               if (_holding)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
