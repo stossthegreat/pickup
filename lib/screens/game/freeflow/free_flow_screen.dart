@@ -275,6 +275,18 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   @override
   void dispose() {
     _disposed = true;
+    // Persist gameFreeUsed if a free user actually used their
+    // session (clockStarted is the truthful "they held to talk"
+    // marker). Bro v6 fix: marking on first hold caused
+    // mid-session paywalls; deferring to dispose ensures the
+    // flag flips when they LEAVE the session, not on the first
+    // hold within it. _lucienUpsellShown already calls
+    // markGameFreeUsed on the timer-expiry path, so this is the
+    // "you bailed mid-session" path.
+    if (_firstEverSession && _clockStarted && !_lucienUpsellShown) {
+      // ignore: discarded_futures
+      LocalStoreService.markGameFreeUsed();
+    }
     // ignore: discarded_futures
     WakelockPlus.disable();
     _clock?.cancel();
@@ -565,12 +577,25 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
 
   void _startHold() {
     if (_phase != _Phase.live || _holding) return;
-    // Bro v4 + v5:
-    //   · Free user: ONE free hold per account. Second hold → paywall.
-    //   · Pro user: 40 minutes of voice per calendar month. Hold while
-    //     under the cap; once exhausted → paywall on next hold.
-    // The free pass is marked on FIRST hold (not on _goLive) so a user
-    // who opens the tab and leaves still has their use intact.
+    // Bro v6: "1 min ain't working — I used it, pressed Lucien, he
+    // answered, I tried to talk to her, may be my signal bad, but I
+    // still had 30 seconds then I pressed record again and it went
+    // to paywall. This is the type of thing that can't happen."
+    //
+    // ROOT CAUSE: the v5 version marked gameFreeUsed on FIRST hold.
+    // Second hold in the same session then re-read gameFreeUsed,
+    // found it true, fired the paywall. Multiple holds per session
+    // are not "second sessions" — they're the user using their one
+    // free session normally.
+    //
+    // FIX: in-session gating now uses the in-memory _firstEverSession
+    // flag (resolved once at _goLive time). gameFreeUsed gets
+    // committed to disk only when the session actually ENDS (see
+    // _endAndScore + dispose). That way:
+    //   · First hold of fresh session → allowed.
+    //   · Second hold of fresh session → ALSO allowed (the bug fix).
+    //   · 60-second clock expiry → upsell + mark used.
+    //   · Tab open after session ended → paywall on first hold.
     // ignore: discarded_futures
     PaywallGate.isPro().then((pro) async {
       if (!mounted) return;
@@ -587,16 +612,17 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         _beginHold();
         return;
       }
-      // Free path — one free session ever.
-      final used = await LocalStoreService.gameFreeUsed();
-      if (!mounted) return;
-      if (used) {
+      // Free path — current session is allowed if it's the user's
+      // free one. Returning free users (i.e. _firstEverSession is
+      // false because gameFreeUsed was already true at _goLive)
+      // hit the paywall on every hold.
+      if (!_firstEverSession) {
+        if (!mounted) return;
         HapticFeedback.mediumImpact();
         await context.push('/paywall',
             extra: {'source': 'game_speak_capped'});
         return;
       }
-      await LocalStoreService.markGameFreeUsed();
       if (!mounted) return;
       _beginHold();
     });
@@ -802,6 +828,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       await _micSub?.cancel();
       // ignore: discarded_futures
       _recorder.stop().catchError((_) {});
+      // Persist gameFreeUsed = true now that the free session is
+      // truly over. Bro v6: marking used inside _startHold caused
+      // multi-hold-in-same-session paywalls; the persistent flag
+      // only flips when the clock actually expires (here) or on
+      // dispose() if they held at all (see dispose()).
+      // ignore: discarded_futures
+      LocalStoreService.markGameFreeUsed();
       if (!mounted) return;
       setState(() {
         _phase = _Phase.scored; // freeze the live UI so the modal sits on top
