@@ -224,6 +224,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   /// (and the Lucien upsell modal at session end) only fires for
   /// free users.
   bool _freeSession = false;
+  /// True ONLY for the user's very first session ever — i.e. they
+  /// haven't burned their free pass yet. Drives the pulsing
+  /// "Become the guy who always knows what to say" CTA over the orb
+  /// before they've held to talk. Disappears as soon as they actually
+  /// start a turn (clockStarted flips true).
+  bool _firstEverSession = false;
   /// Did we already fire the post-session Lucien upsell on this
   /// instance? Guard so the modal doesn't double-stack if the
   /// session ends via more than one path (timer expiry + manual
@@ -314,12 +320,18 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     // every _goLive so a mid-session upgrade flips the user to the Pro
     // 3-minute ceiling on their next vibe-switch.
     final pro = await PaywallGate.isPro();
+    // First-ever check — gameFreeUsed is set by _startHold the moment
+    // the user actually presses to talk for the first time. If it's
+    // still false here AND they're non-pro, this is the user's very
+    // first session and the pulsing CTA over the orb is warranted.
+    final gameUsedAlready = pro ? true : await LocalStoreService.gameFreeUsed();
     if (!mounted) return;
     setState(() {
       _vibe = vibe;
       _phase = _Phase.connecting;
       _error = '';
       _freeSession = !pro;
+      _firstEverSession = !pro && !gameUsedAlready;
       _lucienUpsellShown = false;
       _remaining = pro ? _sessionSeconds : _freeSessionSeconds;
     });
@@ -1257,33 +1269,94 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                   ),
                 ),
               ),
-              // Negative top margin pulls HOLD TO SPEAK back up under
-              // the orb where it reads as the orb's caption, not a
-              // separate row. White text + pulse animation so it
-              // actively asks for attention without competing with
-              // the red orb for the same colour slot.
-              if (_phase == _Phase.live && !_holding && !_herSpeaking)
-                Transform.translate(
-                  offset: const Offset(0, -8),
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      'HOLD TO SPEAK',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.label.copyWith(
-                        color: Colors.white,
-                        fontSize: 18,
-                        letterSpacing: 4.6,
-                        fontWeight: FontWeight.w900,
+              // Caption under the orb. Bro v6: "we need a clear CTA
+              // on the roleplay screen when it's at a stalemate, the
+              // first-time one. Something to make them want to press
+              // it. Become the guy who always knows what to say.
+              // Make it clean, beautiful, clear, pulsing."
+              //
+              // FIRST EVER (free user, haven't held to talk yet) —
+              // the conversion line ABOVE the orb's caption, italic
+              // Playfair, pulsing scale + opacity. Disappears as soon
+              // as they hold once.
+              //
+              // EVERY OTHER session — plain "HOLD TO SPEAK" caption,
+              // same pulse as before.
+              if (_phase == _Phase.live && !_holding && !_herSpeaking) ...[
+                if (_firstEverSession && !_clockStarted)
+                  Transform.translate(
+                    offset: const Offset(0, -16),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Become the guy who\nalways knows what to say.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.playfairDisplay(
+                              color: Colors.white,
+                              fontSize: 22, height: 1.2,
+                              letterSpacing: -0.4,
+                              fontStyle: FontStyle.italic,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          )
+                              .animate(onPlay: (c) => c.repeat(reverse: true))
+                              .fadeIn(duration: 1100.ms,
+                                  curve: Curves.easeInOut)
+                              .scaleXY(begin: 1.0, end: 1.025,
+                                  duration: 1400.ms,
+                                  curve: Curves.easeInOut)
+                              .then()
+                              .fade(begin: 1.0, end: 0.62,
+                                  duration: 1100.ms,
+                                  curve: Curves.easeInOut)
+                              .scaleXY(begin: 1.025, end: 1.0,
+                                  duration: 1400.ms,
+                                  curve: Curves.easeInOut),
+                          const SizedBox(height: 14),
+                          Text('HOLD THE ORB TO BEGIN',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.label.copyWith(
+                              color: AppColors.red,
+                              fontSize: 11, letterSpacing: 3.6,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          )
+                              .animate(onPlay: (c) => c.repeat(reverse: true))
+                              .fadeIn(duration: 900.ms,
+                                  curve: Curves.easeInOut)
+                              .then()
+                              .fade(begin: 1.0, end: 0.55,
+                                  duration: 900.ms,
+                                  curve: Curves.easeInOut),
+                        ],
                       ),
-                    )
-                        .animate(onPlay: (c) => c.repeat(reverse: true))
-                        .fadeIn(duration: 900.ms, curve: Curves.easeInOut)
-                        .then()
-                        .fade(begin: 1.0, end: 0.55,
-                            duration: 900.ms, curve: Curves.easeInOut),
+                    ),
+                  )
+                else
+                  Transform.translate(
+                    offset: const Offset(0, -8),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'HOLD TO SPEAK',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.label.copyWith(
+                          color: Colors.white,
+                          fontSize: 18,
+                          letterSpacing: 4.6,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      )
+                          .animate(onPlay: (c) => c.repeat(reverse: true))
+                          .fadeIn(duration: 900.ms, curve: Curves.easeInOut)
+                          .then()
+                          .fade(begin: 1.0, end: 0.55,
+                              duration: 900.ms, curve: Curves.easeInOut),
+                    ),
                   ),
-                ),
+              ],
               if (_holding)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
