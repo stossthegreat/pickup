@@ -1237,8 +1237,16 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         //
         // AnimatedOpacity gives a clean fade so screen recordings show
         // it land + lift rather than blink.
+        // Bro v6: "make the ImHim that shows on game when user
+        // presses mic big — need people to see it clearly so like
+        // double the size carefully not to overlap." 22 → 42pt
+        // (~2x), top: 46 → 64 to slide it 18px down off the top
+        // chrome (vibe chip + timer row sits at top: 6 with ~40px
+        // content height = ends near 46). The orb area is centred
+        // in the screen so the bottom of the wordmark (~115-120)
+        // stays clear of it.
         Positioned(
-          top: 46, left: 0, right: 0,
+          top: 64, left: 0, right: 0,
           child: IgnorePointer(
             child: AnimatedOpacity(
               opacity: (_phase == _Phase.live &&
@@ -1247,7 +1255,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOut,
               child: const Center(
-                child: ImHimWordmark(fontSize: 22, letterSpacing: -0.5),
+                child: ImHimWordmark(fontSize: 42, letterSpacing: -1.2),
               ),
             ),
           ),
