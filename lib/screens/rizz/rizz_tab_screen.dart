@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../services/analytics_service.dart';
 import '../../services/paywall_gate.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/mirrorly_components.dart';
@@ -70,7 +71,11 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
 
   Future<void> _tapScreenshot() async {
     HapticFeedback.selectionClick();
+    // ignore: discarded_futures
+    AnalyticsService.rizzCardTapped('screenshot');
     if (!_pro && _screenshotUsed) {
+      // ignore: discarded_futures
+      AnalyticsService.rizzBlockedFreeCap('screenshot');
       await _openPaywall('rizz_screenshot_capped');
       return;
     }
@@ -80,7 +85,11 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
 
   Future<void> _tapLines() async {
     HapticFeedback.selectionClick();
+    // ignore: discarded_futures
+    AnalyticsService.rizzCardTapped('lines');
     if (!_pro) {
+      // ignore: discarded_futures
+      AnalyticsService.rizzBlockedFreeCap('lines');
       await _openPaywall('rizz_lines_locked');
       return;
     }
@@ -89,7 +98,11 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
 
   Future<void> _tapChat() async {
     HapticFeedback.selectionClick();
+    // ignore: discarded_futures
+    AnalyticsService.rizzCardTapped('chat');
     if (!_pro) {
+      // ignore: discarded_futures
+      AnalyticsService.rizzBlockedFreeCap('chat');
       await _openPaywall('rizz_chat_locked');
       return;
     }

@@ -14,6 +14,7 @@ import '../screens/scan/scan_screen.dart';
 import '../screens/report/report_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/splash/splash_screen.dart';
+import '../services/analytics_route_observer.dart';
 
 // ── Auralay graft (Eyes + Game tabs) ───────────────────────────────────────
 import '../screens/debug/diagnostic_screen.dart';
@@ -34,6 +35,11 @@ import '../services/test/charisma_test_engine.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
+  // Every navigator push/pop/replace fires screen_view through
+  // AnalyticsRouteObserver, which also updates
+  // AnalyticsService.currentScreen so the app-lifecycle hook in
+  // main.dart's MirrorApp can tag "where did the user quit from".
+  observers: [AnalyticsRouteObserver()],
   routes: [
     GoRoute(path: '/',           builder: (_, __) => const SplashScreen()),
     GoRoute(path: '/intro',      builder: (_, __) => const IntroReelScreen()),
