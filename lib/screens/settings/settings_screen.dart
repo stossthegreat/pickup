@@ -12,6 +12,7 @@ import '../../services/face_asset_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/purchase_service.dart';
 import '../../theme/app_colors.dart';
+import '../rizz/rizz_tab_screen.dart' show RizzCardAction;
 import '../../theme/app_typography.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 
@@ -138,17 +139,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const SizedBox(height: Sp.lg),
 
-              // ── iMESSAGE ─────────────────────────────────────────────────
-              _SectionHeader('iMESSAGE'),
+              // ── SHARE ────────────────────────────────────────────────────
+              _SectionHeader('SHARE'),
               _SettingTile(
-                icon: Icons.add_comment_rounded,
-                title: 'ImHim inside iMessage',
-                subtitle: 'Tap + in Messages, pick ImHim, drop replies in',
+                icon: Icons.ios_share_rounded,
+                title: 'Rizz from anywhere',
+                subtitle: 'Screenshot any chat → Share → ImHim',
                 onTap: () {
                   HapticFeedback.selectionClick();
                   // ignore: discarded_futures
                   AnalyticsService.keyboardInstallTileTapped('settings');
-                  context.push('/imessage-install');
+                  context.push('/rizz', extra: const RizzCardAction.upload());
                 },
               ),
 
