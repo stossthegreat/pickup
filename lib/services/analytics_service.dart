@@ -334,6 +334,23 @@ class AnalyticsService {
   static Future<void> streakLost(int previousLength) =>
       _log('streak_lost', {'previous_length': previousLength});
 
+  // ── ImHim Keyboard ─────────────────────────────────────────────────
+
+  /// User landed on the install/onboarding screen.
+  static Future<void> keyboardInstallViewed() =>
+      _log('keyboard_install_viewed');
+
+  /// User tapped the hero tile in Rizz tab or Settings → opened install.
+  static Future<void> keyboardInstallTileTapped(String source) =>
+      _log('keyboard_install_tile_tapped', {'source': source});
+
+  /// User tapped "OPEN SETTINGS" on the install screen — we deep-linked
+  /// them into iOS Settings. (No way to know if they actually completed
+  /// the install — iOS doesn't expose that — so this is the closest
+  /// proxy to "started the install".)
+  static Future<void> keyboardInstallSettingsTapped() =>
+      _log('keyboard_install_settings_tapped');
+
   // ── Review prompt ──────────────────────────────────────────────────
 
   static Future<void> reviewPromptShown(String trigger) =>
