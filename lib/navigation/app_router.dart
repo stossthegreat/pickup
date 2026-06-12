@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../models/face_geometry.dart';
 import '../screens/chat/chat_screen.dart';
 import '../screens/home/home_screen.dart';
-import '../screens/keyboard/keyboard_install_screen.dart';
+import '../screens/imessage/imessage_install_screen.dart';
 import '../screens/legal/legal_screen.dart';
 import '../screens/onboarding/gender_pick_screen.dart';
 import '../screens/onboarding/intro_reel_screen.dart';
@@ -24,6 +24,7 @@ import '../screens/game/lines/lines_screen.dart';
 import '../screens/game/rizz/rizz_reply_screen.dart';
 import '../screens/rizz/rizz_chat_screen.dart';
 import '../screens/rizz/rizz_tab_screen.dart' show RizzCardAction;
+import '../services/share_intake_service.dart' show SharedScreenshotPayload;
 import '../models/gaze/gaze_syllabus.dart';
 import '../screens/lessons/lesson_detail_screen.dart';
 import '../screens/test/charisma_test_screen.dart';
@@ -84,7 +85,14 @@ final appRouter = GoRouter(
       builder: (_, state) {
         final extra = state.extra;
         final launchUpload = extra is RizzCardAction && extra.launchUpload;
-        return RizzReplyScreen(launchUpload: launchUpload);
+        // The iOS Share Extension routes here with the screenshot bytes
+        // already loaded. The screen auto-fires the OCR + reply
+        // pipeline as if the user had picked the image from Photos.
+        final preloaded = extra is SharedScreenshotPayload ? extra.bytes : null;
+        return RizzReplyScreen(
+          launchUpload:        launchUpload,
+          preloadedScreenshot: preloaded,
+        );
       },
     ),
     GoRoute(
@@ -92,13 +100,14 @@ final appRouter = GoRouter(
       builder: (_, __) => const RizzChatScreen(),
     ),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
-    // ImHim Keyboard onboarding — three-step explainer + iOS Settings
-    // deep-link. The keyboard extension itself lives in its own iOS
-    // target (ios/ImHimKeyboard); this is the conversion surface that
-    // walks the user through Apple's "Allow Full Access" prompt.
+    // ImHim iMessage app onboarding — three-step explainer for the
+    // "+ drawer inside iMessage" surface. Same shape as WingAI:
+    // user takes a screenshot, opens Messages, taps +, picks ImHim,
+    // three replies drop into the compose box. The native extension
+    // lives in ios/ImHimMessages/.
     GoRoute(
-      path: '/keyboard-install',
-      builder: (_, __) => const KeyboardInstallScreen(),
+      path: '/imessage-install',
+      builder: (_, __) => const ImessageInstallScreen(),
     ),
     GoRoute(
       path: '/protocol',
