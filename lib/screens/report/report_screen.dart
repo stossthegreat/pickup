@@ -13,6 +13,7 @@ import '../../models/mirror_analysis.dart';
 import '../../models/scan_record.dart';
 import '../../models/protocol.dart';
 import '../../services/archetype_service.dart';
+import '../../services/analytics_service.dart';
 import '../../services/daily_nudge_service.dart';
 import '../../services/face_asset_service.dart';
 import '../../services/feature_analysis_service.dart';
