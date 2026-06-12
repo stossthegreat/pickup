@@ -146,18 +146,29 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
                 ],
               ),
             ),
-            // Bro v6: "push the three cards down a bit, they're too
-            // high — not massively just a cm or two." 18 → 64px so
-            // the trio sits below the optical centre.
-            //
-            // v187 — keyboard hero card temporarily hidden because the
-            // ImHim Keyboard extension target was pulled from the
-            // Xcode project pending Apple Developer Portal setup (App
-            // Group + bundle ID registration). Once that's done, drop
-            // the spacer back to 36 and re-instate the _KeyboardHeroCard
-            // block at the top of this list. The widget class + the
-            // /keyboard-install route both still exist downstream.
-            const SizedBox(height: 64),
+            const SizedBox(height: 36),
+
+            // ImHim Keyboard hero — the "rizz from anywhere" surface.
+            // Lives ABOVE the three legacy cards because the keyboard
+            // IS the big product story. Tapping routes to the
+            // /keyboard-install onboarding screen; the native extension
+            // target itself comes online once the App Group + bundle id
+            // are registered on the Apple Developer portal.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: _KeyboardHeroCard(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  // ignore: discarded_futures
+                  AnalyticsService.keyboardInstallTileTapped('rizz_tab');
+                  context.push('/keyboard-install');
+                },
+              ),
+            ).animate().fadeIn(duration: 360.ms)
+              .slideY(begin: 0.02, end: 0, duration: 360.ms,
+                  curve: Curves.easeOut),
+
+            const SizedBox(height: 28),
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -170,7 +181,7 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
                 onTap:    _tapScreenshot,
                 locked:   showScreenshotLock,
               ),
-            ).animate().fadeIn(duration: 360.ms)
+            ).animate().fadeIn(delay: 80.ms, duration: 360.ms)
               .slideY(begin: 0.02, end: 0, duration: 360.ms,
                   curve: Curves.easeOut),
 
