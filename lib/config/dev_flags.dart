@@ -17,11 +17,14 @@
 ///
 /// v155 — flipped back to FALSE per bro: "add the lock for
 /// subscription on it again the whole app as we previously planned."
-/// Testing window for the new rizz tone presets + vision wiring is
-/// closed; gates are live again:
-///   · 2 scans / week (free tier)
-///   · 10 Mirror renders / month (free tier)
-///   · 1 free rizz screenshot, then paywall
-///   · LINES + Chat with Mirrorly fully paywalled
-///   · Game tab: 1 free Free-Flow speak, then paywall on SPEAK.
-const kBypassPaywall = false;
+///
+/// v186 — flipped to TRUE per bro: "make it all free right now this
+/// is testing." Everything Pro is unlocked across the whole app
+/// while we shake the keyboard extension out + verify the new
+/// funnels work end-to-end. Flip back to FALSE before the next
+/// public TestFlight cycle that gates conversion.
+///   · Free-tier scan, render, rizz, lines, chat, freeflow, lucien
+///     gates all skip when this is true.
+///   · LocalStoreService.setSubscribed(true) runs on app launch in
+///     main.dart, so any code reading isSubscribed() returns true.
+const kBypassPaywall = true;

@@ -148,13 +148,12 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
             ),
             const SizedBox(height: 36),
 
-            // Bro v9: ImHim Keyboard hero. The "rizz from anywhere"
-            // surface — install the iOS keyboard extension and any
-            // screenshot in any app generates three replies inline.
-            // Lives ABOVE the three legacy cards because it's the
-            // bigger product story; the cards are still here as the
-            // fallback flow when the user hasn't installed the
-            // keyboard yet (or is on Android).
+            // Bro v9: ImHim Keyboard hero — the "rizz from anywhere"
+            // surface. Lives ABOVE the three legacy cards because the
+            // keyboard IS the big product story; the cards are still
+            // here as the fallback flow for users who haven't enabled
+            // the keyboard yet. Now wired into the CI build (Xcode
+            // project includes the ImHimKeyboard target as of v186).
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
               child: _KeyboardHeroCard(
@@ -495,10 +494,9 @@ class _RizzCard extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Keyboard hero — the elite "rizz from anywhere" card. Slightly taller
-//  than the legacy Rizz cards and lit with a soft red glow so the eye
-//  lands on it before the three smaller cards below. Italic Playfair
-//  headline, downward chevron hint.
+//  Keyboard hero — the elite "rizz from anywhere" card. Lit with a soft
+//  red glow so the eye lands on it before the three smaller cards below.
+//  Italic Playfair headline + downward chevron hint.
 // ═══════════════════════════════════════════════════════════════════════════
 class _KeyboardHeroCard extends StatelessWidget {
   final VoidCallback onTap;
