@@ -1,42 +1,57 @@
 //
-//  ShareViewController.swift
-//  ImHimShare
+//  MessagesViewController.swift
+//  ImHimMessages
 //
-//  WingAI-style Share Extension. The user taps Share on a screenshot,
-//  picks ImHim, and a panel slides up from the bottom containing OUR
-//  UI — not the main app. Inside that panel:
+//  The iMessage app — what shows up in iMessage's "+" drawer
+//  alongside Photos, Apple Pay, etc. WingAI ships exactly this kind
+//  of extension. End-to-end flow:
 //
-//    Header  — ImHim wordmark + close X
-//    Image   — the screenshot, rounded card, dimmed slightly
-//              + a red scan line travelling top → bottom → top
-//    Status  — SCANNING NN%   thin red progress bar
-//    Chips   — three reply options, tap to copy to clipboard
+//   1. User opens Messages, taps "+" next to the compose box.
+//   2. The app drawer slides up. ImHim icon is one of the apps.
+//   3. Tap ImHim. Our extension takes over the bottom half of the
+//      screen with our UI:
 //
-//  When the user taps a chip, the text lands on the clipboard, a brief
-//  "COPIED" pill confirms, the panel auto-dismisses and they paste
-//  straight into whatever chat they were composing. No app launch.
+//        Header  ImHim wordmark + close X
+//        Status  "Waiting for screenshot…" (pulsing red pill)
+//        Action  "OR PICK FROM PHOTOS" outline pill
+//
+//   4. While that's on screen, our PHPhotoLibrary poll watches for
+//      a brand-new screenshot. The moment one lands (or the user
+//      picks one via the picker), the UI flips to:
+//
+//        Image (half-screen) with the red scan line travelling
+//        SCANNING  NN%  thin red progress bar
+//
+//   5. Backend returns replies. UI flips to three reply chips.
+//      Tap a chip → activeConversation.insertText(...) drops it
+//      into iMessage's compose box. User taps Send.
+//
+//  No app switch, no copy/paste.
 //
 
+import Messages
 import UIKit
+import Photos
+import PhotosUI
 import UniformTypeIdentifiers
 
-@objc(ShareViewController)
-class ShareViewController: UIViewController {
+@objc(MessagesViewController)
+class MessagesViewController: MSMessagesAppViewController, PHPickerViewControllerDelegate {
 
     // MARK: - State
 
     private enum State {
-        case extracting           // pulling the image out of extensionContext
-        case scanning(Data)       // we have bytes, calling /rizz/reply
+        case waiting               // looking for a screenshot
+        case scanning(Data)        // call to /rizz/reply in flight
         case replies(Data, [RizzReplyItem])
         case error(String)
     }
-
-    private var state: State = .extracting { didSet { render() } }
+    private var state: State = .waiting { didSet { render() } }
     private let client = RizzClient()
+    private var pollTimer: Timer?
+    private var lastConsumedAssetID: String?
 
-    // Two animation controllers — scan line + percentage. Spun up in
-    // viewDidLoad and torn down in deinit.
+    // Animation drivers — only spin up while scanning.
     private var scanCtl: CADisplayLink?
     private var pctCtl:  CADisplayLink?
     private var scanStart: CFTimeInterval = 0
@@ -92,10 +107,7 @@ class ShareViewController: UIViewController {
         return v
     }()
 
-    // Persistent views the scanning state animates — image card + scan
-    // line + percentage label + bar. Kept around across renders so the
-    // CADisplayLink can mutate them without rebuilding the tree on
-    // every frame.
+    // Persistent scanning views.
     private let imageCard: UIImageView = {
         let iv = UIImageView()
         iv.clipsToBounds = true
@@ -105,7 +117,7 @@ class ShareViewController: UIViewController {
         iv.translatesAutoresizingMaskIntoConstraints = false
         return iv
     }()
-    private let scanLine = _ScanLineView()
+    private let scanLine = _ScanLineViewIM()
     private var scanLineCenterY: NSLayoutConstraint?
 
     private let pctLabel: UILabel = {
@@ -136,60 +148,126 @@ class ShareViewController: UIViewController {
             rootStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 14),
             rootStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 18),
             rootStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
-            rootStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+            rootStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -14),
         ])
-
         rootStack.addArrangedSubview(headerRow)
         rootStack.addArrangedSubview(bodyContainer)
 
-        extractImage()
+        render()
+        startPolling()
+    }
+
+    override func willBecomeActive(with conversation: MSConversation) {
+        super.willBecomeActive(with: conversation)
+        startPolling()
+        render()
+    }
+
+    override func didResignActive(with conversation: MSConversation) {
+        super.didResignActive(with: conversation)
+        stopPolling()
+        stopAnimations()
     }
 
     deinit {
         scanCtl?.invalidate()
         pctCtl?.invalidate()
+        pollTimer?.invalidate()
     }
 
-    // MARK: - Extraction
+    // MARK: - Photo polling
 
-    private func extractImage() {
-        guard let inputItems = extensionContext?.inputItems as? [NSExtensionItem] else {
-            state = .error("No screenshot in the share.")
+    private func startPolling() {
+        stopPolling()
+        tryConsumeScreenshot()
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            self?.tryConsumeScreenshot()
+        }
+    }
+    private func stopPolling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+    }
+
+    private func tryConsumeScreenshot() {
+        if case .waiting = state {} else { return }
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if status == .notDetermined {
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { _ in }
             return
         }
-        for item in inputItems {
-            guard let attachments = item.attachments else { continue }
-            for provider in attachments {
-                if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
-                    provider.loadItem(
-                        forTypeIdentifier: UTType.image.identifier,
-                        options: nil
-                    ) { [weak self] item, _ in
-                        DispatchQueue.main.async {
-                            self?.handleLoaded(item)
-                        }
-                    }
-                    return
-                }
+        guard status == .authorized || status == .limited else { return }
+
+        let opts = PHFetchOptions()
+        opts.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        opts.predicate = NSPredicate(
+            format: "(mediaSubtype & %d) != 0",
+            PHAssetMediaSubtype.photoScreenshot.rawValue
+        )
+        opts.fetchLimit = 1
+        let result = PHAsset.fetchAssets(with: .image, options: opts)
+        guard let asset = result.firstObject,
+              let created = asset.creationDate
+        else { return }
+        // 120s freshness window — long enough for the user to take a
+        // screenshot, switch back to iMessage, tap + → ImHim.
+        if Date().timeIntervalSince(created) > 120 { return }
+        if asset.localIdentifier == lastConsumedAssetID { return }
+
+        let req = PHImageRequestOptions()
+        req.isNetworkAccessAllowed = true
+        req.deliveryMode = .highQualityFormat
+        req.resizeMode = .none
+        req.isSynchronous = false
+        PHImageManager.default().requestImageDataAndOrientation(for: asset, options: req) { [weak self] data, _, _, _ in
+            DispatchQueue.main.async {
+                guard let self = self, let data = data else { return }
+                self.lastConsumedAssetID = asset.localIdentifier
+                self.send(data)
             }
         }
-        state = .error("Couldn't find an image to scan.")
     }
 
-    private func handleLoaded(_ item: NSSecureCoding?) {
-        var data: Data?
-        if let url = item as? URL {
-            data = try? Data(contentsOf: url)
-        } else if let image = item as? UIImage {
-            data = image.jpegData(compressionQuality: 0.92)
-        } else if let raw = item as? Data {
-            data = raw
+    // MARK: - Manual picker
+
+    @objc private func pickFromPhotos() {
+        // Expanded presentation gives us the screen real estate we need
+        // to present a PHPickerViewController on top.
+        if presentationStyle != .expanded {
+            requestPresentationStyle(.expanded)
         }
-        guard let data = data else {
-            state = .error("That image couldn't be read.")
-            return
+        var cfg = PHPickerConfiguration(photoLibrary: .shared())
+        cfg.filter = .images
+        cfg.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: cfg)
+        picker.delegate = self
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.present(picker, animated: true)
         }
+    }
+
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        guard let provider = results.first?.itemProvider,
+              provider.hasItemConformingToTypeIdentifier(UTType.image.identifier)
+        else { return }
+        provider.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil) { [weak self] item, _ in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                var data: Data?
+                if let url = item as? URL { data = try? Data(contentsOf: url) }
+                else if let image = item as? UIImage { data = image.jpegData(compressionQuality: 0.92) }
+                else if let raw = item as? Data { data = raw }
+                if let data = data { self.send(data) }
+            }
+        }
+    }
+
+    // MARK: - Send → /rizz/reply
+
+    private func send(_ data: Data) {
         state = .scanning(data)
+        stopPolling()
         startAnimations()
         client.fetchReplies(screenshot: data) { [weak self] result in
             guard let self = self else { return }
@@ -219,14 +297,11 @@ class ShareViewController: UIViewController {
         pctCtl = CADisplayLink(target: self, selector: #selector(pctTick))
         pctCtl?.add(to: .main, forMode: .common)
     }
-
     private func stopAnimations() {
         scanCtl?.invalidate(); scanCtl = nil
         pctCtl?.invalidate(); pctCtl = nil
     }
-
     @objc private func scanTick() {
-        // 1.4s up + 1.4s down = 2.8s cycle. Eased ping-pong via abs(sin).
         let elapsed = CACurrentMediaTime() - scanStart
         let cycle = 2.8
         let t = (elapsed.truncatingRemainder(dividingBy: cycle)) / cycle
@@ -236,24 +311,19 @@ class ShareViewController: UIViewController {
         let y = -(h / 2 - 13) + (h - 26) * pingPong
         scanLineCenterY?.constant = y
     }
-
     @objc private func pctTick() {
-        // Eases 0 → 96 over 14s, then idles. Replies arriving stops
-        // the link entirely — the user sees the chips appear, which
-        // IS the 100%.
         let elapsed = min(CACurrentMediaTime() - pctStart, 14)
-        let progress = pow(1 - (1 - elapsed / 14), 3) // easeOutCubic
+        let progress = pow(1 - (1 - elapsed / 14), 3)
         let pct = Int((progress * 96).rounded())
-        pctLabel.attributedText = NSAttributedString(
+        let attr = NSMutableAttributedString(
             string: "\(pct)%",
             attributes: [
                 .font: italic(size: 42, weight: .heavy),
                 .foregroundColor: Theme.textPrimary,
             ]
         )
-        let m = NSMutableAttributedString(attributedString: pctLabel.attributedText!)
-        m.addAttribute(.foregroundColor, value: Theme.red, range: NSRange(location: m.length - 1, length: 1))
-        pctLabel.attributedText = m
+        attr.addAttribute(.foregroundColor, value: Theme.red, range: NSRange(location: attr.length - 1, length: 1))
+        pctLabel.attributedText = attr
         pctBar.setProgress(Float(pct) / 100, animated: false)
     }
 
@@ -263,10 +333,10 @@ class ShareViewController: UIViewController {
         bodyContainer.subviews.forEach { $0.removeFromSuperview() }
         let inner: UIView
         switch state {
-        case .extracting:           inner = makeExtractingView()
-        case .scanning(let data):   inner = makeScanningView(data)
+        case .waiting:               inner = makeWaitingView()
+        case .scanning(let data):    inner = makeScanningView(data)
         case .replies(let d, let r): inner = makeRepliesView(d, r)
-        case .error(let m):         inner = makeErrorView(m)
+        case .error(let m):          inner = makeErrorView(m)
         }
         inner.translatesAutoresizingMaskIntoConstraints = false
         bodyContainer.addSubview(inner)
@@ -280,20 +350,46 @@ class ShareViewController: UIViewController {
 
     // MARK: - Builders
 
-    private func makeExtractingView() -> UIView {
-        let spinner = UIActivityIndicatorView(style: .medium)
-        spinner.color = Theme.red
-        spinner.startAnimating()
-        let label = UILabel()
-        label.text = "Reading screenshot…"
-        label.textColor = Theme.textSecondary
-        label.font = Theme.body(size: 13)
-        label.textAlignment = .center
-        let stack = UIStackView(arrangedSubviews: [spinner, label])
+    private func makeWaitingView() -> UIView {
+        let card = UIView()
+        card.backgroundColor = Theme.surface1
+        card.layer.cornerRadius = 20
+        card.layer.borderWidth = 0.8
+        card.layer.borderColor = Theme.divider.cgColor
+
+        let title = UILabel()
+        title.text = "Drop a screenshot."
+        title.font = italic(size: 24, weight: .heavy)
+        title.textColor = Theme.textPrimary
+        title.textAlignment = .center
+
+        let sub = UILabel()
+        sub.text = "Take a screenshot of the chat — we'll read it and write three replies you can tap straight in."
+        sub.font = Theme.body(size: 13)
+        sub.textColor = Theme.textSecondary
+        sub.textAlignment = .center
+        sub.numberOfLines = 0
+
+        let pulse = makeRedPill(text: "WAITING FOR SCREENSHOT")
+        animatePulse(pulse)
+
+        let manual = makeOutlinePill(text: "OR PICK FROM PHOTOS")
+        let tap = UITapGestureRecognizer(target: self, action: #selector(pickFromPhotos))
+        manual.addGestureRecognizer(tap)
+
+        let stack = UIStackView(arrangedSubviews: [title, sub, pulse, manual])
         stack.axis = .vertical
         stack.alignment = .center
-        stack.spacing = 8
-        return stack
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
+        ])
+        return card
     }
 
     private func makeScanningView(_ data: Data) -> UIView {
@@ -306,12 +402,6 @@ class ShareViewController: UIViewController {
         cardWrap.addSubview(scanLine)
         let centerY = scanLine.centerYAnchor.constraint(equalTo: imageCard.centerYAnchor, constant: 0)
         scanLineCenterY = centerY
-        // Bro v195: "make it half screen while scanning" — pin the
-        // card to roughly 40% of the share-extension's own height.
-        // The extension is already a half-screen modal, so 0.40 of
-        // its height lands the image at about a quarter of the
-        // device screen, leaving the percentage + bar a clean
-        // breathing block beneath it.
         let halfScreen = imageCard.heightAnchor.constraint(
             equalTo: view.heightAnchor, multiplier: 0.50)
         halfScreen.priority = .required
@@ -326,7 +416,6 @@ class ShareViewController: UIViewController {
             scanLine.heightAnchor.constraint(equalToConstant: 26),
             centerY,
         ])
-        // Dim overlay so the scan reads cleanly over any photo.
         let dim = UIView()
         dim.backgroundColor = UIColor.black.withAlphaComponent(0.20)
         dim.isUserInteractionEnabled = false
@@ -339,7 +428,6 @@ class ShareViewController: UIViewController {
             dim.trailingAnchor.constraint(equalTo: imageCard.trailingAnchor),
         ])
 
-        // SCANNING + percentage + progress bar.
         let scanningLbl = UILabel()
         scanningLbl.attributedText = NSAttributedString(
             string: "SCANNING",
@@ -353,11 +441,11 @@ class ShareViewController: UIViewController {
 
         let stack = UIStackView(arrangedSubviews: [
             cardWrap,
-            UIView.spacer(8),
+            UIViewIM.spacer(8),
             scanningLbl,
-            UIView.spacer(2),
+            UIViewIM.spacer(2),
             pctLabel,
-            UIView.spacer(8),
+            UIViewIM.spacer(8),
             pctBar,
         ])
         stack.axis = .vertical
@@ -377,7 +465,7 @@ class ShareViewController: UIViewController {
 
         let caption = UILabel()
         caption.attributedText = NSAttributedString(
-            string: "TAP A REPLY TO COPY",
+            string: "TAP A REPLY TO INSERT",
             attributes: [
                 .kern: 3.0,
                 .foregroundColor: Theme.textTertiary,
@@ -400,7 +488,7 @@ class ShareViewController: UIViewController {
 
         let stack = UIStackView(arrangedSubviews: [
             captionRow,
-            UIView.spacer(10),
+            UIViewIM.spacer(10),
             chipStack,
         ])
         stack.axis = .vertical
@@ -457,7 +545,6 @@ class ShareViewController: UIViewController {
         card.layer.cornerRadius = 14
         card.layer.borderWidth = 0.8
         card.layer.borderColor = UIColor.systemRed.withAlphaComponent(0.45).cgColor
-        card.translatesAutoresizingMaskIntoConstraints = false
 
         let title = UILabel()
         title.text = msg
@@ -465,17 +552,14 @@ class ShareViewController: UIViewController {
         title.textColor = Theme.textPrimary
         title.textAlignment = .center
         title.numberOfLines = 0
-        title.translatesAutoresizingMaskIntoConstraints = false
 
-        let close = UIButton(type: .system)
-        close.setTitle("CLOSE", for: .normal)
-        close.titleLabel?.font = Theme.label(size: 11)
-        close.tintColor = Theme.textSecondary
-        close.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+        let retry = makeOutlinePill(text: "TRY AGAIN")
+        let tap = UITapGestureRecognizer(target: self, action: #selector(retryWaiting))
+        retry.addGestureRecognizer(tap)
 
-        let stack = UIStackView(arrangedSubviews: [title, close])
+        let stack = UIStackView(arrangedSubviews: [title, retry])
         stack.axis = .vertical
-        stack.spacing = 12
+        stack.spacing = 10
         stack.alignment = .center
         stack.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(stack)
@@ -488,53 +572,77 @@ class ShareViewController: UIViewController {
         return card
     }
 
-    // MARK: - Actions
-
-    @objc private func chipTapped(_ sender: UIControl) {
-        guard let text = sender.accessibilityValue else { return }
-        UIPasteboard.general.string = text
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        showCopiedToast()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.closeTapped()
-        }
-    }
-
-    @objc private func closeTapped() {
-        extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
-    }
-
-    private func showCopiedToast() {
-        let toast = UILabel()
-        toast.attributedText = NSAttributedString(
-            string: "COPIED · PASTE INTO YOUR CHAT",
+    private func makeRedPill(text: String) -> UIView {
+        let pill = UILabel()
+        pill.attributedText = NSAttributedString(
+            string: text,
             attributes: [
-                .kern: 2.4,
-                .foregroundColor: UIColor.white,
+                .kern: 3.2,
+                .foregroundColor: Theme.red,
                 .font: Theme.label(size: 11),
             ]
         )
-        toast.backgroundColor = Theme.red
-        toast.textAlignment = .center
-        toast.layer.cornerRadius = 99
-        toast.layer.masksToBounds = true
-        toast.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(toast)
+        pill.textAlignment = .center
+        pill.backgroundColor = Theme.redDim
+        pill.layer.cornerRadius = 99
+        pill.layer.masksToBounds = true
+        pill.layer.borderWidth = 0.9
+        pill.layer.borderColor = Theme.red.withAlphaComponent(0.65).cgColor
+
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(pill)
+        pill.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            toast.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -28),
-            toast.heightAnchor.constraint(equalToConstant: 36),
-            toast.widthAnchor.constraint(greaterThanOrEqualToConstant: 240),
+            pill.topAnchor.constraint(equalTo: container.topAnchor),
+            pill.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            pill.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            pill.heightAnchor.constraint(equalToConstant: 32),
+            pill.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
         ])
-        toast.alpha = 0
-        toast.transform = CGAffineTransform(translationX: 0, y: 12)
-        UIView.animate(withDuration: 0.28) {
-            toast.alpha = 1
-            toast.transform = .identity
-        }
+        return container
     }
 
-    // MARK: - Type helpers
+    private func makeOutlinePill(text: String) -> UIView {
+        let pill = UILabel()
+        pill.attributedText = NSAttributedString(
+            string: text,
+            attributes: [
+                .kern: 3.0,
+                .foregroundColor: Theme.textSecondary,
+                .font: Theme.label(size: 10.5),
+            ]
+        )
+        pill.textAlignment = .center
+        pill.layer.cornerRadius = 99
+        pill.layer.masksToBounds = true
+        pill.layer.borderWidth = 0.8
+        pill.layer.borderColor = Theme.textTertiary.cgColor
+        pill.isUserInteractionEnabled = true
+
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(pill)
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            pill.topAnchor.constraint(equalTo: container.topAnchor),
+            pill.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            pill.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            pill.heightAnchor.constraint(equalToConstant: 30),
+            pill.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
+        ])
+        container.isUserInteractionEnabled = true
+        return container
+    }
+
+    private func animatePulse(_ v: UIView) {
+        UIView.animate(
+            withDuration: 1.2,
+            delay: 0,
+            options: [.repeat, .autoreverse, .curveEaseInOut, .allowUserInteraction],
+            animations: { v.alpha = 0.55 }
+        )
+    }
 
     private func makeWordmark(size: CGFloat) -> NSAttributedString {
         let attr = NSMutableAttributedString()
@@ -564,10 +672,31 @@ class ShareViewController: UIViewController {
         }
         return base
     }
+
+    // MARK: - Actions
+
+    @objc private func chipTapped(_ sender: UIControl) {
+        guard let text = sender.accessibilityValue else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        // THE INSERT — drops the reply straight into iMessage's compose box.
+        activeConversation?.insertText(text, completionHandler: nil)
+        // Collapse back to compact mode so user sees the chat again.
+        requestPresentationStyle(.compact)
+    }
+
+    @objc private func closeTapped() {
+        requestPresentationStyle(.compact)
+    }
+
+    @objc private func retryWaiting() {
+        lastConsumedAssetID = nil
+        state = .waiting
+        startPolling()
+    }
 }
 
-// ── Scan line ────────────────────────────────────────────────────────
-private final class _ScanLineView: UIView {
+// ── Scan line / spacer helpers ─────────────────────────────────────
+final class _ScanLineViewIM: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
@@ -591,14 +720,12 @@ private final class _ScanLineView: UIView {
             end:   CGPoint(x: rect.midX, y: rect.height),
             options: []
         )
-        // White core line in the middle.
         ctx.setFillColor(UIColor.white.cgColor)
-        let core = CGRect(x: 0, y: rect.midY - 1, width: rect.width, height: 2)
-        ctx.fill(core)
+        ctx.fill(CGRect(x: 0, y: rect.midY - 1, width: rect.width, height: 2))
     }
 }
 
-private extension UIView {
+enum UIViewIM {
     static func spacer(_ h: CGFloat) -> UIView {
         let v = UIView()
         v.translatesAutoresizingMaskIntoConstraints = false
@@ -617,13 +744,10 @@ private extension RizzError {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-//  Supporting types — kept in this single .swift file so the build
-//  installer (ios/scripts/add_share_target.rb) only has to add ONE
-//  source file to the target. Memory-budget friendly: no separate
-//  framework, no header indirection.
+//  Inlined Theme + RizzClient — same trick the Share Extension uses.
+//  One source file, one entry in the installer's SOURCE_FILES list.
 // ═════════════════════════════════════════════════════════════════════
 
-// ── Theme ──────────────────────────────────────────────────────────
 enum Theme {
     static let base         = UIColor(red: 0.00, green: 0.00, blue: 0.00, alpha: 1.00)
     static let surface1     = UIColor(red: 0.07, green: 0.07, blue: 0.08, alpha: 1.00)
@@ -653,7 +777,6 @@ enum Theme {
     }
 }
 
-// ── Rizz network types ────────────────────────────────────────────
 struct RizzReplyItem {
     let text: String
     let tag:  String
@@ -676,7 +799,7 @@ final class RizzClient {
         let b64 = payloadImage.base64EncodedString()
         let body: [String: Any] = [
             "vibe":        preferredVibe,
-            "ctx":         "share",
+            "ctx":         "imessage",
             "scenario":    "",
             "imageBase64": b64,
         ]
