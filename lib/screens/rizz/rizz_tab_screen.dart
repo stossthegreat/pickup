@@ -158,7 +158,11 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
                   HapticFeedback.selectionClick();
                   // ignore: discarded_futures
                   AnalyticsService.keyboardInstallTileTapped('rizz_tab');
-                  context.push('/imessage-install');
+                  // v194: Share Extension is the surface — until we
+                  // ship a dedicated explainer screen, the tile drops
+                  // the user into the in-app picker flow which is the
+                  // same destination the Share Extension lands on.
+                  context.push('/rizz', extra: const RizzCardAction.upload());
                 },
               ),
             ).animate().fadeIn(duration: 360.ms)
