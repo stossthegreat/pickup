@@ -80,12 +80,29 @@ class ShareCard extends StatelessWidget {
                   ],
                 ),
               ] else
-                Text('ImHim',
-                  style: GoogleFonts.playfairDisplay(
-                    color: ShareCard.accentRed,
-                    fontSize: 72, letterSpacing: -1.6,
-                    fontWeight: FontWeight.w800, height: 1,
-                  )),
+                // Two-tone wordmark — matches the ImHimWordmark widget so
+                // the "no scores" share variant carries the same brand
+                // punchline as every other surface.
+                RichText(
+                  text: TextSpan(
+                    style: GoogleFonts.playfairDisplay(
+                      color: Colors.white,
+                      fontSize: 72, letterSpacing: -1.6,
+                      fontWeight: FontWeight.w800, height: 1,
+                    ),
+                    children: [
+                      const TextSpan(text: 'Im'),
+                      TextSpan(
+                        text: 'Him',
+                        style: GoogleFonts.playfairDisplay(
+                          color: ShareCard.accentRed,
+                          fontSize: 72, letterSpacing: -1.6,
+                          fontWeight: FontWeight.w800, height: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
 
               // Push pics down a little so the score row breathes.
               const SizedBox(height: 16),
@@ -247,21 +264,45 @@ class ShareCard extends StatelessWidget {
         if (showBrandWordmark)
           Positioned(
             left: 20, top: 18,
-            child: Text('ImHim',
-              style: GoogleFonts.playfairDisplay(
-                color: ShareCard.accentRed,
-                fontSize: 34, letterSpacing: -0.8,
-                fontWeight: FontWeight.w900, height: 1,
-                shadows: [
-                  // Tight pure-black outline shadow so the red stays
-                  // saturated but still reads over a bright highlight.
-                  Shadow(
-                    color: Colors.black.withValues(alpha: 0.75),
-                    blurRadius: 3,
-                    offset: const Offset(0, 1),
+            // Two-tone "Im" white + "Him" red, matching the in-app
+            // ImHimWordmark widget. v216a fix: the previous version
+            // painted the whole wordmark in accent red so the brand
+            // read as "Him Him" — losing the punchline that "Im" is
+            // who you are and "Him" (red) is who you become.
+            child: RichText(
+              text: TextSpan(
+                style: GoogleFonts.playfairDisplay(
+                  color: Colors.white,
+                  fontSize: 34, letterSpacing: -0.8,
+                  fontWeight: FontWeight.w900, height: 1,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black.withValues(alpha: 0.75),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                children: [
+                  const TextSpan(text: 'Im'),
+                  TextSpan(
+                    text: 'Him',
+                    style: GoogleFonts.playfairDisplay(
+                      color: ShareCard.accentRed,
+                      fontSize: 34, letterSpacing: -0.8,
+                      fontWeight: FontWeight.w900, height: 1,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black.withValues(alpha: 0.75),
+                          blurRadius: 3,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
-              )),
+              ),
+            ),
           ),
 
         // Bottom scrim under the corner label (same as hero card's).

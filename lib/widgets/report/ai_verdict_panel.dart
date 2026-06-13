@@ -36,12 +36,11 @@ class AiVerdictPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Bro: "the new ones make them wider." Each tile bleeds to the
-    // outer SizedBox edges — the parent ReportScreen Transform.translate
-    // is what carries the panel out past the page's normal Sp.lg inset.
-    // Internally we use a tight Sp.sm margin so the four tiles sit
-    // shoulder-to-shoulder with the screen edge.
-    const sideInset = Sp.sm;
+    // v216a: panel now lives at the same Sp.lg gutter as the rest of
+    // the report (PerTraitScores, TraitGrid, etc.) so the cards center
+    // visually under the hero card instead of left-bleeding. No internal
+    // inset — tiles fill the inherited padding edge to edge.
+    const sideInset = 0.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

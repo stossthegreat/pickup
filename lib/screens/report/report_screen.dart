@@ -225,9 +225,13 @@ class _ReportScreenState extends State<ReportScreen> {
           points:   f.points,
           timeline: f.timeline,
         )).toList();
-    final projectedDelta = fixSummaries.fold<int>(
-      0, (sum, f) => sum + f.points,
-    );
+    // Use the SAME projection formula as the HeroCard so the Looks-tab
+    // _HopeCard reads 54 → 77 instead of 54 → 67. The previous formula
+    // (sum of per-fix points) under-counted because each fix card is
+    // tagged with a conservative "fastest win" number, not the full
+    // headroom potential the headline card already shows. Bro: "needs
+    // to be the same score that you get in the actual scan."
+    final projectedDelta = _potentialDelta(score.value);
 
     final record = ScanRecord(
       id:                 id,
@@ -689,22 +693,17 @@ class _ReportScreenState extends State<ReportScreen> {
 
           const SizedBox(height: Sp.lg),
 
-          // ── 2 · AI VERDICT — WIDER than the rest. Bro: "the new ones
-          //   make them wider." Break out of the parent SingleChildScroll-
-          //   View's Sp.lg horizontal padding via a negative-margin
-          //   Transform so the four verdict tiles touch (or near-touch)
-          //   the screen edges while everything above and below stays
-          //   at the normal Sp.lg inset.
+          // ── 2 · AI VERDICT — same inset as the per-trait card below.
+          // v216a: the previous Transform.translate(-Sp.lg) + SizedBox
+          // (width: screen) trick left-bled the panel without widening
+          // it (SizedBox can't override the parent's tighter constraint),
+          // so the four tiles rendered flush-left with an Sp.lg×2 dead
+          // strip on the right. Drop the wrapper so the verdict panel
+          // sits at the same Sp.lg gutter as PerTraitScores beneath it.
           if (_honest?.verdict != null) ...[
-            Transform.translate(
-              offset: const Offset(-Sp.lg, 0),
-              child: SizedBox(
-                width: MediaQuery.of(context).size.width,
-                child: AiVerdictPanel(
-                  verdict: _honest!.verdict!,
-                  extraStrengths: _buildExtraStrengths(),
-                ),
-              ),
+            AiVerdictPanel(
+              verdict: _honest!.verdict!,
+              extraStrengths: _buildExtraStrengths(),
             ).animate().fadeIn(delay: 1450.ms, duration: 500.ms),
             const SizedBox(height: Sp.lg),
           ],
