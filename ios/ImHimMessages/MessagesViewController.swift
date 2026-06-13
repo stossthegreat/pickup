@@ -227,8 +227,8 @@ class MessagesViewController: MSMessagesAppViewController, PHPickerViewControlle
                 } else {
                     self.state = .replies(data, replies)
                 }
-            case .failure(let msg):
-                self.state = .error(msg)
+            case .failure(let err):
+                self.state = .error(err.message)
             }
         }
     }
@@ -531,10 +531,18 @@ struct Reply {
     let tag:  String
 }
 
+// Swift's Result type requires Failure: Error. Wrap our user-facing
+// string in a tiny error type so the call sites can just read
+// .message — keeps the API ergonomic without forcing every caller
+// to bridge to NSError.
+struct RizzError: Error {
+    let message: String
+}
+
 final class RizzClient {
     private let host = URL(string: "https://mirrorly-production.up.railway.app")!
 
-    func fetchReplies(screenshot: Data, completion: @escaping (Result<[Reply], String>) -> Void) {
+    func fetchReplies(screenshot: Data, completion: @escaping (Result<[Reply], RizzError>) -> Void) {
         let payload = compress(screenshot) ?? screenshot
 
         // v201 ELITE MODE — same prompt the in-app Rizz screen sends.
@@ -566,19 +574,19 @@ final class RizzClient {
         req.timeoutInterval = 45
         do { req.httpBody = try JSONSerialization.data(withJSONObject: body) }
         catch {
-            DispatchQueue.main.async { completion(.failure("encode: \(error)")) }
+            DispatchQueue.main.async { completion(.failure(RizzError(message: "encode: \(error)"))) }
             return
         }
         URLSession.shared.dataTask(with: req) { data, _, err in
             if let err = err {
-                DispatchQueue.main.async { completion(.failure("Network: \(err.localizedDescription)")) }
+                DispatchQueue.main.async { completion(.failure(RizzError(message: "Network: \(err.localizedDescription)"))) }
                 return
             }
             guard let data = data,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let replies = json["replies"] as? [[String: Any]]
             else {
-                DispatchQueue.main.async { completion(.failure("Bad response from server.")) }
+                DispatchQueue.main.async { completion(.failure(RizzError(message: "Bad response from server."))) }
                 return
             }
             let mapped: [Reply] = replies.compactMap {
