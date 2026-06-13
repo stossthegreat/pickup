@@ -1365,7 +1365,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         // floating up near HOLD TO SPEAK. HOLD TO SPEAK pulled tighter
         // against the orb by lifting its translate offset from -8 → -22.
         Positioned(
-          top: 82, left: 0, right: 0, bottom: 156,
+          top: 82, left: 0, right: 0, bottom: 130,
           child: Column(
             children: [
               // ImHim wordmark — only while holding. Wrapped in an
@@ -1564,7 +1564,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         // so the user has feedback during the conversation; idle just
         // renders nothing so the LUCIEN button gets room to breathe.
         Positioned(
-          left: 0, right: 0, bottom: 28,
+          left: 0, right: 0, bottom: 6,
           child: Column(
             children: [
               SizedBox(
