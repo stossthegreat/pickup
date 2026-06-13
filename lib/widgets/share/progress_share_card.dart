@@ -339,7 +339,7 @@ class _ScoreRow extends StatelessWidget {
             ),
             child: Text(
               '${positive ? '+' : ''}$delta',
-              style: AppTypography.measurement.copyWith(
+              style: AppTypography.delta.copyWith(
                 color: deltaColor,
                 fontSize: 24, fontWeight: FontWeight.w900,
               )),
