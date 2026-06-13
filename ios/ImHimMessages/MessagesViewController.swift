@@ -536,10 +536,28 @@ final class RizzClient {
 
     func fetchReplies(screenshot: Data, completion: @escaping (Result<[Reply], String>) -> Void) {
         let payload = compress(screenshot) ?? screenshot
+
+        // v201 ELITE MODE — same prompt the in-app Rizz screen sends.
+        // Tightens the voice across both surfaces so the iMessage drop
+        // doesn't feel different from the in-app result.
+        let eliteMode = """
+        ELITE MODE — non-negotiable rules for these three replies:
+        • Real-guy voice. No AI tells (no "haha", "lol", "definitely", "absolutely", "I think", "honestly").
+        • Short. 6–14 words each. Fragments encouraged. Punctuation sparse.
+        • No hedging. Decided. No "I'd love to", no "if you want", no "maybe".
+        • Don't explain the joke. Drop the line and walk.
+        • Specific to what she actually said — reference one word or beat from HER message, not a generic line.
+        • Each of the three replies takes a DIFFERENT angle. One playful, one cocky, one tension — never three flavors of the same idea.
+        • Imply, don't ask. "We're getting drinks Friday" beats "want to grab drinks?".
+        • No emojis unless one is genuinely the punchline.
+        • Never apologise, never simp, never beg, never explain yourself.
+        • Sound like a guy who already knows she likes him.
+        """
+
         let body: [String: Any] = [
-            "vibe":        "playful",
+            "vibe":        "flirty",
             "ctx":         "imessage",
-            "scenario":    "",
+            "scenario":    eliteMode,
             "imageBase64": payload.base64EncodedString(),
         ]
         var req = URLRequest(url: host.appendingPathComponent("rizz/reply"))
