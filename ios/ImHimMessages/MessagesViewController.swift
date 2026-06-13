@@ -227,8 +227,8 @@ class MessagesViewController: MSMessagesAppViewController, PHPickerViewControlle
                 } else {
                     self.state = .replies(data, replies)
                 }
-            case .failure(let msg):
-                self.state = .error(msg)
+            case .failure(let err):
+                self.state = .error(err.message)
             }
         }
     }
@@ -531,15 +531,41 @@ struct Reply {
     let tag:  String
 }
 
+// Swift's Result type requires Failure: Error. Wrap our user-facing
+// string in a tiny error type so the call sites can just read
+// .message — keeps the API ergonomic without forcing every caller
+// to bridge to NSError.
+struct RizzError: Error {
+    let message: String
+}
+
 final class RizzClient {
     private let host = URL(string: "https://mirrorly-production.up.railway.app")!
 
-    func fetchReplies(screenshot: Data, completion: @escaping (Result<[Reply], String>) -> Void) {
+    func fetchReplies(screenshot: Data, completion: @escaping (Result<[Reply], RizzError>) -> Void) {
         let payload = compress(screenshot) ?? screenshot
+
+        // v201 ELITE MODE — same prompt the in-app Rizz screen sends.
+        // Tightens the voice across both surfaces so the iMessage drop
+        // doesn't feel different from the in-app result.
+        let eliteMode = """
+        ELITE MODE — non-negotiable rules for these three replies:
+        • Real-guy voice. No AI tells (no "haha", "lol", "definitely", "absolutely", "I think", "honestly").
+        • Short. 6–14 words each. Fragments encouraged. Punctuation sparse.
+        • No hedging. Decided. No "I'd love to", no "if you want", no "maybe".
+        • Don't explain the joke. Drop the line and walk.
+        • Specific to what she actually said — reference one word or beat from HER message, not a generic line.
+        • Each of the three replies takes a DIFFERENT angle. One playful, one cocky, one tension — never three flavors of the same idea.
+        • Imply, don't ask. "We're getting drinks Friday" beats "want to grab drinks?".
+        • No emojis unless one is genuinely the punchline.
+        • Never apologise, never simp, never beg, never explain yourself.
+        • Sound like a guy who already knows she likes him.
+        """
+
         let body: [String: Any] = [
-            "vibe":        "playful",
+            "vibe":        "flirty",
             "ctx":         "imessage",
-            "scenario":    "",
+            "scenario":    eliteMode,
             "imageBase64": payload.base64EncodedString(),
         ]
         var req = URLRequest(url: host.appendingPathComponent("rizz/reply"))
@@ -548,19 +574,19 @@ final class RizzClient {
         req.timeoutInterval = 45
         do { req.httpBody = try JSONSerialization.data(withJSONObject: body) }
         catch {
-            DispatchQueue.main.async { completion(.failure("encode: \(error)")) }
+            DispatchQueue.main.async { completion(.failure(RizzError(message: "encode: \(error)"))) }
             return
         }
         URLSession.shared.dataTask(with: req) { data, _, err in
             if let err = err {
-                DispatchQueue.main.async { completion(.failure("Network: \(err.localizedDescription)")) }
+                DispatchQueue.main.async { completion(.failure(RizzError(message: "Network: \(err.localizedDescription)"))) }
                 return
             }
             guard let data = data,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let replies = json["replies"] as? [[String: Any]]
             else {
-                DispatchQueue.main.async { completion(.failure("Bad response from server.")) }
+                DispatchQueue.main.async { completion(.failure(RizzError(message: "Bad response from server."))) }
                 return
             }
             let mapped: [Reply] = replies.compactMap {

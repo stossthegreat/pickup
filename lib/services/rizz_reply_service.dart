@@ -186,7 +186,31 @@ class RizzReplyService {
     RizzDebug.reset();
     var her = herMessage.trim();
     final ctx = context.trim();
-    final scn = scenario.trim();
+    // v201 — ELITE MODE prepended to every scenario so the backend
+    // prompt receives our non-negotiable rule set every time. Tightens
+    // the voice: no AI tells, no hedging, no simping, sentence
+    // fragments, specific to her message, three different angles.
+    // Bro: "best rizz on earth, hit harder, feel human, lethal."
+    const eliteMode =
+        'ELITE MODE — non-negotiable rules for these three replies:\n'
+        '• Real-guy voice. No AI tells (no "haha", "lol", "definitely", '
+        '"absolutely", "I think", "honestly").\n'
+        '• Short. 6–14 words each. Fragments encouraged. Punctuation sparse.\n'
+        '• No hedging. Decided. No "I\'d love to", no "if you want", '
+        'no "maybe".\n'
+        '• Don\'t explain the joke. Drop the line and walk.\n'
+        '• Specific to what she actually said — reference one word or beat '
+        'from HER message, not a generic line.\n'
+        '• Each of the three replies takes a DIFFERENT angle. One playful, '
+        'one cocky, one tension — never three flavors of the same idea.\n'
+        '• Imply, don\'t ask. "We\'re getting drinks Friday" beats "want '
+        'to grab drinks?".\n'
+        '• No emojis unless one is genuinely the punchline.\n'
+        '• Never apologise, never simp, never beg, never explain yourself.\n'
+        '• Sound like a guy who already knows she likes him.';
+    final scn = scenario.trim().isEmpty
+        ? eliteMode
+        : '$eliteMode\n\nADDITIONAL CONTEXT: ${scenario.trim()}';
     final hasImage = screenshotBytes != null && screenshotBytes.isNotEmpty;
     RizzDebug.add('start her_len=${her.length} hasImage=$hasImage scn="$scn"');
     if (her.isEmpty && !hasImage && scn.isEmpty) {
