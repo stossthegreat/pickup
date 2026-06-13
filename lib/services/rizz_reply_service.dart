@@ -212,7 +212,20 @@ class RizzReplyService {
         ? eliteMode
         : '$eliteMode\n\nADDITIONAL CONTEXT: ${scenario.trim()}';
     final hasImage = screenshotBytes != null && screenshotBytes.isNotEmpty;
-    RizzDebug.add('start her_len=${her.length} hasImage=$hasImage scn="$scn"');
+    // v203 cost fix: bro caught that GIMME MORE + preset chips were
+    // re-sending the full screenshot every time, re-burning gpt-4o
+    // vision tokens on every tap. Vision is only needed ONCE — on
+    // the very first call when `previous` is empty (cold generate).
+    // Subsequent calls operate in TRANSFORM MODE (previous != empty)
+    // where the backend rewrites the three lines on screen. The
+    // image is dead weight on those calls — skip it.
+    final inTransformMode = previous.isNotEmpty;
+    final useVision = hasImage && !inTransformMode;
+    if (hasImage && inTransformMode) {
+      RizzDebug.add('vision SKIPPED (transform mode) — saves a vision call');
+    }
+    RizzDebug.add('start her_len=${her.length} hasImage=$hasImage '
+        'transform=$inTransformMode useVision=$useVision scn="$scn"');
     if (her.isEmpty && !hasImage && scn.isEmpty) {
       RizzDebug.add('nothing to send → arsenal fallback');
       return _fallbackFromArsenal(vibe);
@@ -225,8 +238,12 @@ class RizzReplyService {
     // guessing at an OCR wall of text. ML Kit OCR stays in tree as
     // a dead fallback (we don't call it when an image is present)
     // so we can revert in one flag if the vision route ever breaks.
-    final imageB64 = hasImage ? base64Encode(screenshotBytes) : null;
-    if (hasImage) {
+    // Only encode + send the image when useVision is true. In transform
+    // mode we hand the backend the three previous replies plus the
+    // user's scenario/tone hint and let it rewrite — no vision call,
+    // no vision tokens.
+    final imageB64 = useVision ? base64Encode(screenshotBytes) : null;
+    if (useVision) {
       RizzDebug.add('vision path active — sending ${imageB64!.length}c b64');
     }
 

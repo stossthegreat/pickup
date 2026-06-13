@@ -169,11 +169,14 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
     // doesn't leave the chip-bias sticky for the next re-roll.
     final scenarioForCall = _scenario;
     _scenario = '';
-    // When a quick-action chip fires, we pass the existing on-screen
-    // replies as `previous` so the backend TRANSFORMS them (preserves
-    // each idea, shifts tone/heat) rather than starting cold. A blank
-    // scenario means fresh generation — no `previous` sent.
-    final previousForCall = (scenarioForCall.isNotEmpty && _replies != null)
+    // v203 cost fix: any time we already have three replies on screen,
+    // pass them in as `previous` so the backend goes into TRANSFORM
+    // mode — rewrites the angles without re-reading the screenshot.
+    // Saves a gpt-4o vision call on every GIMME MORE + every preset
+    // chip tap (which used to re-burn vision tokens on every press).
+    // First-ever generate keeps the image because previousForCall is
+    // empty by definition.
+    final previousForCall = _replies != null
         ? List<RizzReply>.from(_replies!)
         : const <RizzReply>[];
     print('[RIZZ-SCREEN] _generate start hasImage=${_screenshotBytes != null} '
