@@ -211,6 +211,38 @@ you see a substantial beard:
     grooming would reveal a sharper jaw, not because the bone
     is exceptional
 
+### SUB-SCORE RULES (per-axis 0–100)
+v231 adds a "subScores" block to the response. Six axes:
+skin, hair, jawline, masculinity, eyes, face. Each integer 0..100.
+
+Hard rules — if you violate these, the client downgrades to a
+conservative geometry estimate that will publicly read worse than
+this score, so be honest:
+
+  - JAWLINE: if facial hair (beard, heavy stubble, full goatee)
+    obscures the underlying bone — even partially — the subScore
+    CANNOT exceed 65. The actual jaw is unverifiable from this
+    photo. Score it as the bone you can actually see, NOT the
+    outline of the beard.
+  - JAWLINE: clean-shaven faces score honestly to whatever the
+    bones earn — elite is fine if it's earned.
+  - MASCULINITY: shares the beard guardrail. Beard alone is NOT
+    dimorphism evidence. Cap at 70 when jaw is beard-obscured.
+  - SKIN: if facial hair covers >40% of cheek/jaw skin, the read
+    is limited — cap at 75 to reflect incomplete information.
+  - HAIR: assess hairline + density honestly. If a hat / hood
+    occludes the hairline, cap at 60 and put "hat obscures
+    hairline" in biggestWeakness.
+  - EYES: canthal tilt + sclera health + bag/dark-circle severity.
+    Score independent of beard.
+  - FACE: thirds balance + symmetry + tissue distribution.
+    Score independent of beard.
+
+Bro feedback v230: "the jaw score given in the chart is a lie —
+9.5 jawline when I got tiny jaw and massive beard. If user had
+beard then score something not 9.5 — maybe it don't score, leaves
+blank, or says 5. Not generic, should be real."
+
 ### OUTPUT SHAPE`;
 
 function buildPrimaryPrompt() {
@@ -224,6 +256,22 @@ Return JSON only, exactly this shape:
   "score": <integer 0-100, calibrated honestly>,
   "tier":  <one of: "exceptional" | "strong" | "above_average" | "average" | "below_average" | "weak" | "struggling">,
   "note":  "<the viral killer line, 3-beat template, 14-18 words, ≤ 95 chars>",
+  "subScores": {
+    "skin":        <int 0-100, see SUB-SCORE RULES>,
+    "hair":        <int 0-100, see SUB-SCORE RULES>,
+    "jawline":     <int 0-100, BEARD GUARDRAIL APPLIES — never exceed 65 if facial hair obscures bone>,
+    "masculinity": <int 0-100, BEARD GUARDRAIL APPLIES — cap 70 when jaw is beard-obscured>,
+    "eyes":        <int 0-100>,
+    "face":        <int 0-100>
+  },
+  "subTiers": {
+    "skin":        "<2-4 word qualifier, e.g. 'Clear healthy skin' / 'Texture work needed'>",
+    "hair":        "<e.g. 'Full hair' / 'Mild recession' / 'Hat obscures hairline'>",
+    "jawline":     "<e.g. 'Sharp jawline' / 'Beard masks bone' / 'Defined'>",
+    "masculinity": "<e.g. 'High dimorphism' / 'Average' / 'Beard inflates outline'>",
+    "eyes":        "<e.g. 'Hunter eyes' / 'Neutral tilt' / 'Negative tilt'>",
+    "face":        "<e.g. 'Harmonious thirds' / 'Off-balance'>"
+  },
   "verdict": {
     "biggestStrength": {
       "headline": "<2-5 word feature crown — e.g. 'Strong bone structure' / 'Hunter eyes' / 'Hollow cheeks'>",
@@ -312,8 +360,50 @@ async function runRate(imageDataUri, { system, user }) {
     score: clamped,
     tier:  typeof parsed.tier === 'string' ? parsed.tier : tierFromScore(clamped),
     note:  typeof parsed.note === 'string' ? parsed.note : '',
-    verdict: sanitizeVerdict(parsed.verdict, clamped),
+    subScores: sanitizeSubScores(parsed.subScores),
+    subTiers:  sanitizeSubTiers(parsed.subTiers),
+    verdict:   sanitizeVerdict(parsed.verdict, clamped),
   };
+}
+
+/**
+ * v231 — defensive sanitizer for the per-axis subScores block. Each
+ * axis must be an integer 0..100. The BEARD GUARDRAIL is enforced
+ * server-side here too: even if the model returns jawline > 65 on a
+ * beard-visible photo, we don't have the photo signal here so we
+ * trust the prompt to have done its job and just clamp + integer-cast.
+ * Missing axes drop out (the client falls back to geometry for them).
+ */
+function sanitizeSubScores(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const allowed = ['skin', 'hair', 'jawline', 'masculinity', 'eyes', 'face'];
+  const out = {};
+  for (const key of allowed) {
+    const v = raw[key];
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      out[key] = Math.max(0, Math.min(100, Math.round(v)));
+    }
+  }
+  return Object.keys(out).length === 0 ? null : out;
+}
+
+/**
+ * v231 — defensive sanitizer for the subTiers qualifier strings. Each
+ * axis gets a short human-readable phrase (e.g. "Beard masks bone").
+ * Capped at 40 chars so a runaway model can't blow up the row layout.
+ */
+function sanitizeSubTiers(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const allowed = ['skin', 'hair', 'jawline', 'masculinity', 'eyes', 'face'];
+  const out = {};
+  for (const key of allowed) {
+    const v = raw[key];
+    if (typeof v === 'string') {
+      const trimmed = v.trim().slice(0, 40);
+      if (trimmed.length > 0) out[key] = trimmed;
+    }
+  }
+  return Object.keys(out).length === 0 ? null : out;
 }
 
 /**

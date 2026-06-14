@@ -47,7 +47,7 @@ class PaywallScreen extends StatefulWidget {
   State<PaywallScreen> createState() => _PaywallScreenState();
 }
 
-enum _Tier { weekly, monthly, annual, rescue }
+enum _Tier { monthly, annual, rescue }
 
 class _PaywallScreenState extends State<PaywallScreen> {
   _Tier _selected = _Tier.annual;
@@ -139,7 +139,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
   }
 
   Package? _packageFor(_Tier t) => switch (t) {
-    _Tier.weekly  => _offerings.weekly,
     _Tier.monthly => _offerings.monthly,
     _Tier.annual  => _offerings.annual,
     _Tier.rescue  => _offerings.rescue,
@@ -347,19 +346,29 @@ class _PaywallScreenState extends State<PaywallScreen> {
         child: Stack(
           children: [
             SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(22, 56, 22, 20),
+              // v229a — top padding pulled from 56 → 36 so the header
+              // sits where the dropped 80×80 logo used to sit. Bro:
+              // "Hero higher where the logo is."
+              padding: const EdgeInsets.fromLTRB(22, 36, 22, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // 1. Hero logo + wordmark
-                  _hero(),
-                  const SizedBox(height: 26),
-
-                  // 2. The pitch — three outcome lines, no feature spec.
-                  // We sell what the user becomes, not the surgical
-                  // measurements that get them there. Looksmax → notice;
-                  // gaze → hold; game → close. Read in 3 seconds.
-                  _Pitch(glowup: _isGlowupVariant),
+                  // 1. v228 paywall — dropped the 80×80 app-icon hero
+                  //    + ImHimWordmark + Playfair-italic subhead per
+                  //    bro: "big converters don't have logos and app
+                  //    names on the paywall, it distracts. Straight
+                  //    nice header good size underlined, then bullets
+                  //    under it to the left in smaller writing."
+                  //
+                  //    v228a — same shape, glowup-aware copy. The
+                  //    glowup variant catches the user at the
+                  //    post-scan emotional peak: "you saw the verdict,
+                  //    here's exactly how to gain those points."
+                  //    Different header + different bullets but the
+                  //    layout stays identical.
+                  _Header(glowup: _isGlowupVariant),
+                  const SizedBox(height: 20),
+                  _Bullets(glowup: _isGlowupVariant),
 
                   const SizedBox(height: 26),
 
@@ -376,25 +385,25 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   //    as primary cadence, with the monthly-equiv
                   //    only as a small parenthetical — never the
                   //    headline number.
-                  // Three subscription tiers — Weekly | Monthly | Annual.
-                  // v224 added Weekly as the low-entry tier; Annual
-                  // keeps the BEST VALUE badge. Rescue (one-time IAP)
-                  // gets its own row below on Android only.
+                  // 3. Price cards — real localized prices. Three on
+                  //    Android (Monthly / Annual / Rescue one-time),
+                  //    two on iOS where the rescue product isn't yet
+                  //    approved in App Store Connect.
+                  //
+                  //    Google Play Subscriptions Policy compliance:
+                  //    each card MUST clearly state how often the
+                  //    user will be charged (monthly vs yearly) and
+                  //    whether the subscription auto-renews. The
+                  //    annual card therefore shows "billed yearly"
+                  //    as primary cadence, with the monthly-equiv
+                  //    only as a small parenthetical — never the
+                  //    headline number.
+                  //
+                  // v227 — Weekly card was wired in v224 but parked
+                  // here pending final paywall structure decision.
+                  // Restoring 2-card iOS / 3-card Android layout.
                   Row(
                     children: [
-                      Expanded(child: _PriceCard(
-                        title: 'WEEKLY',
-                        price: _priceFor(_Tier.weekly),
-                        cadence: 'Billed weekly',
-                        footnote: 'Auto-renews until cancelled',
-                        selected: _selected == _Tier.weekly,
-                        available: true,
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          setState(() => _selected = _Tier.weekly);
-                        },
-                      )),
-                      const SizedBox(width: 8),
                       Expanded(child: _PriceCard(
                         title: 'MONTHLY',
                         price: _priceFor(_Tier.monthly),
@@ -421,24 +430,23 @@ class _PaywallScreenState extends State<PaywallScreen> {
                           setState(() => _selected = _Tier.annual);
                         },
                       )),
+                      if (_showRescueCard) ...[
+                        const SizedBox(width: 8),
+                        Expanded(child: _PriceCard(
+                          title: 'RESCUE',
+                          price: _priceFor(_Tier.rescue),
+                          cadence: 'One-time · 20 renders',
+                          footnote: 'No subscription',
+                          selected: _selected == _Tier.rescue,
+                          available: true,
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            setState(() => _selected = _Tier.rescue);
+                          },
+                        )),
+                      ],
                     ],
                   ).animate().fadeIn(delay: 600.ms, duration: 400.ms),
-
-                  if (_showRescueCard) ...[
-                    const SizedBox(height: 8),
-                    _PriceCard(
-                      title: 'RESCUE',
-                      price: _priceFor(_Tier.rescue),
-                      cadence: 'One-time · 20 renders',
-                      footnote: 'No subscription',
-                      selected: _selected == _Tier.rescue,
-                      available: true,
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        setState(() => _selected = _Tier.rescue);
-                      },
-                    ).animate().fadeIn(delay: 700.ms, duration: 400.ms),
-                  ],
 
                   const SizedBox(height: 14),
 
@@ -602,7 +610,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
   }
 
   String _ctaLabel() =>
-      _isGlowupVariant ? 'UNLOCK PRO' : 'BECOME UNAVOIDABLE';
+      _isGlowupVariant ? 'UNLOCK PRO' : 'UNLOCK IMHIM PRO';
 
   /// Short above-the-fold summary required by the Google Play
   /// Subscriptions Policy. Must clearly state, in one line:
@@ -616,11 +624,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
     final price = _priceFor(_selected);
     String text;
     switch (_selected) {
-      case _Tier.weekly:
-        text = '$price billed weekly. Auto-renews until cancelled. '
-               'ImHim Pro subscription required for scans, AI '
-               'renders, streaks, AI roleplay, and all rizz features.';
-        break;
       case _Tier.monthly:
         text = '$price billed monthly. Auto-renews until cancelled. '
                'ImHim Pro subscription required for scans, AI '
@@ -664,18 +667,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
     String text;
     switch (_selected) {
-      case _Tier.weekly:
-        text = 'ImHim Pro — weekly subscription. Your payment of '
-               '$price will be charged to your $storeAccount at '
-               'confirmation of purchase. The subscription '
-               'automatically renews each week for $price unless you '
-               'cancel at least 24 hours before the end of the current '
-               'period. Your account will be charged for renewal '
-               'within 24 hours of the period ending. You can manage '
-               'or cancel your subscription any time in your account '
-               'settings. Uninstalling the app does NOT cancel the '
-               'subscription.';
-        break;
       case _Tier.monthly:
         text = 'ImHim Pro — monthly subscription. Your payment of '
                '$price will be charged to your $storeAccount at '
@@ -732,7 +723,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
         ? 'Cancel anytime in App Store settings'
         : 'Cancel anytime in Google Play settings';
     switch (t) {
-      case _Tier.weekly:
       case _Tier.monthly:
       case _Tier.annual:
         // Bro v5: monthly/annual share the same monthly entitlement
@@ -788,6 +778,124 @@ class _CloseX extends StatelessWidget {
             size: 20, color: Colors.white),
         ),
       ),
+    );
+  }
+}
+
+// v228 paywall — replaces the logo-image + wordmark + italic Playfair
+// subhead hero block. Clean white Inter title sized so it commands the
+// top of the screen, a thin red rule under it as the underline bro
+// asked for, then a single subhead line, then the bullets via
+// _Bullets. No red body text, no logos, no app-name. Sits at the same
+// vertical position the old _hero() did so the CTA + price cards
+// underneath don't move.
+class _Header extends StatelessWidget {
+  /// True when the paywall was opened from the post-scan locked
+  /// teaser — every `source` that starts with `glowup`. Swaps in a
+  /// promise that meets the user at the emotional peak right after
+  /// they saw their scan score get teased: "you saw the verdict,
+  /// here's exactly how to gain those points."
+  final bool glowup;
+  const _Header({this.glowup = false});
+
+  @override
+  Widget build(BuildContext context) {
+    // v229a — glowup variant gets the punchier post-scan headline bro
+    // asked for. Both variants keep the same Inter w800 weight, same
+    // size, same rule, same subhead style — only the copy swaps.
+    final headline = glowup
+        ? 'Your glow-up is ready.'
+        : 'Become the guy that owns every room.';
+    final subhead = glowup
+        ? 'Pick now. We show you exactly how to build it.'
+        : 'Looks get attention. Game keeps it.';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          headline,
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 30, height: 1.16,
+            letterSpacing: -0.6,
+            fontWeight: FontWeight.w800,
+          ),
+        ).animate().fadeIn(duration: 380.ms)
+          .slideY(begin: 0.04, end: 0, curve: Curves.easeOut),
+        const SizedBox(height: 12),
+        // Underline rule — thin red bar, fixed width, sits where bro
+        // pictured the "underline" under the header.
+        Container(width: 90, height: 3, color: AppColors.red)
+          .animate().fadeIn(delay: 180.ms, duration: 360.ms),
+        const SizedBox(height: 14),
+        Text(
+          subhead,
+          style: GoogleFonts.inter(
+            color: AppColors.textSecondary,
+            fontSize: 15, height: 1.35,
+            letterSpacing: 0.1,
+            fontWeight: FontWeight.w500,
+          ),
+        ).animate().fadeIn(delay: 240.ms, duration: 360.ms),
+      ],
+    );
+  }
+}
+
+/// Four left-aligned outcome bullets. Inter, white, smaller than the
+/// header, generous line spacing. The bullet glyph is the red app
+/// accent so the eye scans straight down the list.
+///
+/// v229a — both variants now reuse the same four bullets per bro:
+/// "I would add same points as other one." Only the headline +
+/// subhead differ between glowup and default; bullets stay constant.
+class _Bullets extends StatelessWidget {
+  final bool glowup;
+  const _Bullets({this.glowup = false});
+
+  static const _items = <String>[
+    "Find what's costing you points.",
+    'See your AI glow-up before you build it.',
+    'Practice with girls who push back.',
+    'Get coached until it becomes natural.',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _items;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 7, right: 12),
+                child: Container(
+                  width: 6, height: 6,
+                  decoration: const BoxDecoration(
+                    color: AppColors.red, shape: BoxShape.circle),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  items[i],
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 16, height: 1.4,
+                    letterSpacing: 0.1,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ).animate(delay: Duration(milliseconds: 280 + i * 80))
+            .fadeIn(duration: 360.ms)
+            .slideX(begin: -0.03, end: 0, curve: Curves.easeOut),
+        ],
+      ],
     );
   }
 }

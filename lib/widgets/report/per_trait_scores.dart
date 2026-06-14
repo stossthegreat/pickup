@@ -188,34 +188,58 @@ class PerTraitScores extends StatelessWidget {
   int _jawlineFromGeometry() {
     // Lower jaw angle (more acute) = sharper jaw definition.
     // Range observed: ~118° (defined) to ~138° (rounded).
+    //
+    // v231 honesty cap — MediaPipe sees the OUTLINE of the face, so
+    // a thick beard / heavy stubble traces a sharp angle that the
+    // formula reads as an elite jaw. Bro: "the jaw score that's
+    // given in the chart is a lie — says I got 9.5 jawline, I got
+    // tiny jaw and a massive beard. If user had beard then score
+    // something not 9.5 like you think — maybe it don't score, leaves
+    // blank, or says 5. Not generic, should be real."
+    //
+    // Without GPT vision corroboration the geometry-only score is
+    // capped at 65/100 (= 6.5/10). When the /rate backend returns
+    // a verified subScores.jawline that overrides this cap entirely
+    // (see _row()). So clean-shaven users with real geometry verified
+    // by GPT can still hit elite; everyone falling back to geometry
+    // alone gets a conservative read instead of an inflated lie.
     final a = geometry.jawAngle;
     final norm = ((138 - a) / 20).clamp(0.0, 1.0);
-    return (40 + norm * 55).round().clamp(0, 100);
+    return (40 + norm * 25).round().clamp(0, 65);
   }
 
   String _jawlineTier() {
     final s = _jawlineFromGeometry();
-    if (s >= 85) return 'Sharp jawline';
-    if (s >= 70) return 'Defined';
-    if (s >= 55) return 'Normal jawline';
+    // Geometry-only ceiling is 65, so the top-tier label changes:
+    // we can never honestly call the jaw "Sharp" without GPT
+    // confirming the beard isn't doing the work.
+    if (s >= 60) return 'Estimated · clean-shave for true read';
+    if (s >= 52) return 'Defined';
+    if (s >= 45) return 'Normal jawline';
     return 'Soft';
   }
 
   int _masculinityFromGeometry() {
     // Composite: FWHR (target ~2.0), jawAngle (lower = more dimorphic),
     // chin projection. Each contributes 1/3 of the score.
+    //
+    // v231 honesty cap — jaw + chin both come off the same beard-
+    // contaminated MediaPipe outline as the jawline score. Without
+    // GPT corroboration this score caps at 75/100 (= 7.5/10) so the
+    // same beard that fooled the jaw read can't carry masculinity up
+    // to elite either.
     final fwhrScore  = (1.0 - ((geometry.fwhr - 2.0).abs() / 0.8)).clamp(0.0, 1.0);
     final jawScore   = ((138 - geometry.jawAngle) / 20).clamp(0.0, 1.0);
     final chinScore  = geometry.chinProjection.clamp(0.0, 1.0);
     final composite  = (fwhrScore + jawScore + chinScore) / 3.0;
-    return (35 + composite * 60).round().clamp(0, 100);
+    return (35 + composite * 40).round().clamp(0, 75);
   }
 
   String _masculinityTier() {
     final s = _masculinityFromGeometry();
-    if (s >= 82) return 'High dimorphism';
-    if (s >= 68) return 'Above average';
-    if (s >= 55) return 'Average';
+    if (s >= 70) return 'Estimated · clean-shave for true read';
+    if (s >= 60) return 'Above average';
+    if (s >= 50) return 'Average';
     return 'Below average';
   }
 
