@@ -346,7 +346,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
         child: Stack(
           children: [
             SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(22, 56, 22, 20),
+              // v229a — top padding pulled from 56 → 36 so the header
+              // sits where the dropped 80×80 logo used to sit. Bro:
+              // "Hero higher where the logo is."
+              padding: const EdgeInsets.fromLTRB(22, 36, 22, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -797,8 +800,11 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v229a — glowup variant gets the punchier post-scan headline bro
+    // asked for. Both variants keep the same Inter w800 weight, same
+    // size, same rule, same subhead style — only the copy swaps.
     final headline = glowup
-        ? "Here's how to gain those points."
+        ? 'Your glow-up is ready.'
         : 'Become the guy that owns every room.';
     final subhead = glowup
         ? 'Pick now. We show you exactly how to build it.'
@@ -840,35 +846,23 @@ class _Header extends StatelessWidget {
 /// header, generous line spacing. The bullet glyph is the red app
 /// accent so the eye scans straight down the list.
 ///
-/// [glowup] true → bullets describe what's being UNLOCKED right after
-/// the scan teaser ("AI shows your future face", "Every fix ranked by
-/// points", etc.). Same rhythm, different promises that match the
-/// emotional moment.
+/// v229a — both variants now reuse the same four bullets per bro:
+/// "I would add same points as other one." Only the headline +
+/// subhead differ between glowup and default; bullets stay constant.
 class _Bullets extends StatelessWidget {
   final bool glowup;
   const _Bullets({this.glowup = false});
 
-  static const _defaultItems = <String>[
+  static const _items = <String>[
     "Find what's costing you points.",
     'See your AI glow-up before you build it.',
     'Practice with girls who push back.',
     'Get coached until it becomes natural.',
   ];
 
-  /// Glowup variant — keeps the v3 copy bro called "good stuff"
-  /// (future-look, fixes, roleplay, things-to-say) but in the new
-  /// bullet rhythm so the layout stays consistent across both
-  /// variants.
-  static const _glowupItems = <String>[
-    'See exactly what to fix on your face.',
-    "AI-render your future look before you build it.",
-    'Practice live AI roleplay until every line lands.',
-    'Never run out of things to say.',
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final items = glowup ? _glowupItems : _defaultItems;
+    final items = _items;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
