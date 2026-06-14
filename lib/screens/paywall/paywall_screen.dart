@@ -350,15 +350,25 @@ class _PaywallScreenState extends State<PaywallScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // 1. Hero logo + wordmark
-                  _hero(),
-                  const SizedBox(height: 26),
-
-                  // 2. The pitch — three outcome lines, no feature spec.
-                  // We sell what the user becomes, not the surgical
-                  // measurements that get them there. Looksmax → notice;
-                  // gaze → hold; game → close. Read in 3 seconds.
-                  _Pitch(glowup: _isGlowupVariant),
+                  // 1. v228 paywall — dropped the 80×80 app-icon hero
+                  //    + ImHimWordmark + Playfair-italic subhead per
+                  //    bro: "big converters don't have logos and app
+                  //    names on the paywall, it distracts. Straight
+                  //    nice header good size underlined, then bullets
+                  //    under it to the left in smaller writing."
+                  //
+                  //    New stack:
+                  //      · big white header (no red, no italic)
+                  //        + thin underline rule under it
+                  //      · one-line subhead "Looks get attention.
+                  //        Game keeps it."
+                  //      · four left-aligned bullet points
+                  //    Everything below (price cards, CTA, disclosure,
+                  //    legal) is untouched so the CTA stays at the
+                  //    same vertical position.
+                  _Header(),
+                  const SizedBox(height: 20),
+                  _Bullets(),
 
                   const SizedBox(height: 26),
 
@@ -600,7 +610,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
   }
 
   String _ctaLabel() =>
-      _isGlowupVariant ? 'UNLOCK PRO' : 'BECOME UNAVOIDABLE';
+      _isGlowupVariant ? 'UNLOCK PRO' : 'UNLOCK IMHIM PRO';
 
   /// Short above-the-fold summary required by the Google Play
   /// Subscriptions Policy. Must clearly state, in one line:
@@ -768,6 +778,103 @@ class _CloseX extends StatelessWidget {
             size: 20, color: Colors.white),
         ),
       ),
+    );
+  }
+}
+
+// v228 paywall — replaces the logo-image + wordmark + italic Playfair
+// subhead hero block. Clean white Inter title sized so it commands the
+// top of the screen, a thin red rule under it as the underline bro
+// asked for, then a single subhead line, then the bullets via
+// _Bullets. No red body text, no logos, no app-name. Sits at the same
+// vertical position the old _hero() did so the CTA + price cards
+// underneath don't move.
+class _Header extends StatelessWidget {
+  const _Header();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Become the guy that owns every room.',
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 30, height: 1.16,
+            letterSpacing: -0.6,
+            fontWeight: FontWeight.w800,
+          ),
+        ).animate().fadeIn(duration: 380.ms)
+          .slideY(begin: 0.04, end: 0, curve: Curves.easeOut),
+        const SizedBox(height: 12),
+        // Underline rule — thin red bar, fixed width, sits where bro
+        // pictured the "underline" under the header.
+        Container(width: 90, height: 3, color: AppColors.red)
+          .animate().fadeIn(delay: 180.ms, duration: 360.ms),
+        const SizedBox(height: 14),
+        Text(
+          'Looks get attention. Game keeps it.',
+          style: GoogleFonts.inter(
+            color: AppColors.textSecondary,
+            fontSize: 15, height: 1.35,
+            letterSpacing: 0.1,
+            fontWeight: FontWeight.w500,
+          ),
+        ).animate().fadeIn(delay: 240.ms, duration: 360.ms),
+      ],
+    );
+  }
+}
+
+/// Four left-aligned outcome bullets. Inter, white, smaller than the
+/// header, generous line spacing. The bullet glyph is the red app
+/// accent so the eye scans straight down the list.
+class _Bullets extends StatelessWidget {
+  const _Bullets();
+
+  static const _items = <String>[
+    "Find what's costing you points.",
+    'See your AI glow-up before you build it.',
+    'Practice with girls who push back.',
+    'Get coached until it becomes natural.',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < _items.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 7, right: 12),
+                child: Container(
+                  width: 6, height: 6,
+                  decoration: const BoxDecoration(
+                    color: AppColors.red, shape: BoxShape.circle),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  _items[i],
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 16, height: 1.4,
+                    letterSpacing: 0.1,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ).animate(delay: Duration(milliseconds: 280 + i * 80))
+            .fadeIn(duration: 360.ms)
+            .slideX(begin: -0.03, end: 0, curve: Curves.easeOut),
+        ],
+      ],
     );
   }
 }

@@ -780,8 +780,15 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
             extra: {'source': 'game_voice_monthly_capped'});
         return;
       }
-    } else if (!_firstEverSession) {
-      // Non-pro AND not on the free pass → paywall.
+    } else {
+      // v228 — Lucien step-in is now paywalled for EVERY free user,
+      // matching the orb-hold gate. v224 killed free roleplay, but
+      // _lucienStepIn still let _firstEverSession sail through —
+      // so a free user could open the Game tab, watch the screen
+      // auto-load to _Phase.live, then tap LUCIEN — STEP IN and
+      // burn realtime API minutes for free. Bro: "you've put
+      // realtime roleplay behind paywall but ask Lucien ain't,
+      // needs to be also if user presses boom paywall."
       if (!mounted) return;
       // ignore: discarded_futures
       AnalyticsService.freeflowBlockedFreeCap('lucien');
