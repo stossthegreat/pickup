@@ -345,25 +345,28 @@ class _PaywallScreenState extends State<PaywallScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // v234 — full-screen Column instead of SingleChildScrollView
-            // for the main content. Bro: "the CTA stays in view, gets
-            // pushed to the bottom of ONE screen — no scrolling down.
-            // It just goes right near the bottom so it fits perfectly."
+            // v234a — LayoutBuilder + ConstrainedBox(minHeight:viewport)
+            // + IntrinsicHeight is what lets the Spacer below work on
+            // any device:
+            //   · iPhone 13/14/15 + Android pixel-7+: Column = viewport
+            //     height, Spacer eats the leftover gap so CTA pins to
+            //     the bottom of the visible screen, NO SCROLL.
+            //   · iPhone SE / smaller: Column = intrinsic content
+            //     height, Spacer collapses to 0, SingleChildScrollView
+            //     just barely scrolls instead of throwing RenderFlex
+            //     overflow errors.
             //
-            // Layout from top to bottom:
-            //   · Header (one underlined hero line)
-            //   · Bullets (four lines)
-            //   · Spacer — flexes so the rest gets pushed down
-            //   · Monthly card (full width, landscape orientation)
-            //   · Annual card (full width, landscape orientation,
-            //                  identical layout, BEST VALUE badge)
-            //   · CTA — sits near the bottom
-            //   · Summary + disclosure + legal — at the very bottom
-            // Disclosure scrolls within its own constrained box so the
-            // long Apple 3.1.2 text never pushes the CTA off-screen.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 56, 22, 14),
-              child: Column(
+            // Bro: "you just have to make it fit." This is the fitting.
+            LayoutBuilder(
+              builder: (ctx, constraints) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: IntrinsicHeight(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 56, 22, 14),
+                      child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _Header(glowup: _isGlowupVariant),
@@ -491,6 +494,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     ],
                   ),
                 ],
+              ),
+                    ),
+                  ),
+                ),
               ),
             ),
 
