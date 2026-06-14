@@ -357,18 +357,15 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   //    nice header good size underlined, then bullets
                   //    under it to the left in smaller writing."
                   //
-                  //    New stack:
-                  //      · big white header (no red, no italic)
-                  //        + thin underline rule under it
-                  //      · one-line subhead "Looks get attention.
-                  //        Game keeps it."
-                  //      · four left-aligned bullet points
-                  //    Everything below (price cards, CTA, disclosure,
-                  //    legal) is untouched so the CTA stays at the
-                  //    same vertical position.
-                  _Header(),
+                  //    v228a — same shape, glowup-aware copy. The
+                  //    glowup variant catches the user at the
+                  //    post-scan emotional peak: "you saw the verdict,
+                  //    here's exactly how to gain those points."
+                  //    Different header + different bullets but the
+                  //    layout stays identical.
+                  _Header(glowup: _isGlowupVariant),
                   const SizedBox(height: 20),
-                  _Bullets(),
+                  _Bullets(glowup: _isGlowupVariant),
 
                   const SizedBox(height: 26),
 
@@ -790,15 +787,27 @@ class _CloseX extends StatelessWidget {
 // vertical position the old _hero() did so the CTA + price cards
 // underneath don't move.
 class _Header extends StatelessWidget {
-  const _Header();
+  /// True when the paywall was opened from the post-scan locked
+  /// teaser — every `source` that starts with `glowup`. Swaps in a
+  /// promise that meets the user at the emotional peak right after
+  /// they saw their scan score get teased: "you saw the verdict,
+  /// here's exactly how to gain those points."
+  final bool glowup;
+  const _Header({this.glowup = false});
 
   @override
   Widget build(BuildContext context) {
+    final headline = glowup
+        ? "Here's how to gain those points."
+        : 'Become the guy that owns every room.';
+    final subhead = glowup
+        ? 'Pick now. We show you exactly how to build it.'
+        : 'Looks get attention. Game keeps it.';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Become the guy that owns every room.',
+          headline,
           style: GoogleFonts.inter(
             color: Colors.white,
             fontSize: 30, height: 1.16,
@@ -814,7 +823,7 @@ class _Header extends StatelessWidget {
           .animate().fadeIn(delay: 180.ms, duration: 360.ms),
         const SizedBox(height: 14),
         Text(
-          'Looks get attention. Game keeps it.',
+          subhead,
           style: GoogleFonts.inter(
             color: AppColors.textSecondary,
             fontSize: 15, height: 1.35,
@@ -830,22 +839,40 @@ class _Header extends StatelessWidget {
 /// Four left-aligned outcome bullets. Inter, white, smaller than the
 /// header, generous line spacing. The bullet glyph is the red app
 /// accent so the eye scans straight down the list.
+///
+/// [glowup] true → bullets describe what's being UNLOCKED right after
+/// the scan teaser ("AI shows your future face", "Every fix ranked by
+/// points", etc.). Same rhythm, different promises that match the
+/// emotional moment.
 class _Bullets extends StatelessWidget {
-  const _Bullets();
+  final bool glowup;
+  const _Bullets({this.glowup = false});
 
-  static const _items = <String>[
+  static const _defaultItems = <String>[
     "Find what's costing you points.",
     'See your AI glow-up before you build it.',
     'Practice with girls who push back.',
     'Get coached until it becomes natural.',
   ];
 
+  /// Glowup variant — keeps the v3 copy bro called "good stuff"
+  /// (future-look, fixes, roleplay, things-to-say) but in the new
+  /// bullet rhythm so the layout stays consistent across both
+  /// variants.
+  static const _glowupItems = <String>[
+    'See exactly what to fix on your face.',
+    "AI-render your future look before you build it.",
+    'Practice live AI roleplay until every line lands.',
+    'Never run out of things to say.',
+  ];
+
   @override
   Widget build(BuildContext context) {
+    final items = glowup ? _glowupItems : _defaultItems;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < _items.length; i++) ...[
+        for (var i = 0; i < items.length; i++) ...[
           if (i > 0) const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -860,7 +887,7 @@ class _Bullets extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  _items[i],
+                  items[i],
                   style: GoogleFonts.inter(
                     color: Colors.white,
                     fontSize: 16, height: 1.4,
