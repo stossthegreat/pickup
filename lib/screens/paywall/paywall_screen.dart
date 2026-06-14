@@ -345,84 +345,119 @@ class _PaywallScreenState extends State<PaywallScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // v234a — LayoutBuilder + ConstrainedBox(minHeight:viewport)
-            // + IntrinsicHeight is what lets the Spacer below work on
-            // any device:
-            //   · iPhone 13/14/15 + Android pixel-7+: Column = viewport
-            //     height, Spacer eats the leftover gap so CTA pins to
-            //     the bottom of the visible screen, NO SCROLL.
-            //   · iPhone SE / smaller: Column = intrinsic content
-            //     height, Spacer collapses to 0, SingleChildScrollView
-            //     just barely scrolls instead of throwing RenderFlex
-            //     overflow errors.
-            //
-            // Bro: "you just have to make it fit." This is the fitting.
-            LayoutBuilder(
-              builder: (ctx, constraints) => SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight,
-                  ),
-                  child: IntrinsicHeight(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 56, 22, 14),
-                      child: Column(
+            SingleChildScrollView(
+              // v232 — top padding back to 56 (was 36 in v229a). Bro
+              // wants the CTA "back where it was, lower down, still
+              // fully visible but lower." Restoring the v228 padding
+              // pushes the whole stack down so the CTA lands at the
+              // pre-glowup-lift position.
+              padding: const EdgeInsets.fromLTRB(22, 56, 22, 20),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // 1. v228 paywall — dropped the 80×80 app-icon hero
+                  //    + ImHimWordmark + Playfair-italic subhead per
+                  //    bro: "big converters don't have logos and app
+                  //    names on the paywall, it distracts. Straight
+                  //    nice header good size underlined, then bullets
+                  //    under it to the left in smaller writing."
+                  //
+                  //    v228a — same shape, glowup-aware copy. The
+                  //    glowup variant catches the user at the
+                  //    post-scan emotional peak: "you saw the verdict,
+                  //    here's exactly how to gain those points."
+                  //    Different header + different bullets but the
+                  //    layout stays identical.
                   _Header(glowup: _isGlowupVariant),
+                  // v232 — header → bullets gap pushed from 20 → 28
+                  // to balance the bigger underlined hero. Bullets
+                  // themselves now run 22px apart (was 12) so the
+                  // four-line stack fills the available height.
                   const SizedBox(height: 28),
                   _Bullets(glowup: _isGlowupVariant),
 
-                  // Flex spacer — eats whatever vertical room is left
-                  // so the cards + CTA cluster glues to the bottom of
-                  // the visible area no matter what the device height is.
-                  const Spacer(),
+                  const SizedBox(height: 30),
 
-                  // Monthly card — full width, landscape. Bro: "do our
-                  // monthly first then yearly underneath it, both cards
-                  // identical."
-                  _PriceCardLandscape(
-                    title: 'MONTHLY',
-                    price: _priceFor(_Tier.monthly),
-                    cadence: 'Billed monthly · Auto-renews until cancelled',
-                    selected: _selected == _Tier.monthly,
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      setState(() => _selected = _Tier.monthly);
-                    },
-                  ).animate().fadeIn(delay: 480.ms, duration: 360.ms),
-                  const SizedBox(height: 10),
-                  _PriceCardLandscape(
-                    title: 'ANNUAL',
-                    price: _priceFor(_Tier.annual),
-                    cadence:
-                        'Billed yearly (${_perMonthForAnnual()}/mo) · Auto-renews until cancelled',
-                    badge: 'BEST VALUE',
-                    selected: _selected == _Tier.annual,
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      setState(() => _selected = _Tier.annual);
-                    },
-                  ).animate().fadeIn(delay: 540.ms, duration: 360.ms),
-                  if (_showRescueCard) ...[
-                    const SizedBox(height: 10),
-                    _PriceCardLandscape(
-                      title: 'RESCUE',
-                      price: _priceFor(_Tier.rescue),
-                      cadence: 'One-time · 20 renders · No subscription',
-                      selected: _selected == _Tier.rescue,
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        setState(() => _selected = _Tier.rescue);
-                      },
-                    ).animate().fadeIn(delay: 600.ms, duration: 360.ms),
-                  ],
+                  // 3. Price cards — real localized prices. Three on
+                  //    Android (Monthly / Annual / Rescue one-time),
+                  //    two on iOS where the rescue product isn't yet
+                  //    approved in App Store Connect.
+                  //
+                  //    Google Play Subscriptions Policy compliance:
+                  //    each card MUST clearly state how often the
+                  //    user will be charged (monthly vs yearly) and
+                  //    whether the subscription auto-renews. The
+                  //    annual card therefore shows "billed yearly"
+                  //    as primary cadence, with the monthly-equiv
+                  //    only as a small parenthetical — never the
+                  //    headline number.
+                  // 3. Price cards — real localized prices. Three on
+                  //    Android (Monthly / Annual / Rescue one-time),
+                  //    two on iOS where the rescue product isn't yet
+                  //    approved in App Store Connect.
+                  //
+                  //    Google Play Subscriptions Policy compliance:
+                  //    each card MUST clearly state how often the
+                  //    user will be charged (monthly vs yearly) and
+                  //    whether the subscription auto-renews. The
+                  //    annual card therefore shows "billed yearly"
+                  //    as primary cadence, with the monthly-equiv
+                  //    only as a small parenthetical — never the
+                  //    headline number.
+                  //
+                  // v227 — Weekly card was wired in v224 but parked
+                  // here pending final paywall structure decision.
+                  // Restoring 2-card iOS / 3-card Android layout.
+                  Row(
+                    children: [
+                      Expanded(child: _PriceCard(
+                        title: 'MONTHLY',
+                        price: _priceFor(_Tier.monthly),
+                        cadence: 'Billed monthly',
+                        footnote: 'Auto-renews until cancelled',
+                        selected: _selected == _Tier.monthly,
+                        available: true,
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() => _selected = _Tier.monthly);
+                        },
+                      )),
+                      const SizedBox(width: 8),
+                      Expanded(child: _PriceCard(
+                        title: 'ANNUAL',
+                        price: _priceFor(_Tier.annual),
+                        cadence: 'Billed yearly (${_perMonthForAnnual()}/mo)',
+                        footnote: 'Auto-renews until cancelled',
+                        badge: 'BEST VALUE',
+                        selected: _selected == _Tier.annual,
+                        available: true,
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() => _selected = _Tier.annual);
+                        },
+                      )),
+                      if (_showRescueCard) ...[
+                        const SizedBox(width: 8),
+                        Expanded(child: _PriceCard(
+                          title: 'RESCUE',
+                          price: _priceFor(_Tier.rescue),
+                          cadence: 'One-time · 20 renders',
+                          footnote: 'No subscription',
+                          selected: _selected == _Tier.rescue,
+                          available: true,
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            setState(() => _selected = _Tier.rescue);
+                          },
+                        )),
+                      ],
+                    ],
+                  ).animate().fadeIn(delay: 600.ms, duration: 400.ms),
 
                   const SizedBox(height: 14),
 
-                  // CTA — pinned at the bottom of the visible area by
-                  // the Spacer above. Label is "BECOME UNAVOIDABLE"
-                  // (default) or "UNLOCK PRO" (glowup variant).
+                  // 4. CTA — sits high on the screen; disclosure sits
+                  //    immediately below, benefits under that.
                   SizedBox(
                     width: double.infinity, height: 56,
                     child: ElevatedButton(
@@ -450,29 +485,37 @@ class _PaywallScreenState extends State<PaywallScreen> {
                               ),
                             ),
                     ),
-                  ).animate().fadeIn(delay: 660.ms, duration: 360.ms),
+                  ).animate().fadeIn(delay: 720.ms, duration: 400.ms),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
 
-                  // Summary line — Google Play subs compliance, one line.
+                  // 5a. Short headline summary — Google Play
+                  //     Subscriptions Policy requires the price, the
+                  //     billing frequency, the auto-renewal terms,
+                  //     and the "subscription required" notice to be
+                  //     called out clearly in the offer (not buried
+                  //     in fine print). This single line carries
+                  //     all four facts in plain English; the long
+                  //     disclosure below adds the cancellation path.
                   _summaryLine(),
 
-                  const SizedBox(height: 6),
-
-                  // Long-form Apple 3.1.2 disclosure constrained to a
-                  // small scroll box so it can't push the CTA off
-                  // screen. Users who want the full terms can scroll
-                  // inside this 64px window or tap TERMS below.
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 64),
-                    child: SingleChildScrollView(
-                      child: _disclosure(),
-                    ),
-                  ),
-
                   const SizedBox(height: 8),
 
-                  // Legal + restore row — bottom strip.
+                  // 5b. Long-form disclosure — Apple 3.1.2 compliant.
+                  //     Covers price, cadence, renewal, cancellation
+                  //     in full sentences for each tier.
+                  _disclosure(),
+
+                  const SizedBox(height: 16),
+
+                  // 6. Benefits panel — NOW UNDER the CTA per user
+                  //    feedback. Still per-tier, still spells out what
+                  //    each tier actually delivers.
+                  _BenefitsPanel(bullets: _bulletsFor(_selected)),
+
+                  const SizedBox(height: 16),
+
+                  // 7. Legal + restore row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -493,11 +536,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
                       _LinkButton(label: 'RESTORE', onTap: _restore),
                     ],
                   ),
+
+                  const SizedBox(height: 18),
                 ],
-              ),
-                    ),
-                  ),
-                ),
               ),
             ),
 
@@ -984,104 +1025,6 @@ class _Point extends StatelessWidget {
     ).animate(delay: Duration(milliseconds: 320 + int.parse(n) * 80))
       .fadeIn(duration: 400.ms)
       .slideX(begin: -0.04, end: 0, curve: Curves.easeOut);
-  }
-}
-
-/// v234 — full-width landscape price card. Bro: "do sidewards so take
-/// up left to right, monthly first then yearly underneath it, both
-/// cards identical, in one screen size."
-///
-/// Layout (single row): title chip (+ optional BEST VALUE badge) on
-/// the left, price on the right, cadence as a small line under the
-/// title. Compact (~72px tall) so two of them stack inside the
-/// available viewport without forcing a scroll.
-class _PriceCardLandscape extends StatelessWidget {
-  final String title;
-  final String price;
-  final String cadence;
-  final String? badge;
-  final bool selected;
-  final VoidCallback onTap;
-  const _PriceCardLandscape({
-    required this.title,
-    required this.price,
-    required this.cadence,
-    required this.selected,
-    required this.onTap,
-    this.badge,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final borderColor = selected ? AppColors.red : Colors.white24;
-    final priceColor  = selected ? AppColors.red : Colors.white;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: 180.ms,
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.redGlow : Colors.transparent,
-          border: Border.all(
-              color: borderColor, width: selected ? 1.6 : 0.8),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Text(title,
-                        style: AppTypography.label.copyWith(
-                          color: Colors.white,
-                          fontSize: 11, letterSpacing: 2.4,
-                          fontWeight: FontWeight.w900,
-                        )),
-                      if (badge != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.red,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(badge!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 8.5, letterSpacing: 0.6,
-                              fontWeight: FontWeight.w900,
-                            )),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(cadence,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      fontSize: 11, fontWeight: FontWeight.w500,
-                      height: 1.25,
-                    ),
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(price,
-              style: AppTypography.display.copyWith(
-                color: priceColor,
-                fontSize: 26, height: 1, letterSpacing: -0.8,
-                fontWeight: FontWeight.w800,
-              )),
-          ],
-        ),
-      ),
-    );
   }
 }
 
