@@ -181,11 +181,10 @@ LegalDoc get termsDoc => LegalDoc(
       '$_storeAccount for billing purposes only.'),
     LegalSection('SUBSCRIPTIONS & AUTO-RENEWAL',
       'ImHim offers auto-renewing subscriptions:\n\n'
-      '• ImHim Pro Monthly — \$4.99 USD per month (or local '
+      '• ImHim Pro Monthly — \$14.99 USD per month (or local '
       'equivalent), billed monthly until cancelled.\n'
-      '• ImHim Pro Annual — \$29.99 USD per year (or local '
-      'equivalent), with a 7-day free trial for new subscribers, '
-      'billed annually until cancelled.\n\n'
+      '• ImHim Pro Annual — \$109.99 USD per year (or local '
+      'equivalent), billed annually until cancelled.\n\n'
       'Subscription terms:\n\n'
       '• Payment is charged to your $_appleOrGoogleId at '
       'confirmation of purchase.\n'

@@ -138,6 +138,28 @@ class _PaywallScreenState extends State<PaywallScreen> {
     return '$symbol${amount.toStringAsFixed(2)}';
   }
 
+  /// v236 — dynamic annual-vs-monthly savings %, derived from the
+  /// LIVE store prices. Replaces the static "BEST VALUE" badge so the
+  /// label reflects whatever the user actually pays in their currency.
+  ///
+  /// Example: monthly $14.99 × 12 = $179.88, annual $109.99 →
+  /// ($179.88 − $109.99) / $179.88 = 38.85% → "SAVE 39%".
+  ///
+  /// Falls back to the static "BEST VALUE" when either price hasn't
+  /// loaded yet (RC offering empty / dev bypass) so the badge never
+  /// shows a misleading 0% or a dash.
+  String _annualBadge() {
+    final monthly = _offerings.monthly?.storeProduct.price;
+    final annual  = _offerings.annual?.storeProduct.price;
+    if (monthly == null || annual == null) return 'BEST VALUE';
+    if (monthly <= 0 || annual <= 0)        return 'BEST VALUE';
+    final monthlyTotal = monthly * 12;
+    if (annual >= monthlyTotal)             return 'BEST VALUE';
+    final pct = ((monthlyTotal - annual) / monthlyTotal * 100).round();
+    if (pct < 5)                            return 'BEST VALUE';
+    return 'SAVE $pct%';
+  }
+
   Package? _packageFor(_Tier t) => switch (t) {
     _Tier.monthly => _offerings.monthly,
     _Tier.annual  => _offerings.annual,
@@ -428,7 +450,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                         price: _priceFor(_Tier.annual),
                         cadence: 'Billed yearly (${_perMonthForAnnual()}/mo)',
                         footnote: 'Auto-renews until cancelled',
-                        badge: 'BEST VALUE',
+                        badge: _annualBadge(),
                         selected: _selected == _Tier.annual,
                         available: true,
                         onTap: () {
