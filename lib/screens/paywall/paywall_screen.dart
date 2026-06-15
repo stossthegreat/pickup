@@ -52,13 +52,19 @@ class PaywallScreen extends StatefulWidget {
 enum _Tier { weekly, annual, rescue }
 
 class _PaywallScreenState extends State<PaywallScreen> {
-  _Tier _selected = _Tier.annual;
+  // v238b — _selected is initialised in initState now because the
+  // glowup variant only ever shows the Weekly card, so its default
+  // must be _Tier.weekly. The default variant continues to preselect
+  // Annual (the conversion play).
+  late _Tier _selected;
   PurchaseOfferings _offerings = PurchaseOfferings.empty();
   bool _purchasing = false;
 
   @override
   void initState() {
     super.initState();
+    final src = (widget.context?['source'] as String?)?.toLowerCase() ?? '';
+    _selected = src.startsWith('glowup') ? _Tier.weekly : _Tier.annual;
     // Dev-flag bypass: auto-redirect back UNLESS the caller passed
     // `force: true` in the extras. That flag is how the home-header
     // upgrade chip opens the paywall for manual preview/testing — every
@@ -403,81 +409,64 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
                   const SizedBox(height: 30),
 
-                  // 3. Price cards — real localized prices. Three on
-                  //    Android (Monthly / Annual / Rescue one-time),
-                  //    two on iOS where the rescue product isn't yet
-                  //    approved in App Store Connect.
-                  //
-                  //    Google Play Subscriptions Policy compliance:
-                  //    each card MUST clearly state how often the
-                  //    user will be charged (monthly vs yearly) and
-                  //    whether the subscription auto-renews. The
-                  //    annual card therefore shows "billed yearly"
-                  //    as primary cadence, with the monthly-equiv
-                  //    only as a small parenthetical — never the
-                  //    headline number.
-                  // 3. Price cards — real localized prices. Three on
-                  //    Android (Monthly / Annual / Rescue one-time),
-                  //    two on iOS where the rescue product isn't yet
-                  //    approved in App Store Connect.
-                  //
-                  //    Google Play Subscriptions Policy compliance:
-                  //    each card MUST clearly state how often the
-                  //    user will be charged (monthly vs yearly) and
-                  //    whether the subscription auto-renews. The
-                  //    annual card therefore shows "billed yearly"
-                  //    as primary cadence, with the monthly-equiv
-                  //    only as a small parenthetical — never the
-                  //    headline number.
-                  //
-                  // v227 — Weekly card was wired in v224 but parked
-                  // here pending final paywall structure decision.
-                  // Restoring 2-card iOS / 3-card Android layout.
-                  Row(
-                    children: [
-                      Expanded(child: _PriceCard(
-                        title: 'WEEKLY',
-                        price: _priceFor(_Tier.weekly),
-                        cadence: 'Billed weekly',
-                        footnote: 'Auto-renews until cancelled',
-                        selected: _selected == _Tier.weekly,
-                        available: true,
+                  // 3. Price cards — v238b layout:
+                  //   · GLOWUP variant (post-scan onboarding paywall):
+                  //     ONE big horizontal Weekly card, full width.
+                  //     No Annual, no Rescue. Bro: "make it horizontal,
+                  //     take the middle line out, turn it into one
+                  //     weekly card."
+                  //   · DEFAULT variant: TWO stacked horizontal
+                  //     rectangle cards — Weekly on top, Annual
+                  //     underneath, IDENTICAL sizes. Rescue (Android
+                  //     only) drops as a third row below.
+                  if (_isGlowupVariant)
+                    _PriceCardLandscape(
+                      title: 'WEEKLY',
+                      price: _priceFor(_Tier.weekly),
+                      cadence: 'Billed weekly · Auto-renews until cancelled',
+                      selected: true,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _selected = _Tier.weekly);
+                      },
+                    ).animate().fadeIn(delay: 600.ms, duration: 400.ms)
+                  else ...[
+                    _PriceCardLandscape(
+                      title: 'WEEKLY',
+                      price: _priceFor(_Tier.weekly),
+                      cadence: 'Billed weekly · Auto-renews until cancelled',
+                      selected: _selected == _Tier.weekly,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _selected = _Tier.weekly);
+                      },
+                    ).animate().fadeIn(delay: 600.ms, duration: 400.ms),
+                    const SizedBox(height: 8),
+                    _PriceCardLandscape(
+                      title: 'ANNUAL',
+                      price: _priceFor(_Tier.annual),
+                      cadence: 'Billed yearly (${_perMonthForAnnual()}/mo equivalent) · Auto-renews until cancelled',
+                      badge: _annualBadge(),
+                      selected: _selected == _Tier.annual,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _selected = _Tier.annual);
+                      },
+                    ).animate().fadeIn(delay: 660.ms, duration: 400.ms),
+                    if (_showRescueCard) ...[
+                      const SizedBox(height: 8),
+                      _PriceCardLandscape(
+                        title: 'RESCUE',
+                        price: _priceFor(_Tier.rescue),
+                        cadence: 'One-time · 20 renders · No subscription',
+                        selected: _selected == _Tier.rescue,
                         onTap: () {
                           HapticFeedback.selectionClick();
-                          setState(() => _selected = _Tier.weekly);
+                          setState(() => _selected = _Tier.rescue);
                         },
-                      )),
-                      const SizedBox(width: 8),
-                      Expanded(child: _PriceCard(
-                        title: 'ANNUAL',
-                        price: _priceFor(_Tier.annual),
-                        cadence: 'Billed yearly (${_perMonthForAnnual()}/mo)',
-                        footnote: 'Auto-renews until cancelled',
-                        badge: _annualBadge(),
-                        selected: _selected == _Tier.annual,
-                        available: true,
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          setState(() => _selected = _Tier.annual);
-                        },
-                      )),
-                      if (_showRescueCard) ...[
-                        const SizedBox(width: 8),
-                        Expanded(child: _PriceCard(
-                          title: 'RESCUE',
-                          price: _priceFor(_Tier.rescue),
-                          cadence: 'One-time · 20 renders',
-                          footnote: 'No subscription',
-                          selected: _selected == _Tier.rescue,
-                          available: true,
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            setState(() => _selected = _Tier.rescue);
-                          },
-                        )),
-                      ],
+                      ).animate().fadeIn(delay: 720.ms, duration: 400.ms),
                     ],
-                  ).animate().fadeIn(delay: 600.ms, duration: 400.ms),
+                  ],
 
                   const SizedBox(height: 14),
 
@@ -1046,6 +1035,113 @@ class _Point extends StatelessWidget {
     ).animate(delay: Duration(milliseconds: 320 + int.parse(n) * 80))
       .fadeIn(duration: 400.ms)
       .slideX(begin: -0.04, end: 0, curve: Curves.easeOut);
+  }
+}
+
+/// v238b — Full-width landscape price card used by BOTH the glowup
+/// paywall (single Weekly card) AND the default paywall (Weekly +
+/// Annual stacked). Bro: "two rectangle cards like the image, one
+/// weekly that's the top one, then under it yearly. Both cards
+/// identical sizes."
+///
+/// Layout (single row inside a fixed-height container):
+///   · title chip (+ optional badge) — left
+///   · cadence line under it          — left
+///   · price                          — right, aligned end
+///
+/// Fixed 76px tall so two stacked cards always read as identical
+/// rectangles regardless of cadence text length.
+class _PriceCardLandscape extends StatelessWidget {
+  final String title;
+  final String price;
+  final String cadence;
+  final String? badge;
+  final bool selected;
+  final VoidCallback onTap;
+  const _PriceCardLandscape({
+    required this.title,
+    required this.price,
+    required this.cadence,
+    required this.selected,
+    required this.onTap,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = selected ? AppColors.red : Colors.white24;
+    final priceColor  = selected ? AppColors.red : Colors.white;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: 180.ms,
+        // Fixed height so both stacked cards land as identical
+        // rectangles even when the cadence text wraps differently.
+        height: 76,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.redGlow : Colors.transparent,
+          border: Border.all(
+              color: borderColor, width: selected ? 1.6 : 0.8),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Text(title,
+                        style: AppTypography.label.copyWith(
+                          color: Colors.white,
+                          fontSize: 11, letterSpacing: 2.4,
+                          fontWeight: FontWeight.w900,
+                        )),
+                      if (badge != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.red,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(badge!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8.5, letterSpacing: 0.6,
+                              fontWeight: FontWeight.w900,
+                            )),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(cadence,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 10.5, fontWeight: FontWeight.w500,
+                      height: 1.2,
+                    ),
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(price,
+              style: AppTypography.display.copyWith(
+                color: priceColor,
+                fontSize: 24, height: 1, letterSpacing: -0.8,
+                fontWeight: FontWeight.w800,
+              )),
+          ],
+        ),
+      ),
+    );
   }
 }
 
