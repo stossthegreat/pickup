@@ -134,11 +134,13 @@ class ProgressShareCard extends StatelessWidget {
             ),
           ),
           Padding(
-            // v232 — bottom padding pulled from 96 → 56 so the footer
-            // wordmark + tagline ride up to give the LOOKS / GAME
-            // panels more vertical room. Top + sides stay where they
-            // were so the masthead still breathes.
-            padding: const EdgeInsets.fromLTRB(72, 120, 72, 56),
+            // v241 — masthead tightened, footer pulled up so the
+            // LOOKS / GAME numbers fill most of the card. Bro:
+            // "make the two numbers bigger, push them a few cm
+            // higher, add a clear tagline statement, push the bottom
+            // of the page a few cm higher. The biggest flex every
+            // man wants to share."
+            padding: const EdgeInsets.fromLTRB(56, 90, 56, 40),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -147,45 +149,36 @@ class ProgressShareCard extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: AppTypography.label.copyWith(
                     color: AppColors.textTertiary,
-                    fontSize: 26, letterSpacing: 7,
+                    fontSize: 24, letterSpacing: 6,
                     fontWeight: FontWeight.w900,
                   )),
-                const SizedBox(height: 22),
-                // ── Brand — two-tone ImHim.
-                _ImHimMark(fontSize: 130),
-                const SizedBox(height: 18),
-                Container(width: 120, height: 3, color: base.AppColors.red),
+                const SizedBox(height: 16),
+                // ── Brand — two-tone ImHim. Slightly smaller than
+                // before so the score block underneath gets the
+                // weight.
+                _ImHimMark(fontSize: 100),
+                const SizedBox(height: 12),
+                Container(width: 100, height: 3, color: base.AppColors.red),
+                const SizedBox(height: 14),
 
-                const SizedBox(height: 28),
-                // ── Day + streak chip — compact, in one strip.
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 32, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: base.AppColors.red.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(100),
-                    border: Border.all(
-                        color: base.AppColors.red.withValues(alpha: 0.55),
-                        width: 2),
-                  ),
-                  child: Text(
-                    streakDays > 0
-                        ? 'DAY $day  ·  STREAK $streakDays 🔥'
-                        : 'DAY $day  ·  RAW',
-                    style: AppTypography.label.copyWith(
-                      color: base.AppColors.red,
-                      fontSize: 28, letterSpacing: 4,
-                      fontWeight: FontWeight.w900,
-                    )),
-                ),
+                // ── TAGLINE — the brand promise, big, white, all caps
+                // so it lands on a Story even cropped tight. Bro: "add
+                // a clear statement, our tagline."
+                Text('LOOKS GET ATTENTION.\nGAME KEEPS IT.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textPrimary,
+                    fontSize: 30, letterSpacing: 2.4,
+                    height: 1.18,
+                    fontWeight: FontWeight.w900,
+                  )),
 
-                const Spacer(flex: 2),
+                const SizedBox(height: 24),
 
                 // ── HERO SCORE PANELS — Looks + Game side by side.
-                // This is the share angle. Two huge numbers, two
-                // unambiguous labels (LOOKS, GAME), one line of
-                // sub-label that names what GAME actually is so
-                // first-time viewers don't have to guess.
+                // This is THE share angle. Numbers grew from 230 →
+                // 320pt in _HeroScorePanel so the score reads from
+                // across a feed.
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -197,9 +190,7 @@ class ProgressShareCard extends StatelessWidget {
                       accent:   AppColors.accent,
                     )),
                     Container(
-                      // v232 — divider grown to match the taller
-                      // score panels (numbers up from 150 → 230pt).
-                      width: 1, height: 320,
+                      width: 1, height: 420,
                       margin: const EdgeInsets.symmetric(horizontal: 8),
                       color: AppColors.textTertiary.withValues(alpha: 0.35),
                     ),
@@ -213,17 +204,42 @@ class ProgressShareCard extends StatelessWidget {
                   ],
                 ),
 
-                const Spacer(flex: 1),
+                const SizedBox(height: 28),
+
+                // ── Day + streak pill — moved BELOW the scores so it
+                // doesn't compete with the hero numbers for top space.
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 28, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: base.AppColors.red.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(100),
+                    border: Border.all(
+                        color: base.AppColors.red.withValues(alpha: 0.55),
+                        width: 2),
+                  ),
+                  child: Text(
+                    streakDays > 0
+                        ? 'DAY $day  ·  STREAK $streakDays 🔥'
+                        : 'DAY $day  ·  RAW',
+                    style: AppTypography.label.copyWith(
+                      color: base.AppColors.red,
+                      fontSize: 22, letterSpacing: 3,
+                      fontWeight: FontWeight.w900,
+                    )),
+                ),
+
+                const Spacer(),
 
                 // ── Aura mini-row — only if active.
                 if (auraNow != null && auraNow! > 0) ...[
                   Text('AURA · ${auraNow!}',
                     style: AppTypography.label.copyWith(
                       color: AppColors.signalGreen,
-                      fontSize: 24, letterSpacing: 4,
+                      fontSize: 22, letterSpacing: 4,
                       fontWeight: FontWeight.w900,
                     )),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                 ],
 
                 // Activity strip — single line of proof.
@@ -231,22 +247,22 @@ class ProgressShareCard extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: AppTypography.label.copyWith(
                     color: AppColors.textSecondary,
-                    fontSize: 22, letterSpacing: 3,
+                    fontSize: 20, letterSpacing: 3,
                     fontWeight: FontWeight.w800,
                   )),
 
-                const Spacer(flex: 1),
-
                 if (verdict.isNotEmpty) ...[
+                  const SizedBox(height: 16),
                   Text('"$verdict"',
                     textAlign: TextAlign.center,
                     style: AppTypography.h1Italic.copyWith(
                       color: AppColors.textPrimary,
-                      fontSize: 38, height: 1.4,
+                      fontSize: 28, height: 1.4,
                       fontStyle: FontStyle.italic,
                     )),
-                  const Spacer(flex: 1),
                 ],
+
+                const SizedBox(height: 18),
 
                 // Footer wordmark + date.
                 Row(
@@ -332,20 +348,19 @@ class _HeroScorePanel extends StatelessWidget {
             fontWeight: FontWeight.w900,
           )),
         const SizedBox(height: 14),
-        // v232 — score number bumped from 150 → 230pt. Bro: "make
-        // the game and looks numbers a lot bigger." Italic Playfair
-        // display weight stays the same; just the absolute size
-        // grows so a Story / TikTok screenshot leads with the score
-        // even when cropped tight.
+        // v241 — score number bumped 230 → 320pt. Bro called the
+        // v232 size still too small ("make the two numbers bigger,
+        // biggest flex"). At 320pt the score is HALF the card width
+        // when paired — un-missable on a Story / TikTok crop.
         Text(hasValue ? '${value!}' : '—',
           textAlign: TextAlign.center,
           style: AppTypography.display.copyWith(
             color: hasValue ? AppColors.textPrimary
                             : AppColors.textTertiary,
-            fontSize: 230, height: 0.95,
+            fontSize: 320, height: 0.95,
             fontStyle: FontStyle.italic,
             fontWeight: FontWeight.w900,
-            letterSpacing: -6,
+            letterSpacing: -8,
           )),
         const SizedBox(height: 6),
         Text(hasValue ? '/ 100' : 'NOT YET',

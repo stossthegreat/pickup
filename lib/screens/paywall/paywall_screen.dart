@@ -468,25 +468,27 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     ],
                   ],
 
-                  const SizedBox(height: 14),
+                  // v241 — gap before CTA pushed 14 → 28 ("push the
+                  // paywall CTA down a couple cm") + CTA height grown
+                  // 56 → 64 and font 15 → 17 so it visually outweighs
+                  // the price cards above.
+                  const SizedBox(height: 28),
 
-                  // 4. CTA — sits high on the screen; disclosure sits
-                  //    immediately below, benefits under that.
                   SizedBox(
-                    width: double.infinity, height: 56,
+                    width: double.infinity, height: 64,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: canBuy ? AppColors.red : AppColors.surface3,
                         disabledBackgroundColor: AppColors.surface3,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(16)),
                         elevation: 0,
                       ),
                       onPressed: (canBuy && !_purchasing) ? _buy : null,
                       child: _purchasing
                           ? const SizedBox(
-                              width: 18, height: 18,
+                              width: 20, height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 valueColor: AlwaysStoppedAnimation(Colors.white)),
@@ -495,7 +497,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                               _ctaLabel(),
                               style: const TextStyle(
                                 fontWeight: FontWeight.w900,
-                                fontSize: 15, letterSpacing: 2.4,
+                                fontSize: 17, letterSpacing: 2.6,
                               ),
                             ),
                     ),
@@ -1075,15 +1077,16 @@ class _PriceCardLandscape extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: 180.ms,
-        // Fixed height so both stacked cards land as identical
-        // rectangles even when the cadence text wraps differently.
-        height: 76,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        // v241 — height grown 76 → 92 ("make the cards a little
+        // thicker"). Both stacked cards still match each other
+        // because the constant is fixed.
+        height: 92,
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
         decoration: BoxDecoration(
           color: selected ? AppColors.redGlow : Colors.transparent,
           border: Border.all(
-              color: borderColor, width: selected ? 1.6 : 0.8),
-          borderRadius: BorderRadius.circular(14),
+              color: borderColor, width: selected ? 1.8 : 0.8),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
           children: [
@@ -1098,34 +1101,43 @@ class _PriceCardLandscape extends StatelessWidget {
                       Text(title,
                         style: AppTypography.label.copyWith(
                           color: Colors.white,
-                          fontSize: 11, letterSpacing: 2.4,
+                          fontSize: 13, letterSpacing: 2.6,
                           fontWeight: FontWeight.w900,
                         )),
                       if (badge != null) ...[
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
+                        // v241 — SAVE % badge ~50% bigger so the
+                        // savings number is the first thing the eye
+                        // catches. Bro: "make the percent they're
+                        // saving clear."
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                              horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: AppColors.red,
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.red.withValues(alpha: 0.55),
+                                blurRadius: 12, spreadRadius: 0),
+                            ],
                           ),
                           child: Text(badge!,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 8.5, letterSpacing: 0.6,
+                              fontSize: 12, letterSpacing: 1.4,
                               fontWeight: FontWeight.w900,
                             )),
                         ),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(cadence,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      fontSize: 10.5, fontWeight: FontWeight.w500,
-                      height: 1.2,
+                      color: Colors.white.withValues(alpha: 0.65),
+                      fontSize: 11.5, fontWeight: FontWeight.w500,
+                      height: 1.25,
                     ),
                     maxLines: 2, overflow: TextOverflow.ellipsis),
                 ],
@@ -1133,9 +1145,12 @@ class _PriceCardLandscape extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Text(price,
+              // v241 — price font 24 → 30 to ride with the taller
+              // card. Still right-aligned, still hugs the price color
+              // (red when selected).
               style: AppTypography.display.copyWith(
                 color: priceColor,
-                fontSize: 24, height: 1, letterSpacing: -0.8,
+                fontSize: 30, height: 1, letterSpacing: -1.0,
                 fontWeight: FontWeight.w800,
               )),
           ],
