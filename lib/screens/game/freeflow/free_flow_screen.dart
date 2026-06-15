@@ -575,6 +575,32 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       //    user is holding the talk button (push-to-talk). The stream
       //    stays alive; gating on _holding means she never hears herself
       //    and only gets what he actually says.
+      //
+      // v252 — DRAIN THE PRIOR RECORDER BEFORE startStream. Bro's v248
+      // debug trace caught it red-handed: session 1 startStream
+      // returned in 1s, session 2 + 3 startStream NEVER returned and
+      // bailed at the 8s timeout. Root cause: every cleanup path
+      // (_resetToPicker, _restartTabSession, _freeSession upsell,
+      // dispose) calls `_recorder.stop()` fire-and-forget. iOS
+      // AVAudioRecorder is one instance per process, so the next
+      // session's startStream lands while the previous stop is still
+      // mid-flight at the native layer and blocks on the
+      // AVAudioSession sharedInstance lock. Issuing an awaited stop
+      // here is idempotent (no-op on a stopped recorder), forces
+      // pending stops to flush, and unblocks subsequent startStream
+      // calls. The 250ms tail gives iOS time to fully release the
+      // shared audio session before startStream grabs it again.
+      _log('info', 'MIC', 'draining prior recorder state…');
+      // ignore: avoid_print
+      print('[FREEFLOW] draining prior recorder state…');
+      try {
+        await _recorder.stop().timeout(const Duration(seconds: 2));
+      } catch (_) {/* either already stopped or stuck — either way push on */}
+      await Future.delayed(const Duration(milliseconds: 250));
+      _log('ok', 'MIC', 'drain complete · starting fresh stream');
+      // ignore: avoid_print
+      print('[FREEFLOW] drain complete · starting fresh stream');
+
       // Same timeout treatment — iOS occasionally hangs on audio-session
       // acquisition when a previous run didn't release cleanly.
       _log('info', 'MIC', 'calling _recorder.startStream…');
