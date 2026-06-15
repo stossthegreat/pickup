@@ -408,6 +408,10 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       // v247 — fire the FULL debug trail to console so any
       // stuck-step is impossible to misdiagnose. Search Console.app
       // for "[FREEFLOW]" in TestFlight to see the live trace.
+      // v247b — also _log() each step so the on-device DebugPanel
+      // surfaces the same trail without needing a Mac.
+      _log('info', 'GOLIVE', 'START vibe=${vibe.label} '
+          'micGranted=$_micPermissionGranted pcmReady=$_pcmEngineReady');
       // ignore: avoid_print
       print('[FREEFLOW] _goLive START vibe=${vibe.label} pro=$pro '
             'micPermGranted=$_micPermissionGranted '
@@ -424,12 +428,15 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       // wait. Permission state doesn't change mid-process so the
       // cached "true" is honest.
       if (!_micPermissionGranted) {
+        _log('info', 'MIC', 'checking permission (first session)…');
         // ignore: avoid_print
         print('[FREEFLOW] checking mic permission (first session)…');
         final hasMic = await _recorder.hasPermission().timeout(
           const Duration(seconds: 3),
           onTimeout: () => throw 'mic permission timeout',
         );
+        _log(hasMic ? 'ok' : 'error', 'MIC',
+            'permission returned: $hasMic');
         // ignore: avoid_print
         print('[FREEFLOW] mic permission returned: $hasMic');
         if (!hasMic) {
@@ -438,17 +445,20 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         }
         _micPermissionGranted = true;
       } else {
+        _log('info', 'MIC', 'skip (already granted this process)');
         // ignore: avoid_print
         print('[FREEFLOW] skipping mic permission check '
               '(already granted this process)');
       }
 
+      _log('info', 'AUDIO', 'configuring AudioSession…');
       // ignore: avoid_print
       print('[FREEFLOW] configuring AudioSession…');
       await AudioSession.configureForPlayAndRecord().timeout(
         const Duration(seconds: 4),
         onTimeout: () => throw 'audio session timeout',
       );
+      _log('ok', 'AUDIO', 'AudioSession configured');
       // ignore: avoid_print
       print('[FREEFLOW] AudioSession configured');
 
@@ -459,14 +469,17 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       //    setup() to run a single time, then just (re)bind this screen's
       //    feed callback each session.
       if (!_pcmEngineReady) {
+        _log('info', 'PCM', 'engine first-time setup…');
         // ignore: avoid_print
         print('[FREEFLOW] PCM engine first-time setup…');
         await FlutterPcmSound.setup(sampleRate: 24000, channelCount: 1);
         FlutterPcmSound.setFeedThreshold(6000);
         _pcmEngineReady = true;
+        _log('ok', 'PCM', 'engine setup done');
         // ignore: avoid_print
         print('[FREEFLOW] PCM engine setup done');
       } else {
+        _log('info', 'PCM', 'engine already ready — skipping setup');
         // ignore: avoid_print
         print('[FREEFLOW] PCM engine already ready — skipping setup');
       }
@@ -505,30 +518,38 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       // close cleanly while still bailing in time to keep the user-
       // perceived connect snappy. close() is idempotent if it's
       // already closed.
+      _log('info', 'WS', 'awaiting old _session.close()…');
       // ignore: avoid_print
       print('[FREEFLOW] awaiting old _session.close()…');
       try {
         await _session.close().timeout(const Duration(milliseconds: 600));
+        _log('ok', 'WS', 'old close returned cleanly');
         // ignore: avoid_print
         print('[FREEFLOW] old _session.close() returned cleanly');
       } catch (e) {
+        _log('warn', 'WS', 'old close timeout/threw: $e (moving on)');
         // ignore: avoid_print
         print('[FREEFLOW] old _session.close() timed out / threw: $e '
               '(moving on)');
       }
       _session = RealtimeSession();
+      _log('info', 'WS', 'new RealtimeSession created');
       // ignore: avoid_print
       print('[FREEFLOW] new RealtimeSession created');
       _creator = await CreatorModeStore.isActive();
+      _log('info', 'WS', 'creator mode: $_creator');
       // ignore: avoid_print
       print('[FREEFLOW] creator mode: $_creator');
       final memoryBlock = await UserMemory.buildSystemPromptBlock(
         filterTopic: 'rizz',
       );
+      _log('info', 'WS',
+          'memory block built (${memoryBlock.length} chars)');
       // ignore: avoid_print
       print('[FREEFLOW] memory block built '
             '(${memoryBlock.length} chars)');
       _eventSub = _session.events.listen(_onEvent);
+      _log('info', 'WS', 'event sub bound — calling connect…');
       // ignore: avoid_print
       print('[FREEFLOW] event subscription bound — calling _session.connect…');
       // v198 stuck-on-connecting fix: WebSocket connect was awaited
@@ -546,6 +567,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         'memoryBlock':     memoryBlock,
       }).timeout(const Duration(seconds: 12),
         onTimeout: () => throw 'WS connect timeout');
+      _log('ok', 'WS', 'connect returned — WS open');
       // ignore: avoid_print
       print('[FREEFLOW] _session.connect returned — WS open');
 
@@ -555,6 +577,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       //    and only gets what he actually says.
       // Same timeout treatment — iOS occasionally hangs on audio-session
       // acquisition when a previous run didn't release cleanly.
+      _log('info', 'MIC', 'calling _recorder.startStream…');
       // ignore: avoid_print
       print('[FREEFLOW] calling _recorder.startStream…');
       final micStream = await _recorder.startStream(const RecordConfig(
@@ -566,6 +589,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         noiseSuppress: true,
       )).timeout(const Duration(seconds: 8),
         onTimeout: () => throw 'mic acquire timeout');
+      _log('ok', 'MIC', 'startStream returned — mic acquired');
       // ignore: avoid_print
       print('[FREEFLOW] _recorder.startStream returned — mic acquired');
       _micSub = micStream.listen((bytes) {
@@ -581,10 +605,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       // the orb so sitting on the screen reading the scenario
       // doesn't burn their three minutes.
       setState(() => _phase = _Phase.live);
+      _log('ok', 'GOLIVE', 'SUCCESS — phase=live · vibe=${vibe.label}');
       // ignore: avoid_print
       print('[FREEFLOW] _goLive SUCCESS — phase = live · vibe=${vibe.label}');
       HapticFeedback.mediumImpact();
     } catch (e) {
+      _log('error', 'GOLIVE', 'THREW: $e');
       // ignore: avoid_print
       print('[FREEFLOW] _goLive THREW: $e');
       _fail(e.toString());
