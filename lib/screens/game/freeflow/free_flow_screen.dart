@@ -381,7 +381,15 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       _freeSession = !pro;
       _firstEverSession = !pro && !gameUsedAlready;
       _lucienUpsellShown = false;
-      _remaining = pro ? _sessionSeconds : _freeSessionSeconds;
+      // v244 — always show the full 3-minute session timer. The old
+      // pro ? _sessionSeconds : _freeSessionSeconds split made sense
+      // when free users got a 60-second grace window; v224 killed
+      // free roleplay entirely so this branch was lying to paid users
+      // whose subscription cache hadn't synced from RC yet. Bro:
+      // "the first session is still one minute, no needs to be 3."
+      // Free users still hit the paywall the moment they try to
+      // hold the orb — see _startHold().
+      _remaining = _sessionSeconds;
     });
     // ignore: discarded_futures
     AnalyticsService.freeflowSessionStarted(
@@ -946,7 +954,8 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     // "timer" — clock hit zero (free or pro ceiling)
     // "user"  — they tapped END & GET SCORED
     // (cap / error / bail report from their own callers)
-    final cap = _freeSession ? _freeSessionSeconds : _sessionSeconds;
+    // v244 — cap matches the timer: every session is 3 minutes.
+    final cap = _sessionSeconds;
     final reason = _remaining <= 0 ? 'timer' : 'user';
     // ignore: discarded_futures
     AnalyticsService.freeflowSessionEnded(
