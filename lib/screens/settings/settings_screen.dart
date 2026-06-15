@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:in_app_review/in_app_review.dart';
 
 import '../../config/dev_flags.dart';
 import '../../services/analytics_service.dart';
@@ -12,9 +13,7 @@ import '../../services/face_asset_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/purchase_service.dart';
 import '../../theme/app_colors.dart';
-import '../rizz/rizz_tab_screen.dart' show RizzCardAction;
 import '../../theme/app_typography.dart';
-import '../../widgets/common/imhim_wordmark.dart';
 
 /// Settings — every tile wired to a real action. Apple App Review
 /// requires working Terms, Privacy Policy, Restore Purchases, and a
@@ -37,6 +36,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // v240 — settings rebuilt to bro's spec: clean single-list of
+    // ONLY the settings that actually do something. Dead tiles
+    // ("Rescan history → COMING SOON", "Export report → COMING SOON",
+    // "Rizz from anywhere" duplicated by the Rizz tab, the marketing
+    // blurbs "How we handle photos" + "How ImHim works") are gone.
+    // "Rate us" sits at the top and deep-links to the App Store
+    // listing via in_app_review's openStoreListing (uses the App
+    // Store ID 6762532788 from
+    // apps.apple.com/gb/app/mirrorly-looksmax-and-rizz/id6762532788).
+    // Privacy + Terms drop to a single horizontal row at the bottom
+    // matching the screenshot bro sent.
     return Scaffold(
       backgroundColor: AppColors.base,
       body: SafeArea(
@@ -45,70 +55,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
+              // ── Header — "Settings" + close X ───────────────────────────
               const SizedBox(height: Sp.md),
               Row(
                 children: [
+                  Expanded(
+                    child: Text('Settings',
+                      style: AppTypography.h1.copyWith(
+                        color: AppColors.textPrimary,
+                        fontSize: 30, letterSpacing: -0.8,
+                        fontWeight: FontWeight.w800)),
+                  ),
                   IconButton(
                     onPressed: () => context.pop(),
-                    icon: const Icon(Icons.close, color: AppColors.textPrimary),
+                    icon: const Icon(Icons.close_rounded,
+                        color: AppColors.textPrimary),
                     splashRadius: 22,
                   ),
-                  const Spacer(),
-                  Text('SETTINGS', style: AppTypography.label.copyWith(
-                    color: AppColors.textTertiary, letterSpacing: 3, fontSize: 11)),
-                  const Spacer(),
-                  const SizedBox(width: 48),
                 ],
-              ),
+              ).animate().fadeIn(duration: 360.ms),
 
               const SizedBox(height: Sp.lg),
 
-              // App identity
-              Center(
-                child: Column(
-                  children: [
-                    Container(
-                      width: 64, height: 64,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.surface2,
-                        border: Border.all(
-                          color: AppColors.accent.withValues(alpha: 0.4),
-                          width: 1.5),
-                      ),
-                      child: Center(
-                        child: Text('IH',
-                          style: TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.w800,
-                            color: AppColors.accent, letterSpacing: -0.5)),
-                      ),
-                    ),
-                    const SizedBox(height: Sp.sm),
-                    const ImHimWordmark(fontSize: 30, letterSpacing: -0.8),
-                    const SizedBox(height: 4),
-                    Text('Version 1.0.0', style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textTertiary, fontSize: 11)),
-                  ],
-                ),
-              ).animate().fadeIn(duration: 400.ms),
+              // ── Rate us — top of the list, deep-links to App Store ─────
+              _SettingTile(
+                icon: Icons.star_rounded,
+                iconColor: AppColors.signalAmber,
+                title: 'Rate us',
+                subtitle: 'Tap to leave a review on the App Store',
+                onTap: () => _rateUs(context),
+              ),
 
-              const SizedBox(height: Sp.xl),
-
-              // ── SUBSCRIPTION ──────────────────────────────────────────────
-              // In dev-bypass mode the user is forced-subscribed, so the
-              // "Upgrade" tile is hidden to avoid a dead entry point.
-              // Restore + Manage stay visible because Apple requires both
-              // present in release builds regardless.
-              _SectionHeader('SUBSCRIPTION'),
+              // ── Subscription block ──────────────────────────────────────
               if (!kBypassPaywall)
                 _SettingTile(
                   icon: Icons.workspace_premium_rounded,
                   title: 'ImHim Pro',
-                  subtitle: '2 scans / week · 10 renders / month',
+                  subtitle: 'Weekly + annual plans — see what\'s included',
                   onTap: () {
                     HapticFeedback.selectionClick();
-                    context.push('/paywall');
+                    context.push('/paywall', extra: {'force': true});
                   },
                 ),
               _SettingTile(
@@ -118,155 +104,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => _restore(context),
               ),
               _SettingTile(
-                icon: Icons.settings_rounded,
+                icon: Icons.credit_card_rounded,
                 title: 'Manage subscription',
                 subtitle: Platform.isIOS
-                    ? 'Opens your App Store subscription settings'
-                    : 'Opens your Google Play subscription settings',
+                    ? 'Cancel or switch plan in App Store settings'
+                    : 'Cancel or switch plan in Play Store settings',
                 onTap: () => _manageSubscription(context),
               ),
 
-              const SizedBox(height: Sp.lg),
-
-              // ── USAGE ────────────────────────────────────────────────────
-              // Live readout of this month's Pro voice-time allowance
-              // (40 minutes of Free Flow / Council per calendar month,
-              // resets every Monday). Reads voiceMsThisWeek straight
-              // from prefs each build, so a long roleplay session is
-              // reflected the moment the user returns here.
-              _SectionHeader('USAGE'),
+              // ── Usage tile — voice minutes this week ────────────────────
               const _VoiceCapTile(),
 
-              const SizedBox(height: Sp.lg),
-
-              // ── SHARE ────────────────────────────────────────────────────
-              _SectionHeader('SHARE'),
-              _SettingTile(
-                icon: Icons.ios_share_rounded,
-                title: 'Rizz from anywhere',
-                subtitle: 'Screenshot any chat → Share → ImHim',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  // ignore: discarded_futures
-                  AnalyticsService.keyboardInstallTileTapped('settings');
-                  context.push('/rizz', extra: const RizzCardAction.upload());
-                },
-              ),
-
-              const SizedBox(height: Sp.lg),
-
-              // ── SCAN ──────────────────────────────────────────────────────
-              _SectionHeader('SCAN'),
-              _SettingTile(
-                icon: Icons.history,
-                title: 'Rescan history',
-                subtitle: 'Your structural progress over time',
-                trailing: _Badge(label: 'COMING SOON'),
-                onTap: () => _showSoon(context),
-              ),
-              _SettingTile(
-                icon: Icons.download_outlined,
-                title: 'Export report',
-                subtitle: 'Save your last scan as PDF',
-                trailing: _Badge(label: 'COMING SOON'),
-                onTap: () => _showSoon(context),
-              ),
-
-              const SizedBox(height: Sp.lg),
-
-              // ── LEGAL ─────────────────────────────────────────────────────
-              _SectionHeader('LEGAL'),
-              _SettingTile(
-                icon: Icons.gavel_outlined,
-                title: 'Terms of Use',
-                subtitle: 'How ImHim works, what you agree to',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  context.push('/terms');
-                },
-              ),
-              _SettingTile(
-                icon: Icons.policy_outlined,
-                title: 'Privacy Policy',
-                subtitle: 'What we collect and where it goes',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  context.push('/privacy');
-                },
-              ),
-
-              const SizedBox(height: Sp.lg),
-
-              // ── DATA ──────────────────────────────────────────────────────
-              _SectionHeader('YOUR DATA'),
-              _SettingTile(
-                icon: Icons.shield_outlined,
-                title: 'How we handle photos',
-                subtitle: 'Quick summary — full details in Privacy Policy',
-                onTap: () => _showPrivacySummary(context),
-              ),
-              _SettingTile(
-                icon: Icons.cloud_off_outlined,
-                title: 'Revoke AI permission',
-                subtitle: 'Stop sending photos to OpenAI / Replicate; '
-                          'asked again on the next scan',
-                onTap: () => _revokeAiConsent(context),
-              ),
+              // ── Glow-up style (gender pick) ────────────────────────────
               _SettingTile(
                 icon: Icons.style_outlined,
                 title: 'Glow-up style',
-                subtitle: 'Tune analysis + renders for men\'s grooming '
-                          'or women\'s beauty',
+                subtitle: 'Tune analysis + renders for your goal',
                 onTap: () {
                   HapticFeedback.selectionClick();
                   context.push('/onboarding/gender',
                       extra: const {'fromSettings': true});
                 },
               ),
+
+              // ── Privacy / AI consent ────────────────────────────────────
               _SettingTile(
-                icon: Icons.delete_outline,
-                title: 'Delete all data',
+                icon: Icons.cloud_off_outlined,
+                title: 'Revoke AI permission',
+                subtitle: 'Stop sending photos to AI providers',
+                onTap: () => _revokeAiConsent(context),
+              ),
+
+              // ── Contact ─────────────────────────────────────────────────
+              _SettingTile(
+                icon: Icons.mail_outline_rounded,
+                title: 'Contact support',
+                subtitle: 'info@m2mb.co.uk',
+                onTap: () => _copyEmail(context),
+              ),
+
+              // ── Delete all data — destructive, sits low ────────────────
+              _SettingTile(
+                icon: Icons.close_rounded,
+                iconColor: AppColors.signalRed,
+                title: 'Delete my account',
                 subtitle: 'Permanently removes scans from this device',
                 destructive: true,
                 onTap: () => _confirmDelete(context),
               ),
 
-              const SizedBox(height: Sp.lg),
+              const SizedBox(height: Sp.xl),
 
-              // ── CREATOR ───────────────────────────────────────────────────
-              // The single master switch for the Lucien-unchained pipeline
-              // grafted from Auralay. Password-gated, persisted via
-              // [CreatorModeStore]. Live state shown so the user always
-              // knows whether Free Flow / Arena / Council are running the
-              // store-safe persona or the savage roasting persona. Still
-              // policy-bounded server-side regardless.
-              _SectionHeader('CREATOR'),
-              const _CreatorTile(),
-
-              const SizedBox(height: Sp.lg),
-
-              // ── ABOUT ─────────────────────────────────────────────────────
-              _SectionHeader('ABOUT'),
-              _SettingTile(
-                icon: Icons.description_outlined,
-                title: 'How ImHim works',
-                subtitle: 'The science behind the scan',
-                onTap: () => _showHow(context),
+              // ── Footer: Privacy · Terms horizontal row ─────────────────
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      context.push('/privacy');
+                    },
+                    child: Text('Privacy',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textTertiary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 36),
+                  TextButton(
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      context.push('/terms');
+                    },
+                    child: Text('Terms',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textTertiary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600)),
+                  ),
+                ],
               ),
-              _SettingTile(
-                icon: Icons.mail_outline,
-                title: 'Contact',
-                subtitle: 'info@m2mb.co.uk',
-                onTap: () => _copyEmail(context),
-              ),
 
-              const SizedBox(height: Sp.xxl),
-
+              const SizedBox(height: Sp.md),
               Center(
                 child: Text(
                   '© 2026 ImHim',
                   style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textTertiary, fontSize: 11),
+                    color: AppColors.textTertiary.withValues(alpha: 0.6),
+                    fontSize: 11),
                 ),
               ),
               const SizedBox(height: Sp.xl),
@@ -275,6 +200,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  /// v240 — opens the live App Store listing using the App Store ID
+  /// from the URL bro provided
+  /// (apps.apple.com/gb/app/mirrorly-looksmax-and-rizz/id6762532788).
+  /// On Android it falls back to the in-app review request which
+  /// resolves the bundle id automatically. Either way the user lands
+  /// where they can leave a star rating.
+  Future<void> _rateUs(BuildContext ctx) async {
+    HapticFeedback.selectionClick();
+    // ignore: discarded_futures
+    AnalyticsService.reviewNativeOpened();
+    try {
+      final reviewer = InAppReview.instance;
+      if (Platform.isIOS) {
+        await reviewer.openStoreListing(appStoreId: '6762532788');
+      } else {
+        if (await reviewer.isAvailable()) {
+          await reviewer.requestReview();
+        } else {
+          await reviewer.openStoreListing();
+        }
+      }
+    } catch (_) {
+      if (!ctx.mounted) return;
+      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+        content: const Text("Couldn't open the App Store — try again."),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.surface2,
+      ));
+    }
   }
 
   // ───────────────────────────────────────────────────────────────────────
@@ -602,6 +558,10 @@ class _SectionHeader extends StatelessWidget {
 
 class _SettingTile extends StatelessWidget {
   final IconData icon;
+  /// v240 — optional override for the leading icon's colour. Lets the
+  /// "Rate us" star render amber, "Delete my account" render red, etc.
+  /// Defaults to the same muted textSecondary the rest of the tiles use.
+  final Color? iconColor;
   final String title;
   final String? subtitle;
   final Widget? trailing;
@@ -612,6 +572,7 @@ class _SettingTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.onTap,
+    this.iconColor,
     this.subtitle,
     this.trailing,
     this.destructive = false,
@@ -620,6 +581,8 @@ class _SettingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = destructive ? AppColors.signalRed : AppColors.textPrimary;
+    final resolvedIconColor = iconColor ??
+        (destructive ? AppColors.signalRed : AppColors.textSecondary);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -635,9 +598,7 @@ class _SettingTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon, size: 20, color: destructive
-                  ? AppColors.signalRed
-                  : AppColors.textSecondary),
+              Icon(icon, size: 20, color: resolvedIconColor),
               const SizedBox(width: Sp.md),
               Expanded(
                 child: Column(
