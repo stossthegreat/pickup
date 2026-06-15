@@ -38,35 +38,38 @@ class PurchaseConfig {
 
   /// Product identifiers — MUST match exactly what's in App Store
   /// Connect and Google Play Console.
-  ///   mirrorly_pro_monthly   →  Monthly subscription
-  ///   mirrorly_pro_yearly    →  Annual subscription (Play Console
-  ///                             registered the yearly base plan as
-  ///                             `mirrorly_pro_yearly`, not `_annual`)
+  ///
+  /// v238 — Weekly UNPARKED. Monthly kept in the productIds tuple as a
+  /// commented stub (in case bro reverses) but dropped from the
+  /// loadOfferings matcher so the live paywall only surfaces weekly +
+  /// annual.
+  ///
+  ///   mirrorly_pro_weekly    →  Weekly subscription ($6.99/wk)
+  ///   mirrorly_pro_yearly    →  Annual subscription ($109.99/yr,
+  ///                             Play Console registered the yearly
+  ///                             base plan as `mirrorly_pro_yearly`,
+  ///                             not `_annual`)
   ///   mirrorly_pro_rescue    →  Rescue one-time IAP (Android only;
   ///                             iOS rescue product is not yet
   ///                             approved on App Store Connect)
   ///
-  /// PARKED — Weekly tier was wired in v224 but commented out in v227
-  /// while we figure out the right paywall structure. The product id
-  /// + RC slot are kept here as commented stubs so re-enabling is a
-  /// one-line uncomment + the corresponding paywall UI restore.
-  ///     weekly:  'mirrorly_pro_weekly',
+  /// PARKED in v238: monthly: 'mirrorly_pro_monthly'
   static const productIds = (
-    monthly: 'mirrorly_pro_monthly',
+    weekly:  'mirrorly_pro_weekly',
     yearly:  'mirrorly_pro_yearly',
     rescue:  'mirrorly_pro_rescue',
   );
 
   /// RevenueCat package identifiers inside the current Offering.
-  /// RevenueCat has built-in slot names ($rc_monthly, $rc_annual)
+  /// RevenueCat has built-in slot names ($rc_weekly, $rc_annual)
   /// for the two subscriptions — those are what we attach products
   /// to in the dashboard. The rescue one-time IAP is a custom
   /// package slot named `rescue` (see RC dashboard: the Play Store
   /// row shows `mirrorly_pro_rescue:rescue`).
   ///
-  /// PARKED weekly slot: weeklyPackage: '\$rc_weekly'
+  /// PARKED in v238: monthlyPackage: '\$rc_monthly'
   static const offering = (
-    monthlyPackage: '\$rc_monthly',
+    weeklyPackage:  '\$rc_weekly',
     annualPackage:  '\$rc_annual',
     rescuePackage:  'rescue',
   );

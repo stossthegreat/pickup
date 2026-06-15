@@ -517,8 +517,8 @@ class _ReportScreenState extends State<ReportScreen> {
       context.push('/paywall', extra: {'source': 'render_locked'});
       return;
     }
-    final used = await LocalStoreService.mirrorRendersThisMonth();
-    if (used >= LocalStoreService.kRendersPerMonth) {
+    final used = await LocalStoreService.mirrorRendersThisWeek();
+    if (used >= LocalStoreService.kRendersPerWeek) {
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       context.push('/paywall', extra: {'source': 'render_quota_capped'});

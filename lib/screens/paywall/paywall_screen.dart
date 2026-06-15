@@ -47,16 +47,24 @@ class PaywallScreen extends StatefulWidget {
   State<PaywallScreen> createState() => _PaywallScreenState();
 }
 
-enum _Tier { monthly, annual, rescue }
+// v238 — _Tier.monthly dropped, _Tier.weekly added. Bro: "we strip
+// monthly, go weekly + annual only." Rescue stays on Android.
+enum _Tier { weekly, annual, rescue }
 
 class _PaywallScreenState extends State<PaywallScreen> {
-  _Tier _selected = _Tier.annual;
+  // v238b — _selected is initialised in initState now because the
+  // glowup variant only ever shows the Weekly card, so its default
+  // must be _Tier.weekly. The default variant continues to preselect
+  // Annual (the conversion play).
+  late _Tier _selected;
   PurchaseOfferings _offerings = PurchaseOfferings.empty();
   bool _purchasing = false;
 
   @override
   void initState() {
     super.initState();
+    final src = (widget.context?['source'] as String?)?.toLowerCase() ?? '';
+    _selected = src.startsWith('glowup') ? _Tier.weekly : _Tier.annual;
     // Dev-flag bypass: auto-redirect back UNLESS the caller passed
     // `force: true` in the extras. That flag is how the home-header
     // upgrade chip opens the paywall for manual preview/testing — every
@@ -138,30 +146,31 @@ class _PaywallScreenState extends State<PaywallScreen> {
     return '$symbol${amount.toStringAsFixed(2)}';
   }
 
-  /// v236 — dynamic annual-vs-monthly savings %, derived from the
-  /// LIVE store prices. Replaces the static "BEST VALUE" badge so the
-  /// label reflects whatever the user actually pays in their currency.
+  /// v238 — dynamic annual-vs-weekly savings %, derived from the LIVE
+  /// store prices. Replaces v236's monthly-vs-annual math now that
+  /// monthly is dropped. Reads whatever currency the store returns
+  /// (£, $, €, ¥…) so the badge is always honest in the user's locale.
   ///
-  /// Example: monthly $14.99 × 12 = $179.88, annual $109.99 →
-  /// ($179.88 − $109.99) / $179.88 = 38.85% → "SAVE 39%".
+  /// Example: weekly $6.99 × 52 = $363.48, annual $109.99 →
+  /// ($363.48 − $109.99) / $363.48 = 69.7% → "SAVE 70%".
   ///
   /// Falls back to the static "BEST VALUE" when either price hasn't
   /// loaded yet (RC offering empty / dev bypass) so the badge never
   /// shows a misleading 0% or a dash.
   String _annualBadge() {
-    final monthly = _offerings.monthly?.storeProduct.price;
-    final annual  = _offerings.annual?.storeProduct.price;
-    if (monthly == null || annual == null) return 'BEST VALUE';
-    if (monthly <= 0 || annual <= 0)        return 'BEST VALUE';
-    final monthlyTotal = monthly * 12;
-    if (annual >= monthlyTotal)             return 'BEST VALUE';
-    final pct = ((monthlyTotal - annual) / monthlyTotal * 100).round();
-    if (pct < 5)                            return 'BEST VALUE';
+    final weekly = _offerings.weekly?.storeProduct.price;
+    final annual = _offerings.annual?.storeProduct.price;
+    if (weekly == null || annual == null) return 'BEST VALUE';
+    if (weekly <= 0 || annual <= 0)        return 'BEST VALUE';
+    final weeklyTotal = weekly * 52;
+    if (annual >= weeklyTotal)             return 'BEST VALUE';
+    final pct = ((weeklyTotal - annual) / weeklyTotal * 100).round();
+    if (pct < 5)                           return 'BEST VALUE';
     return 'SAVE $pct%';
   }
 
   Package? _packageFor(_Tier t) => switch (t) {
-    _Tier.monthly => _offerings.monthly,
+    _Tier.weekly  => _offerings.weekly,
     _Tier.annual  => _offerings.annual,
     _Tier.rescue  => _offerings.rescue,
   };
@@ -400,81 +409,64 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
                   const SizedBox(height: 30),
 
-                  // 3. Price cards — real localized prices. Three on
-                  //    Android (Monthly / Annual / Rescue one-time),
-                  //    two on iOS where the rescue product isn't yet
-                  //    approved in App Store Connect.
-                  //
-                  //    Google Play Subscriptions Policy compliance:
-                  //    each card MUST clearly state how often the
-                  //    user will be charged (monthly vs yearly) and
-                  //    whether the subscription auto-renews. The
-                  //    annual card therefore shows "billed yearly"
-                  //    as primary cadence, with the monthly-equiv
-                  //    only as a small parenthetical — never the
-                  //    headline number.
-                  // 3. Price cards — real localized prices. Three on
-                  //    Android (Monthly / Annual / Rescue one-time),
-                  //    two on iOS where the rescue product isn't yet
-                  //    approved in App Store Connect.
-                  //
-                  //    Google Play Subscriptions Policy compliance:
-                  //    each card MUST clearly state how often the
-                  //    user will be charged (monthly vs yearly) and
-                  //    whether the subscription auto-renews. The
-                  //    annual card therefore shows "billed yearly"
-                  //    as primary cadence, with the monthly-equiv
-                  //    only as a small parenthetical — never the
-                  //    headline number.
-                  //
-                  // v227 — Weekly card was wired in v224 but parked
-                  // here pending final paywall structure decision.
-                  // Restoring 2-card iOS / 3-card Android layout.
-                  Row(
-                    children: [
-                      Expanded(child: _PriceCard(
-                        title: 'MONTHLY',
-                        price: _priceFor(_Tier.monthly),
-                        cadence: 'Billed monthly',
-                        footnote: 'Auto-renews until cancelled',
-                        selected: _selected == _Tier.monthly,
-                        available: true,
+                  // 3. Price cards — v238b layout:
+                  //   · GLOWUP variant (post-scan onboarding paywall):
+                  //     ONE big horizontal Weekly card, full width.
+                  //     No Annual, no Rescue. Bro: "make it horizontal,
+                  //     take the middle line out, turn it into one
+                  //     weekly card."
+                  //   · DEFAULT variant: TWO stacked horizontal
+                  //     rectangle cards — Weekly on top, Annual
+                  //     underneath, IDENTICAL sizes. Rescue (Android
+                  //     only) drops as a third row below.
+                  if (_isGlowupVariant)
+                    _PriceCardLandscape(
+                      title: 'WEEKLY',
+                      price: _priceFor(_Tier.weekly),
+                      cadence: 'Billed weekly · Auto-renews until cancelled',
+                      selected: true,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _selected = _Tier.weekly);
+                      },
+                    ).animate().fadeIn(delay: 600.ms, duration: 400.ms)
+                  else ...[
+                    _PriceCardLandscape(
+                      title: 'WEEKLY',
+                      price: _priceFor(_Tier.weekly),
+                      cadence: 'Billed weekly · Auto-renews until cancelled',
+                      selected: _selected == _Tier.weekly,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _selected = _Tier.weekly);
+                      },
+                    ).animate().fadeIn(delay: 600.ms, duration: 400.ms),
+                    const SizedBox(height: 8),
+                    _PriceCardLandscape(
+                      title: 'ANNUAL',
+                      price: _priceFor(_Tier.annual),
+                      cadence: 'Billed yearly (${_perMonthForAnnual()}/mo equivalent) · Auto-renews until cancelled',
+                      badge: _annualBadge(),
+                      selected: _selected == _Tier.annual,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _selected = _Tier.annual);
+                      },
+                    ).animate().fadeIn(delay: 660.ms, duration: 400.ms),
+                    if (_showRescueCard) ...[
+                      const SizedBox(height: 8),
+                      _PriceCardLandscape(
+                        title: 'RESCUE',
+                        price: _priceFor(_Tier.rescue),
+                        cadence: 'One-time · 20 renders · No subscription',
+                        selected: _selected == _Tier.rescue,
                         onTap: () {
                           HapticFeedback.selectionClick();
-                          setState(() => _selected = _Tier.monthly);
+                          setState(() => _selected = _Tier.rescue);
                         },
-                      )),
-                      const SizedBox(width: 8),
-                      Expanded(child: _PriceCard(
-                        title: 'ANNUAL',
-                        price: _priceFor(_Tier.annual),
-                        cadence: 'Billed yearly (${_perMonthForAnnual()}/mo)',
-                        footnote: 'Auto-renews until cancelled',
-                        badge: _annualBadge(),
-                        selected: _selected == _Tier.annual,
-                        available: true,
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          setState(() => _selected = _Tier.annual);
-                        },
-                      )),
-                      if (_showRescueCard) ...[
-                        const SizedBox(width: 8),
-                        Expanded(child: _PriceCard(
-                          title: 'RESCUE',
-                          price: _priceFor(_Tier.rescue),
-                          cadence: 'One-time · 20 renders',
-                          footnote: 'No subscription',
-                          selected: _selected == _Tier.rescue,
-                          available: true,
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            setState(() => _selected = _Tier.rescue);
-                          },
-                        )),
-                      ],
+                      ).animate().fadeIn(delay: 720.ms, duration: 400.ms),
                     ],
-                  ).animate().fadeIn(delay: 600.ms, duration: 400.ms),
+                  ],
 
                   const SizedBox(height: 14),
 
@@ -652,8 +644,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
     final price = _priceFor(_selected);
     String text;
     switch (_selected) {
-      case _Tier.monthly:
-        text = '$price billed monthly. Auto-renews until cancelled. '
+      case _Tier.weekly:
+        text = '$price billed weekly. Auto-renews until cancelled. '
                'ImHim Pro subscription required for scans, AI '
                'renders, streaks, AI roleplay, and all rizz features.';
         break;
@@ -695,11 +687,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
     String text;
     switch (_selected) {
-      case _Tier.monthly:
-        text = 'ImHim Pro — monthly subscription. Your payment of '
+      case _Tier.weekly:
+        text = 'ImHim Pro — weekly subscription. Your payment of '
                '$price will be charged to your $storeAccount at '
                'confirmation of purchase. The subscription '
-               'automatically renews each month for $price unless you '
+               'automatically renews each week for $price unless you '
                'cancel at least 24 hours before the end of the current '
                'period. Your account will be charged for renewal '
                'within 24 hours of the period ending. You can manage '
@@ -751,19 +743,18 @@ class _PaywallScreenState extends State<PaywallScreen> {
         ? 'Cancel anytime in App Store settings'
         : 'Cancel anytime in Google Play settings';
     switch (t) {
-      case _Tier.monthly:
+      case _Tier.weekly:
       case _Tier.annual:
-        // Bro v5: monthly/annual share the same monthly entitlement
-        // ceiling. 40 min of voice every month regardless of tier.
-        // Rizz Chat unlimited. Rizz screenshots vision-powered.
+        // v238 — Weekly and Annual share the same weekly entitlement
+        // matrix. Annual is just paying for a year of weekly access
+        // up-front at a discount; the per-week caps are identical.
         return [
           '2 scans per week',
-          '10 AI-rendered images per month',
-          '40 minutes of Live AI roleplay every month',
-          'Unlimited Rizz Chat — ask anything, every day',
-          'Unlimited rizz screenshot replies',
+          '3 AI-rendered images per week',
+          '18 minutes of live AI roleplay per week',
+          '15 screenshot rizz analyses per week',
+          'Unlimited AI chat rizz — ask anything, every day',
           'Streaks + 60-day protocols — Skin, Jaw, Debloat, Hair',
-          'The Mirror — unlimited chat advice',
           'Two-score rating — geometry + honest-looks (Vision)',
           cancelLine,
         ];
@@ -1044,6 +1035,113 @@ class _Point extends StatelessWidget {
     ).animate(delay: Duration(milliseconds: 320 + int.parse(n) * 80))
       .fadeIn(duration: 400.ms)
       .slideX(begin: -0.04, end: 0, curve: Curves.easeOut);
+  }
+}
+
+/// v238b — Full-width landscape price card used by BOTH the glowup
+/// paywall (single Weekly card) AND the default paywall (Weekly +
+/// Annual stacked). Bro: "two rectangle cards like the image, one
+/// weekly that's the top one, then under it yearly. Both cards
+/// identical sizes."
+///
+/// Layout (single row inside a fixed-height container):
+///   · title chip (+ optional badge) — left
+///   · cadence line under it          — left
+///   · price                          — right, aligned end
+///
+/// Fixed 76px tall so two stacked cards always read as identical
+/// rectangles regardless of cadence text length.
+class _PriceCardLandscape extends StatelessWidget {
+  final String title;
+  final String price;
+  final String cadence;
+  final String? badge;
+  final bool selected;
+  final VoidCallback onTap;
+  const _PriceCardLandscape({
+    required this.title,
+    required this.price,
+    required this.cadence,
+    required this.selected,
+    required this.onTap,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = selected ? AppColors.red : Colors.white24;
+    final priceColor  = selected ? AppColors.red : Colors.white;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: 180.ms,
+        // Fixed height so both stacked cards land as identical
+        // rectangles even when the cadence text wraps differently.
+        height: 76,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.redGlow : Colors.transparent,
+          border: Border.all(
+              color: borderColor, width: selected ? 1.6 : 0.8),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Text(title,
+                        style: AppTypography.label.copyWith(
+                          color: Colors.white,
+                          fontSize: 11, letterSpacing: 2.4,
+                          fontWeight: FontWeight.w900,
+                        )),
+                      if (badge != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.red,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(badge!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8.5, letterSpacing: 0.6,
+                              fontWeight: FontWeight.w900,
+                            )),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(cadence,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 10.5, fontWeight: FontWeight.w500,
+                      height: 1.2,
+                    ),
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(price,
+              style: AppTypography.display.copyWith(
+                color: priceColor,
+                fontSize: 24, height: 1, letterSpacing: -0.8,
+                fontWeight: FontWeight.w800,
+              )),
+          ],
+        ),
+      ),
+    );
   }
 }
 

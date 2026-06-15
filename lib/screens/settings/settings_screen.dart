@@ -131,7 +131,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // ── USAGE ────────────────────────────────────────────────────
               // Live readout of this month's Pro voice-time allowance
               // (40 minutes of Free Flow / Council per calendar month,
-              // resets on the 1st). Reads voiceMsThisMonth straight
+              // resets every Monday). Reads voiceMsThisWeek straight
               // from prefs each build, so a long roleplay session is
               // reflected the moment the user returns here.
               _SectionHeader('USAGE'),
@@ -486,7 +486,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 // ── Components ────────────────────────────────────────────────────────────────
 
-/// USAGE → Voice cap tile. Reads voiceMsThisMonth on build, renders the
+/// USAGE → Voice cap tile. Reads voiceMsThisWeek on build, renders the
 /// remaining minutes against the 40-min monthly Pro ceiling. Tile is
 /// always visible — for free users it surfaces the unused 40-minute
 /// budget Pro unlocks (and routes to /paywall on tap so it doubles as
@@ -511,7 +511,7 @@ class _VoiceCapTileState extends State<_VoiceCapTile> {
   }
 
   Future<void> _load() async {
-    final ms  = await LocalStoreService.voiceMsThisMonth();
+    final ms  = await LocalStoreService.voiceMsThisWeek();
     final pro = await LocalStoreService.isSubscribed();
     if (!mounted) return;
     setState(() {
@@ -522,7 +522,7 @@ class _VoiceCapTileState extends State<_VoiceCapTile> {
     // ignore: discarded_futures
     AnalyticsService.settingsVoiceCapViewed(
       usedMs: ms,
-      capMs:  LocalStoreService.kVoiceMinutesPerMonth * 60 * 1000,
+      capMs:  LocalStoreService.kVoiceMinutesPerWeek * 60 * 1000,
     );
   }
 
@@ -535,7 +535,7 @@ class _VoiceCapTileState extends State<_VoiceCapTile> {
 
   @override
   Widget build(BuildContext context) {
-    final capMs = LocalStoreService.kVoiceMinutesPerMonth * 60 * 1000;
+    final capMs = LocalStoreService.kVoiceMinutesPerWeek * 60 * 1000;
     final remainingMs = (capMs - _usedMs).clamp(0, capMs);
     final pct = _loaded ? (_usedMs / capMs).clamp(0.0, 1.0) : 0.0;
     final overCap = _usedMs >= capMs;
@@ -543,16 +543,16 @@ class _VoiceCapTileState extends State<_VoiceCapTile> {
 
     return _SettingTile(
       icon: Icons.mic_rounded,
-      title: 'Roleplay voice — monthly',
+      title: 'Roleplay voice — this week',
       subtitle: !_loaded
           ? 'Loading…'
           : _pro
               ? (overCap
-                  ? 'Capped — resets on the 1st'
+                  ? 'Capped — resets Monday'
                   : '${_fmt(remainingMs)} left of '
-                    '${LocalStoreService.kVoiceMinutesPerMonth}:00')
-              : 'Pro unlocks ${LocalStoreService.kVoiceMinutesPerMonth}'
-                ' minutes a month',
+                    '${LocalStoreService.kVoiceMinutesPerWeek}:00')
+              : 'Pro unlocks ${LocalStoreService.kVoiceMinutesPerWeek}'
+                ' minutes a week',
       trailing: SizedBox(
         width: 70,
         child: Column(
@@ -560,8 +560,8 @@ class _VoiceCapTileState extends State<_VoiceCapTile> {
           children: [
             Text(_pro
                     ? '${_fmt(_usedMs)} / '
-                      '${LocalStoreService.kVoiceMinutesPerMonth}:00'
-                    : '0 / ${LocalStoreService.kVoiceMinutesPerMonth}:00',
+                      '${LocalStoreService.kVoiceMinutesPerWeek}:00'
+                    : '0 / ${LocalStoreService.kVoiceMinutesPerWeek}:00',
                 style: AppTypography.label.copyWith(
                   color: color,
                   fontSize: 11, letterSpacing: 0.6,

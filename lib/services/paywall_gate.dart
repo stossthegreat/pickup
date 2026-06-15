@@ -67,14 +67,19 @@ class PaywallGate {
   /// Pro users: 10 renders per calendar month.
   static Future<bool> renderCapReached() async {
     if (!(await isPro())) return true; // free → no renders, ever.
-    final used = await LocalStoreService.mirrorRendersThisMonth();
-    return used >= LocalStoreService.kRendersPerMonth;
+    final used = await LocalStoreService.mirrorRendersThisWeek();
+    return used >= LocalStoreService.kRendersPerWeek;
   }
 
-  // ── Rizz screenshot gate (1 free use ever) ─────────────────────────────
+  // ── Rizz screenshot gate ────────────────────────────────────────────────
+  /// v238 — Pro users get 15 screenshot rizz analyses per week
+  /// (resets Monday). Free users keep the legacy "1 free ever" rule
+  /// so the first-time conversion funnel still works.
   static Future<bool> rizzScreenshotCapReached() async {
-    if (await isPro()) return false;
-    return LocalStoreService.rizzScreenshotFreeUsed();
+    if (!(await isPro())) {
+      return LocalStoreService.rizzScreenshotFreeUsed();
+    }
+    return LocalStoreService.screenshotRizzCapReached();
   }
 
   // ── Rizz LINES + CHAT (paywalled outright for free users) ─────────────

@@ -156,19 +156,16 @@ class PurchaseService {
         return PurchaseOfferings.empty();
       }
 
-      Package? monthly;
+      Package? weekly;
       Package? annual;
       Package? rescue;
 
-      // Match by package identifier first (canonical RC slots
-      // $rc_monthly / $rc_annual + the custom `rescue` slot for the
-      // one-time IAP). If the dashboard used different package IDs
-      // (e.g. someone picked "Custom" type and typed `monthly` instead
-      // of `$rc_monthly`), fall back to matching by the underlying
-      // store-product id. Either way the app finds them.
-      //
-      // v227 — Weekly slot matcher parked alongside the productIds
-      // stub in purchase_config.dart. Re-enable both together.
+      // v238 — Monthly dropped from the matcher. Weekly is the new
+      // entry tier ($6.99/wk), Annual ($109.99/yr) is the lock-in.
+      // Match by canonical RC slot first ($rc_weekly / $rc_annual +
+      // the custom `rescue` slot), with fallback to bare strings and
+      // underlying store-product ids so a misnamed dashboard package
+      // still gets picked up.
       for (final pkg in current.availablePackages) {
         final pkgId = pkg.identifier.toLowerCase();
         final prodId = pkg.storeProduct.identifier.toLowerCase();
@@ -178,12 +175,12 @@ class PurchaseService {
             || pkgId.contains('rescue')
             || prodId.contains('rescue');
 
-        final isMonthly = !isRescue && (
-               pkgId == r'$rc_monthly'
-            || pkgId == 'monthly'
-            || prodId.contains('monthly'));
+        final isWeekly = !isRescue && (
+               pkgId == r'$rc_weekly'
+            || pkgId == 'weekly'
+            || prodId.contains('weekly'));
 
-        final isAnnual = !isRescue && (
+        final isAnnual = !isRescue && !isWeekly && (
                pkgId == r'$rc_annual'
             || pkgId == 'annual' || pkgId == 'yearly'
             || prodId.contains('annual')
@@ -191,17 +188,17 @@ class PurchaseService {
 
         if (isRescue && rescue == null) {
           rescue = pkg;
-        } else if (isMonthly && monthly == null) {
-          monthly = pkg;
+        } else if (isWeekly && weekly == null) {
+          weekly = pkg;
         } else if (isAnnual && annual == null) {
           annual = pkg;
         }
       }
 
       _cached = PurchaseOfferings(
-        monthly: monthly,
-        annual:  annual,
-        rescue:  rescue,
+        weekly: weekly,
+        annual: annual,
+        rescue: rescue,
       );
       return _cached!;
     } catch (err) {
@@ -380,21 +377,24 @@ class PurchaseService {
 enum PurchaseOutcome { success, cancelled, error, noPriorPurchases, notConfigured }
 
 /// Snapshot of the three products the paywall needs:
-///   monthly / annual subscriptions + the rescue one-time IAP.
+///   weekly / annual subscriptions + the rescue one-time IAP.
 /// Nulls = package isn't in the current offering yet; the paywall
 /// shows a dash for that slot until RC delivers it.
+///
+/// v238 — Monthly field replaced with Weekly per bro's call to drop
+/// the monthly tier across the niche.
 class PurchaseOfferings {
-  final Package? monthly;
+  final Package? weekly;
   final Package? annual;
   final Package? rescue;
 
   const PurchaseOfferings({
-    required this.monthly,
+    required this.weekly,
     required this.annual,
     required this.rescue,
   });
 
   factory PurchaseOfferings.empty() => const PurchaseOfferings(
-    monthly: null, annual: null, rescue: null,
+    weekly: null, annual: null, rescue: null,
   );
 }
