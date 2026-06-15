@@ -184,6 +184,17 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   // matches what Auralay does. Permission state doesn't change
   // mid-process so the cached "true" stays accurate.
   static bool _micPermissionGranted = false;
+  // v253 — process-wide: did THIS process ever start the recorder?
+  // Gates the v252 pre-startStream drain step. The drain is mandatory
+  // on session 2+ (the fire-and-forget _recorder.stop() from the
+  // prior session is mid-flight and blocks the new startStream), but
+  // calling _recorder.stop() on a never-started recorder is NOT a
+  // no-op on iOS — it deactivates the AVAudioSession we JUST
+  // configured for play+record, and the subsequent startStream
+  // sees an inactive session and hangs. v252's debug trace caught
+  // it: session 1 startStream stopped working entirely. Now we only
+  // drain when this flag is true.
+  static bool _recorderEverStarted = false;
   bool    _pcmStarted = false;
   int     _lastFeedMs = 0;        // when the PCM engine last asked for data
   bool    _holding = false;      // push-to-talk: mic only forwards while held
@@ -576,30 +587,41 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       //    stays alive; gating on _holding means she never hears herself
       //    and only gets what he actually says.
       //
-      // v252 — DRAIN THE PRIOR RECORDER BEFORE startStream. Bro's v248
-      // debug trace caught it red-handed: session 1 startStream
-      // returned in 1s, session 2 + 3 startStream NEVER returned and
-      // bailed at the 8s timeout. Root cause: every cleanup path
+      // v253 — DRAIN THE PRIOR RECORDER BEFORE startStream, but ONLY
+      // on session 2+. v252 ran the drain unconditionally and broke
+      // session 1 because _recorder.stop() on a never-started
+      // recorder is NOT a no-op on iOS — it tears down the
+      // AVAudioSession we just configured for play+record (took 2s
+      // in bro's trace) and the subsequent startStream sees a dead
+      // session and hangs.
+      //
+      // The drain IS still needed on session 2+: every cleanup path
       // (_resetToPicker, _restartTabSession, _freeSession upsell,
-      // dispose) calls `_recorder.stop()` fire-and-forget. iOS
-      // AVAudioRecorder is one instance per process, so the next
-      // session's startStream lands while the previous stop is still
-      // mid-flight at the native layer and blocks on the
-      // AVAudioSession sharedInstance lock. Issuing an awaited stop
-      // here is idempotent (no-op on a stopped recorder), forces
-      // pending stops to flush, and unblocks subsequent startStream
-      // calls. The 250ms tail gives iOS time to fully release the
-      // shared audio session before startStream grabs it again.
-      _log('info', 'MIC', 'draining prior recorder state…');
-      // ignore: avoid_print
-      print('[FREEFLOW] draining prior recorder state…');
-      try {
-        await _recorder.stop().timeout(const Duration(seconds: 2));
-      } catch (_) {/* either already stopped or stuck — either way push on */}
-      await Future.delayed(const Duration(milliseconds: 250));
-      _log('ok', 'MIC', 'drain complete · starting fresh stream');
-      // ignore: avoid_print
-      print('[FREEFLOW] drain complete · starting fresh stream');
+      // dispose) calls _recorder.stop() fire-and-forget. AVAudio-
+      // Recorder is one instance per process, so the next session's
+      // startStream lands while the prior stop is mid-flight at the
+      // native layer and blocks on the AVAudioSession sharedInstance
+      // lock. Awaited stop() flushes that pending teardown; the
+      // 250ms tail gives iOS time to release the shared session
+      // before startStream grabs it again.
+      //
+      // _recorderEverStarted flips true AFTER the first successful
+      // startStream below, so on every call after session 1 the
+      // drain runs and unblocks the second + N-th startStream.
+      if (_recorderEverStarted) {
+        _log('info', 'MIC', 'draining prior recorder state…');
+        // ignore: avoid_print
+        print('[FREEFLOW] draining prior recorder state…');
+        try {
+          await _recorder.stop().timeout(const Duration(seconds: 2));
+        } catch (_) {/* either already stopped or stuck — push on */}
+        await Future.delayed(const Duration(milliseconds: 250));
+        _log('ok', 'MIC', 'drain complete · starting fresh stream');
+        // ignore: avoid_print
+        print('[FREEFLOW] drain complete · starting fresh stream');
+      } else {
+        _log('info', 'MIC', 'first session — skip drain');
+      }
 
       // Same timeout treatment — iOS occasionally hangs on audio-session
       // acquisition when a previous run didn't release cleanly.
@@ -618,6 +640,11 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       _log('ok', 'MIC', 'startStream returned — mic acquired');
       // ignore: avoid_print
       print('[FREEFLOW] _recorder.startStream returned — mic acquired');
+      // v253 — flip the static so every subsequent _goLive runs the
+      // pre-startStream drain step (which is mandatory on iOS to
+      // unblock startStream when the prior _recorder.stop() is still
+      // mid-flight at the native layer).
+      _recorderEverStarted = true;
       _micSub = micStream.listen((bytes) {
         if (_disposed || !_holding) return;
         _micChunks++;
