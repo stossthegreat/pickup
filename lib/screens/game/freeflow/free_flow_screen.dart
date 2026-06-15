@@ -176,6 +176,14 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
   // Process-wide: the native PCM engine is set up once and reused across
   // every Free Flow session (never released — see dispose()).
   static bool _pcmEngineReady = false;
+  // v247 — same static-flag pattern as _pcmEngineReady but for the
+  // iOS mic permission check. After the FIRST successful
+  // _recorder.hasPermission() in this process, subsequent calls can
+  // hang because the recorder native object is still mid-stop from
+  // the previous session. Skipping the check on second+ session
+  // matches what Auralay does. Permission state doesn't change
+  // mid-process so the cached "true" stays accurate.
+  static bool _micPermissionGranted = false;
   bool    _pcmStarted = false;
   int     _lastFeedMs = 0;        // when the PCM engine last asked for data
   bool    _holding = false;      // push-to-talk: mic only forwards while held
@@ -397,30 +405,52 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       isFree: !pro,
     );
     try {
-      // v243 safety nets — both _recorder.hasPermission() and
-      // AudioSession.configureForPlayAndRecord() can hang on iOS when
-      // the audio system is in a stuck state (rare, but it happens
-      // when a previous session didn't release cleanly). Without a
-      // timeout, _goLive sits silently between these calls forever
-      // and the user gets the same stuck-on-connecting symptom that
-      // the v242 PaywallGate timeout already fixed for the RC path.
-      // 3s on permission (it should be instant if granted, OS-modal
-      // if not — but never 3 seconds). 4s on audio-session configure
-      // (the iOS native call should resolve in <1s under healthy
-      // conditions). Either timeout → _fail → user gets an error UI
-      // with a retry button instead of staring at "connecting".
-      final hasMic = await _recorder.hasPermission().timeout(
-        const Duration(seconds: 3),
-        onTimeout: () => throw 'mic permission timeout',
-      );
-      if (!hasMic) {
-        _fail('Microphone permission denied.');
-        return;
+      // v247 — fire the FULL debug trail to console so any
+      // stuck-step is impossible to misdiagnose. Search Console.app
+      // for "[FREEFLOW]" in TestFlight to see the live trace.
+      // ignore: avoid_print
+      print('[FREEFLOW] _goLive START vibe=${vibe.label} pro=$pro '
+            'micPermGranted=$_micPermissionGranted '
+            'pcmReady=$_pcmEngineReady');
+
+      // v247 — mic permission check uses the same static-flag pattern
+      // as the PCM engine. Once it's true in this process, we skip.
+      // Auralay dev's checklist #2: "If you call recorder.startStream
+      // twice without disposing the first, iOS silently fails." The
+      // root cause is the recorder native object stays mid-stop after
+      // the first session, and ANY method call on it (including
+      // hasPermission) blocks until that mid-stop resolves. By
+      // skipping the check on second+ sessions we never hit that
+      // wait. Permission state doesn't change mid-process so the
+      // cached "true" is honest.
+      if (!_micPermissionGranted) {
+        // ignore: avoid_print
+        print('[FREEFLOW] checking mic permission (first session)…');
+        final hasMic = await _recorder.hasPermission().timeout(
+          const Duration(seconds: 3),
+          onTimeout: () => throw 'mic permission timeout',
+        );
+        // ignore: avoid_print
+        print('[FREEFLOW] mic permission returned: $hasMic');
+        if (!hasMic) {
+          _fail('Microphone permission denied.');
+          return;
+        }
+        _micPermissionGranted = true;
+      } else {
+        // ignore: avoid_print
+        print('[FREEFLOW] skipping mic permission check '
+              '(already granted this process)');
       }
+
+      // ignore: avoid_print
+      print('[FREEFLOW] configuring AudioSession…');
       await AudioSession.configureForPlayAndRecord().timeout(
         const Duration(seconds: 4),
         onTimeout: () => throw 'audio session timeout',
       );
+      // ignore: avoid_print
+      print('[FREEFLOW] AudioSession configured');
 
       // 1) Streaming playback engine — 24kHz PCM16 mono to match the
       //    Realtime API output. Set up ONCE per process and reused across
@@ -429,9 +459,16 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       //    setup() to run a single time, then just (re)bind this screen's
       //    feed callback each session.
       if (!_pcmEngineReady) {
+        // ignore: avoid_print
+        print('[FREEFLOW] PCM engine first-time setup…');
         await FlutterPcmSound.setup(sampleRate: 24000, channelCount: 1);
         FlutterPcmSound.setFeedThreshold(6000);
         _pcmEngineReady = true;
+        // ignore: avoid_print
+        print('[FREEFLOW] PCM engine setup done');
+      } else {
+        // ignore: avoid_print
+        print('[FREEFLOW] PCM engine already ready — skipping setup');
       }
       FlutterPcmSound.setFeedCallback(_onPcmFeed);
 
@@ -468,15 +505,32 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       // close cleanly while still bailing in time to keep the user-
       // perceived connect snappy. close() is idempotent if it's
       // already closed.
+      // ignore: avoid_print
+      print('[FREEFLOW] awaiting old _session.close()…');
       try {
         await _session.close().timeout(const Duration(milliseconds: 600));
-      } catch (_) {/* old session was already dead or stalling — move on */}
+        // ignore: avoid_print
+        print('[FREEFLOW] old _session.close() returned cleanly');
+      } catch (e) {
+        // ignore: avoid_print
+        print('[FREEFLOW] old _session.close() timed out / threw: $e '
+              '(moving on)');
+      }
       _session = RealtimeSession();
+      // ignore: avoid_print
+      print('[FREEFLOW] new RealtimeSession created');
       _creator = await CreatorModeStore.isActive();
+      // ignore: avoid_print
+      print('[FREEFLOW] creator mode: $_creator');
       final memoryBlock = await UserMemory.buildSystemPromptBlock(
         filterTopic: 'rizz',
       );
+      // ignore: avoid_print
+      print('[FREEFLOW] memory block built '
+            '(${memoryBlock.length} chars)');
       _eventSub = _session.events.listen(_onEvent);
+      // ignore: avoid_print
+      print('[FREEFLOW] event subscription bound — calling _session.connect…');
       // v198 stuck-on-connecting fix: WebSocket connect was awaited
       // without a timeout. If the server stalled, the session sat
       // in _Phase.connecting forever and the only recovery was a
@@ -492,6 +546,8 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         'memoryBlock':     memoryBlock,
       }).timeout(const Duration(seconds: 12),
         onTimeout: () => throw 'WS connect timeout');
+      // ignore: avoid_print
+      print('[FREEFLOW] _session.connect returned — WS open');
 
       // 3) Stream the mic up as PCM16 — but only FORWARD chunks while the
       //    user is holding the talk button (push-to-talk). The stream
@@ -499,6 +555,8 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       //    and only gets what he actually says.
       // Same timeout treatment — iOS occasionally hangs on audio-session
       // acquisition when a previous run didn't release cleanly.
+      // ignore: avoid_print
+      print('[FREEFLOW] calling _recorder.startStream…');
       final micStream = await _recorder.startStream(const RecordConfig(
         encoder:       AudioEncoder.pcm16bits,
         sampleRate:    24000,
@@ -508,6 +566,8 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         noiseSuppress: true,
       )).timeout(const Duration(seconds: 8),
         onTimeout: () => throw 'mic acquire timeout');
+      // ignore: avoid_print
+      print('[FREEFLOW] _recorder.startStream returned — mic acquired');
       _micSub = micStream.listen((bytes) {
         if (_disposed || !_holding) return;
         _micChunks++;
@@ -521,8 +581,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
       // the orb so sitting on the screen reading the scenario
       // doesn't burn their three minutes.
       setState(() => _phase = _Phase.live);
+      // ignore: avoid_print
+      print('[FREEFLOW] _goLive SUCCESS — phase = live · vibe=${vibe.label}');
       HapticFeedback.mediumImpact();
     } catch (e) {
+      // ignore: avoid_print
+      print('[FREEFLOW] _goLive THREW: $e');
       _fail(e.toString());
     }
   }
