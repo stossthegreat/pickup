@@ -47,7 +47,9 @@ class PaywallScreen extends StatefulWidget {
   State<PaywallScreen> createState() => _PaywallScreenState();
 }
 
-enum _Tier { monthly, annual, rescue }
+// v238 — _Tier.monthly dropped, _Tier.weekly added. Bro: "we strip
+// monthly, go weekly + annual only." Rescue stays on Android.
+enum _Tier { weekly, annual, rescue }
 
 class _PaywallScreenState extends State<PaywallScreen> {
   _Tier _selected = _Tier.annual;
@@ -138,30 +140,31 @@ class _PaywallScreenState extends State<PaywallScreen> {
     return '$symbol${amount.toStringAsFixed(2)}';
   }
 
-  /// v236 — dynamic annual-vs-monthly savings %, derived from the
-  /// LIVE store prices. Replaces the static "BEST VALUE" badge so the
-  /// label reflects whatever the user actually pays in their currency.
+  /// v238 — dynamic annual-vs-weekly savings %, derived from the LIVE
+  /// store prices. Replaces v236's monthly-vs-annual math now that
+  /// monthly is dropped. Reads whatever currency the store returns
+  /// (£, $, €, ¥…) so the badge is always honest in the user's locale.
   ///
-  /// Example: monthly $14.99 × 12 = $179.88, annual $109.99 →
-  /// ($179.88 − $109.99) / $179.88 = 38.85% → "SAVE 39%".
+  /// Example: weekly $6.99 × 52 = $363.48, annual $109.99 →
+  /// ($363.48 − $109.99) / $363.48 = 69.7% → "SAVE 70%".
   ///
   /// Falls back to the static "BEST VALUE" when either price hasn't
   /// loaded yet (RC offering empty / dev bypass) so the badge never
   /// shows a misleading 0% or a dash.
   String _annualBadge() {
-    final monthly = _offerings.monthly?.storeProduct.price;
-    final annual  = _offerings.annual?.storeProduct.price;
-    if (monthly == null || annual == null) return 'BEST VALUE';
-    if (monthly <= 0 || annual <= 0)        return 'BEST VALUE';
-    final monthlyTotal = monthly * 12;
-    if (annual >= monthlyTotal)             return 'BEST VALUE';
-    final pct = ((monthlyTotal - annual) / monthlyTotal * 100).round();
-    if (pct < 5)                            return 'BEST VALUE';
+    final weekly = _offerings.weekly?.storeProduct.price;
+    final annual = _offerings.annual?.storeProduct.price;
+    if (weekly == null || annual == null) return 'BEST VALUE';
+    if (weekly <= 0 || annual <= 0)        return 'BEST VALUE';
+    final weeklyTotal = weekly * 52;
+    if (annual >= weeklyTotal)             return 'BEST VALUE';
+    final pct = ((weeklyTotal - annual) / weeklyTotal * 100).round();
+    if (pct < 5)                           return 'BEST VALUE';
     return 'SAVE $pct%';
   }
 
   Package? _packageFor(_Tier t) => switch (t) {
-    _Tier.monthly => _offerings.monthly,
+    _Tier.weekly  => _offerings.weekly,
     _Tier.annual  => _offerings.annual,
     _Tier.rescue  => _offerings.rescue,
   };
@@ -433,15 +436,15 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   Row(
                     children: [
                       Expanded(child: _PriceCard(
-                        title: 'MONTHLY',
-                        price: _priceFor(_Tier.monthly),
-                        cadence: 'Billed monthly',
+                        title: 'WEEKLY',
+                        price: _priceFor(_Tier.weekly),
+                        cadence: 'Billed weekly',
                         footnote: 'Auto-renews until cancelled',
-                        selected: _selected == _Tier.monthly,
+                        selected: _selected == _Tier.weekly,
                         available: true,
                         onTap: () {
                           HapticFeedback.selectionClick();
-                          setState(() => _selected = _Tier.monthly);
+                          setState(() => _selected = _Tier.weekly);
                         },
                       )),
                       const SizedBox(width: 8),
@@ -652,8 +655,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
     final price = _priceFor(_selected);
     String text;
     switch (_selected) {
-      case _Tier.monthly:
-        text = '$price billed monthly. Auto-renews until cancelled. '
+      case _Tier.weekly:
+        text = '$price billed weekly. Auto-renews until cancelled. '
                'ImHim Pro subscription required for scans, AI '
                'renders, streaks, AI roleplay, and all rizz features.';
         break;
@@ -695,11 +698,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
     String text;
     switch (_selected) {
-      case _Tier.monthly:
-        text = 'ImHim Pro — monthly subscription. Your payment of '
+      case _Tier.weekly:
+        text = 'ImHim Pro — weekly subscription. Your payment of '
                '$price will be charged to your $storeAccount at '
                'confirmation of purchase. The subscription '
-               'automatically renews each month for $price unless you '
+               'automatically renews each week for $price unless you '
                'cancel at least 24 hours before the end of the current '
                'period. Your account will be charged for renewal '
                'within 24 hours of the period ending. You can manage '
@@ -751,19 +754,18 @@ class _PaywallScreenState extends State<PaywallScreen> {
         ? 'Cancel anytime in App Store settings'
         : 'Cancel anytime in Google Play settings';
     switch (t) {
-      case _Tier.monthly:
+      case _Tier.weekly:
       case _Tier.annual:
-        // Bro v5: monthly/annual share the same monthly entitlement
-        // ceiling. 40 min of voice every month regardless of tier.
-        // Rizz Chat unlimited. Rizz screenshots vision-powered.
+        // v238 — Weekly and Annual share the same weekly entitlement
+        // matrix. Annual is just paying for a year of weekly access
+        // up-front at a discount; the per-week caps are identical.
         return [
           '2 scans per week',
-          '10 AI-rendered images per month',
-          '40 minutes of Live AI roleplay every month',
-          'Unlimited Rizz Chat — ask anything, every day',
-          'Unlimited rizz screenshot replies',
+          '3 AI-rendered images per week',
+          '18 minutes of live AI roleplay per week',
+          '15 screenshot rizz analyses per week',
+          'Unlimited AI chat rizz — ask anything, every day',
           'Streaks + 60-day protocols — Skin, Jaw, Debloat, Hair',
-          'The Mirror — unlimited chat advice',
           'Two-score rating — geometry + honest-looks (Vision)',
           cancelLine,
         ];

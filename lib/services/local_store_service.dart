@@ -50,26 +50,36 @@ class LocalStoreService {
   static const _kScanFreeUsed = 'scan.free.used.v1';
 
   // ── Usage caps (paywall flood gates) ──────────────────────────────────
-  // Bro: "two scans a week and 10 mirror tab image renders a month.
-  // That's what we had working before — now it's like the flood gates
-  // are open. Nothing for free."
+  // v238 — converted from mixed weekly/monthly buckets to all-weekly so
+  // the entitlements match the Weekly + Annual SKU pair. Both Weekly
+  // and Annual subscribers see the SAME per-week caps (annual just
+  // pays once for a year of weekly access at a discount).
   //
-  // Scans are bucketed by ISO week (Mon-Sun) so the limit resets cleanly
-  // every Monday. Mirror renders are bucketed by calendar month so the
-  // limit resets on the 1st. Subscribers / kBypassPaywall bypass both.
-  static const int  kScansPerWeek      = 2;
-  static const int  kRendersPerMonth   = 10;
-  /// Bro v5: "40 mins roleplay time for monthly every month regardless
-  /// of weather yearly or monthly just every month." Pro voice ceiling
-  /// — tracked as elapsed milliseconds so a 30-second hold counts at
-  /// real granularity, not as a full minute.
-  static const int  kVoiceMinutesPerMonth = 40;
-  static const _kScanWeekBucket    = 'caps.scan.week_bucket.v1';
-  static const _kScanWeekCount     = 'caps.scan.week_count.v1';
-  static const _kVoiceMonthBucket  = 'caps.voice.month_bucket.v1';
-  static const _kVoiceMonthMs      = 'caps.voice.month_ms.v1';
-  static const _kRenderMonthBucket = 'caps.render.month_bucket.v1';
-  static const _kRenderMonthCount  = 'caps.render.month_count.v1';
+  // Final spec bro locked in v238:
+  //   · 2 scans per week
+  //   · 3 mirror renders per week
+  //   · 15 screenshot rizz analyses per week
+  //   · 18 minutes of live AI roleplay per week
+  //     (= 6 sessions × 3 min, ~1 per day)
+  //   · Unlimited AI chat rizz (text is cheap, no cap)
+  //   · Per-session voice cap of 3 min (free_flow_screen.dart enforces)
+  static const int  kScansPerWeek        = 2;
+  static const int  kRendersPerWeek      = 3;
+  static const int  kScreenshotsPerWeek  = 15;
+  static const int  kVoiceMinutesPerWeek = 18;
+
+  static const _kScanWeekBucket        = 'caps.scan.week_bucket.v1';
+  static const _kScanWeekCount         = 'caps.scan.week_count.v1';
+  // v238 — voice + render + screenshot caps moved from monthly to
+  // weekly buckets. Legacy month-bucket keys stay defined below so the
+  // existing read paths keep returning sensible values for old data,
+  // but the new gates use the week-bucket keys exclusively.
+  static const _kVoiceWeekBucket       = 'caps.voice.week_bucket.v1';
+  static const _kVoiceWeekMs           = 'caps.voice.week_ms.v1';
+  static const _kRenderWeekBucket      = 'caps.render.week_bucket.v1';
+  static const _kRenderWeekCount       = 'caps.render.week_count.v1';
+  static const _kScreenshotWeekBucket  = 'caps.screenshot.week_bucket.v1';
+  static const _kScreenshotWeekCount   = 'caps.screenshot.week_count.v1';
 
   // ── Scans ────────────────────────────────────────────────────────────────
   static Future<List<ScanRecord>> loadScans() async {
@@ -399,59 +409,94 @@ class LocalStoreService {
     await prefs.setInt(_kScanWeekCount,  count);
   }
 
-  // ── Monthly Mirror-render cap ──────────────────────────────────────────
-  static int _monthBucket(DateTime now) => now.year * 100 + now.month;
-
-  /// How many Mirror-tab image renders (`/maximize` + `/tryon`) the free
-  /// user has consumed THIS calendar month. Auto-resets on the 1st.
-  static Future<int> mirrorRendersThisMonth() async {
+  // ── Weekly Mirror-render cap ───────────────────────────────────────────
+  /// v238 — Mirror renders moved from a 10/month bucket to 3/week. Same
+  /// _weekBucket helper as the scans cap (ISO week, resets Monday).
+  ///
+  /// How many Mirror-tab image renders (`/maximize` + `/tryon`) the pro
+  /// user has consumed THIS week. Auto-resets every Monday.
+  static Future<int> mirrorRendersThisWeek() async {
     final prefs = await SharedPreferences.getInstance();
-    final bucket = _monthBucket(DateTime.now());
-    final stored = prefs.getInt(_kRenderMonthBucket) ?? 0;
+    final bucket = _weekBucket(DateTime.now());
+    final stored = prefs.getInt(_kRenderWeekBucket) ?? 0;
     if (stored != bucket) return 0;
-    return prefs.getInt(_kRenderMonthCount) ?? 0;
+    return prefs.getInt(_kRenderWeekCount) ?? 0;
   }
 
   static Future<void> markMirrorRenderUsed() async {
     final prefs = await SharedPreferences.getInstance();
-    final bucket = _monthBucket(DateTime.now());
-    final stored = prefs.getInt(_kRenderMonthBucket) ?? 0;
+    final bucket = _weekBucket(DateTime.now());
+    final stored = prefs.getInt(_kRenderWeekBucket) ?? 0;
     final count  = stored == bucket
-        ? (prefs.getInt(_kRenderMonthCount) ?? 0) + 1
+        ? (prefs.getInt(_kRenderWeekCount) ?? 0) + 1
         : 1;
-    await prefs.setInt(_kRenderMonthBucket, bucket);
-    await prefs.setInt(_kRenderMonthCount,  count);
+    await prefs.setInt(_kRenderWeekBucket, bucket);
+    await prefs.setInt(_kRenderWeekCount,  count);
   }
 
-  // ── Monthly voice-time cap (Pro AI roleplay) ───────────────────────────
-  /// Total voice elapsed THIS month, in milliseconds. Resets on the 1st.
-  static Future<int> voiceMsThisMonth() async {
+  // ── Weekly screenshot-rizz cap ─────────────────────────────────────────
+  /// v238 — Pro users get 15 screenshot rizz analyses per week. Free
+  /// users keep the existing single-free-screenshot path (see
+  /// `rizzScreenshotFreeUsed`).
+  static Future<int> screenshotRizzThisWeek() async {
     final prefs = await SharedPreferences.getInstance();
-    final bucket = _monthBucket(DateTime.now());
-    final stored = prefs.getInt(_kVoiceMonthBucket) ?? 0;
+    final bucket = _weekBucket(DateTime.now());
+    final stored = prefs.getInt(_kScreenshotWeekBucket) ?? 0;
     if (stored != bucket) return 0;
-    return prefs.getInt(_kVoiceMonthMs) ?? 0;
+    return prefs.getInt(_kScreenshotWeekCount) ?? 0;
   }
 
-  /// Add to the voice elapsed-ms bucket for THIS month. Caller passes
+  static Future<void> markScreenshotRizzUsed() async {
+    final prefs = await SharedPreferences.getInstance();
+    final bucket = _weekBucket(DateTime.now());
+    final stored = prefs.getInt(_kScreenshotWeekBucket) ?? 0;
+    final count  = stored == bucket
+        ? (prefs.getInt(_kScreenshotWeekCount) ?? 0) + 1
+        : 1;
+    await prefs.setInt(_kScreenshotWeekBucket, bucket);
+    await prefs.setInt(_kScreenshotWeekCount,  count);
+  }
+
+  // ── Weekly voice-time cap (Pro AI roleplay) ────────────────────────────
+  /// v238 — voice cap moved from 40 min/month to 18 min/week. Tracked
+  /// as elapsed milliseconds so a 30-second hold counts at real
+  /// granularity, not as a full minute.
+  ///
+  /// Total voice elapsed THIS week, in milliseconds. Resets Monday.
+  static Future<int> voiceMsThisWeek() async {
+    final prefs = await SharedPreferences.getInstance();
+    final bucket = _weekBucket(DateTime.now());
+    final stored = prefs.getInt(_kVoiceWeekBucket) ?? 0;
+    if (stored != bucket) return 0;
+    return prefs.getInt(_kVoiceWeekMs) ?? 0;
+  }
+
+  /// Add to the voice elapsed-ms bucket for THIS week. Caller passes
   /// the duration of the just-completed session segment; the bucket
-  /// auto-resets if we've crossed into a new month.
+  /// auto-resets if we've crossed into a new week.
   static Future<void> addVoiceMs(int deltaMs) async {
     if (deltaMs <= 0) return;
     final prefs = await SharedPreferences.getInstance();
-    final bucket = _monthBucket(DateTime.now());
-    final stored = prefs.getInt(_kVoiceMonthBucket) ?? 0;
+    final bucket = _weekBucket(DateTime.now());
+    final stored = prefs.getInt(_kVoiceWeekBucket) ?? 0;
     final base = stored == bucket
-        ? (prefs.getInt(_kVoiceMonthMs) ?? 0)
+        ? (prefs.getInt(_kVoiceWeekMs) ?? 0)
         : 0;
-    await prefs.setInt(_kVoiceMonthBucket, bucket);
-    await prefs.setInt(_kVoiceMonthMs,     base + deltaMs);
+    await prefs.setInt(_kVoiceWeekBucket, bucket);
+    await prefs.setInt(_kVoiceWeekMs,     base + deltaMs);
   }
 
-  /// True when the Pro user has used up their monthly voice allowance.
+  /// True when the Pro user has used up their weekly voice allowance.
   static Future<bool> voiceCapReached() async {
-    final ms = await voiceMsThisMonth();
-    return ms >= kVoiceMinutesPerMonth * 60 * 1000;
+    final ms = await voiceMsThisWeek();
+    return ms >= kVoiceMinutesPerWeek * 60 * 1000;
+  }
+
+  /// True when the Pro user has used up their weekly screenshot rizz
+  /// allowance. Used by the Rizz tab's screenshot-upload gate.
+  static Future<bool> screenshotRizzCapReached() async {
+    final used = await screenshotRizzThisWeek();
+    return used >= kScreenshotsPerWeek;
   }
 
   // ── Onboarding (has the user completed first-run?) ──────────────────────

@@ -206,10 +206,14 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
         count:  result.length,
         isFree: !pro,
       );
-      // Burn the free pass — every subsequent tap routes to paywall.
-      // Pro users keep generating without ever flipping this bit.
+      // Free users: burn the once-ever pass so subsequent taps hit
+      //   the paywall.
+      // Pro users (v238): count it against the 15-per-week bucket so
+      //   the gate kicks them to paywall the moment they exceed.
       if (!pro) {
         await LocalStoreService.markRizzScreenshotFreeUsed();
+      } else {
+        await LocalStoreService.markScreenshotRizzUsed();
       }
     } on TimeoutException {
       print('[RIZZ-SCREEN] _generate timed out');
