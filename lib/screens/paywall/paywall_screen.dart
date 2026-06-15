@@ -441,12 +441,20 @@ class _PaywallScreenState extends State<PaywallScreen> {
                         setState(() => _selected = _Tier.weekly);
                       },
                     ).animate().fadeIn(delay: 600.ms, duration: 400.ms),
-                    const SizedBox(height: 8),
+                    // v249 — Annual stack: savings pill ABOVE the card
+                    // (Skeletal-Pro style), then the Annual card itself.
+                    // The pill carries the live SAVE % computed off
+                    // weekly×52 vs annual price. Mirrors how the
+                    // reference paywall floats "3 DAY FREE TRIAL"
+                    // above its Yearly card.
+                    const SizedBox(height: 18),
+                    _AnnualSavingsPill(label: _annualBadge())
+                      .animate().fadeIn(delay: 640.ms, duration: 380.ms),
+                    const SizedBox(height: 6),
                     _PriceCardLandscape(
                       title: 'ANNUAL',
                       price: _priceFor(_Tier.annual),
                       cadence: 'Billed yearly (${_perMonthForAnnual()}/mo equivalent) · Auto-renews until cancelled',
-                      badge: _annualBadge(),
                       selected: _selected == _Tier.annual,
                       onTap: () {
                         HapticFeedback.selectionClick();
@@ -877,13 +885,14 @@ class _Bullets extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 7, right: 12),
-                child: Container(
-                  width: 6, height: 6,
-                  decoration: const BoxDecoration(
-                    color: AppColors.red, shape: BoxShape.circle),
-                ),
+              // v249 — red dot swapped for a white tick. Bro:
+              // "put little white ticks next to each bullet point."
+              // Matches the Skeletal Pro reference where every benefit
+              // line is led by a tiny white check mark.
+              const Padding(
+                padding: EdgeInsets.only(top: 4, right: 10),
+                child: Icon(Icons.check_rounded,
+                  size: 16, color: Colors.white),
               ),
               Expanded(
                 child: Text(
@@ -1040,24 +1049,24 @@ class _Point extends StatelessWidget {
   }
 }
 
-/// v238b — Full-width landscape price card used by BOTH the glowup
-/// paywall (single Weekly card) AND the default paywall (Weekly +
-/// Annual stacked). Bro: "two rectangle cards like the image, one
-/// weekly that's the top one, then under it yearly. Both cards
-/// identical sizes."
+/// v249 — Skeletal-Pro-style landscape price card.
 ///
-/// Layout (single row inside a fixed-height container):
-///   · title chip (+ optional badge) — left
-///   · cadence line under it          — left
-///   · price                          — right, aligned end
+/// Reference: Skeletal Pro paywall (IMG_1316). Both cards are
+/// identical rectangles; the price is the dominant glyph, set in a
+/// clean Inter w800 sans-serif with the $ figure carrying the visual
+/// weight. The title sits as a tight uppercase label above the price,
+/// the cadence line is the secondary detail underneath. No inline
+/// badge here — the savings pill lives ABOVE the Annual card now,
+/// floating on the page like "3 DAY FREE TRIAL" in the reference.
 ///
-/// Fixed 76px tall so two stacked cards always read as identical
-/// rectangles regardless of cadence text length.
+/// Layout (single row, fixed 92px tall — identical across Weekly /
+/// Annual / Rescue):
+///   · title (label) over cadence (footnote) — left, expands
+///   · price                                  — right, end-aligned
 class _PriceCardLandscape extends StatelessWidget {
   final String title;
   final String price;
   final String cadence;
-  final String? badge;
   final bool selected;
   final VoidCallback onTap;
   const _PriceCardLandscape({
@@ -1066,7 +1075,6 @@ class _PriceCardLandscape extends StatelessWidget {
     required this.cadence,
     required this.selected,
     required this.onTap,
-    this.badge,
   });
 
   @override
@@ -1077,9 +1085,6 @@ class _PriceCardLandscape extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: 180.ms,
-        // v241 — height grown 76 → 92 ("make the cards a little
-        // thicker"). Both stacked cards still match each other
-        // because the constant is fixed.
         height: 92,
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
         decoration: BoxDecoration(
@@ -1096,45 +1101,15 @@ class _PriceCardLandscape extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    children: [
-                      Text(title,
-                        style: AppTypography.label.copyWith(
-                          color: Colors.white,
-                          fontSize: 13, letterSpacing: 2.6,
-                          fontWeight: FontWeight.w900,
-                        )),
-                      if (badge != null) ...[
-                        const SizedBox(width: 10),
-                        // v241 — SAVE % badge ~50% bigger so the
-                        // savings number is the first thing the eye
-                        // catches. Bro: "make the percent they're
-                        // saving clear."
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.red,
-                            borderRadius: BorderRadius.circular(6),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.red.withValues(alpha: 0.55),
-                                blurRadius: 12, spreadRadius: 0),
-                            ],
-                          ),
-                          child: Text(badge!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12, letterSpacing: 1.4,
-                              fontWeight: FontWeight.w900,
-                            )),
-                        ),
-                      ],
-                    ],
-                  ),
+                  Text(title,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 13, letterSpacing: 2.6,
+                      fontWeight: FontWeight.w800,
+                    )),
                   const SizedBox(height: 6),
                   Text(cadence,
-                    style: TextStyle(
+                    style: GoogleFonts.inter(
                       color: Colors.white.withValues(alpha: 0.65),
                       fontSize: 11.5, fontWeight: FontWeight.w500,
                       height: 1.25,
@@ -1145,16 +1120,49 @@ class _PriceCardLandscape extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Text(price,
-              // v241 — price font 24 → 30 to ride with the taller
-              // card. Still right-aligned, still hugs the price color
-              // (red when selected).
-              style: AppTypography.display.copyWith(
+              style: GoogleFonts.inter(
                 color: priceColor,
                 fontSize: 30, height: 1, letterSpacing: -1.0,
                 fontWeight: FontWeight.w800,
               )),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// v249 — Floating savings pill rendered ABOVE the Annual card.
+/// Mirrors the Skeletal Pro reference where "3 DAY FREE TRIAL" floats
+/// above the Yearly card. We surface the live SAVE % computed by
+/// `_annualBadge()` (e.g. "SAVE 70%") so the savings number is the
+/// first thing the eye catches on this stack. Centered, red-glow pill,
+/// w900 Inter — same accent treatment as the CTA so the page reads as
+/// a single visual system.
+class _AnnualSavingsPill extends StatelessWidget {
+  final String label;
+  const _AnnualSavingsPill({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.red,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.red.withValues(alpha: 0.55),
+              blurRadius: 14, spreadRadius: 0),
+          ],
+        ),
+        child: Text(label,
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 12, letterSpacing: 1.8,
+            fontWeight: FontWeight.w900,
+          )),
       ),
     );
   }
@@ -1305,13 +1313,13 @@ class _BenefitRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 4, right: 8),
-          child: Container(
-            width: 4, height: 4,
-            decoration: const BoxDecoration(
-              color: AppColors.red, shape: BoxShape.circle),
-          ),
+        // v249 — red dot swapped for a white tick to match the
+        // Skeletal Pro reference treatment used across the rest of
+        // the paywall.
+        const Padding(
+          padding: EdgeInsets.only(top: 2, right: 8),
+          child: Icon(Icons.check_rounded,
+            size: 13, color: Colors.white),
         ),
         Expanded(
           child: Text(bullet,
