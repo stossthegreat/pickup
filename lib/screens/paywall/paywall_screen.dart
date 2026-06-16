@@ -146,26 +146,28 @@ class _PaywallScreenState extends State<PaywallScreen> {
     return '$symbol${amount.toStringAsFixed(2)}';
   }
 
-  /// v238 — dynamic annual-vs-weekly savings %, derived from the LIVE
-  /// store prices. Replaces v236's monthly-vs-annual math now that
-  /// monthly is dropped. Reads whatever currency the store returns
+  /// v258 — dynamic annual-vs-weekly savings %, derived from the LIVE
+  /// store prices. Reads whatever currency the store returns
   /// (£, $, €, ¥…) so the badge is always honest in the user's locale.
   ///
   /// Example: weekly $6.99 × 52 = $363.48, annual $109.99 →
   /// ($363.48 − $109.99) / $363.48 = 69.7% → "SAVE 70%".
   ///
-  /// Falls back to the static "BEST VALUE" when either price hasn't
-  /// loaded yet (RC offering empty / dev bypass) so the badge never
-  /// shows a misleading 0% or a dash.
+  /// Fallback when RC offerings haven't loaded yet: "SAVE 70%" —
+  /// the structural savings between the published Weekly $6.99 and
+  /// Annual $109.99 SKUs we configured. Apple-safe because the
+  /// actual amounts the user pays still come from StoreKit. Never
+  /// shows "BEST VALUE" anymore — bro: "I told you add the
+  /// percentage they save."
   String _annualBadge() {
     final weekly = _offerings.weekly?.storeProduct.price;
     final annual = _offerings.annual?.storeProduct.price;
-    if (weekly == null || annual == null) return 'BEST VALUE';
-    if (weekly <= 0 || annual <= 0)        return 'BEST VALUE';
+    if (weekly == null || annual == null) return 'SAVE 70%';
+    if (weekly <= 0 || annual <= 0)        return 'SAVE 70%';
     final weeklyTotal = weekly * 52;
-    if (annual >= weeklyTotal)             return 'BEST VALUE';
+    if (annual >= weeklyTotal)             return 'SAVE 70%';
     final pct = ((weeklyTotal - annual) / weeklyTotal * 100).round();
-    if (pct < 5)                           return 'BEST VALUE';
+    if (pct < 5)                           return 'SAVE 70%';
     return 'SAVE $pct%';
   }
 
@@ -434,24 +436,19 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     _PriceCardLandscape(
                       title: 'WEEKLY',
                       price: _priceFor(_Tier.weekly),
-                      cadence: 'Billed weekly · Auto-renews until cancelled',
+                      cadence: 'Billed weekly\nAuto-renews until cancelled',
                       selected: _selected == _Tier.weekly,
                       onTap: () {
                         HapticFeedback.selectionClick();
                         setState(() => _selected = _Tier.weekly);
                       },
                     ).animate().fadeIn(delay: 600.ms, duration: 400.ms),
-                    // v256 — tight gap between Weekly and Annual per
-                    // bro: "close the gap between weekly and yearly."
-                    // The SAVE % is no longer a floating pill — it's
-                    // baked into the Annual card as a red banner
-                    // running along its top edge (see topBanner param).
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     _PriceCardLandscape(
                       title: 'ANNUAL',
                       price: _priceFor(_Tier.annual),
-                      cadence: 'Billed yearly (${_perMonthForAnnual()}/mo equivalent) · Auto-renews until cancelled',
-                      topBanner: _annualBadge(),
+                      cadence: 'Billed yearly · ${_perMonthForAnnual()}/mo equivalent\nAuto-renews until cancelled',
+                      priceBadge: _annualBadge(),
                       selected: _selected == _Tier.annual,
                       onTap: () {
                         HapticFeedback.selectionClick();
@@ -459,11 +456,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
                       },
                     ).animate().fadeIn(delay: 660.ms, duration: 400.ms),
                     if (_showRescueCard) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       _PriceCardLandscape(
                         title: 'RESCUE',
                         price: _priceFor(_Tier.rescue),
-                        cadence: 'One-time · 20 renders · No subscription',
+                        cadence: 'One-time · 20 renders\nNo subscription',
                         selected: _selected == _Tier.rescue,
                         onTap: () {
                           HapticFeedback.selectionClick();
@@ -473,11 +470,12 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     ],
                   ],
 
-                  // v241 — gap before CTA pushed 14 → 28 ("push the
-                  // paywall CTA down a couple cm") + CTA height grown
-                  // 56 → 64 and font 15 → 17 so it visually outweighs
-                  // the price cards above.
-                  const SizedBox(height: 28),
+                  // v258 — gap between price cards and CTA tightened
+                  // from 28 → 16 per bro: "make it correct exact
+                  // spacing between cards and cta." CTA height +
+                  // font kept (64px, w900 17pt) so it still visually
+                  // dominates the cards above.
+                  const SizedBox(height: 16),
 
                   SizedBox(
                     width: double.infinity, height: 64,
@@ -1046,36 +1044,35 @@ class _Point extends StatelessWidget {
   }
 }
 
-/// v256 — Skeletal-Pro-style landscape price card.
+/// v258 — landscape price card.
 ///
-/// Bro's IMG_1316 reference: every card has the title pinned at the
-/// TOP-LEFT (inside the card), the billing cadence underneath it in
-/// muted body text (fully visible — no clipping under the price), and
-/// the price right-aligned on the same vertical centre. The Yearly
-/// card carries a SAVE % banner that runs ALONG THE TOP of the card
-/// (inside the border, full width) — not floating above with a gap.
-///
-/// Layout:
+/// Layout (per bro's IMG_1350 feedback):
 ///   ┌────────────────────────────────────┐
-///   │   [optional banner: SAVE X%]       │  ← red strip, full width
-///   ├────────────────────────────────────┤
-///   │  TITLE                             │
-///   │  cadence line(s) wrap below ─── $X │
+///   │  TITLE                  [SAVE X%]  │  ← badge above price
+///   │  Billed yearly ·         $109.99   │
+///   │  $9.17/mo equivalent               │
+///   │  Auto-renews until cancelled       │
 ///   └────────────────────────────────────┘
 ///
-/// Height is now content-driven (not fixed 92px). Cadence can wrap
-/// to 3 lines so the long Annual string "Billed yearly ($9.17/mo
-/// equivalent) · Auto-renews until cancelled" is FULLY visible —
-/// bro's flag: "they will refuse my app" if a reviewer sees the
-/// auto-renew disclosure clipped.
+/// Title pinned top-left. Cadence wraps freely (the call site
+/// inserts an explicit `\n` so "Auto-renews until cancelled" is
+/// always on its own line — bro: "move 'until cancelled' to the
+/// line under it… when price shows up it'll make the text
+/// disappear" — Apple-rejection-proof). Right column stacks an
+/// optional SAVE % badge directly above the price so the discount
+/// reads as a chip on the price, not a banner on the card.
+///
+/// Both Weekly and Annual force a 110px min-height so they render
+/// as visually identical rectangles even though Weekly's cadence
+/// is one line shorter — bro: "make the weekly the same size card
+/// as annual."
 class _PriceCardLandscape extends StatelessWidget {
   final String title;
   final String price;
   final String cadence;
-  /// Optional banner that runs along the TOP of the card, inside the
-  /// border. The Annual card uses this for the live SAVE % computed
-  /// by `_annualBadge()`. When null, no banner row is rendered.
-  final String? topBanner;
+  /// Small red badge that sits in the right column DIRECTLY above
+  /// the price (e.g. "SAVE 70%"). Only Annual uses it.
+  final String? priceBadge;
   final bool selected;
   final VoidCallback onTap;
   const _PriceCardLandscape({
@@ -1084,7 +1081,7 @@ class _PriceCardLandscape extends StatelessWidget {
     required this.cadence,
     required this.selected,
     required this.onTap,
-    this.topBanner,
+    this.priceBadge,
   });
 
   @override
@@ -1095,73 +1092,72 @@ class _PriceCardLandscape extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: 180.ms,
+        constraints: const BoxConstraints(minHeight: 110),
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
         decoration: BoxDecoration(
           color: selected ? AppColors.redGlow : Colors.transparent,
           border: Border.all(
               color: borderColor, width: selected ? 1.8 : 0.8),
           borderRadius: BorderRadius.circular(16),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(15),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (topBanner != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 7),
-                  color: AppColors.red,
-                  child: Center(
-                    child: Text(topBanner!,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 13, letterSpacing: 2.6,
+                      fontWeight: FontWeight.w800,
+                    )),
+                  const SizedBox(height: 6),
+                  Text(cadence,
+                    style: GoogleFonts.inter(
+                      color: Colors.white.withValues(alpha: 0.65),
+                      fontSize: 11, fontWeight: FontWeight.w500,
+                      height: 1.35,
+                    ),
+                    maxLines: 4,
+                    overflow: TextOverflow.visible,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (priceBadge != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.red,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text(priceBadge!,
                       style: GoogleFonts.inter(
                         color: Colors.white,
-                        fontSize: 12, letterSpacing: 1.8,
+                        fontSize: 10, letterSpacing: 1.2,
                         fontWeight: FontWeight.w900,
                       )),
                   ),
-                ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(title,
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 13, letterSpacing: 2.6,
-                              fontWeight: FontWeight.w800,
-                            )),
-                          const SizedBox(height: 6),
-                          Text(cadence,
-                            style: GoogleFonts.inter(
-                              color: Colors.white.withValues(alpha: 0.65),
-                              fontSize: 11, fontWeight: FontWeight.w500,
-                              height: 1.3,
-                            ),
-                            maxLines: 3,
-                            overflow: TextOverflow.visible,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(price,
-                      style: GoogleFonts.inter(
-                        color: priceColor,
-                        fontSize: 26, height: 1, letterSpacing: -1.0,
-                        fontWeight: FontWeight.w800,
-                      )),
-                  ],
-                ),
-              ),
-            ],
-          ),
+                  const SizedBox(height: 6),
+                ],
+                Text(price,
+                  style: GoogleFonts.inter(
+                    color: priceColor,
+                    fontSize: 26, height: 1, letterSpacing: -1.0,
+                    fontWeight: FontWeight.w800,
+                  )),
+              ],
+            ),
+          ],
         ),
       ),
     );
