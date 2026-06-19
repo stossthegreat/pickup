@@ -392,7 +392,15 @@ export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase6
       : userMessage;
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      // v265 — switched from gpt-4o → gpt-4o-mini. Bro flagged the
+      // cost. gpt-4o-mini does vision at ~1/10 the price (text:
+      // $0.15/$0.60 vs $2.50/$10.00 per 1M, vision tile cost
+      // similarly dropped). Quality on rizz reply / convo
+      // diagnosis is plenty — we're parsing structured outputs,
+      // not writing literary essays. Same response_format JSON
+      // contract, same temperature, same content array shape
+      // gpt-4o-mini fully supports.
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: SYSTEM + (extraSystem ? '\n\n' + extraSystem : '') },
         { role: 'user',   content: userContent },
@@ -620,7 +628,12 @@ export async function rizzChat({ messages, imageBase64 } = {}) {
 
   async function runOnce(extraSystem = '') {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      // v265 — gpt-4o → gpt-4o-mini. Same cost reasoning as the
+      // rizzReply call above; chat coach output is short prose +
+      // quoted reply lines, gpt-4o-mini handles it cleanly. Vision
+      // attached on the latest user turn still works — mini
+      // supports the same content-array shape.
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: CHAT_SYSTEM + (extraSystem ? '\n\n' + extraSystem : '') },
         ...apiMessages,

@@ -102,6 +102,23 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     final msg = text.trim();
     if ((msg.isEmpty && image == null) || _sending) return;
     HapticFeedback.selectionClick();
+    // v265 — detect ANALYZE-ONCE-vs-ITERATE mode BEFORE we push the
+    // new user turn into _msgs. The first time the user attaches an
+    // image, we ship the full dual-mode coach wrapper. Every
+    // subsequent turn (text-only, or even a new image) is treated
+    // as ITERATION: "you've already given the analysis, just deliver
+    // ONE new suggestion line in quotes — no breakdown, no markdown
+    // sections, no re-explaining who she is."
+    //
+    // Detection: have we EVER attached an image AND received a reply
+    // back? If yes, we're in iterate mode for every new turn,
+    // including new uploads (user just wants the next line on the
+    // updated state). Iteration prompt is much shorter — kills the
+    // re-explain-every-tap problem bro flagged on the Wing AI
+    // screenshots ("it only explains once").
+    final hadImageBefore = _msgs.any((m) =>
+        m.role == 'user' && m.image != null);
+    final iterating = hadImageBefore;
     setState(() {
       _msgs.add(_RizzMsg('user', msg.isEmpty ? '(screenshot)' : msg,
           image: image));
@@ -109,57 +126,64 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     });
     _ctrl.clear();
     _scrollToBottom();
-    // If we have a screenshot, run OCR and frame the extracted text so
-    // the AI treats the LAST line as what she just sent (the reply
-    // target) and the rest as conversational context. Bro: "it's
-    // completely off topic — needs to finish off the convo, specific
-    // to the last thing said, using the rest as context."
     var effective = msg;
     if (image != null) {
-      // v265 — DUAL-MODE VISION PROMPT. Bro flagged the chat needed
-      // to read profiles AND coach convos like Wing AI does. Same
-      // backend, same model, same number of round-trips — we just
-      // tell the vision model to auto-detect the screenshot type
-      // and switch its output format accordingly:
-      //   · Chat screenshot (iMessage / Hinge / Bumble convo with
-      //     bubbles) → diagnose what worked / what fell flat in
-      //     the user's last 2-3 messages, then deliver ONE line
-      //     to send next, quoted so the inline _SendThisCard
-      //     picks it up for tap-to-copy.
-      //   · Profile screenshot (dating-app profile: bio + photos +
-      //     prompts) → read her archetype + interests + hooks,
-      //     then deliver 3 opener options each in quotes.
-      // Quoted lines hit the existing _extractCopyableLines regex
-      // so both modes get tap-to-copy cards without any UI work.
-      _dbg('vision path — sending image bytes (${image.length}) to backend');
-      const coachWrapper = ''
-        'I attached a screenshot. AUTO-DETECT what it is and respond '
-        'in the matching format:\n\n'
-        'IF CHAT SCREENSHOT (chat bubbles between two people): '
-        'read it as a chat, the LAST bubble on her side is what I '
-        'need a reply for. Reply in this structure:\n'
-        '  · WHAT WORKED: one short sentence on what landed in my '
-        'last 2-3 messages.\n'
-        '  · WHAT FELL FLAT: one short sentence on what didn\'t. Be '
-        'honest, not brutal.\n'
-        '  · SEND THIS: ONE line in double quotes, specific to her '
-        'last message, continuing naturally. Chat abbreviations '
-        '(wbu, wyd, ngl, etc.) are plain English — not code.\n\n'
-        'IF PROFILE SCREENSHOT (dating-app profile — bio, prompts, '
-        'photos, age, location): read her archetype + visible '
-        'interests + emotional vibe. Reply in this structure:\n'
-        '  · WHO SHE IS: one short paragraph on who she reads as — '
-        'archetype, what she\'s into, the vibe she\'s projecting.\n'
-        '  · HOOKS: 2-3 specific things from her profile I can lean '
-        'on (a prompt answer, a photo, a hobby).\n'
-        '  · THREE OPENERS: 3 distinct opener options, each in '
-        'double quotes, each referencing something specific she '
-        'wrote or pictured. No magician/Eiffel/pickup-line cliches.';
+      _dbg('vision path — sending image bytes (${image.length}) to backend · iterating=$iterating');
+      // v265 — TWO wrappers. First image attach → full dual-mode
+      // coach. Subsequent attaches (iteration mode) → slim
+      // "just give me the next line" wrapper so we don't repeat
+      // the whole analysis on every preset / chip tap.
+      final coachWrapper = iterating
+        ? ''
+          'I attached an updated screenshot. You already gave me '
+          'the full analysis earlier in this thread. DO NOT repeat '
+          'it. Just deliver ONE new suggestion line in double '
+          'quotes that fits the current state of the chat / '
+          'profile. No headers, no markdown sections, no '
+          'preamble — one quoted line + one short sentence of '
+          'context max.'
+        : ''
+          'I attached a screenshot. AUTO-DETECT what it is and '
+          'respond in the matching format:\n\n'
+          'IF CHAT SCREENSHOT (chat bubbles between two people): '
+          'read it as a chat, the LAST bubble on her side is what '
+          'I need a reply for. Reply in this structure:\n'
+          '  · WHAT WORKED: one short sentence on what landed in '
+          'my last 2-3 messages.\n'
+          '  · WHAT FELL FLAT: one short sentence on what didn\'t. '
+          'Be honest, not brutal.\n'
+          '  · SEND THIS: ONE line in double quotes, specific to '
+          'her last message, continuing naturally. Chat '
+          'abbreviations (wbu, wyd, ngl, etc.) are plain English '
+          '— not code.\n\n'
+          'IF PROFILE SCREENSHOT (dating-app profile — bio, '
+          'prompts, photos, age, location): read her archetype + '
+          'visible interests + emotional vibe. Reply in this '
+          'structure:\n'
+          '  · WHO SHE IS: one short paragraph on who she reads '
+          'as — archetype, what she\'s into, the vibe she\'s '
+          'projecting.\n'
+          '  · HOOKS: 2-3 specific things from her profile I can '
+          'lean on (a prompt answer, a photo, a hobby).\n'
+          '  · THREE OPENERS: 3 distinct opener options, each in '
+          'double quotes, each referencing something specific '
+          'she wrote or pictured. No magician/Eiffel/pickup-line '
+          'cliches.';
       if (effective.isEmpty) {
         effective = coachWrapper;
       } else {
         effective = '$effective\n\n$coachWrapper';
       }
+    } else if (iterating) {
+      // v265 — text-only iteration after a prior image upload (preset
+      // tap, transform chip tap, free-text input). Wrap the user's
+      // message so the model knows to deliver JUST the next reply,
+      // not re-explain the analysis it already gave. Wing AI's
+      // pattern: analyze once, iterate replies on demand.
+      effective = '$effective\n\n(Iterating on the prior analysis. '
+                  'No re-breakdown. Just deliver ONE new suggestion '
+                  'line in double quotes plus one short sentence of '
+                  'context — that\'s it.)';
     }
     final reply = await _ask(effective, image: image);
     if (!mounted) return;
@@ -278,14 +302,56 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
 
   Future<void> _attach(ImageSource source) async {
     HapticFeedback.selectionClick();
+    // v265 — the silent catch was eating real failures (iOS Limited
+    // Photos permission, picker init crashes, file-read 0-byte
+    // returns), so users tapping + would get nothing back with no
+    // indication WHY. Now every failure point is logged AND a
+    // snackbar surfaces the cause inline so bro can see exactly
+    // what happened.
     try {
+      _dbg('picker source=${source.name} — opening…');
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: source, maxWidth: 1600);
-      if (picked == null || !mounted) return;
-      final bytes = await File(picked.path).readAsBytes();
+      if (picked == null) {
+        _dbg('picker returned null — user cancelled or no image');
+        return;
+      }
+      if (!mounted) return;
+      _dbg('picker returned path=${picked.path}');
+      final file = File(picked.path);
+      if (!await file.exists()) {
+        _dbg('picked file does not exist on disk');
+        _snack('Couldn\'t read the photo — try again.');
+        return;
+      }
+      final bytes = await file.readAsBytes();
+      _dbg('read ${bytes.length} bytes from picked file');
+      if (bytes.isEmpty) {
+        _snack('That photo came back empty — pick another.');
+        return;
+      }
       if (!mounted) return;
       await _send(_ctrl.text, image: bytes);
-    } catch (_) {/* silent */}
+    } catch (e, st) {
+      _dbg('picker / attach THREW: ${e.runtimeType} — $e');
+      _dbg('stack first frame: ${st.toString().split('\n').first}');
+      if (!mounted) return;
+      _snack('Photo upload failed: $e');
+    }
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg,
+        style: GoogleFonts.inter(
+          color: Colors.white, fontSize: 13.5,
+          fontWeight: FontWeight.w600,
+        )),
+      backgroundColor: AppColors.red,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 3),
+    ));
   }
 
   void _showAttachSheet() {
