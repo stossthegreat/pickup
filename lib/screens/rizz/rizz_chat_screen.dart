@@ -1026,127 +1026,149 @@ class _InputBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
-        decoration: BoxDecoration(
-          color: AppColors.surface1,
-          borderRadius: BorderRadius.circular(99),
-          border: Border.all(color: AppColors.surface3, width: 0.6),
-        ),
-        child: Row(
-          children: [
-            // ── Attach (screenshot upload). Compact circle, same as
-            //    before — but slightly tighter so the tone pill +
-            //    text field both fit on the one row.
-            Material(
-              color: Colors.transparent,
-              shape: const CircleBorder(),
-              child: InkWell(
-                onTap: onAttach,
-                customBorder: const CircleBorder(),
-                child: Container(
-                  width: 36, height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.red.withValues(alpha: 0.14),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.red.withValues(alpha: 0.5),
-                      width: 0.8),
-                  ),
-                  child: const Icon(Icons.center_focus_strong_rounded,
-                      color: AppColors.red, size: 17),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            // ── Tone pill — INLINE here, not on a separate row above.
-            //    Bro: "this is a professional app not a clown show."
-            //    Tap opens the same five-tone picker sheet.
-            Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(99),
-              child: InkWell(
-                onTap: onTone,
-                borderRadius: BorderRadius.circular(99),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 7),
-                  decoration: BoxDecoration(
+      // v266 — two-row input dock. Bro: "you've got the flirty etc
+      // dropdown on saw line as text. No text should be one level
+      // above like wing ai. Also make the plus image button better
+      // looks tacky."
+      //
+      // Row 1 (top): tone pill, left-aligned on its own line.
+      //              Plenty of breathing room so the FLIRTY label
+      //              + caret read as a clear standalone control.
+      // Row 2 (bottom): clean photo+ button (Icons.add_rounded in
+      //              a soft surface pill — no more focus-target
+      //              red-glow reticle), the text input, send.
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 0, 0, 8),
+            child: Row(
+              children: [
+                Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(99),
+                  child: InkWell(
+                    onTap: onTone,
                     borderRadius: BorderRadius.circular(99),
-                    border: Border.all(
-                      color: AppColors.red.withValues(alpha: 0.55),
-                      width: 0.9),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface1,
+                        borderRadius: BorderRadius.circular(99),
+                        border: Border.all(
+                          color: AppColors.red.withValues(alpha: 0.55),
+                          width: 0.9),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(tone.emoji,
+                            style: const TextStyle(fontSize: 14, height: 1)),
+                          const SizedBox(width: 6),
+                          Text(tone.label,
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 12.5, height: 1,
+                              letterSpacing: 0.4,
+                              fontWeight: FontWeight.w800,
+                            )),
+                          const SizedBox(width: 3),
+                          const Icon(Icons.keyboard_arrow_down_rounded,
+                            color: AppColors.textSecondary, size: 15),
+                        ],
+                      ),
+                    ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(tone.emoji,
-                        style: const TextStyle(fontSize: 13, height: 1)),
-                      const SizedBox(width: 5),
-                      Text(tone.label,
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 12, height: 1,
-                          letterSpacing: 0.2,
-                          fontWeight: FontWeight.w800,
-                        )),
-                      const SizedBox(width: 2),
-                      const Icon(Icons.keyboard_arrow_down_rounded,
-                        color: AppColors.textSecondary, size: 14),
-                    ],
+                ),
+                const Spacer(),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
+            decoration: BoxDecoration(
+              color: AppColors.surface1,
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(color: AppColors.surface3, width: 0.6),
+            ),
+            child: Row(
+              children: [
+                // v266 — softer add-photo button. Soft surface
+                // background, subtle outline, clean add_photo
+                // glyph. No red glow, no focus reticle — reads as
+                // a calm "attach" control instead of a power tool.
+                Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: onAttach,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 38, height: 38,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface2,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.surface3, width: 0.8),
+                      ),
+                      child: const Icon(
+                          Icons.add_photo_alternate_outlined,
+                          color: Colors.white, size: 19),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                onSubmitted: (_) => onSend(),
-                maxLines: 1,
-                cursorColor: AppColors.red,
-                style: GoogleFonts.inter(
-                  color: AppColors.textPrimary,
-                  fontSize: 15, height: 1.3,
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Ask anything…',
-                  hintStyle: GoogleFonts.inter(
-                    color: AppColors.textTertiary,
-                    fontSize: 15, height: 1.3,
-                    fontWeight: FontWeight.w400,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    onSubmitted: (_) => onSend(),
+                    maxLines: 1,
+                    cursorColor: AppColors.red,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textPrimary,
+                      fontSize: 15, height: 1.3,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Ask anything…',
+                      hintStyle: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 15, height: 1.3,
+                        fontWeight: FontWeight.w400,
+                      ),
+                      border:           InputBorder.none,
+                      enabledBorder:    InputBorder.none,
+                      focusedBorder:    InputBorder.none,
+                      contentPadding:   const EdgeInsets.symmetric(vertical: 12),
+                      isDense:          true,
+                    ),
                   ),
-                  border:           InputBorder.none,
-                  enabledBorder:    InputBorder.none,
-                  focusedBorder:    InputBorder.none,
-                  contentPadding:   const EdgeInsets.symmetric(vertical: 12),
-                  isDense:          true,
                 ),
-              ),
-            ),
-            Material(
-              color: AppColors.red,
-              shape: const CircleBorder(),
-              child: InkWell(
-                onTap: sending ? null : onSend,
-                customBorder: const CircleBorder(),
-                child: Container(
-                  width: 40, height: 40,
-                  alignment: Alignment.center,
-                  child: sending
-                      ? const SizedBox(
-                          width: 18, height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.arrow_upward_rounded,
-                          color: Colors.white, size: 20),
+                Material(
+                  color: AppColors.red,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: sending ? null : onSend,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 40, height: 40,
+                      alignment: Alignment.center,
+                      child: sending
+                          ? const SizedBox(
+                              width: 18, height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.arrow_upward_rounded,
+                              color: Colors.white, size: 20),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
