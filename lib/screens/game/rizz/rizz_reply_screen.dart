@@ -56,6 +56,13 @@ class RizzReplyScreen extends StatefulWidget {
 
 class _RizzReplyScreenState extends State<RizzReplyScreen> {
   final _herCtrl = TextEditingController();
+  /// v269 — free-text CONTEXT field. Rizz AI's #1 wished feature
+  /// (per the App Store review research): users want to type
+  /// "she's my coworker, we matched on Hinge, last date was 5
+  /// days ago" alongside the screenshot so the model has the
+  /// story behind the chat. Backend already accepts `ctx` — we
+  /// were just never collecting it from the UI.
+  final _ctxCtrl = TextEditingController();
   bool _generating = false;
   Uint8List? _screenshotBytes;
   List<RizzReply>? _replies;
@@ -104,6 +111,7 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
   @override
   void dispose() {
     _herCtrl.dispose();
+    _ctxCtrl.dispose();
     super.dispose();
   }
 
@@ -199,6 +207,7 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
         scenario:         scenarioForCall,
         previous:         previousForCall,
         mySide:           _mySide,
+        context:          _ctxCtrl.text.trim(),
       // 55s ceiling — vision adds ~1-2s vs text path; this gives the
       // service-level 50s some headroom before the spinner clears.
       ).timeout(const Duration(seconds: 55));
@@ -454,6 +463,18 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
                 setState(() => _mySide = side);
                 await _generate();
               },
+            ),
+            const SizedBox(height: 12),
+            // v269 — free-text CONTEXT field. Rizz AI's #1 wished
+            // feature (per App Store review research). The user
+            // types "she's my coworker, we matched on Hinge, last
+            // date was 5 days ago" and the backend uses it as the
+            // backstory behind the chat. Optional — empty by
+            // default, doesn't affect anything if left blank.
+            _ContextField(
+              controller: _ctxCtrl,
+              disabled:   _generating,
+              onSubmit:   _generate,
             ),
             const SizedBox(height: 12),
           ],
@@ -1778,6 +1799,83 @@ class _SideChip extends StatelessWidget {
               fontWeight: FontWeight.w800,
             )),
         ),
+      ),
+    );
+  }
+}
+
+
+/// v269 — free-text CONTEXT field. Sits between the bubble-side
+/// toggle and the screenshot preview. Optional input; empty by
+/// default. When the user types into it, [onSubmit] re-fires
+/// _generate so replies refresh with the new backstory. Matches
+/// the chip-style aesthetics of the rest of the screen (rounded
+/// pill, surface1 fill, subtle red focus border).
+class _ContextField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool disabled;
+  final Future<void> Function() onSubmit;
+  const _ContextField({
+    required this.controller,
+    required this.disabled,
+    required this.onSubmit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('ADD CONTEXT (OPTIONAL)',
+            style: GoogleFonts.inter(
+              color: AppColors.textTertiary,
+              fontSize: 10, letterSpacing: 2.6,
+              fontWeight: FontWeight.w800,
+            )),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface1,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.surface3, width: 0.6),
+            ),
+            child: TextField(
+              controller: controller,
+              enabled: !disabled,
+              minLines: 1,
+              maxLines: 3,
+              maxLength: 240,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) async => await onSubmit(),
+              cursorColor: AppColors.red,
+              style: GoogleFonts.inter(
+                color: AppColors.textPrimary,
+                fontSize: 13.5, height: 1.4,
+                fontWeight: FontWeight.w500,
+              ),
+              decoration: InputDecoration(
+                hintText: 'e.g. she\'s my coworker · matched on '
+                          'Hinge last week · last date was 5 days '
+                          'ago and went well',
+                hintStyle: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 13, height: 1.35,
+                  fontWeight: FontWeight.w400,
+                ),
+                contentPadding: const EdgeInsets.fromLTRB(
+                    14, 12, 14, 12),
+                counterText: '',
+                border:        InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                isDense:       true,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
