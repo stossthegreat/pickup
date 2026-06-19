@@ -355,12 +355,35 @@ function repliesContainBannedWord(replies) {
     && RIZZ_BANNED_RX.test(r.text));
 }
 
-export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase64 } = {}) {
+export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase64, mySide } = {}) {
   // Vision path activates when the frontend ships a screenshot. The
   // model sees the iMessage / Hinge / Tinder UI directly — no OCR
   // wall of text, no transcript labeling, no abbreviation guesswork.
   // This is the real fix: read the chat as a human reads it.
   const hasVision = typeof imageBase64 === 'string' && imageBase64.length > 100;
+
+  // v268 — bubble-side override. Wing AI's #1 complaint (30-40% of
+  // their negatives) is that the model can't tell who's sending vs
+  // receiving in screenshots. When the frontend ships `mySide`
+  // (left|right), we inject an explicit system instruction so the
+  // model never gets the seat wrong. Skipped when mySide is missing
+  // / unknown / auto — that's the legacy "let the model infer"
+  // path, which is fine when the layout is unambiguous.
+  const sideHint = (mySide === 'left' || mySide === 'right')
+    ? (mySide === 'left'
+        ? 'USER BUBBLE SIDE: LEFT. In this screenshot, the bubbles ' +
+          'on the LEFT side of the screen are the USER (the person ' +
+          'asking you for a reply). The bubbles on the RIGHT side ' +
+          'belong to HER (the match). Generate the USER\'s NEXT ' +
+          'reply — i.e. another message that would appear on the ' +
+          'LEFT side, continuing from her latest RIGHT-side bubble.'
+        : 'USER BUBBLE SIDE: RIGHT. In this screenshot, the bubbles ' +
+          'on the RIGHT side of the screen are the USER (the person ' +
+          'asking you for a reply). The bubbles on the LEFT side ' +
+          'belong to HER (the match). Generate the USER\'s NEXT ' +
+          'reply — i.e. another message that would appear on the ' +
+          'RIGHT side, continuing from her latest LEFT-side bubble.')
+    : '';
 
   const userMessage = buildUserMessage({
     her:       her      || '',
@@ -372,6 +395,10 @@ export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase6
   });
 
   async function runOnce(extraSystem = '') {
+    // Side hint always rides as part of the system prompt addition
+    // when present. Concatenated to whatever extraSystem the retry
+    // path also wants to inject.
+    const extras = [sideHint, extraSystem].filter(Boolean).join('\n\n');
     // gpt-4o supports a content array of {type:'text'} + {type:'image_url'}
     // on the user role. When we have an image we POST that shape; when
     // we don't, the plain-string content stays.
@@ -402,7 +429,7 @@ export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase6
       // gpt-4o-mini fully supports.
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: SYSTEM + (extraSystem ? '\n\n' + extraSystem : '') },
+        { role: 'system', content: SYSTEM + (extras ? '\n\n' + extras : '') },
         { role: 'user',   content: userContent },
       ],
       response_format: { type: 'json_object' },

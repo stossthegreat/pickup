@@ -71,6 +71,12 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
   /// moment the request fires so subsequent re-rolls don't keep
   /// the bias unless the user re-selects.
   String _scenario = '';
+  /// v268 — which side of the chat-bubble layout belongs to the user.
+  /// Default `auto` lets the backend infer from layout / vocabulary,
+  /// matching the legacy behaviour. The user can override with one
+  /// tap when the model gets it backwards — kills Wing AI's #1
+  /// complaint at zero added cost.
+  BubbleSide _mySide = BubbleSide.auto;
 
   @override
   void initState() {
@@ -192,6 +198,7 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
         vibe:             _tone,
         scenario:         scenarioForCall,
         previous:         previousForCall,
+        mySide:           _mySide,
       // 55s ceiling — vision adds ~1-2s vs text path; this gives the
       // service-level 50s some headroom before the spinner clears.
       ).timeout(const Duration(seconds: 55));
@@ -430,6 +437,25 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
               ),
             ),
             const SizedBox(height: 18),
+          ],
+
+          // v268 — bubble-side override. Only renders when we have a
+          // screenshot in hand. AUTO is the default; tapping LEFT or
+          // RIGHT immediately re-fires _generate with the explicit
+          // side hint so the user can recover from a backwards
+          // inference in one tap. Wing AI's #1 complaint dies here.
+          if (_screenshotBytes != null) ...[
+            _BubbleSideToggle(
+              current: _mySide,
+              disabled: _generating,
+              onChange: (side) async {
+                if (side == _mySide) return;
+                HapticFeedback.selectionClick();
+                setState(() => _mySide = side);
+                await _generate();
+              },
+            ),
+            const SizedBox(height: 12),
           ],
 
           // Full screenshot preview (or typed-text card if no image).
@@ -1640,6 +1666,119 @@ class _BrandHeartbeatDotState extends State<_BrandHeartbeatDot>
           ),
         );
       },
+    );
+  }
+}
+
+/// v268 — three-pill toggle that lets the user mark which side of
+/// the chat-bubble layout is theirs. Default `AUTO` matches the
+/// pre-v268 behaviour (model infers from layout). Tapping `← LEFT`
+/// or `RIGHT →` injects an explicit hint into the next /rizz/reply
+/// call, killing Wing AI's #1 complaint ("can't tell who's talking
+/// in screenshots") at zero added cost.
+///
+/// Sits between the situation chips and the screenshot preview so
+/// the user can see the toggle BEFORE the screenshot, clock the
+/// orientation, and switch sides if the model got it backwards.
+/// Re-fires _generate on every change — replies refresh in-place
+/// with the correct seat.
+class _BubbleSideToggle extends StatelessWidget {
+  final BubbleSide current;
+  final bool disabled;
+  final ValueChanged<BubbleSide> onChange;
+  const _BubbleSideToggle({
+    required this.current,
+    required this.disabled,
+    required this.onChange,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('WHICH SIDE IS YOU?',
+            style: GoogleFonts.inter(
+              color: AppColors.textTertiary,
+              fontSize: 10, letterSpacing: 2.6,
+              fontWeight: FontWeight.w800,
+            )),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _SideChip(
+                label:    'AUTO',
+                selected: current == BubbleSide.auto,
+                disabled: disabled,
+                onTap:    () => onChange(BubbleSide.auto),
+              )),
+              const SizedBox(width: 8),
+              Expanded(child: _SideChip(
+                label:    '← I\'M LEFT',
+                selected: current == BubbleSide.left,
+                disabled: disabled,
+                onTap:    () => onChange(BubbleSide.left),
+              )),
+              const SizedBox(width: 8),
+              Expanded(child: _SideChip(
+                label:    'I\'M RIGHT →',
+                selected: current == BubbleSide.right,
+                disabled: disabled,
+                onTap:    () => onChange(BubbleSide.right),
+              )),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SideChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final bool disabled;
+  final VoidCallback onTap;
+  const _SideChip({
+    required this.label,
+    required this.selected,
+    required this.disabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fill   = selected ? AppColors.red.withValues(alpha: 0.18)
+                            : AppColors.surface1;
+    final border = selected ? AppColors.red
+                            : AppColors.surface3;
+    final fg     = selected ? Colors.white
+                            : (disabled ? AppColors.textTertiary
+                                        : AppColors.textSecondary);
+    return Material(
+      color: fill,
+      borderRadius: BorderRadius.circular(99),
+      child: InkWell(
+        onTap: disabled ? null : onTap,
+        borderRadius: BorderRadius.circular(99),
+        child: Container(
+          height: 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(
+              color: border, width: selected ? 1.2 : 0.6),
+          ),
+          child: Text(label,
+            style: GoogleFonts.inter(
+              color: fg,
+              fontSize: 11.5, letterSpacing: 1.2,
+              fontWeight: FontWeight.w800,
+            )),
+        ),
+      ),
     );
   }
 }
