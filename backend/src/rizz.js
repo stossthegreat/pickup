@@ -397,28 +397,36 @@ export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase6
   // This is the real fix: read the chat as a human reads it.
   const hasVision = typeof imageBase64 === 'string' && imageBase64.length > 100;
 
-  // v268 — bubble-side override. Wing AI's #1 complaint (30-40% of
-  // their negatives) is that the model can't tell who's sending vs
-  // receiving in screenshots. When the frontend ships `mySide`
-  // (left|right), we inject an explicit system instruction so the
-  // model never gets the seat wrong. Skipped when mySide is missing
-  // / unknown / auto — that's the legacy "let the model infer"
-  // path, which is fine when the layout is unambiguous.
-  const sideHint = (mySide === 'left' || mySide === 'right')
-    ? (mySide === 'left'
-        ? 'USER BUBBLE SIDE: LEFT. In this screenshot, the bubbles ' +
-          'on the LEFT side of the screen are the USER (the person ' +
-          'asking you for a reply). The bubbles on the RIGHT side ' +
-          'belong to HER (the match). Generate the USER\'s NEXT ' +
-          'reply — i.e. another message that would appear on the ' +
-          'LEFT side, continuing from her latest RIGHT-side bubble.'
-        : 'USER BUBBLE SIDE: RIGHT. In this screenshot, the bubbles ' +
-          'on the RIGHT side of the screen are the USER (the person ' +
-          'asking you for a reply). The bubbles on the LEFT side ' +
-          'belong to HER (the match). Generate the USER\'s NEXT ' +
-          'reply — i.e. another message that would appear on the ' +
-          'RIGHT side, continuing from her latest LEFT-side bubble.')
-    : '';
+  // v273 — bubble-side override. v268 added the param + a polite
+  // appended hint, but in production the model kept ignoring it.
+  // Root cause: gpt-4o-mini deprioritises late-in-system content
+  // and treats appended blocks as advisory. Fix: when mySide is
+  // set, the side hint becomes the FIRST thing in the system
+  // message AND uses imperative "MUST/NEVER" language so the model
+  // can't downgrade it. Also logs explicitly so a missing hint is
+  // visible in Railway logs instead of silently absent.
+  let sideHint = '';
+  if (mySide === 'left' || mySide === 'right') {
+    const userSide = mySide.toUpperCase();
+    const herSide  = mySide === 'left' ? 'RIGHT' : 'LEFT';
+    sideHint =
+      '🚨 BUBBLE SIDE OVERRIDE — THIS IS LAW, NOT A SUGGESTION:\n' +
+      `THE USER IS ON THE ${userSide} SIDE OF THE SCREENSHOT. PERIOD.\n` +
+      `Every message bubble on the ${userSide} of the image is the ` +
+      'USER (the person who asked you for a reply). Every message ' +
+      `bubble on the ${herSide} of the image is HER (the match the ` +
+      'user is texting). The most recent bubble on her ' +
+      `(${herSide}) side is what the user needs a reply for.\n` +
+      'When you generate "SEND THIS", you are writing the USER\'s ' +
+      `NEXT message — i.e. another bubble that will appear on ` +
+      `the ${userSide} side, continuing from her latest ${herSide}-` +
+      'side bubble. NEVER write a reply as if you were her. NEVER ' +
+      'reverse the sides because the layout "feels" wrong to you. ' +
+      'The user is on the ' + userSide + '. Always. Without ' +
+      'exception. This override completely overrides any default ' +
+      'left/right inference rule you might apply.';
+    console.log(`[rizz] sideHint attached — userSide=${userSide}`);
+  }
 
   const userMessage = buildUserMessage({
     her:       her      || '',
@@ -430,10 +438,12 @@ export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase6
   });
 
   async function runOnce(extraSystem = '') {
-    // Side hint always rides as part of the system prompt addition
-    // when present. Concatenated to whatever extraSystem the retry
-    // path also wants to inject.
-    const extras = [sideHint, extraSystem].filter(Boolean).join('\n\n');
+    // v273 — sideHint is now PREPENDED to SYSTEM (see message build
+    // below) so it leads, not trails. extraSystem (retry reminders)
+    // still rides at the end where the model expects late-rule
+    // reminders. Kept named `extras` so the retry path stays the
+    // same shape.
+    const extras = extraSystem;
     // gpt-4o supports a content array of {type:'text'} + {type:'image_url'}
     // on the user role. When we have an image we POST that shape; when
     // we don't, the plain-string content stays.
@@ -464,7 +474,15 @@ export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase6
       // gpt-4o-mini fully supports.
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: SYSTEM + (extras ? '\n\n' + extras : '') },
+        {
+          role: 'system',
+          // v273 — sideHint LEADS the system prompt so the model
+          // can't deprioritise it. SYSTEM (the base rizz persona +
+          // rules) follows. Late-pinned reminders (extras) trail.
+          content: (sideHint ? sideHint + '\n\n' : '')
+                 + SYSTEM
+                 + (extras ? '\n\n' + extras : ''),
+        },
         { role: 'user',   content: userContent },
       ],
       response_format: { type: 'json_object' },

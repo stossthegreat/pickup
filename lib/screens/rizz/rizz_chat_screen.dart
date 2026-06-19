@@ -50,16 +50,25 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
   /// register. Default FLIRTY.
   RizzVibe _tone = RizzVibe.flirty;
 
+  // v273 — preset list re-ordered. The original COLD OPENER set
+  // (Playful comeback / Ask her out / Plan a date / Keep convo
+  // going / Recover from a bad reply / Win back a ghost / Flirty
+  // first message) leads now — these are the familiar
+  // jump-into-anything chips users expect when they open a fresh
+  // chat. The two coach-mode entries ("Read her profile" / "Where
+  // did I go wrong") sit after; they're still on screen because
+  // _PresetStrip uses Wrap (not horizontal scroll) so every chip
+  // renders without paging.
   static const _presets = <String>[
-    'Read her profile',
-    'Where did I go wrong?',
+    'Flirty first message',
     'Playful comeback',
     'Ask her out',
     'Plan a date',
     'Keep the convo going',
     'Recover from a bad reply',
     'Win back a ghost',
-    'Flirty first message',
+    'Read her profile',
+    'Where did I go wrong?',
   ];
 
   @override
@@ -129,10 +138,16 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     var effective = msg;
     if (image != null) {
       _dbg('vision path — sending image bytes (${image.length}) to backend · iterating=$iterating');
-      // v265 — TWO wrappers. First image attach → full dual-mode
-      // coach. Subsequent attaches (iteration mode) → slim
-      // "just give me the next line" wrapper so we don't repeat
-      // the whole analysis on every preset / chip tap.
+      // v273 — 10x DEEPER breakdown. Bro: "the breakdown the ai gives
+      // — 10x it." Old wrapper was 3 bullets (WHAT WORKED / FELL
+      // FLAT / SEND THIS) — read as a stub. New wrapper is the
+      // Wing-AI-style multi-section analysis: interest level,
+      // dynamic read, multiple green flags, multiple misfires,
+      // her likely read of him, predicted next move, then the
+      // sent line. ~5x the words, ~10x the perceived value.
+      //
+      // Iteration mode still gets the slim "just the next line"
+      // wrapper so preset taps don't repeat the breakdown.
       final coachWrapper = iterating
         ? ''
           'I attached an updated screenshot. You already gave me '
@@ -144,31 +159,65 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
           'context max.'
         : ''
           'I attached a screenshot. AUTO-DETECT what it is and '
-          'respond in the matching format:\n\n'
+          'deliver a FULL coach breakdown — long, specific, '
+          'actually useful. No three-bullet stub. Match the '
+          'format below exactly.\n\n'
           'IF CHAT SCREENSHOT (chat bubbles between two people): '
-          'read it as a chat, the LAST bubble on her side is what '
-          'I need a reply for. Reply in this structure:\n'
-          '  · WHAT WORKED: one short sentence on what landed in '
-          'my last 2-3 messages.\n'
-          '  · WHAT FELL FLAT: one short sentence on what didn\'t. '
-          'Be honest, not brutal.\n'
-          '  · SEND THIS: ONE line in double quotes, specific to '
-          'her last message, continuing naturally. Chat '
-          'abbreviations (wbu, wyd, ngl, etc.) are plain English '
-          '— not code.\n\n'
+          'read every bubble top→bottom as chronological. The '
+          'last bubble on her side is the reply target. Output '
+          'these sections, IN THIS ORDER, with the exact headers:\n\n'
+          '  📊 INTEREST LEVEL: a single line — percent (your read) '
+          'and one word ("rising" / "engaging" / "lukewarm" / '
+          '"dodging"). Example: "72% · rising"\n\n'
+          '  💬 DYNAMIC: 2-3 sentences on what\'s actually happening '
+          'between you. Is she leaning in? Testing? Deflecting? '
+          'Building? Playing? Name the move she\'s running and '
+          'where she\'s at emotionally.\n\n'
+          '  ✅ GREEN FLAGS: 2-3 bullet points starting with "• " '
+          '— specific things SHE did that you should notice (a '
+          'tease back, a fast reply, a personal disclosure, '
+          'matching your tone, etc).\n\n'
+          '  ❌ WHAT YOU NEED TO AVOID: 2-3 bullets — specific '
+          'misfires in your last 2-3 messages OR specific traps '
+          'in the moment ("don\'t go full sincere", "don\'t '
+          'dodge the flirt", "don\'t over-text"). One line each.\n\n'
+          '  🎯 BEST NEXT MOVE: 1-2 sentences naming the angle. '
+          'Not the line — the angle. ("Lean in confidently with '
+          'cocky humor, not sincerity, to keep her guessing.")\n\n'
+          '  ✨ WHAT YOU DID WELL: one short sentence calling out '
+          'your strongest play in the last 2-3 messages.\n\n'
+          '  💡 SEND THIS: ONE line in double quotes that executes '
+          'the BEST NEXT MOVE. Specific to her last bubble. Chat '
+          'abbreviations (wbu, wyd, ngl) are PLAIN ENGLISH, not '
+          'codes. No magician/Eiffel/pickup-line cliches.\n\n'
           'IF PROFILE SCREENSHOT (dating-app profile — bio, '
           'prompts, photos, age, location): read her archetype + '
-          'visible interests + emotional vibe. Reply in this '
-          'structure:\n'
-          '  · WHO SHE IS: one short paragraph on who she reads '
-          'as — archetype, what she\'s into, the vibe she\'s '
-          'projecting.\n'
-          '  · HOOKS: 2-3 specific things from her profile I can '
-          'lean on (a prompt answer, a photo, a hobby).\n'
-          '  · THREE OPENERS: 3 distinct opener options, each in '
-          'double quotes, each referencing something specific '
-          'she wrote or pictured. No magician/Eiffel/pickup-line '
-          'cliches.';
+          'visible interests + emotional vibe. Output these '
+          'sections, IN THIS ORDER, with the exact headers:\n\n'
+          '  👤 WHO SHE IS: 2-3 sentences on her archetype, vibe, '
+          'and what she\'s projecting. Be specific — "she\'s '
+          'leaning into the chaotic-good art girl archetype, '
+          'overshares emotionally early, wants to be SEEN as '
+          'interesting." Not "she seems nice."\n\n'
+          '  💭 WHAT SHE\'S INTO: 3-4 bullets starting with "• " '
+          '— specific interests visible in her bio / photos / '
+          'prompts. Quote the prompt answers where useful.\n\n'
+          '  🎣 HOOKS: 2-3 bullets — specific things you can lean '
+          'on (a prompt, a photo, a hobby). For each, one line on '
+          'the angle you\'d use.\n\n'
+          '  💡 THREE OPENERS: exactly 3 distinct opener options, '
+          'each in double quotes, each referencing something '
+          'specific she wrote or pictured. Different angles '
+          '(observation / tease / future-frame). No magician/'
+          'Eiffel/pickup-line cliches. No "hi beautiful" or '
+          '"hey gorgeous". No body-part compliments.\n\n'
+          'IMPORTANT formatting rules for BOTH modes:\n'
+          '  - Use the emoji headers exactly as shown.\n'
+          '  - Lines in double quotes are the ones the user will '
+          'copy + send — make every one tight, specific, sound '
+          'like a 22-year-old who knows what he\'s doing.\n'
+          '  - Be honest, not brutal. Don\'t be a corporate dating '
+          'coach. The user wants real game, not a self-help PDF.';
       if (effective.isEmpty) {
         effective = coachWrapper;
       } else {
@@ -907,17 +956,20 @@ class _PresetStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+    // v273 — switched from horizontal ListView (which cropped to
+    // 2-3 visible chips and made the rest invisible behind a
+    // non-obvious scroll) to a Wrap that flows every chip onto
+    // visible rows. Bro: "u took all the prompts out wtf" —
+    // they were never gone, just hidden by the scroll-edge.
+    // Wrap fixes the perception AND the access.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
         children: [
           for (final p in presets)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: _PresetChip(label: p, onTap: () => onPick(p)),
-            ),
+            _PresetChip(label: p, onTap: () => onPick(p)),
         ],
       ),
     );
@@ -1369,48 +1421,51 @@ class _ChatTransformStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 42,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _chips.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final c = _chips[i];
-          return Material(
-            color: AppColors.surface1,
-            borderRadius: BorderRadius.circular(100),
-            child: InkWell(
-              onTap: disabled ? null : () => onTap(c.scenario),
+    // v273 — Wrap instead of horizontal scroll. Same reasoning as
+    // _PresetStrip: all 10 chips visible at once, no hidden chips
+    // behind the right edge.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final c in _chips)
+            Material(
+              color: AppColors.surface1,
               borderRadius: BorderRadius.circular(100),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(100),
-                  border: Border.all(color: AppColors.surface3, width: 0.8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(c.emoji,
-                      style: const TextStyle(fontSize: 14, height: 1)),
-                    const SizedBox(width: 7),
-                    Text(c.label,
-                      style: GoogleFonts.inter(
-                        color: disabled
-                            ? AppColors.textTertiary
-                            : Colors.white,
-                        fontSize: 13, height: 1,
-                        letterSpacing: 0.1,
-                        fontWeight: FontWeight.w700,
-                      )),
-                  ],
+              child: InkWell(
+                onTap: disabled ? null : () => onTap(c.scenario),
+                borderRadius: BorderRadius.circular(100),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(100),
+                    border: Border.all(
+                        color: AppColors.surface3, width: 0.8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(c.emoji,
+                        style: const TextStyle(fontSize: 14, height: 1)),
+                      const SizedBox(width: 7),
+                      Text(c.label,
+                        style: GoogleFonts.inter(
+                          color: disabled
+                              ? AppColors.textTertiary
+                              : Colors.white,
+                          fontSize: 13, height: 1,
+                          letterSpacing: 0.1,
+                          fontWeight: FontWeight.w700,
+                        )),
+                    ],
+                  ),
                 ),
               ),
             ),
-          );
-        },
+        ],
       ),
     );
   }
