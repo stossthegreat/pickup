@@ -148,7 +148,7 @@ app.post('/chat', async (req, res) => {
 // no archetypes, no tryon — just text in, text out.
 app.post('/rizz/reply', async (req, res) => {
   try {
-    const { her, vibe, ctx, scenario, previous, imageBase64 } = req.body || {};
+    const { her, vibe, ctx, scenario, previous, imageBase64, mySide } = req.body || {};
     // `previous` is an optional array of {text, tag} objects sent by
     // the quick-action chips ("More heat", "Funnier", "Make a move").
     // When present, rizzReply switches into TRANSFORM MODE and
@@ -169,6 +169,7 @@ app.post('/rizz/reply', async (req, res) => {
       scenario:    typeof scenario === 'string' ? scenario : '',
       previous:    prev,
       imageBase64: typeof imageBase64 === 'string' ? imageBase64 : undefined,
+      mySide:      typeof mySide    === 'string' ? mySide    : undefined,
     });
     res.json(result);
   } catch (err) {

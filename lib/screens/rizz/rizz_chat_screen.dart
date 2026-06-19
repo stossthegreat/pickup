@@ -37,9 +37,11 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
   final _scrollCtrl = ScrollController();
   final List<_RizzMsg> _msgs = [
     const _RizzMsg('assistant',
-        'what\'s good. drop a screenshot of her chat, paste her last '
-        'text, or just ask. i write the line you should send. tap any '
-        'line in quotes to copy it.'),
+        'what\'s good. drop a screenshot of your chat and i\'ll break '
+        'down what worked, what flopped, and the line to send next. '
+        'or drop her PROFILE — bio + photos — and i\'ll read who she '
+        'is and give you three openers that actually reference her. '
+        'tap any line in quotes to copy it.'),
   ];
   bool _sending = false;
   /// Active tone preset. Matches the rizz reply screen so picking
@@ -49,6 +51,8 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
   RizzVibe _tone = RizzVibe.flirty;
 
   static const _presets = <String>[
+    'Read her profile',
+    'Where did I go wrong?',
     'Playful comeback',
     'Ask her out',
     'Plan a date',
@@ -98,6 +102,23 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     final msg = text.trim();
     if ((msg.isEmpty && image == null) || _sending) return;
     HapticFeedback.selectionClick();
+    // v265 — detect ANALYZE-ONCE-vs-ITERATE mode BEFORE we push the
+    // new user turn into _msgs. The first time the user attaches an
+    // image, we ship the full dual-mode coach wrapper. Every
+    // subsequent turn (text-only, or even a new image) is treated
+    // as ITERATION: "you've already given the analysis, just deliver
+    // ONE new suggestion line in quotes — no breakdown, no markdown
+    // sections, no re-explaining who she is."
+    //
+    // Detection: have we EVER attached an image AND received a reply
+    // back? If yes, we're in iterate mode for every new turn,
+    // including new uploads (user just wants the next line on the
+    // updated state). Iteration prompt is much shorter — kills the
+    // re-explain-every-tap problem bro flagged on the Wing AI
+    // screenshots ("it only explains once").
+    final hadImageBefore = _msgs.any((m) =>
+        m.role == 'user' && m.image != null);
+    final iterating = hadImageBefore;
     setState(() {
       _msgs.add(_RizzMsg('user', msg.isEmpty ? '(screenshot)' : msg,
           image: image));
@@ -105,30 +126,64 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     });
     _ctrl.clear();
     _scrollToBottom();
-    // If we have a screenshot, run OCR and frame the extracted text so
-    // the AI treats the LAST line as what she just sent (the reply
-    // target) and the rest as conversational context. Bro: "it's
-    // completely off topic — needs to finish off the convo, specific
-    // to the last thing said, using the rest as context."
     var effective = msg;
     if (image != null) {
-      // Vision path — backend gpt-4o-vision reads the iMessage / Hinge
-      // UI directly from the attached imageBase64. No OCR, no
-      // transcript labeling. We just frame the request and pass the
-      // image bytes through _ask. Bro: "the real fix is vision —
-      // let's go." This is that path.
-      _dbg('vision path — sending image bytes (${image.length}) to backend');
+      _dbg('vision path — sending image bytes (${image.length}) to backend · iterating=$iterating');
+      // v265 — TWO wrappers. First image attach → full dual-mode
+      // coach. Subsequent attaches (iteration mode) → slim
+      // "just give me the next line" wrapper so we don't repeat
+      // the whole analysis on every preset / chip tap.
+      final coachWrapper = iterating
+        ? ''
+          'I attached an updated screenshot. You already gave me '
+          'the full analysis earlier in this thread. DO NOT repeat '
+          'it. Just deliver ONE new suggestion line in double '
+          'quotes that fits the current state of the chat / '
+          'profile. No headers, no markdown sections, no '
+          'preamble — one quoted line + one short sentence of '
+          'context max.'
+        : ''
+          'I attached a screenshot. AUTO-DETECT what it is and '
+          'respond in the matching format:\n\n'
+          'IF CHAT SCREENSHOT (chat bubbles between two people): '
+          'read it as a chat, the LAST bubble on her side is what '
+          'I need a reply for. Reply in this structure:\n'
+          '  · WHAT WORKED: one short sentence on what landed in '
+          'my last 2-3 messages.\n'
+          '  · WHAT FELL FLAT: one short sentence on what didn\'t. '
+          'Be honest, not brutal.\n'
+          '  · SEND THIS: ONE line in double quotes, specific to '
+          'her last message, continuing naturally. Chat '
+          'abbreviations (wbu, wyd, ngl, etc.) are plain English '
+          '— not code.\n\n'
+          'IF PROFILE SCREENSHOT (dating-app profile — bio, '
+          'prompts, photos, age, location): read her archetype + '
+          'visible interests + emotional vibe. Reply in this '
+          'structure:\n'
+          '  · WHO SHE IS: one short paragraph on who she reads '
+          'as — archetype, what she\'s into, the vibe she\'s '
+          'projecting.\n'
+          '  · HOOKS: 2-3 specific things from her profile I can '
+          'lean on (a prompt answer, a photo, a hobby).\n'
+          '  · THREE OPENERS: 3 distinct opener options, each in '
+          'double quotes, each referencing something specific '
+          'she wrote or pictured. No magician/Eiffel/pickup-line '
+          'cliches.';
       if (effective.isEmpty) {
-        effective = 'Here\'s a screenshot of my chat with her. Read it '
-            'as a chat — messages on my side are mine, hers are hers, '
-            'the most recent bubble on her side is what I need a reply '
-            'for. Write me ONE line to send back, specific to her last '
-            'message, continuing the convo naturally. Chat abbreviations '
-            '(wbu, wyd, ngl, etc.) are plain English — not a code.';
+        effective = coachWrapper;
       } else {
-        effective = '$effective\n\n(I attached a chat screenshot — read '
-            'it directly; her latest bubble is what to reply to.)';
+        effective = '$effective\n\n$coachWrapper';
       }
+    } else if (iterating) {
+      // v265 — text-only iteration after a prior image upload (preset
+      // tap, transform chip tap, free-text input). Wrap the user's
+      // message so the model knows to deliver JUST the next reply,
+      // not re-explain the analysis it already gave. Wing AI's
+      // pattern: analyze once, iterate replies on demand.
+      effective = '$effective\n\n(Iterating on the prior analysis. '
+                  'No re-breakdown. Just deliver ONE new suggestion '
+                  'line in double quotes plus one short sentence of '
+                  'context — that\'s it.)';
     }
     final reply = await _ask(effective, image: image);
     if (!mounted) return;
@@ -247,14 +302,56 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
 
   Future<void> _attach(ImageSource source) async {
     HapticFeedback.selectionClick();
+    // v265 — the silent catch was eating real failures (iOS Limited
+    // Photos permission, picker init crashes, file-read 0-byte
+    // returns), so users tapping + would get nothing back with no
+    // indication WHY. Now every failure point is logged AND a
+    // snackbar surfaces the cause inline so bro can see exactly
+    // what happened.
     try {
+      _dbg('picker source=${source.name} — opening…');
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: source, maxWidth: 1600);
-      if (picked == null || !mounted) return;
-      final bytes = await File(picked.path).readAsBytes();
+      if (picked == null) {
+        _dbg('picker returned null — user cancelled or no image');
+        return;
+      }
+      if (!mounted) return;
+      _dbg('picker returned path=${picked.path}');
+      final file = File(picked.path);
+      if (!await file.exists()) {
+        _dbg('picked file does not exist on disk');
+        _snack('Couldn\'t read the photo — try again.');
+        return;
+      }
+      final bytes = await file.readAsBytes();
+      _dbg('read ${bytes.length} bytes from picked file');
+      if (bytes.isEmpty) {
+        _snack('That photo came back empty — pick another.');
+        return;
+      }
       if (!mounted) return;
       await _send(_ctrl.text, image: bytes);
-    } catch (_) {/* silent */}
+    } catch (e, st) {
+      _dbg('picker / attach THREW: ${e.runtimeType} — $e');
+      _dbg('stack first frame: ${st.toString().split('\n').first}');
+      if (!mounted) return;
+      _snack('Photo upload failed: $e');
+    }
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg,
+        style: GoogleFonts.inter(
+          color: Colors.white, fontSize: 13.5,
+          fontWeight: FontWeight.w600,
+        )),
+      backgroundColor: AppColors.red,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 3),
+    ));
   }
 
   void _showAttachSheet() {
@@ -929,127 +1026,149 @@ class _InputBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
-        decoration: BoxDecoration(
-          color: AppColors.surface1,
-          borderRadius: BorderRadius.circular(99),
-          border: Border.all(color: AppColors.surface3, width: 0.6),
-        ),
-        child: Row(
-          children: [
-            // ── Attach (screenshot upload). Compact circle, same as
-            //    before — but slightly tighter so the tone pill +
-            //    text field both fit on the one row.
-            Material(
-              color: Colors.transparent,
-              shape: const CircleBorder(),
-              child: InkWell(
-                onTap: onAttach,
-                customBorder: const CircleBorder(),
-                child: Container(
-                  width: 36, height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.red.withValues(alpha: 0.14),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.red.withValues(alpha: 0.5),
-                      width: 0.8),
-                  ),
-                  child: const Icon(Icons.center_focus_strong_rounded,
-                      color: AppColors.red, size: 17),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            // ── Tone pill — INLINE here, not on a separate row above.
-            //    Bro: "this is a professional app not a clown show."
-            //    Tap opens the same five-tone picker sheet.
-            Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(99),
-              child: InkWell(
-                onTap: onTone,
-                borderRadius: BorderRadius.circular(99),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 7),
-                  decoration: BoxDecoration(
+      // v266 — two-row input dock. Bro: "you've got the flirty etc
+      // dropdown on saw line as text. No text should be one level
+      // above like wing ai. Also make the plus image button better
+      // looks tacky."
+      //
+      // Row 1 (top): tone pill, left-aligned on its own line.
+      //              Plenty of breathing room so the FLIRTY label
+      //              + caret read as a clear standalone control.
+      // Row 2 (bottom): clean photo+ button (Icons.add_rounded in
+      //              a soft surface pill — no more focus-target
+      //              red-glow reticle), the text input, send.
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 0, 0, 8),
+            child: Row(
+              children: [
+                Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(99),
+                  child: InkWell(
+                    onTap: onTone,
                     borderRadius: BorderRadius.circular(99),
-                    border: Border.all(
-                      color: AppColors.red.withValues(alpha: 0.55),
-                      width: 0.9),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface1,
+                        borderRadius: BorderRadius.circular(99),
+                        border: Border.all(
+                          color: AppColors.red.withValues(alpha: 0.55),
+                          width: 0.9),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(tone.emoji,
+                            style: const TextStyle(fontSize: 14, height: 1)),
+                          const SizedBox(width: 6),
+                          Text(tone.label,
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 12.5, height: 1,
+                              letterSpacing: 0.4,
+                              fontWeight: FontWeight.w800,
+                            )),
+                          const SizedBox(width: 3),
+                          const Icon(Icons.keyboard_arrow_down_rounded,
+                            color: AppColors.textSecondary, size: 15),
+                        ],
+                      ),
+                    ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(tone.emoji,
-                        style: const TextStyle(fontSize: 13, height: 1)),
-                      const SizedBox(width: 5),
-                      Text(tone.label,
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 12, height: 1,
-                          letterSpacing: 0.2,
-                          fontWeight: FontWeight.w800,
-                        )),
-                      const SizedBox(width: 2),
-                      const Icon(Icons.keyboard_arrow_down_rounded,
-                        color: AppColors.textSecondary, size: 14),
-                    ],
+                ),
+                const Spacer(),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
+            decoration: BoxDecoration(
+              color: AppColors.surface1,
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(color: AppColors.surface3, width: 0.6),
+            ),
+            child: Row(
+              children: [
+                // v266 — softer add-photo button. Soft surface
+                // background, subtle outline, clean add_photo
+                // glyph. No red glow, no focus reticle — reads as
+                // a calm "attach" control instead of a power tool.
+                Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: onAttach,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 38, height: 38,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface2,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.surface3, width: 0.8),
+                      ),
+                      child: const Icon(
+                          Icons.add_photo_alternate_outlined,
+                          color: Colors.white, size: 19),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                onSubmitted: (_) => onSend(),
-                maxLines: 1,
-                cursorColor: AppColors.red,
-                style: GoogleFonts.inter(
-                  color: AppColors.textPrimary,
-                  fontSize: 15, height: 1.3,
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Ask anything…',
-                  hintStyle: GoogleFonts.inter(
-                    color: AppColors.textTertiary,
-                    fontSize: 15, height: 1.3,
-                    fontWeight: FontWeight.w400,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    onSubmitted: (_) => onSend(),
+                    maxLines: 1,
+                    cursorColor: AppColors.red,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textPrimary,
+                      fontSize: 15, height: 1.3,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Ask anything…',
+                      hintStyle: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 15, height: 1.3,
+                        fontWeight: FontWeight.w400,
+                      ),
+                      border:           InputBorder.none,
+                      enabledBorder:    InputBorder.none,
+                      focusedBorder:    InputBorder.none,
+                      contentPadding:   const EdgeInsets.symmetric(vertical: 12),
+                      isDense:          true,
+                    ),
                   ),
-                  border:           InputBorder.none,
-                  enabledBorder:    InputBorder.none,
-                  focusedBorder:    InputBorder.none,
-                  contentPadding:   const EdgeInsets.symmetric(vertical: 12),
-                  isDense:          true,
                 ),
-              ),
-            ),
-            Material(
-              color: AppColors.red,
-              shape: const CircleBorder(),
-              child: InkWell(
-                onTap: sending ? null : onSend,
-                customBorder: const CircleBorder(),
-                child: Container(
-                  width: 40, height: 40,
-                  alignment: Alignment.center,
-                  child: sending
-                      ? const SizedBox(
-                          width: 18, height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.arrow_upward_rounded,
-                          color: Colors.white, size: 20),
+                Material(
+                  color: AppColors.red,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: sending ? null : onSend,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 40, height: 40,
+                      alignment: Alignment.center,
+                      child: sending
+                          ? const SizedBox(
+                              width: 18, height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.arrow_upward_rounded,
+                              color: Colors.white, size: 20),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1231,6 +1350,13 @@ class _ChatTransformStrip extends StatelessWidget {
   const _ChatTransformStrip({required this.onTap, required this.disabled});
 
   static const _chips = <({String label, String emoji, String scenario})>[
+    // v265 — coach-mode transform chips. The first two reframe the
+    // last reply through the convo-diagnostic or profile-read lens
+    // so the user doesn't need to re-attach the screenshot to ask
+    // for a different read. Bro: "chat got for rizz... breakdown
+    // where user did well where they went wrong."
+    (label: 'What went wrong',  emoji: '🔍', scenario: 'diagnose mode — look at the screenshot / convo again and tell me WHAT FELL FLAT in my last 2-3 messages. Be specific. One short sentence per misstep. End with one revised line in double quotes I should have sent instead.'),
+    (label: 'Read her profile', emoji: '👁️', scenario: 'profile read — treat the latest screenshot as her dating-app profile. Tell me WHO SHE IS (archetype, interests, vibe), 2-3 specific HOOKS from her bio/photos/prompts, and THREE OPENER OPTIONS each in double quotes. No clichés.'),
     (label: 'More heat',     emoji: '🔥', scenario: 'turn up the heat — push every line one notch hotter, more cinematic, more suggestive. Keep the structure, raise the temperature.'),
     (label: 'Flirty tease',  emoji: '😏', scenario: 'flirty tease — push-pull, light needle. Cheeky but warm. Keeps the conversation moving.'),
     (label: 'Make a move',   emoji: '🎯', scenario: 'make a move — pivot toward a specific, confident date proposal without sounding pushy.'),

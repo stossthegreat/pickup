@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../data/rizz_lines.dart';
+import 'rizz_memory_service.dart';
 import 'screenshot_ocr_service.dart';
 import 'villain/villain_api.dart';
 
@@ -75,6 +76,18 @@ Map<String, dynamic> _placeholderFace({String? imageBase64}) => {
   'archetype': 'The Modern Man',
   if (imageBase64 != null) 'imageBase64': imageBase64,
 };
+/// v268 — BUBBLE SIDE override. Wing AI's #1 complaint (30-40% of
+/// their negative reviews) is *"the AI doesn't understand who is
+/// sending vs who is receiving messages."* When the model gets it
+/// backwards, it generates a reply as if the user were HER.
+///
+/// We solve it cheap: the user can override their bubble side with
+/// one tap on the screenshot preview. `auto` lets the model infer
+/// (the existing behaviour); `left` / `right` injects an explicit
+/// system instruction so the model knows which bubbles are the
+/// user's and writes the next message from the correct seat.
+enum BubbleSide { auto, left, right }
+
 /// Tone presets — match the WingAI-style 2026 rizz UX. The user
 /// picks one and every reply rewrites to that register. `flirty` is
 /// the default + free; the others stay accessible since the entire
@@ -182,10 +195,30 @@ class RizzReplyService {
     /// a move", "More heat") — they take the already-good rizz and
     /// add a flavor without throwing it away.
     List<RizzReply> previous = const [],
+    /// v268 — user override of which side of the chat bubble layout
+    /// belongs to them. `auto` lets the model infer (default —
+    /// matches old behaviour). Setting `left` or `right` injects an
+    /// explicit hint into the request so the backend can append a
+    /// system instruction. Kills Wing AI's #1 complaint.
+    BubbleSide mySide = BubbleSide.auto,
   }) async {
     RizzDebug.reset();
     var her = herMessage.trim();
-    final ctx = context.trim();
+    // v271 — prepend the on-device rizz memory prefix to the user
+    // ctx. Stores the last 3 successful interactions and gives the
+    // model continuity across sessions ("you've recently talked to
+    // me about her hinge match — same one? coffee Friday confirmed?").
+    // Empty prefix when fresh device or all entries expired, so the
+    // concat is safe regardless.
+    final memoryPrefix = await RizzMemoryService.buildContextPrefix();
+    final userCtx = context.trim();
+    final ctx = [memoryPrefix, userCtx]
+        .where((s) => s.isNotEmpty)
+        .join('\n\n');
+    if (memoryPrefix.isNotEmpty) {
+      RizzDebug.add('memory prefix attached '
+          '(${memoryPrefix.length} chars)');
+    }
     // v207 — bro reverted ELITE MODE. The v201/v204 prefix was
     // making the replies sound MORE AI, not less. Raw scenario
     // passthrough restores the pre-v201 voice.
@@ -242,6 +275,7 @@ class RizzReplyService {
               'ctx':      ctx,
               'scenario': scn,
               if (imageB64 != null) 'imageBase64': imageB64,
+              if (mySide != BubbleSide.auto) 'mySide': mySide.name,
               if (previous.isNotEmpty)
                 'previous': previous
                     .map((r) => {'text': r.text, 'tag': r.tag})
@@ -267,6 +301,20 @@ class RizzReplyService {
               .toList();
           RizzDebug.parsedCount = parsed.length;
           RizzDebug.add('/rizz/reply parsed ${parsed.length} replies');
+          // v271 — log the interaction to RizzMemoryService so the NEXT
+          // generate gets a continuity prefix. Only on cold generates
+          // (not transform mode) — transform-mode iterations are the
+          // SAME conversation, not a new one, so logging them would
+          // double-count and bury fresh memory under near-duplicates.
+          if (!inTransformMode && parsed.isNotEmpty) {
+            // ignore: discarded_futures
+            RizzMemoryService.recordInteraction(
+              vibe:     vibe.name,
+              ctx:      userCtx,
+              scenario: scn,
+              hadImage: hasImage,
+            );
+          }
           if (parsed.length >= 3) return parsed.take(3).toList();
           if (parsed.isNotEmpty) {
             final arsenal = _fallbackFromArsenal(vibe);

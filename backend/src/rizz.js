@@ -114,6 +114,22 @@ BANNED PHRASES — these scream 50-year-old corporate dating coach:
 - "I think you're amazing" / "you seem amazing"
 - ANY sentence that EXPLAINS WHY before giving the line
 
+BANNED CLICHE OPENERS — these are dead Reddit/Tinder pickup lines. If
+you find yourself reaching for any of these, STOP and generate
+something specific to the chat or profile instead:
+- "Are you a magician?"  (every variant)
+- "Did it hurt when you fell from heaven?"
+- "Are you French? Eiffel for you"  (every Eiffel-pun variant)
+- "Are you a parking ticket?" / "fine"
+- "Are you Google?" / "are you wifi?" / "are you a library card?"
+- "Do you have a map?" / "I keep getting lost in your eyes"
+- "Are you from Tennessee?" / "the only ten I see"
+- "Do you believe in love at first sight?"
+- ANY "are you a [noun]? + corny pun" formula
+- ANY line that reads as a screenshot a 22-year-old would send
+  to her group chat with the caption "kill me." Test EVERY
+  line against that filter before returning it.
+
 HARD RAILS — charm vs creep
 - No body-part compliments as openers ("nice eyes", "great smile" — out).
   Charm reads her ENERGY, not her body parts.
@@ -349,18 +365,60 @@ function parseReplies(raw) {
 // return whatever the second attempt produced.
 const RIZZ_BANNED_RX = /\b(crypt(ic|o)|puzzle|code(s)?|decod(e|ing)|deciph(er|ering)|mysteri(ous|es|y)|mystic|secret(s|ly)?|encrypt(ed|ion)?|riddle(s)?|parallel\s+universe|in\s+code|in\s+a\s+code|in\s+tongues|hidden\s+message)\b/i;
 
+// v270 — cliche-opener detector. Rizz AI / Plug AI / Wing AI all get
+// dragged in their reviews for serving these tired 2014-Reddit
+// openers: "are you a magician", "did it hurt when you fell from
+// heaven", "are you french / eiffel for you", "are you a parking
+// ticket / fine", "are you google", "do you have a map / lost in
+// your eyes". The system prompt now bans them explicitly, but
+// gpt-4o-mini occasionally relapses (these lines are heavily
+// represented in pre-training). The regex catches the relapses
+// and triggers the same retry-once-on-violation pass we run for
+// the mystical/cryptic ban above.
+//
+// Note: these are banned from AUTO-GENERATION only. The CHEESY
+// category of the on-device arsenal (lib/data/rizz_lines.dart)
+// still ships some of these as ironic legends ("do you have a
+// map?", "i'm not a photographer but i can picture us together")
+// — those are user-driven pulls, not model output, and bro
+// explicitly kept them as classics worth landing with a smile.
+const RIZZ_CLICHE_RX = /\b(are\s+you\s+a\s+magician|did\s+it\s+hurt\s+(when\s+)?you\s+fell\s+(from\s+heaven)?|eiffel\s+(for\s+you)?|are\s+you\s+(a\s+)?(parking\s+ticket|fine\s+because|google|campfire|library\s+card|wifi)|fine\s+lookin'?\s+like\s+that|do\s+you\s+have\s+a\s+map|lost\s+in\s+your\s+eyes|are\s+you\s+from\s+tennessee|believe\s+in\s+love\s+at\s+first\s+sight|sit\s+on\s+a\s+pile\s+of\s+sugar|knees\s+from\s+heaven)\b/i;
+
 function repliesContainBannedWord(replies) {
   if (!Array.isArray(replies)) return false;
   return replies.some(r => r && typeof r.text === 'string'
-    && RIZZ_BANNED_RX.test(r.text));
+    && (RIZZ_BANNED_RX.test(r.text) || RIZZ_CLICHE_RX.test(r.text)));
 }
 
-export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase64 } = {}) {
+export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase64, mySide } = {}) {
   // Vision path activates when the frontend ships a screenshot. The
   // model sees the iMessage / Hinge / Tinder UI directly — no OCR
   // wall of text, no transcript labeling, no abbreviation guesswork.
   // This is the real fix: read the chat as a human reads it.
   const hasVision = typeof imageBase64 === 'string' && imageBase64.length > 100;
+
+  // v268 — bubble-side override. Wing AI's #1 complaint (30-40% of
+  // their negatives) is that the model can't tell who's sending vs
+  // receiving in screenshots. When the frontend ships `mySide`
+  // (left|right), we inject an explicit system instruction so the
+  // model never gets the seat wrong. Skipped when mySide is missing
+  // / unknown / auto — that's the legacy "let the model infer"
+  // path, which is fine when the layout is unambiguous.
+  const sideHint = (mySide === 'left' || mySide === 'right')
+    ? (mySide === 'left'
+        ? 'USER BUBBLE SIDE: LEFT. In this screenshot, the bubbles ' +
+          'on the LEFT side of the screen are the USER (the person ' +
+          'asking you for a reply). The bubbles on the RIGHT side ' +
+          'belong to HER (the match). Generate the USER\'s NEXT ' +
+          'reply — i.e. another message that would appear on the ' +
+          'LEFT side, continuing from her latest RIGHT-side bubble.'
+        : 'USER BUBBLE SIDE: RIGHT. In this screenshot, the bubbles ' +
+          'on the RIGHT side of the screen are the USER (the person ' +
+          'asking you for a reply). The bubbles on the LEFT side ' +
+          'belong to HER (the match). Generate the USER\'s NEXT ' +
+          'reply — i.e. another message that would appear on the ' +
+          'RIGHT side, continuing from her latest LEFT-side bubble.')
+    : '';
 
   const userMessage = buildUserMessage({
     her:       her      || '',
@@ -372,6 +430,10 @@ export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase6
   });
 
   async function runOnce(extraSystem = '') {
+    // Side hint always rides as part of the system prompt addition
+    // when present. Concatenated to whatever extraSystem the retry
+    // path also wants to inject.
+    const extras = [sideHint, extraSystem].filter(Boolean).join('\n\n');
     // gpt-4o supports a content array of {type:'text'} + {type:'image_url'}
     // on the user role. When we have an image we POST that shape; when
     // we don't, the plain-string content stays.
@@ -392,9 +454,17 @@ export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase6
       : userMessage;
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      // v265 — switched from gpt-4o → gpt-4o-mini. Bro flagged the
+      // cost. gpt-4o-mini does vision at ~1/10 the price (text:
+      // $0.15/$0.60 vs $2.50/$10.00 per 1M, vision tile cost
+      // similarly dropped). Quality on rizz reply / convo
+      // diagnosis is plenty — we're parsing structured outputs,
+      // not writing literary essays. Same response_format JSON
+      // contract, same temperature, same content array shape
+      // gpt-4o-mini fully supports.
+      model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: SYSTEM + (extraSystem ? '\n\n' + extraSystem : '') },
+        { role: 'system', content: SYSTEM + (extras ? '\n\n' + extras : '') },
         { role: 'user',   content: userContent },
       ],
       response_format: { type: 'json_object' },
@@ -407,17 +477,23 @@ export async function rizzReply({ her, vibe, ctx, scenario, previous, imageBase6
 
   let replies = await runOnce();
 
-  // Post-filter — if any reply contains a banned word, retry ONCE
-  // with a harder reminder pinned to the end of the system prompt.
+  // Post-filter — if any reply contains a banned word OR cliche
+  // opener, retry ONCE with a harder reminder pinned to the end
+  // of the system prompt.
   if (repliesContainBannedWord(replies)) {
-    console.warn('[rizz] banned word detected in first pass — regenerating');
-    const harder = 'REMINDER: Your previous attempt used one of the '
-      + 'BANNED words (cryptic, puzzle, code, decode, decipher, '
+    console.warn('[rizz] banned/cliche detected in first pass — regenerating');
+    const harder = 'REMINDER: Your previous attempt used either a '
+      + 'BANNED word (cryptic, puzzle, code, decode, decipher, '
       + 'mysterious, mystery, secret, encrypted, riddle, parallel '
-      + 'universe, in code, in tongues, hidden message). Write '
-      + 'fresh replies WITHOUT any of those words. The chat is a '
-      + 'normal chat. wbu = "what about you", wyd = "what you '
-      + 'doing" — they are PLAIN ENGLISH abbreviations, not codes.';
+      + 'universe, in code, in tongues, hidden message) OR a '
+      + 'BANNED CLICHE OPENER (are you a magician / did it hurt '
+      + 'when you fell / eiffel for you / are you a parking ticket '
+      + '/ are you Google / do you have a map / "are you a [noun]?" '
+      + 'pun formula). Write fresh replies WITHOUT any of those. '
+      + 'The chat is a normal chat. wbu = "what about you", wyd = '
+      + '"what you doing" — they are PLAIN ENGLISH abbreviations, '
+      + 'not codes. Each line MUST pass the GROUP CHAT TEST: would '
+      + 'her friends react with "respond NOW" or "block him"?';
     replies = await runOnce(harder);
   }
 
@@ -507,6 +583,16 @@ BANNED PHRASES — these scream 50-year-old corporate dating coach:
 - "I was wondering if you'd like to"
 - "Hi/Hey [name]," (no formal greetings)
 - Any sentence that explains WHY before giving the line
+
+BANNED CLICHE OPENERS — these are dead Reddit/Tinder pickup lines:
+- "Are you a magician?" / "did it hurt when you fell from heaven?"
+- "Are you French? Eiffel for you" (every Eiffel-pun variant)
+- "Are you a parking ticket? / fine" / "are you Google?" / "wifi?"
+- "Do you have a map? / lost in your eyes"
+- "Are you from Tennessee?" / "do you believe in love at first sight"
+- ANY "are you a [noun]? + corny pun" formula
+- Test EVERY line in quotes against the GROUP CHAT TEST below; if
+  her friends would react with "kill me" or "block him", REWRITE.
 
 HARD RAILS — charm vs creep
 - No body-part compliments as openers
@@ -620,7 +706,12 @@ export async function rizzChat({ messages, imageBase64 } = {}) {
 
   async function runOnce(extraSystem = '') {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      // v265 — gpt-4o → gpt-4o-mini. Same cost reasoning as the
+      // rizzReply call above; chat coach output is short prose +
+      // quoted reply lines, gpt-4o-mini handles it cleanly. Vision
+      // attached on the latest user turn still works — mini
+      // supports the same content-array shape.
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: CHAT_SYSTEM + (extraSystem ? '\n\n' + extraSystem : '') },
         ...apiMessages,
@@ -634,16 +725,21 @@ export async function rizzChat({ messages, imageBase64 } = {}) {
   let reply = await runOnce();
 
   // Same post-filter as rizzReply — regenerate once if any banned
-  // word slipped through the prompt rule.
-  if (RIZZ_BANNED_RX.test(reply)) {
-    console.warn('[rizz/chat] banned word detected in first pass — regenerating');
-    const harder = 'REMINDER: Your previous attempt used one of the '
-      + 'BANNED words (cryptic, puzzle, code, decode, decipher, '
+  // word OR cliche opener slipped through the prompt rule.
+  if (RIZZ_BANNED_RX.test(reply) || RIZZ_CLICHE_RX.test(reply)) {
+    console.warn('[rizz/chat] banned/cliche detected in first pass — regenerating');
+    const harder = 'REMINDER: Your previous attempt used either a '
+      + 'BANNED word (cryptic, puzzle, code, decode, decipher, '
       + 'mysterious, mystery, secret, encrypted, riddle, parallel '
-      + 'universe, in code, in tongues, hidden message). Write a '
-      + 'fresh reply WITHOUT any of those words. The chat is a '
-      + 'normal chat. wbu = "what about you", wyd = "what you '
-      + 'doing" — they are PLAIN ENGLISH abbreviations, not codes.';
+      + 'universe, in code, in tongues, hidden message) OR a '
+      + 'BANNED CLICHE OPENER (are you a magician / did it hurt '
+      + 'when you fell / eiffel for you / are you a parking ticket '
+      + '/ are you Google / do you have a map). Write a fresh '
+      + 'reply WITHOUT any of those. The chat is a normal chat. '
+      + 'wbu = "what about you", wyd = "what you doing" — they '
+      + 'are PLAIN ENGLISH abbreviations, not codes. The line you '
+      + 'generate must pass the GROUP CHAT TEST: would her friends '
+      + 'react with "respond NOW" or "block him"?';
     reply = await runOnce(harder);
   }
 

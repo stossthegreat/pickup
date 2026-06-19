@@ -12,6 +12,7 @@ import '../../services/creator_mode_store.dart';
 import '../../services/face_asset_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/purchase_service.dart';
+import '../../services/rizz_memory_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 
@@ -427,9 +428,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () async {
               Navigator.of(ctx).pop();
               // Actually delete. LocalStoreService wipes prefs;
-              // FaceAssetService wipes the on-disk scan JPEGs.
+              // FaceAssetService wipes the on-disk scan JPEGs;
+              // v271 — RizzMemoryService also gets cleared so the
+              // last-thread continuity prefix doesn't survive an
+              // account delete (GDPR Article 17 compliance).
               await LocalStoreService.clearAllUserData();
               await FaceAssetService.purgeAll();
+              await RizzMemoryService.clear();
               if (!ctx.mounted) return;
               ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
                 behavior: SnackBarBehavior.floating,
