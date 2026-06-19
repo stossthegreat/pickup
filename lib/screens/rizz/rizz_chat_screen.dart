@@ -37,9 +37,11 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
   final _scrollCtrl = ScrollController();
   final List<_RizzMsg> _msgs = [
     const _RizzMsg('assistant',
-        'what\'s good. drop a screenshot of her chat, paste her last '
-        'text, or just ask. i write the line you should send. tap any '
-        'line in quotes to copy it.'),
+        'what\'s good. drop a screenshot of your chat and i\'ll break '
+        'down what worked, what flopped, and the line to send next. '
+        'or drop her PROFILE — bio + photos — and i\'ll read who she '
+        'is and give you three openers that actually reference her. '
+        'tap any line in quotes to copy it.'),
   ];
   bool _sending = false;
   /// Active tone preset. Matches the rizz reply screen so picking
@@ -49,6 +51,8 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
   RizzVibe _tone = RizzVibe.flirty;
 
   static const _presets = <String>[
+    'Read her profile',
+    'Where did I go wrong?',
     'Playful comeback',
     'Ask her out',
     'Plan a date',
@@ -112,22 +116,49 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     // to the last thing said, using the rest as context."
     var effective = msg;
     if (image != null) {
-      // Vision path — backend gpt-4o-vision reads the iMessage / Hinge
-      // UI directly from the attached imageBase64. No OCR, no
-      // transcript labeling. We just frame the request and pass the
-      // image bytes through _ask. Bro: "the real fix is vision —
-      // let's go." This is that path.
+      // v265 — DUAL-MODE VISION PROMPT. Bro flagged the chat needed
+      // to read profiles AND coach convos like Wing AI does. Same
+      // backend, same model, same number of round-trips — we just
+      // tell the vision model to auto-detect the screenshot type
+      // and switch its output format accordingly:
+      //   · Chat screenshot (iMessage / Hinge / Bumble convo with
+      //     bubbles) → diagnose what worked / what fell flat in
+      //     the user's last 2-3 messages, then deliver ONE line
+      //     to send next, quoted so the inline _SendThisCard
+      //     picks it up for tap-to-copy.
+      //   · Profile screenshot (dating-app profile: bio + photos +
+      //     prompts) → read her archetype + interests + hooks,
+      //     then deliver 3 opener options each in quotes.
+      // Quoted lines hit the existing _extractCopyableLines regex
+      // so both modes get tap-to-copy cards without any UI work.
       _dbg('vision path — sending image bytes (${image.length}) to backend');
+      const coachWrapper = ''
+        'I attached a screenshot. AUTO-DETECT what it is and respond '
+        'in the matching format:\n\n'
+        'IF CHAT SCREENSHOT (chat bubbles between two people): '
+        'read it as a chat, the LAST bubble on her side is what I '
+        'need a reply for. Reply in this structure:\n'
+        '  · WHAT WORKED: one short sentence on what landed in my '
+        'last 2-3 messages.\n'
+        '  · WHAT FELL FLAT: one short sentence on what didn\'t. Be '
+        'honest, not brutal.\n'
+        '  · SEND THIS: ONE line in double quotes, specific to her '
+        'last message, continuing naturally. Chat abbreviations '
+        '(wbu, wyd, ngl, etc.) are plain English — not code.\n\n'
+        'IF PROFILE SCREENSHOT (dating-app profile — bio, prompts, '
+        'photos, age, location): read her archetype + visible '
+        'interests + emotional vibe. Reply in this structure:\n'
+        '  · WHO SHE IS: one short paragraph on who she reads as — '
+        'archetype, what she\'s into, the vibe she\'s projecting.\n'
+        '  · HOOKS: 2-3 specific things from her profile I can lean '
+        'on (a prompt answer, a photo, a hobby).\n'
+        '  · THREE OPENERS: 3 distinct opener options, each in '
+        'double quotes, each referencing something specific she '
+        'wrote or pictured. No magician/Eiffel/pickup-line cliches.';
       if (effective.isEmpty) {
-        effective = 'Here\'s a screenshot of my chat with her. Read it '
-            'as a chat — messages on my side are mine, hers are hers, '
-            'the most recent bubble on her side is what I need a reply '
-            'for. Write me ONE line to send back, specific to her last '
-            'message, continuing the convo naturally. Chat abbreviations '
-            '(wbu, wyd, ngl, etc.) are plain English — not a code.';
+        effective = coachWrapper;
       } else {
-        effective = '$effective\n\n(I attached a chat screenshot — read '
-            'it directly; her latest bubble is what to reply to.)';
+        effective = '$effective\n\n$coachWrapper';
       }
     }
     final reply = await _ask(effective, image: image);
@@ -1231,6 +1262,13 @@ class _ChatTransformStrip extends StatelessWidget {
   const _ChatTransformStrip({required this.onTap, required this.disabled});
 
   static const _chips = <({String label, String emoji, String scenario})>[
+    // v265 — coach-mode transform chips. The first two reframe the
+    // last reply through the convo-diagnostic or profile-read lens
+    // so the user doesn't need to re-attach the screenshot to ask
+    // for a different read. Bro: "chat got for rizz... breakdown
+    // where user did well where they went wrong."
+    (label: 'What went wrong',  emoji: '🔍', scenario: 'diagnose mode — look at the screenshot / convo again and tell me WHAT FELL FLAT in my last 2-3 messages. Be specific. One short sentence per misstep. End with one revised line in double quotes I should have sent instead.'),
+    (label: 'Read her profile', emoji: '👁️', scenario: 'profile read — treat the latest screenshot as her dating-app profile. Tell me WHO SHE IS (archetype, interests, vibe), 2-3 specific HOOKS from her bio/photos/prompts, and THREE OPENER OPTIONS each in double quotes. No clichés.'),
     (label: 'More heat',     emoji: '🔥', scenario: 'turn up the heat — push every line one notch hotter, more cinematic, more suggestive. Keep the structure, raise the temperature.'),
     (label: 'Flirty tease',  emoji: '😏', scenario: 'flirty tease — push-pull, light needle. Cheeky but warm. Keeps the conversation moving.'),
     (label: 'Make a move',   emoji: '🎯', scenario: 'make a move — pivot toward a specific, confident date proposal without sounding pushy.'),
