@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../data/rizz_lines.dart';
+import 'rizz_memory_service.dart';
 import 'screenshot_ocr_service.dart';
 import 'villain/villain_api.dart';
 
@@ -203,7 +204,21 @@ class RizzReplyService {
   }) async {
     RizzDebug.reset();
     var her = herMessage.trim();
-    final ctx = context.trim();
+    // v271 — prepend the on-device rizz memory prefix to the user
+    // ctx. Stores the last 3 successful interactions and gives the
+    // model continuity across sessions ("you've recently talked to
+    // me about her hinge match — same one? coffee Friday confirmed?").
+    // Empty prefix when fresh device or all entries expired, so the
+    // concat is safe regardless.
+    final memoryPrefix = await RizzMemoryService.buildContextPrefix();
+    final userCtx = context.trim();
+    final ctx = [memoryPrefix, userCtx]
+        .where((s) => s.isNotEmpty)
+        .join('\n\n');
+    if (memoryPrefix.isNotEmpty) {
+      RizzDebug.add('memory prefix attached '
+          '(${memoryPrefix.length} chars)');
+    }
     // v207 — bro reverted ELITE MODE. The v201/v204 prefix was
     // making the replies sound MORE AI, not less. Raw scenario
     // passthrough restores the pre-v201 voice.
@@ -286,6 +301,20 @@ class RizzReplyService {
               .toList();
           RizzDebug.parsedCount = parsed.length;
           RizzDebug.add('/rizz/reply parsed ${parsed.length} replies');
+          // v271 — log the interaction to RizzMemoryService so the NEXT
+          // generate gets a continuity prefix. Only on cold generates
+          // (not transform mode) — transform-mode iterations are the
+          // SAME conversation, not a new one, so logging them would
+          // double-count and bury fresh memory under near-duplicates.
+          if (!inTransformMode && parsed.isNotEmpty) {
+            // ignore: discarded_futures
+            RizzMemoryService.recordInteraction(
+              vibe:     vibe.name,
+              ctx:      userCtx,
+              scenario: scn,
+              hadImage: hasImage,
+            );
+          }
           if (parsed.length >= 3) return parsed.take(3).toList();
           if (parsed.isNotEmpty) {
             final arsenal = _fallbackFromArsenal(vibe);
