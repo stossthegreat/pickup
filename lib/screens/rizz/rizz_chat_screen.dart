@@ -50,15 +50,15 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
   /// register. Default FLIRTY.
   RizzVibe _tone = RizzVibe.flirty;
 
-  // v273 — preset list re-ordered. The original COLD OPENER set
-  // (Playful comeback / Ask her out / Plan a date / Keep convo
-  // going / Recover from a bad reply / Win back a ghost / Flirty
-  // first message) leads now — these are the familiar
-  // jump-into-anything chips users expect when they open a fresh
-  // chat. The two coach-mode entries ("Read her profile" / "Where
-  // did I go wrong") sit after; they're still on screen because
-  // _PresetStrip uses Wrap (not horizontal scroll) so every chip
-  // renders without paging.
+  // v275 — back to the ORIGINAL 7 cold-state openers. Bro caught the
+  // problem with my v265 additions: "Read her profile" and "Where
+  // did I go wrong?" make no sense without an image in hand — tapping
+  // either with no screenshot makes the AI politely ask the user to
+  // upload one, which is the exact friction a preset is supposed to
+  // skip. Both removed. The behaviour they were trying to expose is
+  // already handled automatically the moment a screenshot lands (the
+  // dual-mode wrapper detects PROFILE vs CHAT and routes), so the
+  // dedicated chips were redundant.
   static const _presets = <String>[
     'Flirty first message',
     'Playful comeback',
@@ -67,9 +67,55 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     'Keep the convo going',
     'Recover from a bad reply',
     'Win back a ghost',
-    'Read her profile',
-    'Where did I go wrong?',
   ];
+
+  /// v275 — full prompt sent to the backend when the user taps a
+  /// preset chip. The chip LABEL is short (so the chat bubble reads
+  /// clean), but the API payload is the full self-contained prompt.
+  /// This is what stops the AI from replying "tell me more about her"
+  /// — the prompt explicitly says "no context needed, produce a line
+  /// directly." Bro: "the response comes then and there."
+  static const Map<String, String> _presetPrompts = {
+    'Flirty first message':
+      'Give me a flirty first message I can send to a new match RIGHT '
+      'NOW. No context needed — produce a banger of an opener in '
+      'double quotes that would work on Hinge / Tinder / Bumble. '
+      'Make it feel specific, not a generic pickup line. ONE line in '
+      'quotes plus one short sentence on WHY it lands.',
+    'Playful comeback':
+      'Give me a playful comeback I can use when a girl is teasing me '
+      'on a dating app. No context — assume she just sent something '
+      'cheeky and I need to fire back. ONE line in double quotes that '
+      'matches her energy without folding. One short sentence on the '
+      'move underneath.',
+    'Ask her out':
+      'Give me a confident way to ask her out for the first date right '
+      'now. No context needed — make it universal: someone I\'ve been '
+      'texting on Hinge, going well, ready to lock in a date. ONE line '
+      'in double quotes plus one short sentence on why it works.',
+    'Plan a date':
+      'Give me a specific, confident date PROPOSAL I can send. Name a '
+      'place, vibe or activity. Cocky-warm, not desperate. No context — '
+      'assume we\'ve been chatting and it\'s time to move it offline. '
+      'ONE line in double quotes plus one short sentence on the angle.',
+    'Keep the convo going':
+      'Give me a line that pivots a stalling chat into something '
+      'interesting. No context — assume she replied short and the convo '
+      'is cooling. Use observation, intimate-probe, or compressed-cinema '
+      'style. ONE line in double quotes plus one short sentence on the '
+      'move.',
+    'Recover from a bad reply':
+      'Give me a line that recovers a chat after she replied flat / '
+      'short / one-word. Acknowledge the cool-off, redirect with high '
+      'agency, do not beg. ONE line in double quotes plus one short '
+      'sentence on the move.',
+    'Win back a ghost':
+      'Give me a line that re-engages a girl who went silent on me. '
+      'Confident, slightly mysterious, doesn\'t reek of effort. Could '
+      'be a callback to something earlier in the chat or a fresh angle. '
+      'ONE line in double quotes plus one short sentence on why it '
+      'works.',
+  };
 
   @override
   void initState() {
@@ -107,10 +153,17 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     });
   }
 
-  Future<void> _send(String text, {Uint8List? image}) async {
+  Future<void> _send(String text, {Uint8List? image, String? apiText}) async {
     final msg = text.trim();
     if ((msg.isEmpty && image == null) || _sending) return;
     HapticFeedback.selectionClick();
+    // v275 — apiText lets the caller display a SHORT label in the
+    // chat bubble while sending a LONGER, self-contained prompt to
+    // the backend. Used by the preset chips so "Flirty first message"
+    // shows in the user's bubble but the AI receives a full directive
+    // ("produce a banger of an opener…") that triggers a direct
+    // line, not a "tell me more about her" follow-up question.
+    final apiOverride = apiText?.trim();
     // v265 — detect ANALYZE-ONCE-vs-ITERATE mode BEFORE we push the
     // new user turn into _msgs. The first time the user attaches an
     // image, we ship the full dual-mode coach wrapper. Every
@@ -135,7 +188,13 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
     });
     _ctrl.clear();
     _scrollToBottom();
-    var effective = msg;
+    // v275 — when the caller passed an apiText override, use it as
+    // the base "effective" string the backend sees. The bubble in
+    // _msgs already shows the short label; this swap only affects
+    // the outbound API turn.
+    var effective = apiOverride != null && apiOverride.isNotEmpty
+        ? apiOverride
+        : msg;
     if (image != null) {
       _dbg('vision path — sending image bytes (${image.length}) to backend · iterating=$iterating');
       // v273 — 10x DEEPER breakdown. Bro: "the breakdown the ai gives
@@ -158,14 +217,30 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
           'preamble — one quoted line + one short sentence of '
           'context max.'
         : ''
-          'I attached a screenshot. AUTO-DETECT what it is and '
-          'deliver a FULL coach breakdown — long, specific, '
-          'actually useful. No three-bullet stub. Match the '
-          'format below exactly.\n\n'
-          'IF CHAT SCREENSHOT (chat bubbles between two people): '
-          'read every bubble top→bottom as chronological. The '
-          'last bubble on her side is the reply target. Output '
-          'these sections, IN THIS ORDER, with the exact headers:\n\n'
+          'I attached a screenshot. LOOK AT IT. You have vision — '
+          'use it. Classify FIRST, then respond.\n\n'
+          'CLASSIFICATION (you MUST pick one):\n'
+          '  - PROFILE PAGE if the image shows: a person\'s NAME, '
+          'age, distance, BIO TEXT, PROMPT ANSWERS like "My ideal '
+          'sunday is…" / "Two truths and a lie" / "I\'m looking '
+          'for…", PHOTOS arranged in a profile-card layout, '
+          'dating-app profile UI (Hinge / Tinder / Bumble / Match / '
+          'Coffee Meets Bagel). Any ONE of these signals is enough — '
+          'if you see prompt answers OR a bio paragraph OR a stacked '
+          'profile-photo layout, IT IS A PROFILE.\n'
+          '  - CHAT THREAD if the image shows: speech bubbles on '
+          'LEFT and RIGHT sides of the screen between two people '
+          '(iMessage / SMS / Hinge chat / Bumble chat / Instagram '
+          'DM / Snapchat / WhatsApp). The presence of typed message '
+          'bubbles trading back and forth = CHAT.\n\n'
+          'Tell yourself: "This is a [PROFILE / CHAT]" before you '
+          'write anything. Then deliver a FULL coach breakdown — '
+          'long, specific, actually useful. No three-bullet stub. '
+          'Match the format for the type you picked.\n\n'
+          'IF CHAT THREAD: read every bubble top→bottom as '
+          'chronological. The last bubble on her side is the reply '
+          'target. Output these sections, IN THIS ORDER, with the '
+          'exact emoji headers:\n\n'
           '  📊 INTEREST LEVEL: a single line — percent (your read) '
           'and one word ("rising" / "engaging" / "lukewarm" / '
           '"dodging"). Example: "72% · rising"\n\n'
@@ -190,10 +265,10 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
           'the BEST NEXT MOVE. Specific to her last bubble. Chat '
           'abbreviations (wbu, wyd, ngl) are PLAIN ENGLISH, not '
           'codes. No magician/Eiffel/pickup-line cliches.\n\n'
-          'IF PROFILE SCREENSHOT (dating-app profile — bio, '
-          'prompts, photos, age, location): read her archetype + '
-          'visible interests + emotional vibe. Output these '
-          'sections, IN THIS ORDER, with the exact headers:\n\n'
+          'IF PROFILE PAGE: read her archetype + visible interests '
+          '+ emotional vibe based on her bio + prompt answers + '
+          'photo choices. Output these sections, IN THIS ORDER, '
+          'with the exact emoji headers:\n\n'
           '  👤 WHO SHE IS: 2-3 sentences on her archetype, vibe, '
           'and what she\'s projecting. Be specific — "she\'s '
           'leaning into the chaotic-good art girl archetype, '
@@ -513,7 +588,14 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
               if (fresh) ...[
                 _PresetStrip(
                   presets: _presets,
-                  onPick: (p) => _send(p),
+                  // v275 — chip label is short (clean bubble), the
+                  // FULL prompt rides as apiText to the backend so
+                  // the AI delivers a direct line instead of asking
+                  // for context.
+                  onPick: (label) {
+                    final full = _presetPrompts[label] ?? label;
+                    _send(label, apiText: full);
+                  },
                 ),
                 const SizedBox(height: 10),
               ],
@@ -1385,13 +1467,14 @@ class _ChatTransformStrip extends StatelessWidget {
   const _ChatTransformStrip({required this.onTap, required this.disabled});
 
   static const _chips = <({String label, String emoji, String scenario})>[
-    // v265 — coach-mode transform chips. The first two reframe the
-    // last reply through the convo-diagnostic or profile-read lens
-    // so the user doesn't need to re-attach the screenshot to ask
-    // for a different read. Bro: "chat got for rizz... breakdown
-    // where user did well where they went wrong."
-    (label: 'What went wrong',  emoji: '🔍', scenario: 'diagnose mode — look at the screenshot / convo again and tell me WHAT FELL FLAT in my last 2-3 messages. Be specific. One short sentence per misstep. End with one revised line in double quotes I should have sent instead.'),
-    (label: 'Read her profile', emoji: '👁️', scenario: 'profile read — treat the latest screenshot as her dating-app profile. Tell me WHO SHE IS (archetype, interests, vibe), 2-3 specific HOOKS from her bio/photos/prompts, and THREE OPENER OPTIONS each in double quotes. No clichés.'),
+    // v275 — the "What went wrong" and "Read her profile" coach
+    // transforms were dropped. Bro: "the AI does that when you send
+    // a screenshot." Right — the dual-mode wrapper now auto-runs
+    // both the WHAT FELL FLAT diagnostic (CHAT mode) and the WHO SHE
+    // IS profile read (PROFILE mode) on every fresh image, so these
+    // chips were duplicating work the cold path already does. The
+    // remaining 8 tone-shift chips iterate on tone, which the
+    // wrapper does NOT auto-handle, so they earn their slot.
     (label: 'More heat',     emoji: '🔥', scenario: 'turn up the heat — push every line one notch hotter, more cinematic, more suggestive. Keep the structure, raise the temperature.'),
     (label: 'Flirty tease',  emoji: '😏', scenario: 'flirty tease — push-pull, light needle. Cheeky but warm. Keeps the conversation moving.'),
     (label: 'Make a move',   emoji: '🎯', scenario: 'make a move — pivot toward a specific, confident date proposal without sounding pushy.'),
