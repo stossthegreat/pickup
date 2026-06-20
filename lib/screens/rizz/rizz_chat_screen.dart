@@ -706,39 +706,40 @@ class _ChatBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = msg.role == 'user';
+    // v274 — AI replies render LOOSE on the background. No card,
+    // no border, no avatar icon — the prose fills the available
+    // width and reads like a coach typing on a clean page. Quoted
+    // lines still extract into their own SEND THIS copy-cards
+    // underneath (the rizz lines, not the analysis prose, get
+    // the card treatment). User messages keep the red-card-on-the-
+    // right bubble + image attachment shape unchanged. Bro: "the
+    // ai text never fuking comes in the card."
+    if (!isUser) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (msg.text.trim().isNotEmpty)
+            SelectableText(msg.text,
+              style: GoogleFonts.inter(
+                color: AppColors.textPrimary,
+                fontSize: 15.5, height: 1.5,
+                fontWeight: FontWeight.w500,
+              )),
+          ..._extractCopyableLines(context),
+        ],
+      );
+    }
     return Row(
-      mainAxisAlignment:
-          isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.end,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (!isUser) ...[
-          Container(
-            width: 30, height: 30,
-            decoration: BoxDecoration(
-              color: AppColors.red,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.red.withValues(alpha: 0.3),
-                  blurRadius: 10, spreadRadius: 0,
-                ),
-              ],
-            ),
-            alignment: Alignment.center,
-            child: const Icon(Icons.auto_awesome_rounded,
-                color: Colors.white, size: 16),
-          ),
-          const SizedBox(width: 10),
-        ],
         Flexible(
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: MediaQuery.of(context).size.width * 0.74,
             ),
             child: Column(
-              crossAxisAlignment: isUser
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 if (msg.image != null) ...[
                   ClipRRect(
@@ -752,12 +753,7 @@ class _ChatBubble extends StatelessWidget {
                   if (msg.text != '(screenshot)') const SizedBox(height: 6),
                 ],
                 if (msg.text != '(screenshot)' || msg.image == null)
-                  _bubble(context, isUser),
-                // Extract any quoted lines from the assistant's reply
-                // and render them as their own tap-to-copy cards so
-                // the user doesn't have to long-press-select inside
-                // the bubble.
-                if (!isUser) ..._extractCopyableLines(context),
+                  _userBubble(),
               ],
             ),
           ),
@@ -766,32 +762,27 @@ class _ChatBubble extends StatelessWidget {
     );
   }
 
-  Widget _bubble(BuildContext context, bool isUser) {
+  Widget _userBubble() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
-        color: isUser ? AppColors.red : AppColors.surface1,
-        borderRadius: BorderRadius.only(
-          topLeft:     const Radius.circular(20),
-          topRight:    const Radius.circular(20),
-          bottomLeft:  Radius.circular(isUser ? 20 : 4),
-          bottomRight: Radius.circular(isUser ? 4 : 20),
+        color: AppColors.red,
+        borderRadius: const BorderRadius.only(
+          topLeft:     Radius.circular(20),
+          topRight:    Radius.circular(20),
+          bottomLeft:  Radius.circular(20),
+          bottomRight: Radius.circular(4),
         ),
-        border: isUser
-            ? null
-            : Border.all(color: AppColors.surface3, width: 0.6),
-        boxShadow: isUser
-            ? [
-                BoxShadow(
-                  color: AppColors.red.withValues(alpha: 0.3),
-                  blurRadius: 16, spreadRadius: 0,
-                ),
-              ]
-            : null,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.red.withValues(alpha: 0.3),
+            blurRadius: 16, spreadRadius: 0,
+          ),
+        ],
       ),
       child: SelectableText(msg.text,
         style: GoogleFonts.inter(
-          color: isUser ? Colors.white : AppColors.textPrimary,
+          color: Colors.white,
           fontSize: 15, height: 1.42,
           fontWeight: FontWeight.w500,
         )),
@@ -956,20 +947,23 @@ class _PresetStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // v273 — switched from horizontal ListView (which cropped to
-    // 2-3 visible chips and made the rest invisible behind a
-    // non-obvious scroll) to a Wrap that flows every chip onto
-    // visible rows. Bro: "u took all the prompts out wtf" —
-    // they were never gone, just hidden by the scroll-edge.
-    // Wrap fixes the perception AND the access.
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+    // v274 — back to a SIDEWAYS horizontal scroll strip directly
+    // above the input bar (the original placement). Bro: "put the
+    // beginning presets back to wat they was and where they fuking
+    // was — sideways like before." Wrap (v273) went downwards;
+    // restored ListView goes sideways. All 9 chips still in the
+    // list — they just scroll horizontally instead of wrapping.
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
           for (final p in presets)
-            _PresetChip(label: p, onTap: () => onPick(p)),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _PresetChip(label: p, onTap: () => onPick(p)),
+            ),
         ],
       ),
     );
@@ -1078,65 +1072,13 @@ class _InputBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      // v266 — two-row input dock. Bro: "you've got the flirty etc
-      // dropdown on saw line as text. No text should be one level
-      // above like wing ai. Also make the plus image button better
-      // looks tacky."
-      //
-      // Row 1 (top): tone pill, left-aligned on its own line.
-      //              Plenty of breathing room so the FLIRTY label
-      //              + caret read as a clear standalone control.
-      // Row 2 (bottom): clean photo+ button (Icons.add_rounded in
-      //              a soft surface pill — no more focus-target
-      //              red-glow reticle), the text input, send.
+      // v274 — INPUT ROW LEADS, tone pill BELOW. Bro: "put the
+      // dropdown with flirty etc under the fuking text tab." Tap
+      // the pill → showModalBottomSheet slides up from the bottom
+      // edge (natural iOS pattern, so "opens upwards" is intrinsic).
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(6, 0, 0, 8),
-            child: Row(
-              children: [
-                Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(99),
-                  child: InkWell(
-                    onTap: onTone,
-                    borderRadius: BorderRadius.circular(99),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface1,
-                        borderRadius: BorderRadius.circular(99),
-                        border: Border.all(
-                          color: AppColors.red.withValues(alpha: 0.55),
-                          width: 0.9),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(tone.emoji,
-                            style: const TextStyle(fontSize: 14, height: 1)),
-                          const SizedBox(width: 6),
-                          Text(tone.label,
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 12.5, height: 1,
-                              letterSpacing: 0.4,
-                              fontWeight: FontWeight.w800,
-                            )),
-                          const SizedBox(width: 3),
-                          const Icon(Icons.keyboard_arrow_down_rounded,
-                            color: AppColors.textSecondary, size: 15),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const Spacer(),
-              ],
-            ),
-          ),
           Container(
             padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
             decoration: BoxDecoration(
@@ -1146,10 +1088,6 @@ class _InputBar extends StatelessWidget {
             ),
             child: Row(
               children: [
-                // v266 — softer add-photo button. Soft surface
-                // background, subtle outline, clean add_photo
-                // glyph. No red glow, no focus reticle — reads as
-                // a calm "attach" control instead of a power tool.
                 Material(
                   color: Colors.transparent,
                   shape: const CircleBorder(),
@@ -1217,6 +1155,51 @@ class _InputBar extends StatelessWidget {
                     ),
                   ),
                 ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 8, 0, 0),
+            child: Row(
+              children: [
+                Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(99),
+                  child: InkWell(
+                    onTap: onTone,
+                    borderRadius: BorderRadius.circular(99),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface1,
+                        borderRadius: BorderRadius.circular(99),
+                        border: Border.all(
+                          color: AppColors.red.withValues(alpha: 0.55),
+                          width: 0.9),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(tone.emoji,
+                            style: const TextStyle(fontSize: 14, height: 1)),
+                          const SizedBox(width: 6),
+                          Text(tone.label,
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 12.5, height: 1,
+                              letterSpacing: 0.4,
+                              fontWeight: FontWeight.w800,
+                            )),
+                          const SizedBox(width: 3),
+                          const Icon(Icons.keyboard_arrow_up_rounded,
+                            color: AppColors.textSecondary, size: 15),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const Spacer(),
               ],
             ),
           ),
@@ -1421,51 +1404,53 @@ class _ChatTransformStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // v273 — Wrap instead of horizontal scroll. Same reasoning as
-    // _PresetStrip: all 10 chips visible at once, no hidden chips
-    // behind the right edge.
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final c in _chips)
-            Material(
-              color: AppColors.surface1,
+    // v274 — back to SIDEWAYS horizontal scroll. Same restore as
+    // _PresetStrip — Wrap (v273) was wrong, Wing-AI / our previous
+    // chat both used a horizontal strip directly above the input.
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _chips.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final c = _chips[i];
+          return Material(
+            color: AppColors.surface1,
+            borderRadius: BorderRadius.circular(100),
+            child: InkWell(
+              onTap: disabled ? null : () => onTap(c.scenario),
               borderRadius: BorderRadius.circular(100),
-              child: InkWell(
-                onTap: disabled ? null : () => onTap(c.scenario),
-                borderRadius: BorderRadius.circular(100),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 9),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(100),
-                    border: Border.all(
-                        color: AppColors.surface3, width: 0.8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(c.emoji,
-                        style: const TextStyle(fontSize: 14, height: 1)),
-                      const SizedBox(width: 7),
-                      Text(c.label,
-                        style: GoogleFonts.inter(
-                          color: disabled
-                              ? AppColors.textTertiary
-                              : Colors.white,
-                          fontSize: 13, height: 1,
-                          letterSpacing: 0.1,
-                          fontWeight: FontWeight.w700,
-                        )),
-                    ],
-                  ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(
+                      color: AppColors.surface3, width: 0.8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(c.emoji,
+                      style: const TextStyle(fontSize: 14, height: 1)),
+                    const SizedBox(width: 7),
+                    Text(c.label,
+                      style: GoogleFonts.inter(
+                        color: disabled
+                            ? AppColors.textTertiary
+                            : Colors.white,
+                        fontSize: 13, height: 1,
+                        letterSpacing: 0.1,
+                        fontWeight: FontWeight.w700,
+                      )),
+                  ],
                 ),
               ),
             ),
-        ],
+          );
+        },
       ),
     );
   }

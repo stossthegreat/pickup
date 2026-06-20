@@ -20,9 +20,32 @@ class FaceAssetService {
 
   static Future<Uint8List?> loadScanImageBytes(String path) async {
     try {
+      // Fast path — the stored path resolves directly. The common case.
       final file = File(path);
-      if (!await file.exists()) return null;
-      return await file.readAsBytes();
+      if (await file.exists()) return await file.readAsBytes();
+
+      // v274 — iOS container-UUID rescue. The path written at scan
+      // time is absolute, including a `/var/mobile/Containers/Data/
+      // Application/<UUID>/...` prefix unique to the install. iOS
+      // can reassign that UUID across installs / iCloud restores /
+      // device migrations even when the on-disk JPEG (and the
+      // SharedPreferences scan record that names it) both survive.
+      // When that happens the stored path points at a dead UUID
+      // but the file is sitting in the CURRENT container's
+      // documents/mirrorly/scans/ directory under the same
+      // filename. Pull the basename off the dead path and look
+      // for the file in the live docs dir before giving up.
+      //
+      // No other change anywhere — TryOnService, ChatScreen,
+      // the Mirror tab all keep their existing call shape. They
+      // just stop returning null for the UUID-drift case.
+      final filename = path.split('/').last;
+      if (filename.isNotEmpty && filename != path) {
+        final dir = await getApplicationDocumentsDirectory();
+        final rescued = File('${dir.path}/mirrorly/scans/$filename');
+        if (await rescued.exists()) return await rescued.readAsBytes();
+      }
+      return null;
     } catch (_) {
       return null;
     }
@@ -30,7 +53,18 @@ class FaceAssetService {
 
   static Future<bool> exists(String? path) async {
     if (path == null || path.isEmpty) return false;
-    return File(path).exists();
+    if (await File(path).exists()) return true;
+    // v274 — mirror the UUID rescue from loadScanImageBytes so
+    // every "do we still have this scan?" call gets the same
+    // recovery behaviour as the read path.
+    try {
+      final filename = path.split('/').last;
+      if (filename.isNotEmpty && filename != path) {
+        final dir = await getApplicationDocumentsDirectory();
+        return File('${dir.path}/mirrorly/scans/$filename').exists();
+      }
+    } catch (_) {}
+    return false;
   }
 
   static Future<void> deleteScanImage(String path) async {
