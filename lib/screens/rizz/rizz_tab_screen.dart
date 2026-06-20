@@ -124,13 +124,13 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 32),
           children: [
-            // v265 — ImHim masthead matched to the Looks tab. Bro:
-            // "add the imhim header onto the rizz tab exactly same
-            // one as the looks tab." Same Inter-w900 wordmark at 34pt,
-            // same italic brand subhead "Looks get attention. Game
-            // keeps it.", same right-side chip stack (streak +
-            // progress + cog). The Rizz tab now reads as one app
-            // instead of a separate utility surface.
+            // v274 — keep ImHim wordmark + right-side chip stack.
+            // Subheader ("Looks get attention. Game keeps it.")
+            // removed per bro: "take the sub header out of rizz
+            // tab not the ImHim, just the sub header." The Looks
+            // tab keeps its subhead because it carries the brand
+            // pitch on first impression; the Rizz tab doesn't need
+            // it (the three cards already say what the tab is).
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
               child: Row(
@@ -150,20 +150,7 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22),
-              child: Text(
-                'Looks get attention. Game keeps it.',
-                style: GoogleFonts.inter(
-                  color: AppColors.textSecondary,
-                  fontSize: 15, height: 1.35,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 36),
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
