@@ -374,18 +374,22 @@ class NotificationService {
   /// the lifecycle observer in main.dart whenever the app foregrounds,
   /// so the user opening the app counts as "I saw the notification".
   ///
-  /// Implementation: removeAllDeliveredNotifications also resets the
-  /// application icon badge on iOS — that's the documented side-effect.
-  /// On Android the per-icon dot is system-managed and clears
-  /// automatically when the notification is tapped or dismissed; no
-  /// code path needed.
+  /// flutter_local_notifications 17.x doesn't expose a single-call
+  /// removeAllDelivered; we walk active notifications and cancel each
+  /// by id. That clears the delivered tray + per-notification badge
+  /// contribution without touching pending schedules (pending and
+  /// delivered ids never overlap on iOS — once a notif fires it leaves
+  /// the pending queue). On Android the per-icon dot is system-managed
+  /// and clears automatically when the user opens / dismisses; no code
+  /// path needed.
   static Future<void> clearIconBadge() async {
     if (!_initialized) return;
     try {
-      await _plugin
-          .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
-          ?.removeAllDeliveredNotifications();
+      final active = await _plugin.getActiveNotifications();
+      for (final n in active) {
+        final id = n.id;
+        if (id != null) await _plugin.cancel(id);
+      }
     } catch (e) {
       debugPrint('clearIconBadge failed: $e');
     }
