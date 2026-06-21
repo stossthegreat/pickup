@@ -20,9 +20,7 @@ import '../../widgets/report/aspect_protocol_cards.dart';
 import '../eyes/eyes_tab_screen.dart';
 import '../game/game_tab_screen.dart';
 import '../rizz/rizz_tab_screen.dart';
-// ASCEND tab folded — streak moved to Looks masthead. Re-import +
-// re-add the IndexedStack child below to restore.
-// import 'ascend_screen.dart';
+import 'ascend_screen.dart';
 
 /// The hub. Four surfaces, one promise per tab:
 ///   0. HOME (Ascend) — streak, daily missions, gap to potential
