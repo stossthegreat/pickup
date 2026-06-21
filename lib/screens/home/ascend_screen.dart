@@ -11,7 +11,7 @@ import '../../models/scan_record.dart' show ScanRecord;
 import '../../services/ascension_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
-import '../../widgets/common/mirrorly_components.dart';
+import '../../widgets/common/imhim_wordmark.dart';
 
 /// v281 — ASCENSION home tab.
 ///
@@ -94,15 +94,38 @@ class AscendScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.only(bottom: Sp.xl),
           children: [
-            MirrorlyMasthead(
-              title: 'ASCENSION',
-              subtitle: rank.label,
-              actions: [
-                MastheadAction(
-                  icon: Icons.tune,
-                  onTap: () => context.push('/settings'),
-                ),
-              ],
+            // v287 — masthead aligned to Looks / Rizz pattern: ImHim
+            // wordmark only, nothing under it. Bro: "put title on
+            // ascension as imhim, same as rest, nothing under it."
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const ImHimWordmark(fontSize: 34),
+                  const Spacer(),
+                  Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      onTap: () => context.push('/settings'),
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 38, height: 38,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface1,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.divider, width: 0.8),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.tune,
+                          size: 18, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             const SizedBox(height: Sp.lg),

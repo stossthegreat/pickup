@@ -66,6 +66,15 @@ abstract final class AudioSession {
     await Future.delayed(const Duration(milliseconds: 100));
   }
 
+  // v287 — options aligned with the Auralay stack
+  // (live_audio_io.dart) which has shipped for months without the
+  // recurring OSStatus 561017449. Difference was `mixWithOthers`:
+  // audioplayers configured the session as
+  // `playAndRecord + mixWithOthers`, then record_darwin called
+  // setCategory(.playAndRecord) WITHOUT mixWithOthers, and iOS
+  // refuses that downgrade mid-session with 561017449. Both
+  // configurators now use the same option set so setCategory is a
+  // no-op transition.
   static AudioContext _playAndRecordContext() => AudioContext(
         iOS: AudioContextIOS(
           category: AVAudioSessionCategory.playAndRecord,
@@ -73,7 +82,6 @@ abstract final class AudioSession {
             AVAudioSessionOptions.defaultToSpeaker,
             AVAudioSessionOptions.allowBluetooth,
             AVAudioSessionOptions.allowBluetoothA2DP,
-            AVAudioSessionOptions.mixWithOthers,
           },
         ),
         android: const AudioContextAndroid(

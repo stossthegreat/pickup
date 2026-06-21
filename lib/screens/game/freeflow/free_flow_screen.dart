@@ -778,17 +778,43 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         onTimeout: () => throw 'audio session timeout',
       );
 
-      // Start the mic stream. This is the ONE AND ONLY startStream
-      // call across the whole Game-tab visit.
-      final raw = await _sharedRecorder!.startStream(const RecordConfig(
-        encoder:       AudioEncoder.pcm16bits,
-        sampleRate:    24000,
-        numChannels:   1,
-        echoCancel:    true,
-        autoGain:      true,
-        noiseSuppress: true,
-      )).timeout(const Duration(seconds: 8),
-        onTimeout: () => throw 'mic acquire timeout (8s)');
+      // v287 — startStream wrapped in a 3-attempt retry loop. Same
+      // pattern selene_lesson_screen uses (committed in 30e8b98 to
+      // recover from OSStatus 561017449). The Auralay-aligned audio
+      // session config in audio_session.dart should make this a
+      // belt-and-braces guard — but iOS interruptions (Siri, route
+      // changes, lock-screen audio) can still drop setCategory on
+      // the floor. invalidate + reconfigure between attempts lets
+      // the OS settle the session before record_darwin tries again.
+      Stream<Uint8List>? raw;
+      Object? lastErr;
+      for (var attempt = 1; attempt <= 3; attempt++) {
+        try {
+          raw = await _sharedRecorder!.startStream(const RecordConfig(
+            encoder:       AudioEncoder.pcm16bits,
+            sampleRate:    24000,
+            numChannels:   1,
+            echoCancel:    true,
+            autoGain:      true,
+            noiseSuppress: true,
+          )).timeout(const Duration(seconds: 8),
+            onTimeout: () => throw 'mic acquire timeout (8s)');
+          break;
+        } catch (e) {
+          lastErr = e;
+          _log('warn', 'MIC',
+            'startStream attempt $attempt/3 failed: $e');
+          if (attempt == 3) rethrow;
+          // Tear the session down and re-arm before the next try.
+          await Future.delayed(const Duration(milliseconds: 500));
+          AudioSession.invalidate();
+          try {
+            await AudioSession.configureForPlayAndRecord()
+                .timeout(const Duration(seconds: 4));
+          } catch (_) {/* logged on next attempt */}
+        }
+      }
+      if (raw == null) throw lastErr ?? 'mic start failed';
       // Multi-listener broadcast so every session can attach + detach
       // without restarting the mic.
       _sharedMicStream = raw.asBroadcastStream();
