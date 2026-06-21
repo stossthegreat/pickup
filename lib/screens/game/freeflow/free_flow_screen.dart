@@ -778,17 +778,43 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         onTimeout: () => throw 'audio session timeout',
       );
 
-      // Start the mic stream. This is the ONE AND ONLY startStream
-      // call across the whole Game-tab visit.
-      final raw = await _sharedRecorder!.startStream(const RecordConfig(
-        encoder:       AudioEncoder.pcm16bits,
-        sampleRate:    24000,
-        numChannels:   1,
-        echoCancel:    true,
-        autoGain:      true,
-        noiseSuppress: true,
-      )).timeout(const Duration(seconds: 8),
-        onTimeout: () => throw 'mic acquire timeout (8s)');
+      // v287 — startStream wrapped in a 3-attempt retry loop. Same
+      // pattern selene_lesson_screen uses (committed in 30e8b98 to
+      // recover from OSStatus 561017449). The Auralay-aligned audio
+      // session config in audio_session.dart should make this a
+      // belt-and-braces guard — but iOS interruptions (Siri, route
+      // changes, lock-screen audio) can still drop setCategory on
+      // the floor. invalidate + reconfigure between attempts lets
+      // the OS settle the session before record_darwin tries again.
+      Stream<Uint8List>? raw;
+      Object? lastErr;
+      for (var attempt = 1; attempt <= 3; attempt++) {
+        try {
+          raw = await _sharedRecorder!.startStream(const RecordConfig(
+            encoder:       AudioEncoder.pcm16bits,
+            sampleRate:    24000,
+            numChannels:   1,
+            echoCancel:    true,
+            autoGain:      true,
+            noiseSuppress: true,
+          )).timeout(const Duration(seconds: 8),
+            onTimeout: () => throw 'mic acquire timeout (8s)');
+          break;
+        } catch (e) {
+          lastErr = e;
+          _log('warn', 'MIC',
+            'startStream attempt $attempt/3 failed: $e');
+          if (attempt == 3) rethrow;
+          // Tear the session down and re-arm before the next try.
+          await Future.delayed(const Duration(milliseconds: 500));
+          AudioSession.invalidate();
+          try {
+            await AudioSession.configureForPlayAndRecord()
+                .timeout(const Duration(seconds: 4));
+          } catch (_) {/* logged on next attempt */}
+        }
+      }
+      if (raw == null) throw lastErr ?? 'mic start failed';
       // Multi-listener broadcast so every session can attach + detach
       // without restarting the mic.
       _sharedMicStream = raw.asBroadcastStream();
@@ -1030,7 +1056,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     PaywallGate.isPro().then((pro) async {
       if (!mounted) return;
       if (pro) {
-        // Pro path — monthly minute cap.
+        // Pro path — rolling weekly minute cap.
         if (await LocalStoreService.voiceCapReached()) {
           if (!mounted) return;
           // ignore: discarded_futures
@@ -1136,8 +1162,8 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     // surface as push-to-talk. A returning free user (one who has
     // already burnt their one 60-second free session) gets routed
     // to the paywall the moment they tap LUCIEN — STEP IN, same
-    // as if they'd held the orb. Pro users with their monthly
-    // 40-minute voice cap exhausted also get bounced. First-ever
+    // as if they'd held the orb. Pro users with their weekly
+    // voice-minute cap exhausted also get bounced. First-ever
     // free session users (the in-memory _firstEverSession flag)
     // sail through; the session itself burns the free pass at
     // _endAndScore.
@@ -1262,11 +1288,11 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         t.cancel();
         return;
       }
-      // Per-tick voice-time accrual for the monthly Pro cap. Fire and
-      // forget — addVoiceMs is internally idempotent against month
-      // rollover. Tracked even for free users in case they later
-      // upgrade mid-month (their early minutes don't carry over —
-      // bucket auto-resets — so it's still fair).
+      // Per-tick voice-time accrual for the rolling weekly Pro
+      // cap. Fire and forget — addVoiceMs is internally idempotent
+      // against window rollover. Tracked even for free users in
+      // case they later upgrade mid-window (their early minutes
+      // don't carry over — bucket auto-resets — so it's still fair).
       // ignore: discarded_futures
       LocalStoreService.addVoiceMs(1000);
       setState(() => _remaining--);
@@ -1274,8 +1300,9 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         t.cancel();
         _endAndScore();
       }
-      // Hard stop the moment the user hits their monthly minutes —
-      // route to paywall instead of letting the clock burn through.
+      // Hard stop the moment the user hits their weekly-window
+      // minutes — route to paywall instead of letting the clock
+      // burn through.
       // ignore: discarded_futures
       LocalStoreService.voiceCapReached().then((capped) {
         if (capped && mounted && _phase == _Phase.live) {
