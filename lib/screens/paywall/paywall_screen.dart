@@ -151,23 +151,28 @@ class _PaywallScreenState extends State<PaywallScreen> {
   /// (£, $, €, ¥…) so the badge is always honest in the user's locale.
   ///
   /// Example: weekly $6.99 × 52 = $363.48, annual $139.99 →
-  /// ($363.48 − $139.99) / $363.48 = 61.5% → "SAVE 62%".
+  /// ($363.48 − $139.99) / $363.48 = 61.5% → floored to "SAVE 61%".
   ///
-  /// Fallback when RC offerings haven't loaded yet: "SAVE 70%" —
+  /// Fallback when RC offerings haven't loaded yet: "SAVE 61%" —
   /// the structural savings between the published Weekly $6.99 and
-  /// Annual $139.99 SKUs we configured. Apple-safe because the
-  /// actual amounts the user pays still come from StoreKit. Never
-  /// shows "BEST VALUE" anymore — bro: "I told you add the
-  /// percentage they save."
+  /// Annual $139.99 SKUs we configured (52 × 6.99 = 363.48 → 139.99
+  /// → 61.5 % → floored to 61 % so the badge never over-claims).
+  /// Apple-safe because the actual amounts the user pays still come
+  /// from StoreKit. Never shows "BEST VALUE" anymore — bro: "I told
+  /// you add the percentage they save."
   String _annualBadge() {
     final weekly = _offerings.weekly?.storeProduct.price;
     final annual = _offerings.annual?.storeProduct.price;
-    if (weekly == null || annual == null) return 'SAVE 62%';
-    if (weekly <= 0 || annual <= 0)        return 'SAVE 62%';
+    if (weekly == null || annual == null) return 'SAVE 61%';
+    if (weekly <= 0 || annual <= 0)        return 'SAVE 61%';
     final weeklyTotal = weekly * 52;
-    if (annual >= weeklyTotal)             return 'SAVE 62%';
-    final pct = ((weeklyTotal - annual) / weeklyTotal * 100).round();
-    if (pct < 5)                           return 'SAVE 62%';
+    if (annual >= weeklyTotal)             return 'SAVE 61%';
+    // v285 — floor() instead of round(). Bro: "leave no room for
+    // them to complain." A 61.5 % real saving rendered as 62 % is
+    // technically over-claiming; flooring guarantees the badge
+    // always understates the discount, never overstates it.
+    final pct = ((weeklyTotal - annual) / weeklyTotal * 100).floor();
+    if (pct < 5)                           return 'SAVE 61%';
     return 'SAVE $pct%';
   }
 
