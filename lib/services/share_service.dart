@@ -303,6 +303,10 @@ class ShareService {
     int? voiceNow,
     int? voiceDelta,
     int? auraNow,
+    // v290 — IMHIM SCORE hero. The composite that the share card now
+    // leads with; Looks + Game demoted to "BUILT FROM" rows beneath.
+    int? imhimNow,
+    int? imhimDelta,
     String verdict = '',
     String? text,
   }) async {
@@ -335,6 +339,8 @@ class ShareService {
         voiceNow:       voiceNow,
         voiceDelta:     voiceDelta,
         auraNow:        auraNow,
+        imhimNow:       imhimNow,
+        imhimDelta:     imhimDelta,
         verdict:        verdict,
       );
       final bytes = await _captureOffscreen(
