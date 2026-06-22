@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../services/analytics_service.dart';
 import '../../../services/local_store_service.dart';
@@ -210,6 +211,20 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
         count:  result.length,
         isFree: !pro,
       );
+      // v289 — stamp the rizz pillar done-flag for today so the
+      // Ascension tab's pillar mission ticks green. Same shape as
+      // looks_done_ymd (protocol_service) and game_done_ymd
+      // (free_flow_screen). Mirror file pattern intentionally.
+      if (result.isNotEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final now   = DateTime.now();
+          await prefs.setInt(
+            'rizz_done_ymd',
+            now.year * 10000 + now.month * 100 + now.day,
+          );
+        } catch (_) {/* pillar tick best-effort; no UI fallback */}
+      }
       // Free users: burn the once-ever pass so subsequent taps hit
       //   the paywall.
       // Pro users (v238): count it against the 15-per-week bucket so

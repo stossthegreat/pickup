@@ -76,6 +76,16 @@ class ProgressShareCard extends StatelessWidget {
   /// Aura score (0..100) — the Auralay-imported combined index.
   final int? auraNow;
 
+  /// v290 — IMHIM SCORE composite (0..100). The hero of the card.
+  /// Looks + Game demoted to "BUILT FROM" inputs underneath; the
+  /// score on top is what the viewer reads first.
+  final int? imhimNow;
+
+  /// v290 — IMHIM SCORE delta from the prior weekly snapshot.
+  /// Positive numbers render as green ↑; null / 0 hide the chip
+  /// rather than show a confusing "+0".
+  final int? imhimDelta;
+
   /// One-line user-facing verdict — usually the highest-scoring
   /// surface's last verdict so the card has a quote attached. If empty
   /// the quote block is hidden.
@@ -93,6 +103,8 @@ class ProgressShareCard extends StatelessWidget {
     this.voiceNow,
     this.voiceDelta,
     this.auraNow,
+    this.imhimNow,
+    this.imhimDelta,
     this.verdict = '',
   });
 
@@ -106,12 +118,13 @@ class ProgressShareCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    // v224 redesign: LOOKS + GAME are the two hero numbers. Aura is
-    // a secondary chip. The DAY-360pt hero from v216 is downgraded
-    // to a small eyebrow chip — "DAY 14 · STREAK 14 🔥" — because
-    // a number alone says nothing and screenshot virality lives on
-    // the two scores everyone wants to compare. People save+post
-    // these because the score is the story, not the day count.
+    // v290 — IMHIM SCORE leads. Bro: "imhim score is in the progress
+    // icon share right now its game looks scores but above them in
+    // the middle needs imhim score". Same atmospheric halo, same
+    // brand. The hero number is now the unified composite (320pt
+    // italic), with LOOKS / GAME demoted to the BUILT FROM input row
+    // underneath. This is the consultant's "one character to level"
+    // psychology applied to the share asset.
 
     return Container(
       width: size.width, height: size.height, color: AppColors.base,
@@ -126,7 +139,7 @@ class ProgressShareCard extends StatelessWidget {
                   center: const Alignment(0, -0.35),
                   radius: 0.95,
                   colors: [
-                    base.AppColors.red.withValues(alpha: 0.20),
+                    base.AppColors.red.withValues(alpha: 0.22),
                     Colors.transparent,
                   ],
                 ),
@@ -134,17 +147,11 @@ class ProgressShareCard extends StatelessWidget {
             ),
           ),
           Padding(
-            // v241 — masthead tightened, footer pulled up so the
-            // LOOKS / GAME numbers fill most of the card. Bro:
-            // "make the two numbers bigger, push them a few cm
-            // higher, add a clear tagline statement, push the bottom
-            // of the page a few cm higher. The biggest flex every
-            // man wants to share."
-            padding: const EdgeInsets.fromLTRB(56, 90, 56, 40),
+            padding: const EdgeInsets.fromLTRB(56, 90, 56, 48),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // ── Eyebrow — clear "what this is".
+                // ── Eyebrow — what this is.
                 Text('MY GLOW UP · CERTIFIED',
                   textAlign: TextAlign.center,
                   style: AppTypography.label.copyWith(
@@ -153,61 +160,33 @@ class ProgressShareCard extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   )),
                 const SizedBox(height: 16),
-                // ── Brand — two-tone ImHim. Slightly smaller than
-                // before so the score block underneath gets the
-                // weight.
+                // ── Brand — two-tone ImHim.
                 _ImHimMark(fontSize: 100),
                 const SizedBox(height: 12),
                 Container(width: 100, height: 3, color: base.AppColors.red),
-                const SizedBox(height: 14),
+                const SizedBox(height: 22),
 
-                // ── TAGLINE — the brand promise, big, white, all caps
-                // so it lands on a Story even cropped tight. Bro: "add
-                // a clear statement, our tagline."
+                // ── TAGLINE.
                 Text('LOOKS GET ATTENTION.\nGAME KEEPS IT.',
                   textAlign: TextAlign.center,
                   style: AppTypography.label.copyWith(
                     color: AppColors.textPrimary,
-                    fontSize: 30, letterSpacing: 2.4,
+                    fontSize: 28, letterSpacing: 2.4,
                     height: 1.18,
                     fontWeight: FontWeight.w900,
                   )),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 40),
 
-                // ── HERO SCORE PANELS — Looks + Game side by side.
-                // This is THE share angle. Numbers grew from 230 →
-                // 320pt in _HeroScorePanel so the score reads from
-                // across a feed.
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _HeroScorePanel(
-                      label:    'LOOKS',
-                      subLabel: 'FACE INDEX',
-                      value:    aestheticNow,
-                      delta:    aestheticDelta,
-                      accent:   AppColors.accent,
-                    )),
-                    Container(
-                      width: 1, height: 420,
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      color: AppColors.textTertiary.withValues(alpha: 0.35),
-                    ),
-                    Expanded(child: _HeroScorePanel(
-                      label:    'GAME',
-                      subLabel: 'VOICE · ROLEPLAY',
-                      value:    voiceNow,
-                      delta:    voiceDelta,
-                      accent:   AppColors.signalAmber,
-                    )),
-                  ],
+                // ── IMHIM SCORE HERO. The unified composite.
+                _ImHimScoreShareHero(
+                  score: imhimNow,
+                  delta: imhimDelta,
                 ),
 
-                const SizedBox(height: 28),
+                const SizedBox(height: 24),
 
-                // ── Day + streak pill — moved BELOW the scores so it
-                // doesn't compete with the hero numbers for top space.
+                // ── Day + streak pill — anchors the score in TIME.
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 28, vertical: 12),
@@ -231,38 +210,65 @@ class ProgressShareCard extends StatelessWidget {
 
                 const Spacer(),
 
-                // ── Aura mini-row — only if active.
+                // ── BUILT FROM — the input row underneath the hero.
+                // Looks + Game (and Aura if active) demoted from their
+                // old hero-twin treatment so the IMHIM number on top
+                // gets the full read; viewers still see the inputs so
+                // the composite reads as honest, not magic.
+                Text('BUILT FROM',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textTertiary,
+                    fontSize: 18, letterSpacing: 4,
+                    fontWeight: FontWeight.w900,
+                  )),
+                const SizedBox(height: 16),
+                _BuiltFromRow(
+                  label: 'LOOKS',
+                  value: aestheticNow,
+                  delta: aestheticDelta,
+                  accent: AppColors.accent,
+                ),
+                const SizedBox(height: 10),
+                _BuiltFromRow(
+                  label: 'GAME',
+                  value: voiceNow,
+                  delta: voiceDelta,
+                  accent: AppColors.signalAmber,
+                ),
                 if (auraNow != null && auraNow! > 0) ...[
-                  Text('AURA · ${auraNow!}',
-                    style: AppTypography.label.copyWith(
-                      color: AppColors.signalGreen,
-                      fontSize: 22, letterSpacing: 4,
-                      fontWeight: FontWeight.w900,
-                    )),
                   const SizedBox(height: 10),
+                  _BuiltFromRow(
+                    label: 'AURA',
+                    value: auraNow,
+                    delta: null,
+                    accent: AppColors.signalGreen,
+                  ),
                 ],
 
-                // Activity strip — single line of proof.
+                const SizedBox(height: 20),
+
+                // ── Activity strip — single line of proof.
                 Text(_activityLine,
                   textAlign: TextAlign.center,
                   style: AppTypography.label.copyWith(
                     color: AppColors.textSecondary,
-                    fontSize: 20, letterSpacing: 3,
+                    fontSize: 18, letterSpacing: 3,
                     fontWeight: FontWeight.w800,
                   )),
 
                 if (verdict.isNotEmpty) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   Text('"$verdict"',
                     textAlign: TextAlign.center,
                     style: AppTypography.h1Italic.copyWith(
                       color: AppColors.textPrimary,
-                      fontSize: 28, height: 1.4,
+                      fontSize: 26, height: 1.4,
                       fontStyle: FontStyle.italic,
                     )),
                 ],
 
-                const SizedBox(height: 18),
+                const SizedBox(height: 22),
 
                 // Footer wordmark + date.
                 Row(
@@ -286,12 +292,12 @@ class ProgressShareCard extends StatelessWidget {
                       )),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Text("BECOME THE GUY WHO OWNS THE ROOM  ·  imhim.app",
                   textAlign: TextAlign.center,
                   style: AppTypography.label.copyWith(
                     color: AppColors.textTertiary,
-                    fontSize: 22, letterSpacing: 5,
+                    fontSize: 20, letterSpacing: 5,
                     fontWeight: FontWeight.w900,
                   )),
               ],
@@ -311,20 +317,90 @@ class ProgressShareCard extends StatelessWidget {
   }
 }
 
-/// Hero score column — one big colored label, one massive italic number,
-/// a thin sub-label that says exactly what the number measures, and an
-/// optional delta pill. Two of these sit side-by-side as the centerpiece
-/// of the v224 progress card so the share post screenshots cleanly to
-/// "LOOKS 68 / GAME 72" without anyone having to read fine print.
-class _HeroScorePanel extends StatelessWidget {
+/// v290 — IMHIM SCORE share hero. Single massive italic numeral on
+/// top of the share card, "/100" anchored beneath, optional weekly
+/// delta pill underneath. The composite is the hook; viewers read
+/// the number first, then the BUILT FROM row tells them how it was
+/// earned. Same italic Playfair language as the in-app score block.
+class _ImHimScoreShareHero extends StatelessWidget {
+  final int? score;
+  final int? delta;
+  const _ImHimScoreShareHero({required this.score, required this.delta});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasValue   = score != null;
+    final hasDelta   = hasValue && delta != null && delta != 0;
+    final positive   = (delta ?? 0) >= 0;
+    final deltaColor = positive ? AppColors.signalGreen : AppColors.signalRed;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('IMHIM SCORE',
+          textAlign: TextAlign.center,
+          style: AppTypography.label.copyWith(
+            color: base.AppColors.red,
+            fontSize: 36, letterSpacing: 8,
+            fontWeight: FontWeight.w900,
+          )),
+        const SizedBox(height: 18),
+        Text(hasValue ? '${score!}' : '—',
+          textAlign: TextAlign.center,
+          style: AppTypography.display.copyWith(
+            color: hasValue ? AppColors.textPrimary
+                            : AppColors.textTertiary,
+            fontSize: 360, height: 0.92,
+            fontStyle: FontStyle.italic,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -10,
+          )),
+        const SizedBox(height: 4),
+        Text(hasValue ? '/ 100' : 'NOT YET',
+          textAlign: TextAlign.center,
+          style: AppTypography.label.copyWith(
+            color: AppColors.textTertiary,
+            fontSize: 26, letterSpacing: 4,
+            fontWeight: FontWeight.w900,
+          )),
+        if (hasDelta) ...[
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 18, vertical: 9),
+            decoration: BoxDecoration(
+              color: deltaColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(
+                color: deltaColor.withValues(alpha: 0.6), width: 1.8),
+            ),
+            child: Text(
+              '${positive ? "↑ +" : "↓ "}$delta THIS WEEK',
+              style: AppTypography.label.copyWith(
+                color: deltaColor,
+                fontSize: 22, letterSpacing: 3,
+                fontWeight: FontWeight.w900,
+              )),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// v290 — BUILT FROM input row. One label on the left, a thin
+/// progress bar through the middle, the value pinned right. Three
+/// stacked rows under the IMHIM hero make the composite read as
+/// honest evidence rather than a magic number. Optional delta chip
+/// hangs off the right when we have a non-zero delta for the
+/// component.
+class _BuiltFromRow extends StatelessWidget {
   final String label;
-  final String subLabel;
-  final int?   value;     // null → "—" placeholder + "NOT YET" sublabel
+  final int?   value;
   final int?   delta;
   final Color  accent;
-  const _HeroScorePanel({
+  const _BuiltFromRow({
     required this.label,
-    required this.subLabel,
     required this.value,
     required this.delta,
     required this.accent,
@@ -336,66 +412,70 @@ class _HeroScorePanel extends StatelessWidget {
     final hasDelta   = hasValue && delta != null && delta != 0;
     final positive   = (delta ?? 0) >= 0;
     final deltaColor = positive ? AppColors.signalGreen : AppColors.signalRed;
+    final width      = hasValue ? (value! / 100).clamp(0.0, 1.0) : 0.0;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Row(
       children: [
-        Text(label,
-          textAlign: TextAlign.center,
-          style: AppTypography.label.copyWith(
-            color: accent,
-            fontSize: 46, letterSpacing: 6,
-            fontWeight: FontWeight.w900,
-          )),
-        const SizedBox(height: 14),
-        // v241 — score number bumped 230 → 320pt. Bro called the
-        // v232 size still too small ("make the two numbers bigger,
-        // biggest flex"). At 320pt the score is HALF the card width
-        // when paired — un-missable on a Story / TikTok crop.
-        Text(hasValue ? '${value!}' : '—',
-          textAlign: TextAlign.center,
-          style: AppTypography.display.copyWith(
-            color: hasValue ? AppColors.textPrimary
-                            : AppColors.textTertiary,
-            fontSize: 320, height: 0.95,
-            fontStyle: FontStyle.italic,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -8,
-          )),
-        const SizedBox(height: 6),
-        Text(hasValue ? '/ 100' : 'NOT YET',
-          textAlign: TextAlign.center,
-          style: AppTypography.label.copyWith(
-            color: AppColors.textTertiary,
-            fontSize: 22, letterSpacing: 3,
-            fontWeight: FontWeight.w800,
-          )),
-        const SizedBox(height: 6),
-        Text(subLabel,
-          textAlign: TextAlign.center,
-          style: AppTypography.label.copyWith(
-            color: AppColors.textSecondary,
-            fontSize: 18, letterSpacing: 2.5,
-            fontWeight: FontWeight.w700,
-          )),
-        if (hasDelta) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            decoration: BoxDecoration(
-              color: deltaColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: deltaColor.withValues(alpha: 0.6), width: 1.5),
+        SizedBox(
+          width: 130,
+          child: Text(label,
+            style: AppTypography.label.copyWith(
+              color: accent,
+              fontSize: 26, letterSpacing: 4,
+              fontWeight: FontWeight.w900,
+            )),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: Stack(
+              children: [
+                Container(
+                  height: 10,
+                  color: AppColors.textTertiary.withValues(alpha: 0.25),
+                ),
+                FractionallySizedBox(
+                  widthFactor: width,
+                  child: Container(
+                    height: 10,
+                    color: accent,
+                  ),
+                ),
+              ],
             ),
-            child: Text(
-              '${positive ? '+' : ''}$delta',
-              style: AppTypography.delta.copyWith(
+          ),
+        ),
+        const SizedBox(width: 16),
+        SizedBox(
+          width: 80,
+          child: Text(hasValue ? '${value!}' : '—',
+            textAlign: TextAlign.right,
+            style: AppTypography.display.copyWith(
+              color: AppColors.textPrimary,
+              fontSize: 36, height: 1,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1.4,
+            )),
+        ),
+        if (hasDelta) ...[
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: deltaColor.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text('${positive ? "+" : ""}$delta',
+              style: AppTypography.label.copyWith(
                 color: deltaColor,
-                fontSize: 22, fontWeight: FontWeight.w900,
+                fontSize: 16, letterSpacing: 1.4,
+                fontWeight: FontWeight.w900,
               )),
           ),
-        ],
+        ] else
+          const SizedBox(width: 44), // align even when no chip
       ],
     );
   }

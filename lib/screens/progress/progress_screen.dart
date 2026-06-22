@@ -14,6 +14,8 @@ import '../../services/analytics_service.dart';
 import '../../services/gaze/gaze_progress_store.dart';
 import '../../services/local_store_service.dart';
 import '../../services/presence/presence_progress_store.dart';
+import '../../services/ascension_service.dart';
+import '../../services/protocol_service.dart';
 import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
@@ -132,7 +134,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 color: AppColors.red, shape: BoxShape.circle),
             ),
             const Spacer(),
-            _ProgressShareButton(onTap: () => _shareProgress(sorted, deltas)),
+            _ProgressShareButton(
+              // ignore: discarded_futures
+              onTap: () => _shareProgress(sorted, deltas)),
             const SizedBox(width: 8),
             _ProgressCloseButton(onTap: () {
               // ignore: discarded_futures
@@ -221,9 +225,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
   /// post-able receipt. Deltas come from the same axis-delta pass that
   /// powers the in-app DELTA · FIRST → LATEST row so the share number
   /// matches what the user just looked at.
-  void _shareProgress(
+  Future<void> _shareProgress(
       List<ScanRecord> sortedScans,
-      Map<String, (double, double)>? deltas) {
+      Map<String, (double, double)>? deltas) async {
     HapticFeedback.lightImpact();
     // ignore: discarded_futures
     AnalyticsService.shareTapped(surface: 'progress');
@@ -246,6 +250,32 @@ class _ProgressScreenState extends State<ProgressScreen> {
           : null;
     }
 
+    // v290 — compute the IMHIM SCORE composite the share card now
+    // leads with. Same formula AscensionService runs on the in-app
+    // hero so the number is consistent between surfaces. Loading
+    // the protocol is one async hop; the share spinner is already
+    // up while we render the off-screen card so the user never
+    // sees the latency. Weekly delta comes from the same prior-
+    // snapshot ring used on the Ascend tab.
+    int? imhimNow;
+    int? imhimDelta;
+    try {
+      final protocol = await ProtocolService.loadActive();
+      final consistency = AscensionService.consistencyFor(protocol);
+      final imhim = AscensionService.imhimScoreFromComponents(
+        looks: aestheticNow ?? 0,
+        game:  voiceNow     ?? 0,
+        consistency: consistency,
+      );
+      imhimNow   = imhim;
+      imhimDelta = await AscensionService.weeklyDeltaFor(imhim);
+    } catch (_) {
+      // No protocol or prefs unhappy — fall through with nulls so
+      // the share card hides the hero number rather than render
+      // garbage. Looks + Game still surface in the BUILT FROM row.
+    }
+
+    if (!mounted) return;
     // ignore: discarded_futures
     ShareService.shareProgress(
       context:        context,
@@ -259,6 +289,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
       voiceNow:       voiceNow,
       voiceDelta:     voiceDelta,
       auraNow:        aux.auraScore > 0 ? aux.auraScore : null,
+      imhimNow:       imhimNow,
+      imhimDelta:     imhimDelta,
     );
   }
 

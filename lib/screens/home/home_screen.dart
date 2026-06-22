@@ -63,6 +63,12 @@ class _HomeScreenState extends State<HomeScreen> {
   int _auraScore  = 0;
   int _gameScore  = 0;
   int _dayStreak  = 0;
+  // v289 — raw 0-100 versions surfaced separately because the
+  // Ascend tab's IMHIM-score formula needs the original precision;
+  // the /10 fields above stay around for the home-tab pillar tiles
+  // that have always rendered out of 10.
+  int _looksScore100 = 0;
+  int _gameScore100  = 0;
   // Today\'s Ascension — which pillars have a completion logged TODAY.
   // Each session screen writes its `<pillar>_done_ymd` int (year*10000 +
   // month*100 + day) to SharedPreferences when a rep lands; here we
@@ -70,6 +76,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _looksDoneToday = false;
   bool _auraDoneToday  = false;
   bool _gameDoneToday  = false;
+  /// v289 — Rizz pillar completion-today flag. Written by
+  /// `rizz_reply_screen` whenever a generation lands successfully.
+  /// Drives the Rizz row of the Ascend tab's pillar missions panel.
+  bool _rizzDoneToday  = false;
 
   static int _todayYmd() {
     final n = DateTime.now();
@@ -129,6 +139,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final looksOk  = (prefs.getInt('looks_done_ymd') ?? 0) == today;
     final auraOk   = (prefs.getInt('aura_done_ymd')  ?? 0) == today;
     final gameOk   = (prefs.getInt('game_done_ymd')  ?? 0) == today;
+    // v289 — read the Rizz daily flag stamped by rizz_reply_screen.
+    final rizzOk   = (prefs.getInt('rizz_done_ymd')  ?? 0) == today;
     final allThree = looksOk && auraOk && gameOk;
     int tripleStreak = prefs.getInt('triple_streak_count') ?? 0;
     final lastTripleYmd = prefs.getInt('triple_streak_last_ymd') ?? 0;
@@ -172,9 +184,12 @@ class _HomeScreenState extends State<HomeScreen> {
       // fallback for users whose first scan landed before the
       // looks_score key existed.
       final looksRaw = prefs.getInt('looks_score') ?? latest?.score ?? 0;
-      _looksScore = (looksRaw / 10).round().clamp(0, 10);
-      _auraScore  = ((prefs.getInt('aura_score')  ?? 0) / 10).round().clamp(0, 10);
-      _gameScore  = ((prefs.getInt('game_score')  ?? 0) / 10).round().clamp(0, 10);
+      final gameRaw  = prefs.getInt('game_score')  ?? 0;
+      _looksScore    = (looksRaw / 10).round().clamp(0, 10);
+      _auraScore     = ((prefs.getInt('aura_score') ?? 0) / 10).round().clamp(0, 10);
+      _gameScore     = (gameRaw / 10).round().clamp(0, 10);
+      _looksScore100 = looksRaw.clamp(0, 100);
+      _gameScore100  = gameRaw.clamp(0, 100);
       // _dayStreak is the bigger of the protocol streak and the
       // triple-pillar streak — whichever the user actually
       // earned, that\'s what the masthead chip displays.
@@ -183,6 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _looksDoneToday = looksOk;
       _auraDoneToday  = auraOk;
       _gameDoneToday  = gameOk;
+      _rizzDoneToday  = rizzOk;
     });
   }
 
@@ -238,6 +254,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   dayStreak:        _dayStreak,
                   looksDoneToday:   _looksDoneToday,
                   gameDoneToday:    _gameDoneToday,
+                  rizzDoneToday:    _rizzDoneToday,
+                  looksScore100:    _looksScore100,
+                  gameScore100:     _gameScore100,
                 ),
               ],
             ),
