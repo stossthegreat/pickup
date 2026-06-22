@@ -30,7 +30,6 @@ import '../../../widgets/common/imhim_wordmark.dart';
 import '../../../widgets/common/mirrorly_components.dart';
 import '../../../widgets/debug_panel.dart';
 import '../../../widgets/safe_close_button.dart';
-import '../arena/arena_scenes_screen.dart';
 
 /// FREE FLOW — live, streaming voice roleplay (OpenAI Realtime API).
 ///
@@ -52,9 +51,9 @@ import '../arena/arena_scenes_screen.dart';
 class FreeFlowScreen extends StatefulWidget {
   /// When true, the screen renders as the GAME tab body — no close
   /// button, no picker phase. INTO YOU is auto-loaded as the default
-  /// persona; a "CHANGE CHARACTER" chip + "ARENA" button replace the
-  /// default chrome. The session lifecycle (tap-and-hold, scoring,
-  /// Lucien step-in) behaves identically to the standalone push.
+  /// persona; a "CHANGE CHARACTER" chip sits in the top chrome.
+  /// The session lifecycle (tap-and-hold, scoring, Lucien step-in)
+  /// behaves identically to the standalone push.
   final bool tabMode;
   const FreeFlowScreen({super.key, this.tabMode = false});
 
@@ -1521,16 +1520,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     await _goLive(v);
   }
 
-  /// GAME tab — open the arena scene picker. Pushes on top of the
-  /// tab so the Free Flow session stays alive in the background; on
-  /// pop the user lands back on the live circle.
-  void _openArena() {
-    HapticFeedback.selectionClick();
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => const ArenaScenesScreen(),
-    ));
-  }
-
   /// GAME tab — character switcher. Shows a modal bottom sheet
   /// listing every vibe; on selection we tear the current session
   /// down and start a fresh one with the new persona, so the user
@@ -1716,10 +1705,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                       fontWeight: FontWeight.w900,
                     )),
               const Spacer(),
-              if (widget.tabMode) ...[
-                _ArenaPill(onTap: _openArena),
-                const SizedBox(width: 8),
-              ],
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -2691,56 +2676,6 @@ class _ChangeCharacterChip extends StatelessWidget {
               const SizedBox(width: 4),
               const Icon(Icons.keyboard_arrow_down_rounded,
                 color: AppColors.red, size: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The ARENA pill — a clean one-tap route into the scripted-scene
-/// picker without leaving the tab. Sits next to the timer in tab
-/// mode where the close button used to live.
-/// ARENA — paired with the CHANGE CHARACTER chip on the left.
-/// Exact same size + outlined-red style so the two chips read as a
-/// matched pair across the top chrome. Fire icon + label + arrow,
-/// all red, on the dark surface1 background.
-class _ArenaPill extends StatelessWidget {
-  final VoidCallback onTap;
-  const _ArenaPill({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(100),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(100),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppColors.surface1,
-            borderRadius: BorderRadius.circular(100),
-            border: Border.all(
-              color: AppColors.red.withValues(alpha: 0.45), width: 0.8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.local_fire_department_rounded,
-                  color: AppColors.red, size: 14),
-              const SizedBox(width: 4),
-              Text('ARENA',
-                style: AppTypography.label.copyWith(
-                  color: AppColors.red,
-                  fontSize: 11, letterSpacing: 2.6,
-                  fontWeight: FontWeight.w900,
-                )),
-              const SizedBox(width: 2),
-              const Icon(Icons.arrow_forward_rounded,
-                  color: AppColors.red, size: 14),
             ],
           ),
         ),

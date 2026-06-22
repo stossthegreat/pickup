@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -184,6 +185,19 @@ class _ProgressScreenState extends State<ProgressScreen> {
               .animate().fadeIn(delay: 160.ms, duration: 400.ms),
             const SizedBox(height: Sp.md),
           ],
+
+          // v292 — milestone photo gallery. Bro: "users should be
+          // allowed to save their images… make a space in progress
+          // that they can save every two weeks or day 1 day 30 and
+          // day 60 — clear images that stay clearly titled day 1
+          // etc." Three slots pulled from the existing scan history
+          // — no new save flow needed, the scan already persists
+          // capturedImagePath. Empty slots get a TAKE pill that
+          // routes to /scan so the user can fill them.
+          _MilestonePhotoStrip(scans: _scans)
+            .animate().fadeIn(delay: 220.ms, duration: 400.ms),
+
+          const SizedBox(height: Sp.lg),
 
           _ScanHistoryList(scans: _scans)
             .animate().fadeIn(delay: 280.ms, duration: 400.ms),
@@ -1430,4 +1444,205 @@ class _ProgressCloseButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// v292 — milestone photo strip. Three slots — DAY 1 / DAY 30 /
+/// DAY 60 — each rendered as a 4:5 portrait tile with the captured
+/// face from the matching scan (or a "TAKE" CTA if no scan landed
+/// inside that window yet). Bro: "this one feature can make this
+/// app massive — imagine people seeing a completely different
+/// looking person from day 1 to day 60."
+///
+/// Day-N is anchored to the user's FIRST scan (chronologically
+/// earliest in history), so the strip works whether or not the
+/// active protocol has been loaded into the Progress screen
+/// constructor — the photo gallery lives off the on-device scan
+/// history, not the protocol object.
+class _MilestonePhotoStrip extends StatelessWidget {
+  final List<ScanRecord> scans;
+  const _MilestonePhotoStrip({required this.scans});
+
+  /// Returns the first scan that landed inside the protocol-day
+  /// window [from..to] when anchored to [anchor]. Null when the
+  /// window is still empty so the tile can render a TAKE CTA.
+  ScanRecord? _findInWindow({
+    required DateTime anchor,
+    required int from,
+    required int to,
+    required List<ScanRecord> sorted,
+  }) {
+    for (final s in sorted) {
+      final dayAt = s.takenAt.difference(anchor).inDays + 1;
+      if (dayAt >= from && dayAt <= to) return s;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sorted = [...scans]
+      ..sort((a, b) => a.takenAt.compareTo(b.takenAt));
+    // No scans at all → no anchor, nothing to render. The user is
+    // pre-Day-1 and the Looks tab will route them to /scan anyway.
+    if (sorted.isEmpty) return const SizedBox.shrink();
+    final anchor = sorted.first.takenAt;
+    final day1   = sorted.first;
+    final day30  = _findInWindow(
+      anchor: anchor, from: 25, to: 35, sorted: sorted);
+    final day60  = _findInWindow(
+      anchor: anchor, from: 55, to: 65, sorted: sorted);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('MILESTONE PHOTOS',
+          style: AppTypography.label.copyWith(
+            color: AppColors.textTertiary,
+            letterSpacing: 2.5, fontSize: 10)),
+        const SizedBox(height: 6),
+        Text('Your transformation, in three frames.',
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textSecondary,
+            fontStyle: FontStyle.italic, fontSize: 12.5)),
+        const SizedBox(height: Sp.md),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _MilestoneTile(
+              label: 'DAY 1',  scan: day1, accent: AppColors.textTertiary)),
+            const SizedBox(width: 10),
+            Expanded(child: _MilestoneTile(
+              label: 'DAY 30', scan: day30, accent: AppColors.accent)),
+            const SizedBox(width: 10),
+            Expanded(child: _MilestoneTile(
+              label: 'DAY 60', scan: day60, accent: AppColors.red)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// One tile inside [_MilestonePhotoStrip]. Two visual states:
+///  PHOTO  — captured face image cropped to a 4:5 portrait, label
+///           underneath, score chip pinned bottom-left.
+///  EMPTY  — surface2 placeholder with a face glyph + dashed
+///           border + "TAKE" pill that routes to /scan so the
+///           user can fill the slot.
+class _MilestoneTile extends StatelessWidget {
+  final String label;
+  final ScanRecord? scan;
+  final Color accent;
+  const _MilestoneTile({
+    required this.label,
+    required this.scan,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasScan  = scan != null;
+    final path     = scan?.capturedImagePath;
+    final file     = path == null ? null : File(path);
+    final hasImage = hasScan && file != null && file.existsSync();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        AspectRatio(
+          aspectRatio: 4 / 5,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: hasScan
+                  ? accent.withValues(alpha: 0.55)
+                  : AppColors.divider,
+                width: hasScan ? 1.4 : 0.8),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: hasImage
+                ? Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Image.file(file, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _placeholder()),
+                      ),
+                      // Score chip — pinned to the bottom-left so
+                      // every tile reads as a labeled receipt.
+                      Positioned(
+                        left: 6, bottom: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.62),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text('${scan!.score}',
+                            style: AppTypography.label.copyWith(
+                              color: accent,
+                              fontSize: 9.5, letterSpacing: 1.0,
+                              fontWeight: FontWeight.w900,
+                            )),
+                        ),
+                      ),
+                    ],
+                  )
+                : Center(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          context.push('/scan');
+                        },
+                        borderRadius: BorderRadius.circular(99),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(99),
+                            border: Border.all(
+                              color: accent.withValues(alpha: 0.5),
+                              width: 0.8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add_a_photo_outlined,
+                                color: accent, size: 12),
+                              const SizedBox(width: 5),
+                              Text('TAKE',
+                                style: AppTypography.label.copyWith(
+                                  color: accent,
+                                  fontSize: 9, letterSpacing: 2.0,
+                                  fontWeight: FontWeight.w900,
+                                )),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(label,
+          style: AppTypography.label.copyWith(
+            color: hasScan ? accent : AppColors.textTertiary,
+            fontSize: 10, letterSpacing: 2.2,
+            fontWeight: FontWeight.w900,
+          )),
+      ],
+    );
+  }
+
+  Widget _placeholder() => Container(
+        color: AppColors.surface2,
+        alignment: Alignment.center,
+        child: Icon(Icons.face_retouching_natural_outlined,
+          size: 28, color: AppColors.textTertiary.withValues(alpha: 0.6)),
+      );
 }

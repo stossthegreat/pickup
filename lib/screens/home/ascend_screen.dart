@@ -154,9 +154,11 @@ class _AscendScreenState extends State<AscendScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: Sp.xl),
           children: [
-            // v287 — masthead aligned to Looks / Rizz pattern: ImHim
-            // wordmark only, nothing under it. Bro: "put title on
-            // ascension as imhim, same as rest, nothing under it."
+            // v292 — masthead matches Looks / Rizz: wordmark, then
+            // the streak flame (gated > 0 like the other tabs so a
+            // brand-new user doesn't see a dead "0 day" chip),
+            // progress chart, settings cog. Bro: "add the progress
+            // and streak icons on rizz and ascend."
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
               child: Row(
@@ -164,26 +166,15 @@ class _AscendScreenState extends State<AscendScreen> {
                 children: [
                   const ImHimWordmark(fontSize: 34),
                   const Spacer(),
-                  Material(
-                    color: Colors.transparent,
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      onTap: () => context.push('/settings'),
-                      customBorder: const CircleBorder(),
-                      child: Container(
-                        width: 38, height: 38,
-                        decoration: BoxDecoration(
-                          color: AppColors.surface1,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.divider, width: 0.8),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.tune,
-                          size: 18, color: AppColors.textSecondary),
-                      ),
-                    ),
-                  ),
+                  if (widget.dayStreak > 0) ...[
+                    _MastheadStreakBadge(days: widget.dayStreak),
+                    const SizedBox(width: 8),
+                  ],
+                  _MastheadProgressChip(
+                    onTap: () => context.push('/progress')),
+                  const SizedBox(width: 8),
+                  _MastheadSettingsCog(
+                    onTap: () => context.push('/settings')),
                 ],
               ),
             ),
@@ -1705,6 +1696,103 @@ class _FinalFormCard extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  v292 — Ascend masthead chips. Same visual treatment the Looks +
+//  Rizz mastheads use; duplicated locally so the Ascend tab stays
+//  self-contained (those tabs have their own private chip widgets,
+//  and dragging them into a shared file would couple three
+//  unrelated screens).
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _MastheadStreakBadge extends StatelessWidget {
+  final int days;
+  const _MastheadStreakBadge({required this.days});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.red.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(
+          color: AppColors.red.withValues(alpha: 0.45), width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.local_fire_department_rounded,
+              color: AppColors.red, size: 16),
+          const SizedBox(width: 5),
+          Text('$days',
+            style: GoogleFonts.inter(
+              color: AppColors.red,
+              fontSize: 13.5, height: 1,
+              letterSpacing: 0.2,
+              fontWeight: FontWeight.w900,
+            )),
+        ],
+      ),
+    );
+  }
+}
+
+class _MastheadProgressChip extends StatelessWidget {
+  final VoidCallback onTap;
+  const _MastheadProgressChip({required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: () { HapticFeedback.selectionClick(); onTap(); },
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 38, height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: AppColors.signalAmber.withValues(alpha: 0.55),
+              width: 0.8),
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.show_chart_rounded,
+              size: 18, color: AppColors.signalAmber),
+        ),
+      ),
+    );
+  }
+}
+
+class _MastheadSettingsCog extends StatelessWidget {
+  final VoidCallback onTap;
+  const _MastheadSettingsCog({required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 38, height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: AppColors.divider, width: 0.8),
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.tune,
+            size: 18, color: AppColors.textSecondary),
         ),
       ),
     );
