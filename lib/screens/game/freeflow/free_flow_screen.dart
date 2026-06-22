@@ -30,7 +30,6 @@ import '../../../widgets/common/imhim_wordmark.dart';
 import '../../../widgets/common/mirrorly_components.dart';
 import '../../../widgets/debug_panel.dart';
 import '../../../widgets/safe_close_button.dart';
-import '../arena/arena_scenes_screen.dart';
 
 /// FREE FLOW — live, streaming voice roleplay (OpenAI Realtime API).
 ///
@@ -52,9 +51,9 @@ import '../arena/arena_scenes_screen.dart';
 class FreeFlowScreen extends StatefulWidget {
   /// When true, the screen renders as the GAME tab body — no close
   /// button, no picker phase. INTO YOU is auto-loaded as the default
-  /// persona; a "CHANGE CHARACTER" chip + "ARENA" button replace the
-  /// default chrome. The session lifecycle (tap-and-hold, scoring,
-  /// Lucien step-in) behaves identically to the standalone push.
+  /// persona; a "CHANGE CHARACTER" chip sits in the top chrome.
+  /// The session lifecycle (tap-and-hold, scoring, Lucien step-in)
+  /// behaves identically to the standalone push.
   final bool tabMode;
   const FreeFlowScreen({super.key, this.tabMode = false});
 
@@ -1521,16 +1520,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     await _goLive(v);
   }
 
-  /// GAME tab — open the arena scene picker. Pushes on top of the
-  /// tab so the Free Flow session stays alive in the background; on
-  /// pop the user lands back on the live circle.
-  void _openArena() {
-    HapticFeedback.selectionClick();
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => const ArenaScenesScreen(),
-    ));
-  }
-
   /// GAME tab — character switcher. Shows a modal bottom sheet
   /// listing every vibe; on selection we tear the current session
   /// down and start a fresh one with the new persona, so the user
@@ -1716,10 +1705,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                       fontWeight: FontWeight.w900,
                     )),
               const Spacer(),
-              if (widget.tabMode) ...[
-                _ArenaPill(onTap: _openArena),
-                const SizedBox(width: 8),
-              ],
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -2030,43 +2015,59 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                 const _LucienNudgeBubble(),
                 const SizedBox(height: 6),
               ],
-              Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
-                  onTap: _phase == _Phase.live ? _lucienStepIn : null,
+              // v293 — Lucien Step-In gated on _clockStarted. Bro:
+              // "as a rule that button activates after the big button
+              // is pressed only. That way it can only ever be in
+              // their time." A Pro user could otherwise tap Lucien
+              // immediately on session entry and burn voice minutes
+              // without ever holding the orb. The gate pegs Lucien
+              // to actual engagement — first hold of the session
+              // (which is also when the clock starts) flips the
+              // button live. Resets on session end / new persona.
+              Builder(builder: (_) {
+                final lucienReady = _phase == _Phase.live && _clockStarted;
+                return Material(
+                  color: Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 22, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: _phase == _Phase.live
-                          ? AppColors.accent
-                          : AppColors.surface3,
-                      borderRadius: BorderRadius.circular(12),
-                      // Soft accent glow ONLY when the nudge is up so
-                      // the button itself becomes the obvious target.
-                      boxShadow: (_firstEverSession
-                              && _hadFirstSheReply
-                              && !_lucienNudgeDismissed
-                              && _phase == _Phase.live)
-                          ? [BoxShadow(
-                              color: AppColors.accent.withValues(alpha: 0.55),
-                              blurRadius: 24, spreadRadius: 1)]
-                          : null,
-                    ),
-                    child: Text('LUCIEN — STEP IN',
+                  child: InkWell(
+                    onTap: lucienReady ? _lucienStepIn : null,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 22, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: lucienReady
+                            ? AppColors.accent
+                            : AppColors.surface3,
+                        borderRadius: BorderRadius.circular(12),
+                        // Soft accent glow ONLY when the nudge is up
+                        // so the button itself becomes the obvious
+                        // target.
+                        boxShadow: (_firstEverSession
+                                && _hadFirstSheReply
+                                && !_lucienNudgeDismissed
+                                && lucienReady)
+                            ? [BoxShadow(
+                                color: AppColors.accent.withValues(alpha: 0.55),
+                                blurRadius: 24, spreadRadius: 1)]
+                            : null,
+                      ),
+                      child: Text(
+                        lucienReady
+                            ? 'LUCIEN — STEP IN'
+                            : 'HOLD TO TALK FIRST',
                         style: AppTypography.label.copyWith(
-                          color: _phase == _Phase.live
+                          color: lucienReady
                               ? Colors.white
                               : AppColors.textTertiary,
                           fontSize: 12,
                           letterSpacing: 2.6,
                           fontWeight: FontWeight.w900,
                         )),
+                    ),
                   ),
-                ),
-              ),
+                );
+              }),
               const SizedBox(height: 12),
               Material(
                 color: Colors.transparent,
@@ -2691,56 +2692,6 @@ class _ChangeCharacterChip extends StatelessWidget {
               const SizedBox(width: 4),
               const Icon(Icons.keyboard_arrow_down_rounded,
                 color: AppColors.red, size: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The ARENA pill — a clean one-tap route into the scripted-scene
-/// picker without leaving the tab. Sits next to the timer in tab
-/// mode where the close button used to live.
-/// ARENA — paired with the CHANGE CHARACTER chip on the left.
-/// Exact same size + outlined-red style so the two chips read as a
-/// matched pair across the top chrome. Fire icon + label + arrow,
-/// all red, on the dark surface1 background.
-class _ArenaPill extends StatelessWidget {
-  final VoidCallback onTap;
-  const _ArenaPill({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(100),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(100),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppColors.surface1,
-            borderRadius: BorderRadius.circular(100),
-            border: Border.all(
-              color: AppColors.red.withValues(alpha: 0.45), width: 0.8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.local_fire_department_rounded,
-                  color: AppColors.red, size: 14),
-              const SizedBox(width: 4),
-              Text('ARENA',
-                style: AppTypography.label.copyWith(
-                  color: AppColors.red,
-                  fontSize: 11, letterSpacing: 2.6,
-                  fontWeight: FontWeight.w900,
-                )),
-              const SizedBox(width: 2),
-              const Icon(Icons.arrow_forward_rounded,
-                  color: AppColors.red, size: 14),
             ],
           ),
         ),
