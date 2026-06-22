@@ -40,7 +40,7 @@ import '../../widgets/common/imhim_wordmark.dart';
 ///   6. STREAK — huge flame number. Users protect streaks, not scores.
 ///   7. FINAL FORM — Day-60 unlock card, locked + blurred. Anticipation
 ///      IS the retention.
-class AscendScreen extends StatelessWidget {
+class AscendScreen extends StatefulWidget {
   /// Switch the bottom-nav to a specific tab. 1=Looks, 2=Game, 3=Rizz.
   final ValueChanged<int> onJumpToTab;
 
@@ -65,6 +65,17 @@ class AscendScreen extends StatelessWidget {
   /// Did the user complete a Free Flow / roleplay session today?
   final bool gameDoneToday;
 
+  /// v289 — Did the user generate a rizz reply today?
+  final bool rizzDoneToday;
+
+  /// v289 — latest Looks pillar score, 0-100 raw scale. Feeds the
+  /// IMHIM-score formula.
+  final int looksScore100;
+
+  /// v289 — best Free Flow / Game pillar score, 0-100 raw scale.
+  /// Feeds the IMHIM-score formula.
+  final int gameScore100;
+
   const AscendScreen({
     super.key,
     required this.onJumpToTab,
@@ -74,19 +85,66 @@ class AscendScreen extends StatelessWidget {
     this.dayStreak = 0,
     this.looksDoneToday = false,
     this.gameDoneToday = false,
+    this.rizzDoneToday = false,
+    this.looksScore100 = 0,
+    this.gameScore100 = 0,
   });
 
   @override
+  State<AscendScreen> createState() => _AscendScreenState();
+}
+
+class _AscendScreenState extends State<AscendScreen> {
+  /// Cached weekly delta — the diff between the user's current
+  /// IMHIM score and the prior weekly snapshot. Pre-loaded on first
+  /// build so the score hero can render the arrow synchronously.
+  int _weeklyDelta = 0;
+  bool _deltaLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDeltaAndSnapshot();
+  }
+
+  /// Read whatever prior snapshot the prefs have, compute the
+  /// delta, then write today's score back so the next visit has a
+  /// fresh reference point. Idempotent per calendar day — multiple
+  /// taps on the tab don't move the "prior" slot.
+  Future<void> _loadDeltaAndSnapshot() async {
+    final score = AscensionService.imhimScoreFromComponents(
+      looks:       widget.looksScore100,
+      game:        widget.gameScore100,
+      consistency: AscensionService.consistencyFor(widget.protocol),
+    );
+    final delta = await AscensionService.weeklyDeltaFor(score);
+    await AscensionService.snapshotTodayScore(score);
+    if (!mounted) return;
+    setState(() {
+      _weeklyDelta = delta;
+      _deltaLoaded = true;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final day            = AscensionService.dayFor(protocol);
-    final daysLeft       = AscensionService.daysRemainingFor(protocol);
+    final p              = widget.protocol;
+    final day            = AscensionService.dayFor(p);
+    final daysLeft       = AscensionService.daysRemainingFor(p);
     final rank           = AscensionService.rankFor(day);
+    final consistency    = AscensionService.consistencyFor(p);
+    final imhimScore     = AscensionService.imhimScoreFromComponents(
+      looks:       widget.looksScore100,
+      game:        widget.gameScore100,
+      consistency: consistency,
+    );
     final missions       = _buildMissions();
     final missionsDone   = missions.where((m) => m.done).length;
-    final costLine       = AscensionService.costOfQuittingLine(day);
+    final todayMsg       = AscensionService.todayMessageFor(
+      day: day, streak: widget.dayStreak);
     final milestones     = _buildMilestones();
-    final finalUnlocked  = AscensionService.finalFormUnlockedFor(protocol);
-    final longestStreak  = protocol?.longestStreak ?? dayStreak;
+    final finalUnlocked  = AscensionService.finalFormUnlockedFor(p);
+    final longestStreak  = p?.longestStreak ?? widget.dayStreak;
 
     return Scaffold(
       backgroundColor: AppColors.base,
@@ -140,48 +198,66 @@ class AscendScreen extends StatelessWidget {
               .scale(begin: const Offset(0.92, 0.92),
                 end: const Offset(1, 1), curve: Curves.easeOutBack),
 
-            const SizedBox(height: Sp.xl),
+            const SizedBox(height: Sp.lg),
 
-            // ── 2 — COST OF QUITTING. Rotating fear card.
-            if (costLine.isNotEmpty) ...[
-              _CostOfQuittingCard(line: costLine)
-                .animate().fadeIn(delay: 240.ms, duration: 400.ms),
+            // ── 2 — IMHIM SCORE. The composite number that unifies
+            // the four surfaces. Consultant's biggest call: "Without
+            // this, users are managing 4 systems. With this, users
+            // are levelling one character." Built from Looks + Game
+            // + Consistency; Rizz is too soft to score honestly.
+            _ImHimScoreHero(
+              score:        imhimScore,
+              delta:        _weeklyDelta,
+              deltaReady:   _deltaLoaded,
+              looks:        widget.looksScore100,
+              game:         widget.gameScore100,
+              consistency:  consistency,
+            ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
+
+            const SizedBox(height: Sp.lg),
+
+            // ── 3 — TODAY'S MESSAGE. Single rotating identity line
+            // (v289 replaced Cost of Quitting — fear was a one-shot
+            // drug, identity is the loop).
+            if (todayMsg.isNotEmpty) ...[
+              _TodayMessageCard(line: todayMsg)
+                .animate().fadeIn(delay: 280.ms, duration: 400.ms),
               const SizedBox(height: Sp.lg),
             ],
 
-            // ── 3 — TODAY'S ASCENSION. Five missions, status header.
+            // ── 4 — TODAY'S ASCENSION. Pillar-mapped missions.
             _MissionsPanel(
               missions: missions,
               done:     missionsDone,
-            ).animate().fadeIn(delay: 320.ms, duration: 400.ms),
+            ).animate().fadeIn(delay: 360.ms, duration: 400.ms),
 
             const SizedBox(height: Sp.lg),
 
-            // ── 4 — RANK PROGRESSION. The identity ladder.
+            // ── 5 — RANK PROGRESSION. The identity ladder.
             _RankProgression(currentDay: day)
-              .animate().fadeIn(delay: 400.ms, duration: 400.ms),
+              .animate().fadeIn(delay: 440.ms, duration: 400.ms),
 
             const SizedBox(height: Sp.lg),
 
-            // ── 5 — ASCENSION RECORD. Timeline of milestones.
-            _RecordTimeline(milestones: milestones)
-              .animate().fadeIn(delay: 480.ms, duration: 400.ms),
-
-            const SizedBox(height: Sp.lg),
-
-            // ── 6 — STREAK. Huge flame number.
+            // ── 6 — STREAK. Hero treatment per the consultant.
             _StreakPanel(
-              current: dayStreak,
+              current: widget.dayStreak,
               longest: longestStreak,
-            ).animate().fadeIn(delay: 560.ms, duration: 400.ms),
+            ).animate().fadeIn(delay: 520.ms, duration: 400.ms),
 
             const SizedBox(height: Sp.lg),
 
-            // ── 7 — FINAL FORM. Locked premium reward.
+            // ── 7 — ASCENSION RECORD. Timeline of milestones.
+            _RecordTimeline(milestones: milestones)
+              .animate().fadeIn(delay: 600.ms, duration: 400.ms),
+
+            const SizedBox(height: Sp.lg),
+
+            // ── 8 — FINAL FORM. Locked premium reward.
             _FinalFormCard(
               unlocked: finalUnlocked,
               daysLeft: daysLeft,
-            ).animate().fadeIn(delay: 640.ms, duration: 400.ms),
+            ).animate().fadeIn(delay: 680.ms, duration: 400.ms),
 
             const SizedBox(height: Sp.xl),
           ],
@@ -190,55 +266,61 @@ class AscendScreen extends StatelessWidget {
     );
   }
 
-  // ── Mission builder ──────────────────────────────────────────────────────
+  // ── Mission builder — v289 pillar-mapped ────────────────────────────────
   //
-  // 4 missions, in priority order. Each one is tied to a feature that
-  // ACTUALLY ships in the current app — no aspirational pillars, no
-  // dead references. v286 — dropped the "Complete a challenge" row
-  // that pointed at the folded Eyes tab (gaze drills no longer exist
-  // as a surface).
+  // Consultant: "The tasks feel disconnected. They need to represent
+  // the three pillars." Each row now belongs to one of the four
+  // tabs so the whole hub reads as one journey, not four orphaned
+  // surfaces.
   //
-  //   1. Complete protocol  ← looksDoneToday (protocol_screen check-in)
-  //   2. Free Flow round    ← gameDoneToday  (free_flow_screen)
-  //   3. Submit scan        ← scan today    (latest scan dated today;
-  //                           only required ~1/wk, green-ticks when
-  //                           there's a scan today, otherwise neutral)
-  //   4. Return tomorrow    ← always undone today; the contract that
-  //                           flips green the moment the app is opened
-  //                           on the next calendar day.
+  //   LOOKS   ← looksDoneToday (protocol_screen check-in)
+  //   GAME    ← gameDoneToday  (Free Flow round)
+  //   RIZZ    ← rizzDoneToday  (rizz_reply_screen generation)
+  //   GROWTH  ← weekly scan    (latest scan dated today; soft until
+  //                             the user is in a scan window)
   List<AscendMission> _buildMissions() {
     final scanToday = _hasScanFromToday();
+    final w = widget;
     return [
       AscendMission(
-        title: 'Complete today\'s protocol',
-        hint:  looksDoneToday ? 'logged' : 'log day ${protocol?.currentDay ?? 1}',
-        done:  looksDoneToday,
-        onTap: () => onJumpToTab(0),
+        title: 'LOOKS · Complete today\'s protocol',
+        hint:  w.looksDoneToday
+            ? 'logged'
+            : 'log day ${w.protocol?.currentDay ?? 1}',
+        done:  w.looksDoneToday,
+        onTap: () => w.onJumpToTab(0),
       ),
       AscendMission(
-        title: 'Free Flow round with Lucien',
-        hint:  gameDoneToday ? 'session in the can' : 'open Game · Free Flow',
-        done:  gameDoneToday,
-        onTap: () => onJumpToTab(1),
+        title: 'GAME · Free Flow round with Lucien',
+        hint:  w.gameDoneToday
+            ? 'session in the can'
+            : 'open Game · Free Flow',
+        done:  w.gameDoneToday,
+        onTap: () => w.onJumpToTab(1),
       ),
       AscendMission(
-        title: 'Submit scan',
-        hint:  scanToday ? 'logged today' : 'weekly — keep the delta honest',
+        title: 'RIZZ · Use Rizz analysis',
+        hint:  w.rizzDoneToday
+            ? 'generated today'
+            : 'drop a screenshot, run a reply',
+        done:  w.rizzDoneToday,
+        onTap: () => w.onJumpToTab(2),
+      ),
+      AscendMission(
+        title: 'GROWTH · Submit scan',
+        hint:  scanToday
+            ? 'logged today'
+            : 'weekly — keep the delta honest',
         done:  scanToday,
-        onTap: () => onJumpToTab(0),
-      ),
-      const AscendMission(
-        title: 'Return tomorrow',
-        hint:  'the contract — every day, no exceptions',
-        done:  false,
+        onTap: () => w.onJumpToTab(0),
       ),
     ];
   }
 
   bool _hasScanFromToday() {
-    if (latest == null) return false;
+    if (widget.latest == null) return false;
     final now = DateTime.now();
-    final t   = latest!.takenAt;
+    final t   = widget.latest!.takenAt;
     return t.year == now.year && t.month == now.month && t.day == now.day;
   }
 
@@ -254,7 +336,7 @@ class AscendScreen extends StatelessWidget {
   // of the visible list.
   List<AscendMilestone> _buildMilestones() {
     final out = <AscendMilestone>[];
-    final p   = protocol;
+    final p   = widget.protocol;
     if (p != null) {
       out.add(AscendMilestone(
         day:    1,
@@ -273,7 +355,7 @@ class AscendScreen extends StatelessWidget {
       }
     }
     // Scan history — newest at the top of this loop; we'll sort below.
-    for (final s in allScans.take(8)) {
+    for (final s in widget.allScans.take(8)) {
       final dayAt = p == null
           ? 1
           : (s.takenAt.difference(p.startedAt).inDays + 1).clamp(1, 999);
@@ -502,15 +584,173 @@ class _ProgressRingPainter extends CustomPainter {
 //  SECTION 2 — COST OF QUITTING
 // ═══════════════════════════════════════════════════════════════════════════
 
-class _CostOfQuittingCard extends StatelessWidget {
+/// v289 — IMHIM SCORE hero. The composite that levels the whole
+/// app into one character. Hero number in red, weekly delta arrow
+/// underneath, three component pillars stacked below as the
+/// "built from" credit row. Sits directly under the flame so the
+/// user reads day + score as one unit.
+class _ImHimScoreHero extends StatelessWidget {
+  final int score;
+  final int delta;
+  final bool deltaReady;
+  final int looks;
+  final int game;
+  final int consistency;
+  const _ImHimScoreHero({
+    required this.score,
+    required this.delta,
+    required this.deltaReady,
+    required this.looks,
+    required this.game,
+    required this.consistency,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final deltaText = !deltaReady
+        ? '—'
+        : delta == 0
+            ? '+0 this week'
+            : delta > 0
+                ? '↑ +$delta this week'
+                : '↓ $delta this week';
+    final deltaColor = !deltaReady || delta == 0
+        ? AppColors.textTertiary
+        : delta > 0
+            ? AppColors.signalGreen
+            : AppColors.signalAmber;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+        decoration: BoxDecoration(
+          color: AppColors.surface1,
+          borderRadius: BorderRadius.circular(Rd.lg),
+          border: Border.all(
+            color: AppColors.red.withValues(alpha: 0.22), width: 0.8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text('IMHIM SCORE',
+              style: GoogleFonts.inter(
+                color: AppColors.red,
+                fontSize: 10.5, letterSpacing: 3.2,
+                fontWeight: FontWeight.w900,
+              )),
+            const SizedBox(height: 6),
+            Text('$score',
+              style: GoogleFonts.playfairDisplay(
+                color: Colors.white,
+                fontSize: 72, height: 1,
+                letterSpacing: -2.4,
+                fontWeight: FontWeight.w900,
+                fontStyle: FontStyle.italic,
+              )),
+            const SizedBox(height: 6),
+            Text(deltaText,
+              style: GoogleFonts.inter(
+                color: deltaColor,
+                fontSize: 12.5, letterSpacing: 1.4,
+                fontWeight: FontWeight.w800,
+              )),
+            const SizedBox(height: 16),
+            const Divider(height: 1, thickness: 0.5,
+              color: AppColors.divider),
+            const SizedBox(height: 14),
+            Text('BUILT FROM',
+              style: GoogleFonts.inter(
+                color: AppColors.textTertiary,
+                fontSize: 9, letterSpacing: 2.4,
+                fontWeight: FontWeight.w800,
+              )),
+            const SizedBox(height: 10),
+            _ImHimComponentRow(label: 'Looks',       value: looks,        accent: AppColors.measure),
+            const SizedBox(height: 6),
+            _ImHimComponentRow(label: 'Game',        value: game,         accent: AppColors.accent),
+            const SizedBox(height: 6),
+            _ImHimComponentRow(label: 'Consistency', value: consistency,  accent: AppColors.red),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ImHimComponentRow extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color accent;
+  const _ImHimComponentRow({
+    required this.label,
+    required this.value,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final width = (value / 100).clamp(0.0, 1.0);
+    return Row(
+      children: [
+        SizedBox(
+          width: 92,
+          child: Text(label,
+            style: GoogleFonts.inter(
+              color: AppColors.textSecondary,
+              fontSize: 12.5, letterSpacing: 0.4,
+              fontWeight: FontWeight.w700,
+            )),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: Stack(
+              children: [
+                Container(
+                  height: 5,
+                  color: AppColors.surface3.withValues(alpha: 0.55),
+                ),
+                FractionallySizedBox(
+                  widthFactor: width,
+                  child: Container(
+                    height: 5,
+                    color: accent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 32,
+          child: Text('$value',
+            textAlign: TextAlign.right,
+            style: GoogleFonts.spaceGrotesk(
+              color: AppColors.textPrimary,
+              fontSize: 13, letterSpacing: 0.3,
+              fontWeight: FontWeight.w800,
+            )),
+        ),
+      ],
+    );
+  }
+}
+
+/// v289 — Today's Message. Single rotating identity line that
+/// replaces the manufactured fear of the Cost of Quitting card.
+/// Day-indexed copy, streak-milestone overrides — see
+/// [AscensionService.todayMessageFor].
+class _TodayMessageCard extends StatelessWidget {
   final String line;
-  const _CostOfQuittingCard({required this.line});
+  const _TodayMessageCard({required this.line});
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
         decoration: BoxDecoration(
           color: AppColors.surface1,
           borderRadius: BorderRadius.circular(Rd.lg),
@@ -521,18 +761,20 @@ class _CostOfQuittingCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('THE COST OF QUITTING',
+            Text('TODAY',
               style: GoogleFonts.inter(
                 color: AppColors.red,
                 fontSize: 10, letterSpacing: 2.8,
                 fontWeight: FontWeight.w900,
               )),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Text(line,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.playfairDisplay(
                 color: AppColors.textPrimary,
-                fontSize: 14, height: 1.55,
-                fontWeight: FontWeight.w500,
+                fontSize: 18, height: 1.35,
+                letterSpacing: -0.4,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w600,
               )),
           ],
         ),
@@ -897,6 +1139,10 @@ class _MilestoneRow extends StatelessWidget {
 //  SECTION 6 — STREAK
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// v289 — Streak panel rebuilt as a hero treatment. Consultant:
+/// "Make it bigger." Massive day numeral with the flame floating
+/// over it; longest run pinned right. No fake percentile copy —
+/// honest signals only.
 class _StreakPanel extends StatelessWidget {
   final int current;
   final int longest;
@@ -906,71 +1152,86 @@ class _StreakPanel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+        padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
         decoration: BoxDecoration(
           color: AppColors.surface1,
           borderRadius: BorderRadius.circular(Rd.lg),
           border: Border.all(
-            color: AppColors.red.withValues(alpha: 0.22), width: 0.8),
+            color: AppColors.red.withValues(alpha: 0.32), width: 0.8),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.red.withValues(alpha: 0.18),
+              blurRadius: 28, spreadRadius: 0),
+          ],
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 64, height: 64,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.red,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.red.withValues(alpha: 0.5),
-                    blurRadius: 24, spreadRadius: 2),
-                ],
-              ),
-              alignment: Alignment.center,
-              child: const Icon(
-                Icons.local_fire_department_rounded,
-                color: Colors.white, size: 36),
+            Row(
+              children: [
+                Icon(Icons.local_fire_department_rounded,
+                  color: AppColors.red, size: 22),
+                const SizedBox(width: 8),
+                Text(current == 1 ? 'DAY STREAK' : 'DAY STREAK',
+                  style: GoogleFonts.inter(
+                    color: AppColors.red,
+                    fontSize: 11, letterSpacing: 3.0,
+                    fontWeight: FontWeight.w900,
+                  )),
+                const Spacer(),
+                Text('LONGEST $longest',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 10, letterSpacing: 1.8,
+                    fontWeight: FontWeight.w800,
+                  )),
+              ],
             ),
-            const SizedBox(width: 18),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text('$current',
-                        style: GoogleFonts.playfairDisplay(
-                          color: Colors.white,
-                          fontSize: 56, height: 1,
-                          letterSpacing: -2,
-                          fontWeight: FontWeight.w900,
-                          fontStyle: FontStyle.italic,
-                        )),
-                      const SizedBox(width: 10),
-                      Text(current == 1 ? 'DAY' : 'DAYS',
-                        style: GoogleFonts.inter(
-                          color: AppColors.textSecondary,
-                          fontSize: 13, letterSpacing: 2.4,
-                          fontWeight: FontWeight.w800,
-                        )),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text('Longest run: $longest',
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text('$current',
+                  style: GoogleFonts.playfairDisplay(
+                    color: Colors.white,
+                    fontSize: 96, height: 1,
+                    letterSpacing: -3.6,
+                    fontWeight: FontWeight.w900,
+                    fontStyle: FontStyle.italic,
+                  )),
+                const SizedBox(width: 12),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 18),
+                  child: Text(current == 1 ? 'DAY' : 'DAYS',
                     style: GoogleFonts.inter(
-                      color: AppColors.textTertiary,
-                      fontSize: 12, letterSpacing: 0.6,
-                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                      fontSize: 16, letterSpacing: 3.0,
+                      fontWeight: FontWeight.w800,
                     )),
-                ],
-              ),
+                ),
+              ],
             ),
+            const SizedBox(height: 6),
+            Text(_streakStatusLine(current, longest),
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 13, letterSpacing: 0.4,
+                fontWeight: FontWeight.w600,
+              )),
           ],
         ),
       ),
     );
+  }
+
+  /// Honest one-line status, not fake percentile copy. Reads off
+  /// the user's actual numbers.
+  static String _streakStatusLine(int current, int longest) {
+    if (current == 0)                return 'No streak yet — log today.';
+    if (current == 1)                return 'Day one. Make it stick.';
+    if (current >= longest)          return 'Best run yet. Don\'t break it.';
+    return 'Longest: $longest. Catch it.';
   }
 }
 
