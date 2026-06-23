@@ -11,6 +11,7 @@ import '../../models/scan_record.dart';
 import '../../services/analytics_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/paywall_gate.dart';
 import '../../services/protocol_service.dart';
 import '../../services/review_prompt_service.dart';
 import '../../theme/app_colors.dart';
@@ -85,6 +86,10 @@ class _HomeScreenState extends State<HomeScreen> {
   /// the moment the user copies a line. Drives the DROP A LINE
   /// daily mission row on the Ascend tab.
   bool _pickupLineDoneToday = false;
+  /// v302 — Pro / paid state. Drives the POTENTIAL-score lock on
+  /// THE READ card so free users see a blacked-out value with a
+  /// lock affordance; flipped to true the moment Pro is detected.
+  bool _isPro = false;
 
   static int _todayYmd() {
     final n = DateTime.now();
@@ -148,6 +153,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final rizzOk   = (prefs.getInt('rizz_done_ymd')  ?? 0) == today;
     // v301 — pickup-line daily flag from pickup_line_screen._copy.
     final pickupOk = (prefs.getInt('pickup_line_done_ymd') ?? 0) == today;
+    // v302 — Pro flag for the POTENTIAL lock on THE READ card.
+    final pro = await PaywallGate.isPro();
     final allThree = looksOk && auraOk && gameOk;
     int tripleStreak = prefs.getInt('triple_streak_count') ?? 0;
     final lastTripleYmd = prefs.getInt('triple_streak_last_ymd') ?? 0;
@@ -207,6 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _gameDoneToday  = gameOk;
       _rizzDoneToday  = rizzOk;
       _pickupLineDoneToday = pickupOk;
+      _isPro = pro;
     });
   }
 
@@ -255,6 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   protocol:         _protocol,
                   activeProtocols:  _activeProtocols,
                   dayStreak:        _dayStreak,
+                  isPro:            _isPro,
                   onRefresh:        _reload,
                 ),
                 const GameTabScreen(),
@@ -309,12 +318,17 @@ class _ScanHubTab extends StatelessWidget {
   /// Surfaces as a small flame-prefixed badge in the masthead so the
   /// streak loop survives the Ascend-tab removal.
   final int                      dayStreak;
+  /// v302 — Pro flag. Locks the POTENTIAL value on THE READ card
+  /// for free users; the moment Pro is detected, the lock
+  /// dissolves and the real number lands.
+  final bool                     isPro;
   final Future<void> Function()  onRefresh;
   const _ScanHubTab({
     required this.latest,
     required this.protocol,
     required this.activeProtocols,
     required this.dayStreak,
+    required this.isPro,
     required this.onRefresh,
   });
 
@@ -458,6 +472,7 @@ class _ScanHubTab extends StatelessWidget {
                     projected: (latest!.score + latest!.projectedDelta)
                                   .clamp(0, 100),
                     archetype: latest!.archetypeName,
+                    pro:       isPro,
                   ),
                 ).animate().fadeIn(duration: 400.ms),
 
@@ -532,10 +547,16 @@ class _HopeCard extends StatelessWidget {
   final int current;
   final int projected;
   final String archetype;
+  /// v302 — Pro state. When false, the POTENTIAL number is
+  /// blacked-out and shows a lock pill; tap routes to /paywall.
+  /// Flips to true the moment the user upgrades and the card
+  /// rebuilds → real number reveals.
+  final bool pro;
   const _HopeCard({
     required this.current,
     required this.projected,
     required this.archetype,
+    this.pro = false,
   });
 
   @override
@@ -596,13 +617,15 @@ class _HopeCard extends StatelessWidget {
                 value: current,
                 color: AppColors.textPrimary,
                 isNow: true,
+                locked: false,
               ),
-              _gainPill(gain),
+              _gainPill(gain, locked: !pro),
               _edgeStat(
                 label: 'POTENTIAL',
                 value: projected,
                 color: AppColors.signalGreen,
                 isNow: false,
+                locked: !pro,
               ),
             ],
           ),
@@ -634,20 +657,62 @@ class _HopeCard extends StatelessWidget {
     required int value,
     required Color color,
     required bool isNow,
+    required bool locked,
+  }) {
+    final shown = locked ? '??' : '$value';
+    final mainColor = locked ? AppColors.textTertiary : color;
+    final body = _edgeStatBody(
+      label: label, shown: shown, mainColor: mainColor,
+      isNow: isNow, locked: locked);
+    // v302 — locked POTENTIAL becomes tap-to-unlock so the gate
+    // reads as an obvious upgrade affordance, not a dead pill.
+    if (locked && !isNow) {
+      return Builder(builder: (ctx) => Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            ctx.push('/paywall', extra: {'source': 'home_potential_lock'});
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: body,
+        ),
+      ));
+    }
+    return body;
+  }
+
+  Widget _edgeStatBody({
+    required String label,
+    required String shown,
+    required Color mainColor,
+    required bool isNow,
+    required bool locked,
   }) {
     return Column(
       crossAxisAlignment:
           isNow ? CrossAxisAlignment.start : CrossAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label,
-          style: AppTypography.label.copyWith(
-            color: isNow
-                ? AppColors.textTertiary
-                : AppColors.signalGreen.withValues(alpha: 0.85),
-            fontSize: 9.5, letterSpacing: 2.4,
-            fontWeight: FontWeight.w900,
-          )),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (locked && !isNow) ...[
+              Icon(Icons.lock_rounded,
+                color: AppColors.signalGreen.withValues(alpha: 0.85),
+                size: 11),
+              const SizedBox(width: 4),
+            ],
+            Text(label,
+              style: AppTypography.label.copyWith(
+                color: isNow
+                    ? AppColors.textTertiary
+                    : AppColors.signalGreen.withValues(alpha: 0.85),
+                fontSize: 9.5, letterSpacing: 2.4,
+                fontWeight: FontWeight.w900,
+              )),
+          ],
+        ),
         const SizedBox(height: 2),
         // Bro: "push the left number up slightly so it's in line with
         // the right number." Italic Playfair has uneven visual tops
@@ -657,14 +722,14 @@ class _HopeCard extends StatelessWidget {
         // visual tops without touching POTENTIAL's glow shadow.
         Transform.translate(
           offset: Offset(0, isNow ? -4 : 0),
-          child: Text('$value',
+          child: Text(shown,
             style: GoogleFonts.playfairDisplay(
-              color: color,
+              color: mainColor,
               fontSize: 48, height: 0.95,
               letterSpacing: -2.0,
               fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w900,
-              shadows: isNow
+              shadows: isNow || locked
                   ? null
                   : [
                       Shadow(
@@ -678,7 +743,10 @@ class _HopeCard extends StatelessWidget {
   }
 
   /// +XX pill that sits centred between NOW and POTENTIAL.
-  Widget _gainPill(int gain) {
+  /// v302 — `locked` swaps the gain digits for ??? so the page
+  /// doesn't leak the projected delta to free users.
+  Widget _gainPill(int gain, {bool locked = false}) {
+    final label = locked ? '+??' : '+$gain';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
@@ -691,10 +759,10 @@ class _HopeCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.trending_up_rounded,
+          Icon(locked ? Icons.lock_rounded : Icons.trending_up_rounded,
               color: AppColors.signalGreen, size: 13),
           const SizedBox(width: 4),
-          Text('+$gain',
+          Text(label,
             style: AppTypography.label.copyWith(
               color: AppColors.signalGreen,
               fontSize: 13, letterSpacing: 0.4,
