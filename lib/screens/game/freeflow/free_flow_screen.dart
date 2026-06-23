@@ -1689,7 +1689,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
           child: Row(
             children: [
               if (widget.tabMode)
-                const ImHimWordmark(fontSize: 26)
+                const ImHimWordmark(fontSize: 34)
               else
                 Text(_vibe?.label ?? '',
                     style: AppTypography.label.copyWith(
