@@ -238,6 +238,8 @@ class RizzCardAction {
 /// Local settings-cog widget — circular, surface1 background, matches
 /// the Looks tab _MastheadCog so both tabs read as the same chrome
 /// language.
+/// v303 — promoted to a solid red fill so the chip carries real
+/// visual weight in the masthead row. Same shape Looks + Ascend use.
 class _RizzStreakBadge extends StatelessWidget {
   final int days;
   const _RizzStreakBadge({required this.days});
@@ -245,23 +247,26 @@ class _RizzStreakBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.red.withValues(alpha: 0.14),
+        color: AppColors.red,
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(
-          color: AppColors.red.withValues(alpha: 0.45), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.red.withValues(alpha: 0.45),
+            blurRadius: 14, spreadRadius: 0),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.local_fire_department_rounded,
-              color: AppColors.red, size: 16),
+              color: Colors.white, size: 18),
           const SizedBox(width: 5),
           Text('$days',
             style: GoogleFonts.inter(
-              color: AppColors.red,
-              fontSize: 13.5, height: 1,
+              color: Colors.white,
+              fontSize: 14, height: 1,
               letterSpacing: 0.2,
               fontWeight: FontWeight.w900,
             )),
