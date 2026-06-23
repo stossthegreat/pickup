@@ -10,6 +10,7 @@ import '../../../data/rizz_lines.dart';
 import '../../../services/paywall_gate.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_typography.dart';
+import '../../../widgets/common/imhim_wordmark.dart';
 
 /// v298 — PICKUP LINE.
 ///
@@ -148,7 +149,9 @@ class _PickupLineScreenState extends State<PickupLineScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Header strip
+            // ── Header strip — v300 carries the ImHim wordmark
+            // so the screen reads as branded the moment the user
+            // screenshots a line for their group chat.
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
               child: Row(
@@ -162,12 +165,22 @@ class _PickupLineScreenState extends State<PickupLineScreen> {
                       minWidth: 28, minHeight: 28),
                   ),
                   const SizedBox(width: 6),
-                  Text('PICKUP LINE',
-                    style: GoogleFonts.inter(
-                      color: AppColors.red,
-                      fontSize: 12, letterSpacing: 3.6,
-                      fontWeight: FontWeight.w900,
-                    )),
+                  const ImHimWordmark(fontSize: 22, letterSpacing: -0.5),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.red.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text('PICKUP LINE',
+                      style: GoogleFonts.inter(
+                        color: AppColors.red,
+                        fontSize: 9, letterSpacing: 2.4,
+                        fontWeight: FontWeight.w900,
+                      )),
+                  ),
                   const Spacer(),
                   Text(_activeSlug.isEmpty
                       ? 'ALL'

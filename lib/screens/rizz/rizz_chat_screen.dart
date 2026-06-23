@@ -14,6 +14,7 @@ import '../../services/paywall_gate.dart';
 import '../../services/rizz_reply_service.dart' show RizzVibe, RizzVibeLabel;
 import '../../services/screenshot_ocr_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/common/imhim_wordmark.dart';
 
 /// CHAT WITH MIRRORLY — clean, sexy, no-bullshit dating + self-improvement
 /// coach. Editorial bubbles, preset chips, screenshot upload, tap-to-
@@ -786,30 +787,12 @@ class _Header extends StatelessWidget {
             icon: const Icon(Icons.arrow_back_ios_new_rounded,
               color: Colors.white, size: 18),
           ),
-          const SizedBox(width: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.red.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(99),
-              border: Border.all(
-                color: AppColors.red.withValues(alpha: 0.45), width: 0.8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.auto_awesome_rounded,
-                    color: AppColors.red, size: 14),
-                const SizedBox(width: 5),
-                Text('IMHIM',
-                  style: GoogleFonts.inter(
-                    color: AppColors.red,
-                    fontSize: 11.5, letterSpacing: 3.0,
-                    fontWeight: FontWeight.w800,
-                  )),
-              ],
-            ),
-          ),
+          const SizedBox(width: 2),
+          // v300 — wordmark replaces the old "IMHIM" pill so the
+          // brand reads at full weight in any chat screenshot the
+          // user posts. Same italic Playfair lockup as every other
+          // Rizz surface.
+          const ImHimWordmark(fontSize: 22, letterSpacing: -0.5),
           const Spacer(),
           Container(
             width: 8, height: 8,
