@@ -37,15 +37,20 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
   final _scrollCtrl = ScrollController();
   final List<_RizzMsg> _msgs = [
     const _RizzMsg('assistant',
-        'what\'s good. drop ANY of:\n'
-        '· a screenshot of your chat with her — i\'ll break down '
-        'what worked, what flopped, and the line to send next\n'
-        '· a screenshot of her dating-app PROFILE (bio + prompts '
-        '+ photos) — i\'ll read who she is and give you three '
-        'openers that actually reference her\n'
-        '· just a PHOTO of her — i\'ll read the visual signals '
-        '(her style, vibe, what she\'s projecting) and give you '
-        'three openers off the photo alone\n\n'
+        // v298 — copy stripped to ONLY what the model actually does
+        // well in production. Profile-pic + single-photo paths kept
+        // hallucinating ("I can\'t view images") even after the v296
+        // vision hardening, so we don\'t promise them in the intro
+        // any more. Bro: "just take profile pic talk in the ai
+        // intro on chat page — coz it don\'t fucking work. Clean
+        // message about paste your chat for a breakdown or a rizz
+        // line."
+        'what\'s good. paste a screenshot of your chat with her '
+        'and i\'ll break down what\'s working, what flopped, and '
+        'the exact line to send next.\n\n'
+        'or just ask me anything — "what should i open with", '
+        '"how do i get her back", "tell me a banger" — i\'ll give '
+        'you the line and tell you why it lands.\n\n'
         'tap any line in quotes to copy it.'),
   ];
   bool _sending = false;

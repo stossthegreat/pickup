@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/analytics_service.dart';
 import '../../services/paywall_gate.dart';
+import '../../services/protocol_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/mirrorly_components.dart';
@@ -54,7 +55,18 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
     final pro = await PaywallGate.isPro();
     final ssUsed = await PaywallGate.rizzScreenshotCapReached();
     final prefs = await SharedPreferences.getInstance();
-    final streak = prefs.getInt('triple_streak_count') ?? 0;
+    final triple = prefs.getInt('triple_streak_count') ?? 0;
+    // v298 — match HomeScreen: streak == max(triple-pillar streak,
+    // protocol streak). The previous read only saw triple-streak,
+    // so a user mid-protocol with no triple-streak day saw a
+    // hidden chip (gate is > 0). Now reads both and picks the
+    // bigger one — same chip the Looks tab shows.
+    int protocolStreak = 0;
+    try {
+      final p = await ProtocolService.loadActive();
+      protocolStreak = p?.effectiveStreak ?? 0;
+    } catch (_) {/* protocol read best-effort */}
+    final streak = triple > protocolStreak ? triple : protocolStreak;
     if (!mounted) return;
     setState(() {
       _pro = pro;
