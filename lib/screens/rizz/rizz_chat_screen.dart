@@ -14,6 +14,7 @@ import '../../services/paywall_gate.dart';
 import '../../services/rizz_reply_service.dart' show RizzVibe, RizzVibeLabel;
 import '../../services/screenshot_ocr_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/common/imhim_wordmark.dart';
 
 /// CHAT WITH MIRRORLY — clean, sexy, no-bullshit dating + self-improvement
 /// coach. Editorial bubbles, preset chips, screenshot upload, tap-to-
@@ -37,15 +38,20 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
   final _scrollCtrl = ScrollController();
   final List<_RizzMsg> _msgs = [
     const _RizzMsg('assistant',
-        'what\'s good. drop ANY of:\n'
-        '· a screenshot of your chat with her — i\'ll break down '
-        'what worked, what flopped, and the line to send next\n'
-        '· a screenshot of her dating-app PROFILE (bio + prompts '
-        '+ photos) — i\'ll read who she is and give you three '
-        'openers that actually reference her\n'
-        '· just a PHOTO of her — i\'ll read the visual signals '
-        '(her style, vibe, what she\'s projecting) and give you '
-        'three openers off the photo alone\n\n'
+        // v298 — copy stripped to ONLY what the model actually does
+        // well in production. Profile-pic + single-photo paths kept
+        // hallucinating ("I can\'t view images") even after the v296
+        // vision hardening, so we don\'t promise them in the intro
+        // any more. Bro: "just take profile pic talk in the ai
+        // intro on chat page — coz it don\'t fucking work. Clean
+        // message about paste your chat for a breakdown or a rizz
+        // line."
+        'what\'s good. paste a screenshot of your chat with her '
+        'and i\'ll break down what\'s working, what flopped, and '
+        'the exact line to send next.\n\n'
+        'or just ask me anything — "what should i open with", '
+        '"how do i get her back", "tell me a banger" — i\'ll give '
+        'you the line and tell you why it lands.\n\n'
         'tap any line in quotes to copy it.'),
   ];
   bool _sending = false;
@@ -781,30 +787,12 @@ class _Header extends StatelessWidget {
             icon: const Icon(Icons.arrow_back_ios_new_rounded,
               color: Colors.white, size: 18),
           ),
-          const SizedBox(width: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.red.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(99),
-              border: Border.all(
-                color: AppColors.red.withValues(alpha: 0.45), width: 0.8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.auto_awesome_rounded,
-                    color: AppColors.red, size: 14),
-                const SizedBox(width: 5),
-                Text('IMHIM',
-                  style: GoogleFonts.inter(
-                    color: AppColors.red,
-                    fontSize: 11.5, letterSpacing: 3.0,
-                    fontWeight: FontWeight.w800,
-                  )),
-              ],
-            ),
-          ),
+          const SizedBox(width: 2),
+          // v300 — wordmark replaces the old "IMHIM" pill so the
+          // brand reads at full weight in any chat screenshot the
+          // user posts. Same italic Playfair lockup as every other
+          // Rizz surface.
+          const ImHimWordmark(fontSize: 22, letterSpacing: -0.5),
           const Spacer(),
           Container(
             width: 8, height: 8,

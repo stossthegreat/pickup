@@ -692,13 +692,13 @@ class _Header extends StatelessWidget {
             icon: const Icon(Icons.arrow_back_ios_new_rounded,
                 color: Colors.white, size: 18),
           ),
-          const SizedBox(width: 4),
-          Text('RIZZ',
-            style: GoogleFonts.inter(
-              color: AppColors.red,
-              fontSize: 12, letterSpacing: 3.6,
-              fontWeight: FontWeight.w800,
-            )),
+          const SizedBox(width: 2),
+          // v300 — every Rizz surface now carries the ImHim two-tone
+          // wordmark in the masthead so the brand is baked into any
+          // screenshot the user takes of the output. Bro: "let's also
+          // brand all our rizz screens good for marketing, content
+          // etc — a nice imhim on all of them."
+          const ImHimWordmark(fontSize: 22, letterSpacing: -0.5),
           const Spacer(),
           if (onReset != null)
             Material(

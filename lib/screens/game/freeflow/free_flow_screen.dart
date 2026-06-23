@@ -1672,30 +1672,24 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
     // visibility gate tightens from "convo is active" to "user is
     // actively holding to talk." The wordmark now paints ONLY
     // while _holding == true. When she's responding (or in the
-    // brief silence between turns) the chrome reverts to the
-    // chip + arena pill so the user can still switch character
-    // or jump to the arena while she's mid-reply.
-    final showWordmark = _phase == _Phase.live
-        && _clockStarted
-        && _holding;
+    // v298 — wordmark is in the chrome row now, no per-hold flag
+    // needed. Local removed.
     return Stack(
       children: [
         // Top chrome.
+        // v298 — Game tab now matches the Looks / Rizz / Ascend
+        // chrome layout: ImHim wordmark on the left, controls on
+        // the right. Character chip + timer pair on the right so
+        // the wordmark gets the same anchor across every tab. Bro:
+        // "put imhim on roleplay and move the character dropdown
+        // right next to the number on top right, so every tab is
+        // exactly the same."
         Positioned(
-          top: 6, left: 8, right: 8,
+          top: 6, left: 16, right: 8,
           child: Row(
             children: [
-              const SizedBox(width: 8),
-              // Bro v8: ImHim wordmark moved OUT of the chrome row
-              // to a dedicated slot above the orb (see the wordmark
-              // Positioned block further down). The chrome row now
-              // always carries the character chip + ARENA pill so
-              // the user can switch character mid-session even
-              // while holding to talk.
               if (widget.tabMode)
-                _ChangeCharacterChip(
-                    current: _vibe?.label ?? '',
-                    onTap: _showCharacterSheet)
+                const ImHimWordmark(fontSize: 26)
               else
                 Text(_vibe?.label ?? '',
                     style: AppTypography.label.copyWith(
@@ -1705,6 +1699,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
                       fontWeight: FontWeight.w900,
                     )),
               const Spacer(),
+              if (widget.tabMode) ...[
+                _ChangeCharacterChip(
+                  current: _vibe?.label ?? '',
+                  onTap: _showCharacterSheet),
+                const SizedBox(width: 8),
+              ],
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -1781,18 +1781,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
           top: 82, left: 0, right: 0, bottom: 130,
           child: Column(
             children: [
-              // ImHim wordmark — only while holding. Wrapped in an
-              // AnimatedSwitcher-equivalent SizedBox with a fixed
-              // height so the orb doesn't jump when it appears.
-              SizedBox(
-                height: 36,
-                child: AnimatedOpacity(
-                  opacity: showWordmark ? 1 : 0,
-                  duration: const Duration(milliseconds: 220),
-                  child: const ImHimWordmark(
-                      fontSize: 30, letterSpacing: -0.8),
-                ),
-              ),
+              // v298 — wordmark moved into the top chrome row to
+              // match Looks / Rizz / Ascend; the floating wordmark
+              // here is now redundant. Empty SizedBox keeps the
+              // existing vertical rhythm so the orb doesn't jump
+              // up against HOLD TO SPEAK without it.
+              const SizedBox(height: 36),
               const SizedBox(height: 0),
               // The orb IS the talk button. Hold it to speak; a ring
               // spins while you hold; release to send. Uses raw pointer
