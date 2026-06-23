@@ -70,6 +70,9 @@ class AscendScreen extends StatefulWidget {
   /// v289 — Did the user generate a rizz reply today?
   final bool rizzDoneToday;
 
+  /// v301 — Did the user copy a pickup line today?
+  final bool pickupLineDoneToday;
+
   /// v289 — latest Looks pillar score, 0-100 raw scale. Feeds the
   /// IMHIM-score formula.
   final int looksScore100;
@@ -88,6 +91,7 @@ class AscendScreen extends StatefulWidget {
     this.looksDoneToday = false,
     this.gameDoneToday = false,
     this.rizzDoneToday = false,
+    this.pickupLineDoneToday = false,
     this.looksScore100 = 0,
     this.gameScore100 = 0,
   });
@@ -279,62 +283,58 @@ class _AscendScreenState extends State<AscendScreen> {
     );
   }
 
-  // ── Mission builder — v289 pillar-mapped ────────────────────────────────
+  // ── Mission builder — v301 daily-feasible only ──────────────────────────
   //
-  // Consultant: "The tasks feel disconnected. They need to represent
-  // the three pillars." Each row now belongs to one of the four
-  // tabs so the whole hub reads as one journey, not four orphaned
-  // surfaces.
+  // Bro: "with the streaks have you used factual things they have
+  // to do? They only got 5 sessions a week for roleplay so it
+  // can't be everyday. We should only get them to scan once a
+  // week. The ones we can use is analyse rizz in rizz chat and
+  // drop a pickup line or complete a protocol."
   //
-  //   LOOKS   ← looksDoneToday (protocol_screen check-in)
-  //   GAME    ← gameDoneToday  (Free Flow round)
-  //   RIZZ    ← rizzDoneToday  (rizz_reply_screen generation)
-  //   GROWTH  ← weekly scan    (latest scan dated today; soft until
-  //                             the user is in a scan window)
+  // Weekly-capped actions (Free Flow = 5/wk, Scan = 2/wk) are no
+  // longer in the daily missions panel — a user can't legitimately
+  // tick them every day. The Scan window prompts already live in
+  // the milestone strip on the Progress tab; Free Flow lives in
+  // the Game tab. Daily missions are the three actions a user
+  // can ACTUALLY do every day without burning a weekly bucket:
+  //
+  //   PROTOCOL · looksDoneToday       (protocol_screen check-in)
+  //   PICKUP   · pickupLineDoneToday  (pickup_line_screen._copy)
+  //   READ     · rizzDoneToday        (rizz_reply_screen generate)
+  //
+  // Copy reframed in leveling-up voice — every line reads as a
+  // rep banked toward becoming Him, not a chore to clear. Bro:
+  // "we're trying to make them HIM in everything we tell them to
+  // do. Feels like they're leveling up."
   List<AscendMission> _buildMissions() {
-    final scanToday = _hasScanFromToday();
     final w = widget;
+    final day = w.protocol?.currentDay ?? 1;
     return [
       AscendMission(
-        title: 'LOOKS · Complete today\'s protocol',
+        title: 'PROTOCOL · LOG DAY $day',
         hint:  w.looksDoneToday
-            ? 'logged'
-            : 'log day ${w.protocol?.currentDay ?? 1}',
+            ? 'banked. another day deeper.'
+            : 'today\'s reps. the work that compounds.',
         done:  w.looksDoneToday,
         onTap: () => w.onJumpToTab(0),
       ),
       AscendMission(
-        title: 'GAME · Free Flow round with Lucien',
-        hint:  w.gameDoneToday
-            ? 'session in the can'
-            : 'open Game · Free Flow',
-        done:  w.gameDoneToday,
-        onTap: () => w.onJumpToTab(1),
-      ),
-      AscendMission(
-        title: 'RIZZ · Use Rizz analysis',
-        hint:  w.rizzDoneToday
-            ? 'generated today'
-            : 'drop a screenshot, run a reply',
-        done:  w.rizzDoneToday,
+        title: 'PICKUP · DROP A LINE',
+        hint:  w.pickupLineDoneToday
+            ? 'used a banger today.'
+            : 'one line. screenshot-worthy. copy it.',
+        done:  w.pickupLineDoneToday,
         onTap: () => w.onJumpToTab(2),
       ),
       AscendMission(
-        title: 'GROWTH · Submit scan',
-        hint:  scanToday
-            ? 'logged today'
-            : 'weekly — keep the delta honest',
-        done:  scanToday,
-        onTap: () => w.onJumpToTab(0),
+        title: 'READ · GET THE TAKE',
+        hint:  w.rizzDoneToday
+            ? 'chat read. moves locked in.'
+            : 'paste a chat or ask the rizz coach.',
+        done:  w.rizzDoneToday,
+        onTap: () => w.onJumpToTab(2),
       ),
     ];
-  }
-
-  bool _hasScanFromToday() {
-    if (widget.latest == null) return false;
-    final now = DateTime.now();
-    final t   = widget.latest!.takenAt;
-    return t.year == now.year && t.month == now.month && t.day == now.day;
   }
 
   /// v290 — which scan milestone (if any) is currently in window
@@ -1442,43 +1442,54 @@ class _MilestoneRow extends StatelessWidget {
 //  SECTION 6 — STREAK
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// v289 — Streak panel rebuilt as a hero treatment. Consultant:
-/// "Make it bigger." Massive day numeral with the flame floating
-/// over it; longest run pinned right. No fake percentile copy —
-/// honest signals only.
+/// v303 — Streak panel rebuilt. Flame icon + numeral are now ONE
+/// lockup. Bro: "the streak is dislocated and a dud. fix it
+/// production grade only fix perfectly." Old layout had the flame
+/// floating up in the label row and the numeral isolated below —
+/// they read as two unrelated things. New layout pins the flame
+/// directly against the number at matching visual weight so the
+/// pair anchors as a single hero element.
 class _StreakPanel extends StatelessWidget {
   final int current;
   final int longest;
   const _StreakPanel({required this.current, required this.longest});
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
+        padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
         decoration: BoxDecoration(
-          color: AppColors.surface1,
+          // Warm red radial behind the lockup so the flame reads
+          // as actually glowing on the surface, not a flat icon.
+          gradient: RadialGradient(
+            center: const Alignment(-0.5, -0.2),
+            radius: 1.2,
+            colors: [
+              AppColors.red.withValues(alpha: 0.20),
+              AppColors.surface1,
+            ],
+          ),
           borderRadius: BorderRadius.circular(Rd.lg),
           border: Border.all(
-            color: AppColors.red.withValues(alpha: 0.32), width: 0.8),
+            color: AppColors.red.withValues(alpha: 0.42), width: 0.8),
           boxShadow: [
             BoxShadow(
-              color: AppColors.red.withValues(alpha: 0.18),
-              blurRadius: 28, spreadRadius: 0),
+              color: AppColors.red.withValues(alpha: 0.28),
+              blurRadius: 32, spreadRadius: 0),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Eyebrow row: label left, LONGEST right.
             Row(
               children: [
-                Icon(Icons.local_fire_department_rounded,
-                  color: AppColors.red, size: 22),
-                const SizedBox(width: 8),
-                Text(current == 1 ? 'DAY STREAK' : 'DAY STREAK',
+                Text('STREAK',
                   style: GoogleFonts.inter(
                     color: AppColors.red,
-                    fontSize: 11, letterSpacing: 3.0,
+                    fontSize: 11, letterSpacing: 3.2,
                     fontWeight: FontWeight.w900,
                   )),
                 const Spacer(),
@@ -1490,36 +1501,75 @@ class _StreakPanel extends StatelessWidget {
                   )),
               ],
             ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text('$current',
-                  style: GoogleFonts.playfairDisplay(
-                    color: Colors.white,
-                    fontSize: 96, height: 1,
-                    letterSpacing: -3.6,
-                    fontWeight: FontWeight.w900,
-                    fontStyle: FontStyle.italic,
-                  )),
-                const SizedBox(width: 12),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 18),
-                  child: Text(current == 1 ? 'DAY' : 'DAYS',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textSecondary,
-                      fontSize: 16, letterSpacing: 3.0,
-                      fontWeight: FontWeight.w800,
-                    )),
-                ),
-              ],
+            const SizedBox(height: 10),
+
+            // ── THE LOCKUP — flame, number, "DAY" label, all on
+            // the same baseline at matching visual weight. Stack
+            // gives the flame a soft outer halo before the icon
+            // renders so it reads as glowing, not stamped.
+            SizedBox(
+              height: 100,
+              child: Stack(
+                alignment: Alignment.bottomLeft,
+                children: [
+                  // Halo behind the flame.
+                  Positioned(
+                    left: -6, bottom: 4,
+                    child: Container(
+                      width: 110, height: 110,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(colors: [
+                          AppColors.red.withValues(alpha: 0.42),
+                          Colors.transparent,
+                        ]),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Icon(Icons.local_fire_department_rounded,
+                        color: AppColors.red, size: 88),
+                      const SizedBox(width: 6),
+                      // The numeral. Italic Playfair, white, sized
+                      // to match the flame's optical height so the
+                      // pair reads as one unit.
+                      Text('$current',
+                        style: GoogleFonts.playfairDisplay(
+                          color: Colors.white,
+                          fontSize: 92, height: 1,
+                          letterSpacing: -3.4,
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w900,
+                          shadows: [
+                            Shadow(
+                              color: AppColors.red.withValues(alpha: 0.45),
+                              blurRadius: 18),
+                          ],
+                        )),
+                      const SizedBox(width: 10),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 18),
+                        child: Text(current == 1 ? 'DAY' : 'DAYS',
+                          style: GoogleFonts.inter(
+                            color: AppColors.textSecondary,
+                            fontSize: 14, letterSpacing: 3.0,
+                            fontWeight: FontWeight.w900,
+                          )),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 6),
+
+            const SizedBox(height: 8),
             Text(_streakStatusLine(current, longest),
               style: GoogleFonts.inter(
                 color: AppColors.textSecondary,
-                fontSize: 13, letterSpacing: 0.4,
+                fontSize: 13, height: 1.4,
+                letterSpacing: 0.3,
                 fontWeight: FontWeight.w600,
               )),
           ],
@@ -1531,7 +1581,7 @@ class _StreakPanel extends StatelessWidget {
   /// Honest one-line status, not fake percentile copy. Reads off
   /// the user's actual numbers.
   static String _streakStatusLine(int current, int longest) {
-    if (current == 0)                return 'No streak yet — log today.';
+    if (current == 0)                return 'No streak yet. Log today and ignite.';
     if (current == 1)                return 'Day one. Make it stick.';
     if (current >= longest)          return 'Best run yet. Don\'t break it.';
     return 'Longest: $longest. Catch it.';
@@ -1710,29 +1760,37 @@ class _FinalFormCard extends StatelessWidget {
 //  unrelated screens).
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// v303 — Masthead streak chip. Solid red fill (was 14% tinted
+/// ghost), white flame + white digit, soft red glow shadow so the
+/// chip reads as one of the strongest visual elements on the
+/// chrome row instead of disappearing into the background. Same
+/// lockup the Looks + Rizz mastheads now use for consistency.
 class _MastheadStreakBadge extends StatelessWidget {
   final int days;
   const _MastheadStreakBadge({required this.days});
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.red.withValues(alpha: 0.14),
+        color: AppColors.red,
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(
-          color: AppColors.red.withValues(alpha: 0.45), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.red.withValues(alpha: 0.45),
+            blurRadius: 14, spreadRadius: 0),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.local_fire_department_rounded,
-              color: AppColors.red, size: 16),
+              color: Colors.white, size: 18),
           const SizedBox(width: 5),
           Text('$days',
             style: GoogleFonts.inter(
-              color: AppColors.red,
-              fontSize: 13.5, height: 1,
+              color: Colors.white,
+              fontSize: 14, height: 1,
               letterSpacing: 0.2,
               fontWeight: FontWeight.w900,
             )),

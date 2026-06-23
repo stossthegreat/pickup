@@ -11,6 +11,7 @@ import '../../models/scan_record.dart';
 import '../../services/analytics_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/paywall_gate.dart';
 import '../../services/protocol_service.dart';
 import '../../services/review_prompt_service.dart';
 import '../../theme/app_colors.dart';
@@ -81,6 +82,14 @@ class _HomeScreenState extends State<HomeScreen> {
   /// `rizz_reply_screen` whenever a generation lands successfully.
   /// Drives the Rizz row of the Ascend tab's pillar missions panel.
   bool _rizzDoneToday  = false;
+  /// v301 — Pickup-line daily flag. Written by `pickup_line_screen`
+  /// the moment the user copies a line. Drives the DROP A LINE
+  /// daily mission row on the Ascend tab.
+  bool _pickupLineDoneToday = false;
+  /// v302 — Pro / paid state. Drives the POTENTIAL-score lock on
+  /// THE READ card so free users see a blacked-out value with a
+  /// lock affordance; flipped to true the moment Pro is detected.
+  bool _isPro = false;
 
   static int _todayYmd() {
     final n = DateTime.now();
@@ -142,6 +151,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final gameOk   = (prefs.getInt('game_done_ymd')  ?? 0) == today;
     // v289 — read the Rizz daily flag stamped by rizz_reply_screen.
     final rizzOk   = (prefs.getInt('rizz_done_ymd')  ?? 0) == today;
+    // v301 — pickup-line daily flag from pickup_line_screen._copy.
+    final pickupOk = (prefs.getInt('pickup_line_done_ymd') ?? 0) == today;
+    // v302 — Pro flag for the POTENTIAL lock on THE READ card.
+    final pro = await PaywallGate.isPro();
     final allThree = looksOk && auraOk && gameOk;
     int tripleStreak = prefs.getInt('triple_streak_count') ?? 0;
     final lastTripleYmd = prefs.getInt('triple_streak_last_ymd') ?? 0;
@@ -200,6 +213,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _auraDoneToday  = auraOk;
       _gameDoneToday  = gameOk;
       _rizzDoneToday  = rizzOk;
+      _pickupLineDoneToday = pickupOk;
+      _isPro = pro;
     });
   }
 
@@ -248,6 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   protocol:         _protocol,
                   activeProtocols:  _activeProtocols,
                   dayStreak:        _dayStreak,
+                  isPro:            _isPro,
                   onRefresh:        _reload,
                 ),
                 const GameTabScreen(),
@@ -257,16 +273,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 // completion booleans from this screen's state so
                 // it never has to spin up its own service layer.
                 AscendScreen(
-                  onJumpToTab:      _switchTab,
-                  protocol:         _protocol,
-                  latest:           _latest,
-                  allScans:         _scans,
-                  dayStreak:        _dayStreak,
-                  looksDoneToday:   _looksDoneToday,
-                  gameDoneToday:    _gameDoneToday,
-                  rizzDoneToday:    _rizzDoneToday,
-                  looksScore100:    _looksScore100,
-                  gameScore100:     _gameScore100,
+                  onJumpToTab:          _switchTab,
+                  protocol:             _protocol,
+                  latest:               _latest,
+                  allScans:             _scans,
+                  dayStreak:            _dayStreak,
+                  looksDoneToday:       _looksDoneToday,
+                  gameDoneToday:        _gameDoneToday,
+                  rizzDoneToday:        _rizzDoneToday,
+                  pickupLineDoneToday:  _pickupLineDoneToday,
+                  looksScore100:        _looksScore100,
+                  gameScore100:         _gameScore100,
                 ),
               ],
             ),
@@ -301,12 +318,17 @@ class _ScanHubTab extends StatelessWidget {
   /// Surfaces as a small flame-prefixed badge in the masthead so the
   /// streak loop survives the Ascend-tab removal.
   final int                      dayStreak;
+  /// v302 — Pro flag. Locks the POTENTIAL value on THE READ card
+  /// for free users; the moment Pro is detected, the lock
+  /// dissolves and the real number lands.
+  final bool                     isPro;
   final Future<void> Function()  onRefresh;
   const _ScanHubTab({
     required this.latest,
     required this.protocol,
     required this.activeProtocols,
     required this.dayStreak,
+    required this.isPro,
     required this.onRefresh,
   });
 
@@ -450,6 +472,7 @@ class _ScanHubTab extends StatelessWidget {
                     projected: (latest!.score + latest!.projectedDelta)
                                   .clamp(0, 100),
                     archetype: latest!.archetypeName,
+                    pro:       isPro,
                   ),
                 ).animate().fadeIn(duration: 400.ms),
 
@@ -524,10 +547,16 @@ class _HopeCard extends StatelessWidget {
   final int current;
   final int projected;
   final String archetype;
+  /// v302 — Pro state. When false, the POTENTIAL number is
+  /// blacked-out and shows a lock pill; tap routes to /paywall.
+  /// Flips to true the moment the user upgrades and the card
+  /// rebuilds → real number reveals.
+  final bool pro;
   const _HopeCard({
     required this.current,
     required this.projected,
     required this.archetype,
+    this.pro = false,
   });
 
   @override
@@ -588,13 +617,15 @@ class _HopeCard extends StatelessWidget {
                 value: current,
                 color: AppColors.textPrimary,
                 isNow: true,
+                locked: false,
               ),
-              _gainPill(gain),
+              _gainPill(gain, locked: !pro),
               _edgeStat(
                 label: 'POTENTIAL',
                 value: projected,
                 color: AppColors.signalGreen,
                 isNow: false,
+                locked: !pro,
               ),
             ],
           ),
@@ -626,20 +657,62 @@ class _HopeCard extends StatelessWidget {
     required int value,
     required Color color,
     required bool isNow,
+    required bool locked,
+  }) {
+    final shown = locked ? '??' : '$value';
+    final mainColor = locked ? AppColors.textTertiary : color;
+    final body = _edgeStatBody(
+      label: label, shown: shown, mainColor: mainColor,
+      isNow: isNow, locked: locked);
+    // v302 — locked POTENTIAL becomes tap-to-unlock so the gate
+    // reads as an obvious upgrade affordance, not a dead pill.
+    if (locked && !isNow) {
+      return Builder(builder: (ctx) => Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            ctx.push('/paywall', extra: {'source': 'home_potential_lock'});
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: body,
+        ),
+      ));
+    }
+    return body;
+  }
+
+  Widget _edgeStatBody({
+    required String label,
+    required String shown,
+    required Color mainColor,
+    required bool isNow,
+    required bool locked,
   }) {
     return Column(
       crossAxisAlignment:
           isNow ? CrossAxisAlignment.start : CrossAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label,
-          style: AppTypography.label.copyWith(
-            color: isNow
-                ? AppColors.textTertiary
-                : AppColors.signalGreen.withValues(alpha: 0.85),
-            fontSize: 9.5, letterSpacing: 2.4,
-            fontWeight: FontWeight.w900,
-          )),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (locked && !isNow) ...[
+              Icon(Icons.lock_rounded,
+                color: AppColors.signalGreen.withValues(alpha: 0.85),
+                size: 11),
+              const SizedBox(width: 4),
+            ],
+            Text(label,
+              style: AppTypography.label.copyWith(
+                color: isNow
+                    ? AppColors.textTertiary
+                    : AppColors.signalGreen.withValues(alpha: 0.85),
+                fontSize: 9.5, letterSpacing: 2.4,
+                fontWeight: FontWeight.w900,
+              )),
+          ],
+        ),
         const SizedBox(height: 2),
         // Bro: "push the left number up slightly so it's in line with
         // the right number." Italic Playfair has uneven visual tops
@@ -649,14 +722,14 @@ class _HopeCard extends StatelessWidget {
         // visual tops without touching POTENTIAL's glow shadow.
         Transform.translate(
           offset: Offset(0, isNow ? -4 : 0),
-          child: Text('$value',
+          child: Text(shown,
             style: GoogleFonts.playfairDisplay(
-              color: color,
+              color: mainColor,
               fontSize: 48, height: 0.95,
               letterSpacing: -2.0,
               fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w900,
-              shadows: isNow
+              shadows: isNow || locked
                   ? null
                   : [
                       Shadow(
@@ -670,7 +743,10 @@ class _HopeCard extends StatelessWidget {
   }
 
   /// +XX pill that sits centred between NOW and POTENTIAL.
-  Widget _gainPill(int gain) {
+  /// v302 — `locked` swaps the gain digits for ??? so the page
+  /// doesn't leak the projected delta to free users.
+  Widget _gainPill(int gain, {bool locked = false}) {
+    final label = locked ? '+??' : '+$gain';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
@@ -683,10 +759,10 @@ class _HopeCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.trending_up_rounded,
+          Icon(locked ? Icons.lock_rounded : Icons.trending_up_rounded,
               color: AppColors.signalGreen, size: 13),
           const SizedBox(width: 4),
-          Text('+$gain',
+          Text(label,
             style: AppTypography.label.copyWith(
               color: AppColors.signalGreen,
               fontSize: 13, letterSpacing: 0.4,
@@ -701,6 +777,8 @@ class _HopeCard extends StatelessWidget {
 // ── Streak badge — a tiny flame-prefixed pill in the Looks masthead
 // action row. Survives the Ascend-tab removal so the user still sees
 // the daily-streak loop without scrolling to find it.
+/// v303 — promoted to a solid red fill so the chip carries real
+/// visual weight in the masthead row. Same shape Ascend + Rizz use.
 class _StreakBadge extends StatelessWidget {
   final int days;
   const _StreakBadge({required this.days});
@@ -708,23 +786,26 @@ class _StreakBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.red.withValues(alpha: 0.14),
+        color: AppColors.red,
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(
-          color: AppColors.red.withValues(alpha: 0.45), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.red.withValues(alpha: 0.45),
+            blurRadius: 14, spreadRadius: 0),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.local_fire_department_rounded,
-              color: AppColors.red, size: 16),
+              color: Colors.white, size: 18),
           const SizedBox(width: 5),
           Text('$days',
             style: GoogleFonts.inter(
-              color: AppColors.red,
-              fontSize: 13.5, height: 1,
+              color: Colors.white,
+              fontSize: 14, height: 1,
               letterSpacing: 0.2,
               fontWeight: FontWeight.w900,
             )),
@@ -1313,6 +1394,11 @@ class _NavBar extends StatelessWidget {
       (label: 'Rizz',   icon: Icons.bolt_rounded,                      italic: true),
       (label: 'Ascend', icon: Icons.local_fire_department_rounded,     italic: true),
     ];
+    // v303 — bottom nav rebuilt in the Skeletal-PT pattern bro
+    // pointed at: each tab is its own block, the ACTIVE block fills
+    // with the brand red and stays filled, inactive tabs render
+    // flat. Bigger icons + bigger labels, and the whole block is
+    // the tap target (no more tiny icon-only hit area).
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface1,
@@ -1322,69 +1408,109 @@ class _NavBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           child: Row(
             children: [
               for (var i = 0; i < items.length; i++)
                 Expanded(
-                  child: InkWell(
-                    onTap: () => onTap(i),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // v298 — Stack so a red dot can ride over
-                        // the Ascend tab icon when ascendPending is
-                        // true and the user isn't already on that
-                        // tab. Other icons render normally.
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Icon(items[i].icon,
-                              size: 20,
-                              color: i == index
-                                  ? AppColors.red
-                                  : AppColors.textTertiary),
-                            if (i == 3 && ascendPending && i != index)
-                              Positioned(
-                                right: -5, top: -3,
-                                child: Container(
-                                  width: 9, height: 9,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.red,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: AppColors.surface1, width: 1.4),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                        // GAME renders italic Playfair to match how the
-                        // Auralay tab used to brand Lucien — the editorial
-                        // serif italic against the all-caps tracked sans.
-                        Text(
-                          items[i].italic
-                              ? items[i].label    // mixed case for italic serif
-                              : items[i].label.toUpperCase(),
-                          style: (items[i].italic
-                                  ? AppTypography.h1.copyWith(
-                                      fontStyle: FontStyle.italic,
-                                      fontWeight: FontWeight.w700)
-                                  : AppTypography.label)
-                              .copyWith(
-                                color: i == index
-                                    ? AppColors.red
-                                    : AppColors.textTertiary,
-                                fontSize: items[i].italic ? 11 : 8.5,
-                                letterSpacing: items[i].italic ? -0.2 : 1.8,
-                                height: 1,
-                              ),
-                        ),
-                      ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: _NavBlock(
+                      label: items[i].label,
+                      icon: items[i].icon,
+                      active: i == index,
+                      showPendingDot:
+                          i == 3 && ascendPending && i != index,
+                      onTap: () => onTap(i),
                     ),
                   ),
                 ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// v303 — Bottom-nav block. Active tab fills with brand red and
+/// stays filled; inactive tabs render flat. Whole block is the tap
+/// target so the user can land anywhere on the rectangle. Big
+/// icon (24pt) + big label (12pt italic Playfair) so the chrome
+/// reads as confident, not crowded.
+///
+/// `showPendingDot` rides a small red dot at the top-right of the
+/// icon when this tab has an outstanding action (currently only
+/// the Ascend tab uses it). Suppressed on the active tab — the dot
+/// has served its purpose once the user is there.
+class _NavBlock extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool active;
+  final bool showPendingDot;
+  final VoidCallback onTap;
+  const _NavBlock({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.showPendingDot,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = active ? Colors.white : AppColors.textSecondary;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? AppColors.red : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: AppColors.red.withValues(alpha: 0.45),
+                      blurRadius: 18, spreadRadius: 0),
+                  ]
+                : null,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(icon, size: 24, color: fg),
+                  if (showPendingDot)
+                    Positioned(
+                      right: -5, top: -3,
+                      child: Container(
+                        width: 9, height: 9,
+                        decoration: BoxDecoration(
+                          color: AppColors.red,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.surface1, width: 1.4),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(label,
+                style: AppTypography.h1.copyWith(
+                  color: fg,
+                  fontSize: 13, height: 1,
+                  letterSpacing: -0.2,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w800,
+                )),
             ],
           ),
         ),

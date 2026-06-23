@@ -138,31 +138,122 @@ class NotificationService {
     }
   }
 
-  /// Copy for the daily streak nudge, tuned by the protocol's current
-  /// state. Four lanes: brand-new (no streak yet), live, at-risk, broken.
+  /// v303 — daily streak nudge copy. Bro: "powerful notifications
+  /// that hit hard psychology — think what sells, what retains."
+  /// Four state lanes (fresh / live / at-risk / broken) × multiple
+  /// rotating lines per lane so the user never sees the same
+  /// nudge twice in a row. Rotation key is the protocol day —
+  /// deterministic, no RNG, so a given day always gets the same
+  /// line (predictable QA, retains identity-coherent voice across
+  /// the user's run).
+  ///
+  /// Milestone overrides (day 3 / 7 / 14 / 30 / 60) trump the lane
+  /// pool on the day they hit so the big moments get the loudest
+  /// copy. The aim is the friend-who-pulls voice from the rizz
+  /// prompts, applied to retention: brutal, identity-anchored,
+  /// no corporate cheer.
   static (String title, String body) _streakCopy(Protocol p) {
-    switch (p.streakStatus) {
-      case StreakStatus.fresh:
-        return (
-          'Day ${p.currentDay} of ${p.lengthDays}',
-          'Your protocol is waiting. Two minutes locks in day one.',
-        );
-      case StreakStatus.live:
-        return (
-          '${p.effectiveStreak} days · on fire',
-          'Log day ${p.currentDay} before midnight. Streak stays alive.',
-        );
-      case StreakStatus.atRisk:
-        return (
-          'Don\'t break ${p.currentStreak}',
-          'Log today. One freeze available if you miss.',
-        );
-      case StreakStatus.broken:
-        return (
-          'Start a new run',
-          'Streak reset. Longest was ${p.longestStreak}. Go again.',
-        );
+    // ── Milestone overrides — fire on the exact day, regardless
+    //    of streak state. These are the lines the user will read
+    //    to friends. Hit them hard.
+    final milestone = _milestoneCopy(p.effectiveStreak);
+    if (milestone != null) return milestone;
+
+    final lane = _laneFor(p);
+    final i = (p.currentDay - 1).clamp(0, 9999) % lane.length;
+    return lane[i];
+  }
+
+  /// Hard-stop copy on the day a streak milestone lands. Fires only
+  /// when [effectiveStreak] matches one of the milestone numbers
+  /// exactly — bumping past resumes the lane rotation.
+  static (String, String)? _milestoneCopy(int streak) {
+    switch (streak) {
+      case 3:  return ('3 days in', 'The habit just got real. Don\'t blink now.');
+      case 7:  return ('One week', 'Most quit before this. You didn\'t. Don\'t break it.');
+      case 14: return ('Two weeks', 'This is who you are now. Lock it.');
+      case 21: return ('21 days', 'Old habit dead. New man installed. Keep building.');
+      case 30: return ('30 days', 'The version of you that quit can\'t reach you here.');
+      case 45: return ('45 days', 'Magnetic territory. The room finds you. Stay on it.');
+      case 60: return ('60 days', 'Final form. Today is your IMHIM-certified day.');
     }
+    return null;
+  }
+
+  /// Pick the rotating line pool for the user's current state.
+  static List<(String, String)> _laneFor(Protocol p) {
+    switch (p.streakStatus) {
+      case StreakStatus.fresh:    return _freshLines(p);
+      case StreakStatus.live:     return _liveLines(p);
+      case StreakStatus.atRisk:   return _atRiskLines(p);
+      case StreakStatus.broken:   return _brokenLines(p);
+    }
+  }
+
+  /// Brand-new: no check-in yet. Identity-gain framing — the man
+  /// they're becoming starts here, not next week.
+  static List<(String, String)> _freshLines(Protocol p) {
+    final n = p.currentDay;
+    return [
+      ('Day $n. Start the run.',
+       'The version of you that quits doesn\'t exist yet. Two minutes.'),
+      ('Don\'t install. Begin.',
+       'Day $n is the only day that ever matters. Log it.'),
+      ('First rep, day $n.',
+       'Strangers will see the man who started. Make today him.'),
+      ('Open the door.',
+       'You downloaded an app to become Him. Press start.'),
+    ];
+  }
+
+  /// Live streak — identity-anchored, pride-of-build framing. Each
+  /// day is a brick in the man.
+  static List<(String, String)> _liveLines(Protocol p) {
+    final s = p.effectiveStreak;
+    final n = p.currentDay;
+    return [
+      ('$s days locked in', 'Log day $n. The reps are the work.'),
+      ('Don\'t skip the man', 'Day $n. The version of you you\'re building is watching.'),
+      ('Keep the chain', '$s days clean. One log away from $s+1.'),
+      ('You\'re different now', 'Day $n. Everyone you used to be lost. Keep it that way.'),
+      ('No off days', '$s days = $s days. Today doesn\'t get a pass.'),
+      ('Strangers notice first', 'Friends notice last. Stack day $n.'),
+      ('The man you\'re becoming',
+       'is built one log at a time. Day $n is on the table.'),
+    ];
+  }
+
+  /// At risk — yesterday was the last log, today is the cliff.
+  /// Loss framing, brutal but not mean.
+  static List<(String, String)> _atRiskLines(Protocol p) {
+    final s = p.currentStreak;
+    return [
+      ('Don\'t fold on yourself',
+       '24h to keep $s. Quitters always think tomorrow.'),
+      ('$s days on the line',
+       'The Him you\'re becoming is watching. Don\'t embarrass him.'),
+      ('One log saves the run',
+       '$s days. Two minutes. Nobody respects "almost did it."'),
+      ('You\'re one tap from $s+1',
+       'or one no-show from zero. Pick.'),
+      ('Streak at risk',
+       '$s days. Don\'t be the guy who folded on himself.'),
+    ];
+  }
+
+  /// Broken — gap past the freeze budget. Identity-rebuild, no
+  /// shame. The man who pulls picks himself up.
+  static List<(String, String)> _brokenLines(Protocol p) {
+    final l = p.longestStreak;
+    return [
+      ('Start again', 'Longest was $l. The man who pulls comes back.'),
+      ('Day one again',
+       'Quitting is a habit too. Break it. Log today.'),
+      ('You missed. Don\'t miss twice',
+       'The work still compounds when you fall. Stand up.'),
+      ('Rebuild the chain',
+       'Your $l-day record is the proof you can. Go again.'),
+    ];
   }
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/dev_flags.dart';
@@ -15,13 +15,13 @@ import '../../providers/auralay_app_provider.dart';
 import '../../services/analytics_service.dart';
 import '../../services/gaze/gaze_progress_store.dart';
 import '../../services/local_store_service.dart';
-import '../../services/milestone_photo_store.dart';
 import '../../services/presence/presence_progress_store.dart';
 import '../../services/ascension_service.dart';
 import '../../services/protocol_service.dart';
 import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
+import '../../widgets/common/imhim_wordmark.dart';
 
 class ProgressScreen extends StatefulWidget {
   final ScanRecord? latest;
@@ -160,7 +160,22 @@ class _ProgressScreenState extends State<ProgressScreen> {
           style: AppTypography.label.copyWith(
             color: AppColors.textMuted, fontSize: 8.5, letterSpacing: 2.8)),
 
-        const SizedBox(height: Sp.xl),
+        const SizedBox(height: Sp.lg),
+
+        // ── v302 IMHIM HERO. Photo pair → IMHIM SCORE → Looks +
+        // Game beneath → italic hard-hitting line on top. Replaces
+        // the dead-feeling chart-first landing with the screenshot
+        // a user actually wants to send to their group chat. Hides
+        // until they have at least one scan (nothing to anchor the
+        // before frame to before then).
+        if (hasScans)
+          _ProgressImhimHero(
+            scans:        sorted,
+            gameScores:   _gameScores,
+            dayCount:     context.read<AuralayAppProvider>().state.currentDay,
+          ).animate().fadeIn(duration: 420.ms),
+
+        if (hasScans) const SizedBox(height: Sp.lg),
 
         // ── TRAINING block (Auralay graft) ──────────────────────────────
         // Aura Score hero + Day/Streak chips + per-tab drill counts +
@@ -187,19 +202,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
               .animate().fadeIn(delay: 160.ms, duration: 400.ms),
             const SizedBox(height: Sp.md),
           ],
-
-          // v292 — milestone photo gallery. Bro: "users should be
-          // allowed to save their images… make a space in progress
-          // that they can save every two weeks or day 1 day 30 and
-          // day 60 — clear images that stay clearly titled day 1
-          // etc." Three slots pulled from the existing scan history
-          // — no new save flow needed, the scan already persists
-          // capturedImagePath. Empty slots get a TAKE pill that
-          // routes to /scan so the user can fill them.
-          _MilestonePhotoStrip(scans: _scans)
-            .animate().fadeIn(delay: 220.ms, duration: 400.ms),
-
-          const SizedBox(height: Sp.lg),
 
           _ScanHistoryList(scans: _scans)
             .animate().fadeIn(delay: 280.ms, duration: 400.ms),
@@ -525,19 +527,51 @@ class _ChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v302 — chart card lifted out of the "coffin" feel. Warmer
+    // surface (surfaceElevated), red-tinted border, subtle glow,
+    // and a colored axis label so the eye reads the section as a
+    // live arc, not a tombstone.
+    final last = scans.last.score;
     return Container(
       padding: const EdgeInsets.all(Sp.md),
       decoration: BoxDecoration(
-        color: AppColors.surface1,
+        color: AppColors.surfaceElevated,
         borderRadius: BorderRadius.circular(Rd.xl),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(
+          color: AppColors.red.withValues(alpha: 0.22), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.red.withValues(alpha: 0.12),
+            blurRadius: 24, spreadRadius: 0),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('AESTHETIC INDEX · OVER TIME',
-            style: AppTypography.label.copyWith(
-              color: AppColors.textTertiary, letterSpacing: 2.5, fontSize: 9)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text('LOOKS · OVER TIME',
+                style: AppTypography.label.copyWith(
+                  color: AppColors.red,
+                  letterSpacing: 2.5, fontSize: 9.5,
+                  fontWeight: FontWeight.w900)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.red.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('NOW $last',
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.red,
+                    fontSize: 9, letterSpacing: 1.6,
+                    fontWeight: FontWeight.w900)),
+              ),
+            ],
+          ),
           const SizedBox(height: Sp.md),
           SizedBox(
             height: 160,
@@ -620,17 +654,22 @@ class _ScoreChartPainter extends CustomPainter {
       areaPath
         ..lineTo(points.last.dx, padTop + chartH)
         ..close();
+      // v302 — warm red area gradient instead of the invisible
+      // divider-on-divider wash. Bro: charts felt "in a coffin."
       canvas.drawPath(areaPath, Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter, end: Alignment.bottomCenter,
           colors: [
-            AppColors.divider,
-            AppColors.divider,
+            AppColors.red.withValues(alpha: 0.35),
+            AppColors.red.withValues(alpha: 0.04),
+            Colors.transparent,
           ],
+          stops: const [0.0, 0.7, 1.0],
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)));
     }
 
-    // Main line — smooth
+    // Main line — smooth, with a soft outer glow stroke
+    // underneath so the arc lifts off the dark surface.
     if (points.length > 1) {
       final linePath = Path()..moveTo(points.first.dx, points.first.dy);
       for (var i = 1; i < points.length; i++) {
@@ -639,20 +678,36 @@ class _ScoreChartPainter extends CustomPainter {
         final midX = (prev.dx + cur.dx) / 2;
         linePath.cubicTo(midX, prev.dy, midX, cur.dy, cur.dx, cur.dy);
       }
+      // Glow underlay — wider, low alpha, blurred via maskFilter.
+      canvas.drawPath(linePath, Paint()
+        ..color = AppColors.red.withValues(alpha: 0.55)
+        ..strokeWidth = 6
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
+      // Main stroke on top.
       canvas.drawPath(linePath, Paint()
         ..color = AppColors.red
-        ..strokeWidth = 2.2
+        ..strokeWidth = 2.6
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round);
     }
 
-    // Data points
+    // Data points — endpoints get a halo so first/last read as
+    // anchors, intermediate dots stay minimal.
     for (var i = 0; i < points.length; i++) {
       final p = points[i];
-      canvas.drawCircle(p, 4.5, Paint()..color = AppColors.surface1);
-      canvas.drawCircle(p, 4.5, Paint()
+      final isEnd = (i == 0 || i == points.length - 1);
+      if (isEnd) {
+        canvas.drawCircle(p, 9, Paint()
+          ..color = AppColors.red.withValues(alpha: 0.35)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+      }
+      canvas.drawCircle(p, isEnd ? 5.5 : 4.5,
+        Paint()..color = AppColors.surface1);
+      canvas.drawCircle(p, isEnd ? 5.5 : 4.5, Paint()
         ..color = AppColors.red
-        ..strokeWidth = 1.6
+        ..strokeWidth = isEnd ? 2.0 : 1.6
         ..style = PaintingStyle.stroke);
 
       // Only label first + last to avoid clutter
@@ -1218,27 +1273,45 @@ class _GameChartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final latest = scores.last.score;
     final best   = scores.map((e) => e.score).reduce(math.max);
+    // v302 — chart card lifted same way as the Looks card.
     return Container(
       padding: const EdgeInsets.all(Sp.md),
       decoration: BoxDecoration(
-        color: AppColors.surface1,
+        color: AppColors.surfaceElevated,
         borderRadius: BorderRadius.circular(Rd.xl),
-        border: Border.all(color: AppColors.signalAmber.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: AppColors.signalAmber.withValues(alpha: 0.32), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.signalAmber.withValues(alpha: 0.10),
+            blurRadius: 24, spreadRadius: 0),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text('GAME · OVER TIME',
                 style: AppTypography.label.copyWith(
                   color: AppColors.signalAmber,
-                  letterSpacing: 2.5, fontSize: 9)),
+                  letterSpacing: 2.5, fontSize: 9.5,
+                  fontWeight: FontWeight.w900)),
               const Spacer(),
-              Text('BEST $best · NOW $latest',
-                style: AppTypography.label.copyWith(
-                  color: AppColors.textTertiary,
-                  letterSpacing: 1.6, fontSize: 8.5)),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.signalAmber.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('BEST $best · NOW $latest',
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.signalAmber,
+                    fontSize: 9, letterSpacing: 1.4,
+                    fontWeight: FontWeight.w900)),
+              ),
             ],
           ),
           const SizedBox(height: Sp.md),
@@ -1323,13 +1396,18 @@ class _GameChartPainter extends CustomPainter {
       areaPath
         ..lineTo(points.last.dx, padTop + chartH)
         ..close();
+      // v302 — beefier amber gradient + glow line to match the
+      // Looks chart energy. The old 0.18-alpha wash was too faint
+      // to read on the dark surface.
       canvas.drawPath(areaPath, Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter, end: Alignment.bottomCenter,
           colors: [
-            AppColors.signalAmber.withValues(alpha: 0.18),
-            AppColors.signalAmber.withValues(alpha: 0.02),
+            AppColors.signalAmber.withValues(alpha: 0.40),
+            AppColors.signalAmber.withValues(alpha: 0.05),
+            Colors.transparent,
           ],
+          stops: const [0.0, 0.7, 1.0],
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)));
     }
 
@@ -1342,18 +1420,31 @@ class _GameChartPainter extends CustomPainter {
         linePath.cubicTo(midX, prev.dy, midX, cur.dy, cur.dx, cur.dy);
       }
       canvas.drawPath(linePath, Paint()
+        ..color = AppColors.signalAmber.withValues(alpha: 0.55)
+        ..strokeWidth = 6
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
+      canvas.drawPath(linePath, Paint()
         ..color = AppColors.signalAmber
-        ..strokeWidth = 2.2
+        ..strokeWidth = 2.6
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round);
     }
 
     for (var i = 0; i < points.length; i++) {
       final p = points[i];
-      canvas.drawCircle(p, 4.5, Paint()..color = AppColors.surface1);
-      canvas.drawCircle(p, 4.5, Paint()
+      final isEnd = (i == 0 || i == points.length - 1);
+      if (isEnd) {
+        canvas.drawCircle(p, 9, Paint()
+          ..color = AppColors.signalAmber.withValues(alpha: 0.35)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+      }
+      canvas.drawCircle(p, isEnd ? 5.5 : 4.5,
+        Paint()..color = AppColors.surface1);
+      canvas.drawCircle(p, isEnd ? 5.5 : 4.5, Paint()
         ..color = AppColors.signalAmber
-        ..strokeWidth = 1.6
+        ..strokeWidth = isEnd ? 2.0 : 1.6
         ..style = PaintingStyle.stroke);
 
       if (i == 0 || i == points.length - 1) {
@@ -1448,297 +1539,295 @@ class _ProgressCloseButton extends StatelessWidget {
   }
 }
 
-/// v294 — milestone photo strip, redesigned to bro's note: vertical
-/// stack (one frame per row) with a giant Playfair day numeral
-/// above each, and the TAKE button captures a quick photo in-place
-/// instead of routing the user through the full /scan flow.
-///
-/// Slot order top → bottom:
-///   DAY 1   — auto-fills from the first scan's capturedImagePath
-///             so a fresh user already sees Day 1 the moment their
-///             first scan lands. User-saved photo (if any) takes
-///             precedence over the scan photo.
-///   DAY 30  — empty until the user shoots one; once captured,
-///             tile reads as "30 days in. Locked in."
-///   DAY 60  — same, final form.
-///
-/// User-captured photos persist via [MilestonePhotoStore] under
-/// the app's documents directory + a SharedPreferences pointer per
-/// slot, so a re-capture overwrites the slot cleanly.
-class _MilestonePhotoStrip extends StatefulWidget {
-  final List<ScanRecord> scans;
-  const _MilestonePhotoStrip({required this.scans});
 
+/// v302 — PROGRESS hero. Bro: "make the imhim score use the first
+/// before and after they get, then under it the game and looks
+/// scores, and then above the imhim score the hard hitting lines
+/// you were supposed to write. Also the actual progress tab needs
+/// some life — it looks like it's in a coffin."
+///
+/// Stack (top → bottom):
+///   1. Hard-hitting identity line (italic Playfair, rotates daily
+///      via AscensionService.todayMessageFor so it never stales).
+///   2. IMHIM SCORE composite — 84pt italic numeral in red, "/100"
+///      anchor and weekly delta arrow beneath.
+///   3. BEFORE / AFTER face pair — first scan capturedImagePath vs
+///      latest, accent borders, "BEFORE" / "AFTER" labels.
+///   4. LOOKS  · GAME inline chips — the two supporting pillars,
+///      colored.
+///
+/// Card surface gets a soft red atmospheric wash + glow so the
+/// block reads as warm, not interred.
+class _ProgressImhimHero extends StatefulWidget {
+  final List<ScanRecord>   scans;       // chronological asc
+  final List<GameScoreEntry> gameScores;// any order
+  final int                dayCount;
+  const _ProgressImhimHero({
+    required this.scans,
+    required this.gameScores,
+    required this.dayCount,
+  });
   @override
-  State<_MilestonePhotoStrip> createState() => _MilestonePhotoStripState();
+  State<_ProgressImhimHero> createState() => _ProgressImhimHeroState();
 }
 
-class _MilestonePhotoStripState extends State<_MilestonePhotoStrip> {
-  /// Manually-captured paths keyed by slot day (1 / 30 / 60).
-  /// Loaded once on init + refreshed after a successful capture.
-  Map<int, String?> _savedPaths = const {1: null, 30: null, 60: null};
+class _ProgressImhimHeroState extends State<_ProgressImhimHero> {
+  int  _imhim       = 0;
+  int  _delta       = 0;
+  bool _ready       = false;
+  Protocol? _proto;
 
   @override
   void initState() {
     super.initState();
-    _refreshSavedPaths();
+    _load();
   }
 
-  Future<void> _refreshSavedPaths() async {
-    final p = await MilestonePhotoStore.loadAll();
+  Future<void> _load() async {
+    Protocol? p;
+    try { p = await ProtocolService.loadActive(); } catch (_) {}
+    final looks = widget.scans.isEmpty ? 0 : widget.scans.last.score;
+    final game  = widget.gameScores.isEmpty
+        ? 0
+        : widget.gameScores.map((g) => g.score).reduce(math.max);
+    final consistency = AscensionService.consistencyFor(p);
+    final imhim = AscensionService.imhimScoreFromComponents(
+      looks: looks, game: game, consistency: consistency);
+    final delta = await AscensionService.weeklyDeltaFor(imhim);
     if (!mounted) return;
-    setState(() => _savedPaths = p);
-  }
-
-  /// Open the system camera through image_picker, hand the returned
-  /// file to MilestonePhotoStore for durable storage, refresh the
-  /// strip. Gracefully no-ops on cancel or permission denial — the
-  /// user just stays on the empty slot.
-  Future<void> _captureForSlot(int day) async {
-    HapticFeedback.mediumImpact();
-    try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: CameraDevice.front,
-        imageQuality: 92,
-      );
-      if (picked == null) return;
-      final saved = await MilestonePhotoStore.saveCapturedFile(
-        day, File(picked.path));
-      if (saved == null || !mounted) return;
-      await _refreshSavedPaths();
-      HapticFeedback.heavyImpact();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Couldn't open camera: ${e.toString().split('\n').first}"),
-        backgroundColor: AppColors.surface2,
-        behavior: SnackBarBehavior.floating,
-      ));
-    }
+    setState(() {
+      _imhim = imhim;
+      _delta = delta;
+      _proto = p;
+      _ready = true;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final sorted = [...widget.scans]
-      ..sort((a, b) => a.takenAt.compareTo(b.takenAt));
-    final firstScanPath = sorted.isEmpty
-        ? null
-        : sorted.first.capturedImagePath;
+    final scans = widget.scans;
+    final firstScan = scans.first;
+    final lastScan  = scans.last;
+    final looks = lastScan.score;
+    final game  = widget.gameScores.isEmpty
+        ? 0
+        : widget.gameScores.map((g) => g.score).reduce(math.max);
+    final streak = _proto?.effectiveStreak ?? 0;
+    final line = AscensionService.todayMessageFor(
+      day: widget.dayCount, streak: streak);
+    final deltaText = !_ready
+        ? '—'
+        : _delta == 0
+            ? '+0 this week'
+            : _delta > 0
+                ? '↑ +$_delta this week'
+                : '↓ $_delta this week';
+    final deltaColor = !_ready || _delta == 0
+        ? AppColors.textTertiary
+        : _delta > 0
+            ? AppColors.signalGreen
+            : AppColors.signalAmber;
 
-    // Resolved per-slot path: user capture wins, then a scan-photo
-    // fallback for DAY 1 (since the onboarding scan IS effectively
-    // the user's Day-1 photo).
-    final day1Path  = _savedPaths[1]  ?? firstScanPath;
-    final day30Path = _savedPaths[30];
-    final day60Path = _savedPaths[60];
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+      decoration: BoxDecoration(
+        // Warm gradient wash — kills the "coffin" feel without
+        // breaking the black-first brand. Radial top-bias so the
+        // glow lives behind the hero number.
+        gradient: RadialGradient(
+          center: const Alignment(0, -0.5),
+          radius: 1.1,
+          colors: [
+            AppColors.red.withValues(alpha: 0.16),
+            AppColors.surface1,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(Rd.xl),
+        border: Border.all(
+          color: AppColors.red.withValues(alpha: 0.30), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.red.withValues(alpha: 0.18),
+            blurRadius: 32, spreadRadius: 0),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // ── Hard-hitting identity line.
+          if (line.isNotEmpty) ...[
+            Text(line,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.playfairDisplay(
+                color: AppColors.textPrimary,
+                fontSize: 16, height: 1.35,
+                letterSpacing: -0.4,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w600,
+              )),
+            const SizedBox(height: 18),
+          ],
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('MILESTONE PHOTOS',
-          style: AppTypography.label.copyWith(
-            color: AppColors.textTertiary,
-            letterSpacing: 2.5, fontSize: 10)),
-        const SizedBox(height: 6),
-        Text('Your transformation, in three frames.',
-          style: AppTypography.bodySmall.copyWith(
-            color: AppColors.textSecondary,
-            fontStyle: FontStyle.italic, fontSize: 12.5)),
-        const SizedBox(height: Sp.lg),
-        _MilestoneRow(
-          dayLabel:   1,
-          accent:     AppColors.textSecondary,
-          imagePath:  day1Path,
-          onTake:     () => _captureForSlot(1),
-        ),
-        const SizedBox(height: Sp.xl),
-        _MilestoneRow(
-          dayLabel:   30,
-          accent:     AppColors.accent,
-          imagePath:  day30Path,
-          onTake:     () => _captureForSlot(30),
-        ),
-        const SizedBox(height: Sp.xl),
-        _MilestoneRow(
-          dayLabel:   60,
-          accent:     AppColors.red,
-          imagePath:  day60Path,
-          onTake:     () => _captureForSlot(60),
-        ),
-      ],
+          // ── IMHIM SCORE numeral hero.
+          Text('IMHIM SCORE',
+            style: GoogleFonts.inter(
+              color: AppColors.red,
+              fontSize: 10.5, letterSpacing: 3.2,
+              fontWeight: FontWeight.w900,
+            )),
+          const SizedBox(height: 4),
+          Text('${_ready ? _imhim : 0}',
+            style: GoogleFonts.playfairDisplay(
+              color: Colors.white,
+              fontSize: 84, height: 1,
+              letterSpacing: -2.6,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w900,
+            )),
+          const SizedBox(height: 2),
+          Text('/ 100',
+            style: GoogleFonts.inter(
+              color: AppColors.textTertiary,
+              fontSize: 11, letterSpacing: 2.4,
+              fontWeight: FontWeight.w800,
+            )),
+          const SizedBox(height: 8),
+          Text(deltaText,
+            style: GoogleFonts.inter(
+              color: deltaColor,
+              fontSize: 12, letterSpacing: 1.2,
+              fontWeight: FontWeight.w900,
+            )),
+
+          const SizedBox(height: 22),
+
+          // ── BEFORE / AFTER face pair.
+          Row(
+            children: [
+              Expanded(
+                child: _ProgressFaceTile(
+                  label: 'BEFORE',
+                  imagePath: firstScan.capturedImagePath,
+                  accent: AppColors.textTertiary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _ProgressFaceTile(
+                  label: scans.length > 1 ? 'NOW' : 'TODAY',
+                  imagePath: lastScan.capturedImagePath,
+                  accent: AppColors.red,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          // ── LOOKS · GAME supporting chips.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _ProgressStatChip(
+                label: 'LOOKS', value: looks, accent: AppColors.measure),
+              const SizedBox(width: 12),
+              _ProgressStatChip(
+                label: 'GAME', value: game, accent: AppColors.signalAmber),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// One milestone row — a giant Playfair "DAY N" label on top, a
-/// large photo (or empty TAKE state) underneath. Wide rectangle
-/// (4:3-ish landscape) so the user reads the frame as the receipt
-/// rather than a thumbnail. Tap-to-replace via the same camera
-/// capture flow.
-class _MilestoneRow extends StatelessWidget {
-  final int dayLabel;
-  final Color accent;
+class _ProgressFaceTile extends StatelessWidget {
+  final String label;
   final String? imagePath;
-  final VoidCallback onTake;
-  const _MilestoneRow({
-    required this.dayLabel,
-    required this.accent,
+  final Color accent;
+  const _ProgressFaceTile({
+    required this.label,
     required this.imagePath,
-    required this.onTake,
+    required this.accent,
   });
-
   @override
   Widget build(BuildContext context) {
     final file = imagePath == null ? null : File(imagePath!);
     final hasImage = file != null && file.existsSync();
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Giant day numeral above the frame — italic Playfair, in
-        // the slot's accent colour so the eye reads three distinct
-        // milestones at a glance when scrolling.
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text('DAY',
-              style: AppTypography.label.copyWith(
-                color: accent,
-                fontSize: 14, letterSpacing: 4.0,
-                fontWeight: FontWeight.w900,
-              )),
-            const SizedBox(width: 10),
-            Text('$dayLabel',
-              style: AppTypography.display.copyWith(
-                color: accent,
-                fontSize: 56, height: 1,
-                letterSpacing: -2.0,
-                fontStyle: FontStyle.italic,
-                fontWeight: FontWeight.w900,
-              )),
-            const Spacer(),
-            if (hasImage)
-              // Subtle "retake" affordance once a photo exists. Same
-              // capture flow — the saver overwrites the slot.
-              _RetakePill(accent: accent, onTap: onTake),
-          ],
-        ),
-        const SizedBox(height: Sp.sm),
-        // The frame itself — large, wide, tap-to-take when empty.
-        Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(Rd.lg),
-          child: InkWell(
-            onTap: hasImage ? null : onTake,
-            borderRadius: BorderRadius.circular(Rd.lg),
-            child: AspectRatio(
-              aspectRatio: 4 / 3,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface2,
-                  borderRadius: BorderRadius.circular(Rd.lg),
-                  border: Border.all(
-                    color: hasImage
-                      ? accent.withValues(alpha: 0.55)
-                      : accent.withValues(alpha: 0.30),
-                    width: hasImage ? 1.4 : 1.0),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: hasImage
-                    ? Image.file(file, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _placeholder())
-                    : _emptyState(accent),
-              ),
+        AspectRatio(
+          aspectRatio: 4 / 5,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(Rd.lg),
+              border: Border.all(
+                color: accent.withValues(alpha: 0.55), width: 1.4),
             ),
+            clipBehavior: Clip.antiAlias,
+            child: hasImage
+                ? Image.file(file, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _placeholder())
+                : _placeholder(),
           ),
         ),
+        const SizedBox(height: 8),
+        Text(label,
+          style: GoogleFonts.inter(
+            color: accent,
+            fontSize: 11, letterSpacing: 2.6,
+            fontWeight: FontWeight.w900,
+          )),
       ],
     );
   }
-
-  Widget _emptyState(Color accent) => Container(
-        color: AppColors.surface2,
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_a_photo_outlined,
-              size: 36, color: accent),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18, vertical: 9),
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(99),
-                border: Border.all(
-                  color: accent.withValues(alpha: 0.6), width: 1.0),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('TAKE PHOTO',
-                    style: AppTypography.label.copyWith(
-                      color: accent,
-                      fontSize: 11, letterSpacing: 2.4,
-                      fontWeight: FontWeight.w900,
-                    )),
-                  const SizedBox(width: 6),
-                  Icon(Icons.camera_alt_rounded,
-                    color: accent, size: 14),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
 
   Widget _placeholder() => Container(
         color: AppColors.surface2,
         alignment: Alignment.center,
         child: Icon(Icons.face_retouching_natural_outlined,
-          size: 36, color: AppColors.textTertiary.withValues(alpha: 0.6)),
+          size: 36, color: AppColors.textTertiary.withValues(alpha: 0.55)),
       );
 }
 
-class _RetakePill extends StatelessWidget {
+class _ProgressStatChip extends StatelessWidget {
+  final String label;
+  final int value;
   final Color accent;
-  final VoidCallback onTap;
-  const _RetakePill({required this.accent, required this.onTap});
-
+  const _ProgressStatChip({
+    required this.label, required this.value, required this.accent});
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(99),
-      child: InkWell(
-        onTap: () { HapticFeedback.selectionClick(); onTap(); },
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(99),
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: AppColors.surface2,
-            borderRadius: BorderRadius.circular(99),
-            border: Border.all(
-              color: accent.withValues(alpha: 0.55), width: 0.8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.refresh_rounded, color: accent, size: 13),
-              const SizedBox(width: 5),
-              Text('RETAKE',
-                style: AppTypography.label.copyWith(
-                  color: accent,
-                  fontSize: 9.5, letterSpacing: 2.0,
-                  fontWeight: FontWeight.w900,
-                )),
-            ],
-          ),
-        ),
+        border: Border.all(
+          color: accent.withValues(alpha: 0.55), width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(label,
+            style: GoogleFonts.inter(
+              color: accent,
+              fontSize: 11, letterSpacing: 2.4,
+              fontWeight: FontWeight.w900,
+            )),
+          const SizedBox(width: 8),
+          Text('$value',
+            style: GoogleFonts.playfairDisplay(
+              color: Colors.white,
+              fontSize: 22, height: 1,
+              letterSpacing: -0.8,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w900,
+            )),
+        ],
       ),
     );
   }
