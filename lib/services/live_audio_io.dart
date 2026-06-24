@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:record/record.dart';
 
+import 'audio_session.dart';
+
 /// Streaming audio I/O for the realtime live session.
 ///
 /// MIC IN  — uses `record`'s startStream() to pull PCM16 chunks from
@@ -88,7 +90,12 @@ class LiveAudioIO {
     // (or silenced entirely) on iOS.
     await _ensureAudioContext();
 
-    final stream = await _recorder.startStream(const RecordConfig(
+    // v307 — !pri recover-and-retry. Service-level, so we throw a
+    // human-readable error on final failure; the caller surfaces it
+    // however it wants (snackbar, banner, log). AudioSession's
+    // message constant gives every caller identical user-facing
+    // copy.
+    const cfg = RecordConfig(
       encoder: AudioEncoder.pcm16bits,
       sampleRate: _sampleRate,
       numChannels: _channels,
@@ -96,7 +103,19 @@ class LiveAudioIO {
       // exposes them — keeps Diablo's voice out of the mic loop.
       echoCancel: true,
       noiseSuppress: true,
-    ));
+    );
+    Stream<Uint8List> stream;
+    try {
+      stream = await _recorder.startStream(cfg);
+    } catch (err) {
+      if (!AudioSession.isInsufficientPriorityError(err)) rethrow;
+      await AudioSession.recoverFromPriorityConflict();
+      try {
+        stream = await _recorder.startStream(cfg);
+      } catch (_) {
+        throw Exception(AudioSession.priorityConflictMessage);
+      }
+    }
     _micSub = stream.listen(onChunk);
     _capturing = true;
     return true;
