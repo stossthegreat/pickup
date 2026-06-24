@@ -110,15 +110,28 @@ class _CouncilChatScreenState extends State<CouncilChatScreen> {
       final dir = await getTemporaryDirectory();
       final path =
           '${dir.path}/council_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _recorder.start(
-        const RecordConfig(
-          encoder:     AudioEncoder.aacLc,
-          sampleRate:  44100,
-          bitRate:     128000,
-          numChannels: 1,
-        ),
-        path: path,
+      const cfg = RecordConfig(
+        encoder:     AudioEncoder.aacLc,
+        sampleRate:  44100,
+        bitRate:     128000,
+        numChannels: 1,
       );
+      // v307 — !pri recover-and-retry, same shape as Arena.
+      try {
+        await _recorder.start(cfg, path: path);
+      } catch (err) {
+        if (!AudioSession.isInsufficientPriorityError(err)) rethrow;
+        _log('warn', 'MIC', '!pri detected — recovering');
+        await AudioSession.recoverFromPriorityConflict();
+        try {
+          await _recorder.start(cfg, path: path);
+          _log('ok', 'MIC', '!pri recovery succeeded');
+        } catch (err2) {
+          _log('error', 'MIC', '!pri recovery FAILED: $err2');
+          _fail(AudioSession.priorityConflictMessage);
+          return;
+        }
+      }
       _activeRecordingPath = path;
       _recordingStarted   = DateTime.now();
       HapticFeedback.mediumImpact();

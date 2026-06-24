@@ -777,43 +777,74 @@ class _FreeFlowScreenState extends State<FreeFlowScreen> {
         onTimeout: () => throw 'audio session timeout',
       );
 
-      // v287 — startStream wrapped in a 3-attempt retry loop. Same
-      // pattern selene_lesson_screen uses (committed in 30e8b98 to
-      // recover from OSStatus 561017449). The Auralay-aligned audio
-      // session config in audio_session.dart should make this a
-      // belt-and-braces guard — but iOS interruptions (Siri, route
-      // changes, lock-screen audio) can still drop setCategory on
-      // the floor. invalidate + reconfigure between attempts lets
-      // the OS settle the session before record_darwin tries again.
+      // v307 — try once normally. If the failure is the iOS !pri
+      // (OSStatus 561017449) insufficient-priority error, run the
+      // ambient → playAndRecord release-and-reassert recovery
+      // dance and retry exactly once. Other errors get a 2nd
+      // generic retry (Siri / route-change blips). Hitting BOTH
+      // the !pri recovery AND the generic retry without success
+      // means another app on the device is holding the audio
+      // session in exclusive mode — surface the user-facing
+      // message so they know to pause Spotify / end the call.
+      const cfg = RecordConfig(
+        encoder:       AudioEncoder.pcm16bits,
+        sampleRate:    24000,
+        numChannels:   1,
+        echoCancel:    true,
+        autoGain:      true,
+        noiseSuppress: true,
+      );
       Stream<Uint8List>? raw;
       Object? lastErr;
+      bool sawPriorityConflict = false;
       for (var attempt = 1; attempt <= 3; attempt++) {
         try {
-          raw = await _sharedRecorder!.startStream(const RecordConfig(
-            encoder:       AudioEncoder.pcm16bits,
-            sampleRate:    24000,
-            numChannels:   1,
-            echoCancel:    true,
-            autoGain:      true,
-            noiseSuppress: true,
-          )).timeout(const Duration(seconds: 8),
-            onTimeout: () => throw 'mic acquire timeout (8s)');
+          raw = await _sharedRecorder!.startStream(cfg)
+              .timeout(const Duration(seconds: 8),
+                onTimeout: () => throw 'mic acquire timeout (8s)');
           break;
         } catch (e) {
           lastErr = e;
+          final isPriority = AudioSession.isInsufficientPriorityError(e);
+          if (isPriority) sawPriorityConflict = true;
           _log('warn', 'MIC',
-            'startStream attempt $attempt/3 failed: $e');
+            'startStream attempt $attempt/3 failed (!pri=$isPriority): $e');
           if (attempt == 3) rethrow;
-          // Tear the session down and re-arm before the next try.
-          await Future.delayed(const Duration(milliseconds: 500));
-          AudioSession.invalidate();
-          try {
-            await AudioSession.configureForPlayAndRecord()
-                .timeout(const Duration(seconds: 4));
-          } catch (_) {/* logged on next attempt */}
+          if (isPriority) {
+            // Real OS-level conflict — run the ambient release-and-
+            // reassert dance, give it a beat, retry.
+            await AudioSession.recoverFromPriorityConflict();
+          } else {
+            // Generic transient — invalidate + reconfigure (the
+            // pre-v307 path that handles Siri / route changes /
+            // background interruption).
+            await Future.delayed(const Duration(milliseconds: 500));
+            AudioSession.invalidate();
+            try {
+              await AudioSession.configureForPlayAndRecord()
+                  .timeout(const Duration(seconds: 4));
+            } catch (_) {/* logged on next attempt */}
+          }
         }
       }
-      if (raw == null) throw lastErr ?? 'mic start failed';
+      if (raw == null) {
+        // Surface the user-friendly message ONLY when the failure
+        // was specifically a priority conflict — generic failures
+        // get their own snackbar elsewhere in the screen.
+        if (sawPriorityConflict && mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(AudioSession.priorityConflictMessage,
+              style: AppTypography.bodySmall.copyWith(
+                color: Colors.white, fontSize: 13.5,
+                fontWeight: FontWeight.w600)),
+            backgroundColor: AppColors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 6),
+          ));
+        }
+        throw lastErr ?? 'mic start failed';
+      }
       // Multi-listener broadcast so every session can attach + detach
       // without restarting the mic.
       _sharedMicStream = raw.asBroadcastStream();

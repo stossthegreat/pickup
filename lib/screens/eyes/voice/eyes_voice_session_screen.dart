@@ -423,15 +423,28 @@ class _EyesVoiceSessionScreenState extends State<EyesVoiceSessionScreen>
       final dir = await getTemporaryDirectory();
       final path =
           '${dir.path}/presence_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _recorder.start(
-        const RecordConfig(
-          encoder:     AudioEncoder.aacLc,
-          sampleRate:  44100,
-          bitRate:     128000,
-          numChannels: 1,
-        ),
-        path: path,
+      const cfg = RecordConfig(
+        encoder:     AudioEncoder.aacLc,
+        sampleRate:  44100,
+        bitRate:     128000,
+        numChannels: 1,
       );
+      // v307 — !pri recover-and-retry.
+      try {
+        await _recorder.start(cfg, path: path);
+      } catch (err) {
+        if (!AudioSession.isInsufficientPriorityError(err)) rethrow;
+        _log('warn', 'MIC', '!pri detected — recovering');
+        await AudioSession.recoverFromPriorityConflict();
+        try {
+          await _recorder.start(cfg, path: path);
+          _log('ok', 'MIC', '!pri recovery succeeded');
+        } catch (err2) {
+          _log('error', 'MIC', '!pri recovery FAILED: $err2');
+          _failWith(_PEError(AudioSession.priorityConflictMessage));
+          return;
+        }
+      }
       _activeRecordingPath = path;
       _recordingStarted   = DateTime.now();
       _samples.clear();

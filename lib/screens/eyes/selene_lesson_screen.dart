@@ -462,28 +462,44 @@ class _SeleneLessonScreenState extends State<SeleneLessonScreen>
       //    old session has always released in testing. Re-assert the
       //    AudioContext before each retry so the OS knows we want
       //    play+record, not a leftover playback-only state.
+      // v307 — same recover-and-retry shape as Free Flow. !pri
+      // failures get the ambient release-and-reassert dance,
+      // generic failures get the invalidate-and-reconfigure pass.
+      const cfg = RecordConfig(
+        encoder:       AudioEncoder.pcm16bits,
+        sampleRate:    24000,
+        numChannels:   1,
+        echoCancel:    true,
+        noiseSuppress: true,
+        autoGain:      true,
+      );
       Stream<Uint8List>? stream;
       Object? lastErr;
+      bool sawPriorityConflict = false;
       for (int attempt = 0; attempt < 3; attempt++) {
         try {
-          stream = await _recorder.startStream(const RecordConfig(
-            encoder:       AudioEncoder.pcm16bits,
-            sampleRate:    24000,
-            numChannels:   1,
-            echoCancel:    true,
-            noiseSuppress: true,
-            autoGain:      true,
-          ));
+          stream = await _recorder.startStream(cfg);
           lastErr = null;
           break;
         } catch (e) {
           lastErr = e;
-          await Future.delayed(const Duration(milliseconds: 500));
-          AudioSession.invalidate();
-          await AudioSession.configureForPlayAndRecord();
+          final isPriority = AudioSession.isInsufficientPriorityError(e);
+          if (isPriority) sawPriorityConflict = true;
+          if (isPriority) {
+            await AudioSession.recoverFromPriorityConflict();
+          } else {
+            await Future.delayed(const Duration(milliseconds: 500));
+            AudioSession.invalidate();
+            await AudioSession.configureForPlayAndRecord();
+          }
         }
       }
-      if (stream == null) throw lastErr ?? Exception('recorder failed to start');
+      if (stream == null) {
+        final msg = sawPriorityConflict
+            ? AudioSession.priorityConflictMessage
+            : (lastErr?.toString() ?? 'recorder failed to start');
+        throw Exception(msg);
+      }
       _micSub = stream.listen((bytes) {
         if (_disposed) return;
         _session.sendAudioChunk(bytes);

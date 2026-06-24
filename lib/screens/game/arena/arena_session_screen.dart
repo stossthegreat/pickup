@@ -278,18 +278,48 @@ class _ArenaSessionScreenState extends State<ArenaSessionScreen> {
       await AudioSession.prepareForRecording(_player);
       final dir  = await getTemporaryDirectory();
       final path = '${dir.path}/arena_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _recorder.start(
-        const RecordConfig(
-          encoder:    AudioEncoder.aacLc,
-          // 44.1kHz is the iOS native mic rate — using 16kHz means
-          // the audio engine has to resample, and on some devices it
-          // silently fails to start when paired with playAndRecord.
-          sampleRate: 44100,
-          bitRate:    128000,
-          numChannels: 1,
-        ),
-        path: path,
+      const cfg = RecordConfig(
+        encoder:    AudioEncoder.aacLc,
+        // 44.1kHz is the iOS native mic rate — using 16kHz means
+        // the audio engine has to resample, and on some devices it
+        // silently fails to start when paired with playAndRecord.
+        sampleRate: 44100,
+        bitRate:    128000,
+        numChannels: 1,
       );
+      // v307 — !pri recover-and-retry. If iOS denies the
+      // recorder with OSStatus 561017449 because Spotify / a
+      // phone call / Siri holds higher priority, run the
+      // release-and-reassert dance + try once more. If the
+      // retry also fails, surface the user-facing message
+      // instead of just dying with a stack trace.
+      try {
+        await _recorder.start(cfg, path: path);
+      } catch (err) {
+        if (!AudioSession.isInsufficientPriorityError(err)) rethrow;
+        _log('warn', 'MIC', '!pri detected — running recovery dance');
+        await AudioSession.recoverFromPriorityConflict();
+        try {
+          await _recorder.start(cfg, path: path);
+          _log('ok', 'MIC', '!pri recovery succeeded on retry');
+        } catch (err2) {
+          _log('error', 'MIC', '!pri recovery FAILED: $err2');
+          if (mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(AudioSession.priorityConflictMessage,
+                style: AppTypography.label.copyWith(
+                  color: Colors.white, fontSize: 13.5,
+                  letterSpacing: 0.2,
+                  fontWeight: FontWeight.w600)),
+              backgroundColor: AppColors.red,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 6),
+            ));
+          }
+          rethrow;
+        }
+      }
       _activeRecordingPath = path;
       HapticFeedback.mediumImpact();
       _log('ok', 'MIC', 'recording → $path');
