@@ -18,11 +18,11 @@ import '../../theme/auralay_app_colors.dart';
 import '../../theme/auralay_app_typography.dart';
 import '../../widgets/train/eye_target_overlay.dart';
 
-/// 60-second seduction LESSON.
+/// 60-second presence LESSON.
 ///
 /// Different intent than the charisma TEST:
 ///   * The test grades you on hold-the-gaze-and-don't-flinch.
-///   * The lesson TEACHES five classic seductive moves and grades the
+///   * The lesson TEACHES five classic presence moves and grades the
 ///     execution of each one — head-down-eyes-up, slow blink, side glance,
 ///     half smile, the full flow.
 ///
@@ -30,14 +30,14 @@ import '../../widgets/train/eye_target_overlay.dart';
 /// the gate copy frames it as a LESSON, not a TEST. The result card reuses
 /// the cinematic ResultRevealScreen — its dimension grid renders whatever
 /// phase keys the engine produces.
-class SeductionLessonScreen extends StatefulWidget {
-  const SeductionLessonScreen({super.key});
+class PresenceLessonScreen extends StatefulWidget {
+  const PresenceLessonScreen({super.key});
 
   @override
-  State<SeductionLessonScreen> createState() => _SeductionLessonScreenState();
+  State<PresenceLessonScreen> createState() => _PresenceLessonScreenState();
 }
 
-class _SeductionLessonScreenState extends State<SeductionLessonScreen>
+class _PresenceLessonScreenState extends State<PresenceLessonScreen>
     with TickerProviderStateMixin {
   CameraController? _camera;
   bool _cameraReady = false;
@@ -45,7 +45,7 @@ class _SeductionLessonScreenState extends State<SeductionLessonScreen>
 
   final FaceDetectorService _detector = FaceDetectorService();
   final VoiceCoach _voice = VoiceCoach();
-  late final SeductionLessonEngine _engine = SeductionLessonEngine(voice: _voice);
+  late final PresenceLessonEngine _engine = PresenceLessonEngine(voice: _voice);
 
   bool _processing = false;
   FaceMetrics? _metrics;
@@ -212,7 +212,7 @@ class _SeductionLessonScreenState extends State<SeductionLessonScreen>
       'engineName':     _detector.engineName,
       'hasIris':        _detector.hasIris,
       'isFreeTraining': true, // routes RETAKE → /train
-      'isSeduction':    true,
+      'isPresenceLesson': true,
     });
   }
 
@@ -253,7 +253,7 @@ class _SeductionLessonScreenState extends State<SeductionLessonScreen>
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                 child: _stage == _Stage.running
-                    ? _SeductionProgressStrip(frame: _frame)
+                    ? _PresenceProgressStrip(frame: _frame)
                     : const SizedBox.shrink(),
               ),
             ),
@@ -578,9 +578,9 @@ class _CaptionLayer extends StatelessWidget {
   }
 }
 
-class _SeductionProgressStrip extends StatelessWidget {
+class _PresenceProgressStrip extends StatelessWidget {
   final TestFrame frame;
-  const _SeductionProgressStrip({required this.frame});
+  const _PresenceProgressStrip({required this.frame});
 
   static const _phases = [
     TestPhaseId.lookUp,

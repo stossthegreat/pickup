@@ -18,9 +18,9 @@ import '../../theme/auralay_app_colors.dart';
 import '../../theme/auralay_app_typography.dart';
 import '../../widgets/train/eye_target_overlay.dart';
 
-/// THE VIRAL SEDUCTION TEST — post-paywall first-experience.
+/// THE VIRAL PRESENCE TEST — post-paywall first-experience.
 ///
-/// 60-second scripted choreography of five dark-charisma moves:
+/// 60-second scripted choreography of five presence moves:
 ///
 ///   1. THE SMOLDER     — squinch / lower-lid raise + locked gaze
 ///   2. THE FALL        — vulnerability break, chin drops + slow return
@@ -30,16 +30,16 @@ import '../../widgets/train/eye_target_overlay.dart';
 ///
 /// Live HUD includes the **VIBE METER** — a horizontal gradient bar that
 /// sweeps Cold → Intrigue → Tension → Danger as the user nails the
-/// active move's signal. The meter uses [SeductionTestEngine.signalLevel]
+/// active move's signal. The meter uses [PresenceTestEngine.signalLevel]
 /// which the engine recomputes per frame from the move-specific rubric.
-class SeductionTestScreen extends StatefulWidget {
-  const SeductionTestScreen({super.key});
+class PresenceTestScreen extends StatefulWidget {
+  const PresenceTestScreen({super.key});
 
   @override
-  State<SeductionTestScreen> createState() => _SeductionTestScreenState();
+  State<PresenceTestScreen> createState() => _PresenceTestScreenState();
 }
 
-class _SeductionTestScreenState extends State<SeductionTestScreen>
+class _PresenceTestScreenState extends State<PresenceTestScreen>
     with TickerProviderStateMixin {
   CameraController? _camera;
   bool _cameraReady = false;
@@ -47,7 +47,7 @@ class _SeductionTestScreenState extends State<SeductionTestScreen>
 
   final FaceDetectorService _detector = FaceDetectorService();
   final VoiceCoach _voice = VoiceCoach();
-  late final SeductionTestEngine _engine = SeductionTestEngine(voice: _voice);
+  late final PresenceTestEngine _engine = PresenceTestEngine(voice: _voice);
 
   bool _processing = false;
   FaceMetrics? _metrics;
@@ -213,7 +213,7 @@ class _SeductionTestScreenState extends State<SeductionTestScreen>
       'eyeY':           _heroEyeY,
       'engineName':     _detector.engineName,
       'hasIris':        _detector.hasIris,
-      'isSeductionTest': true,
+      'isPresenceTest': true,
     });
   }
 
@@ -276,7 +276,7 @@ class _SeductionTestScreenState extends State<SeductionTestScreen>
 
           if (_stage == _Stage.running) _CaptionLayer(frame: _frame),
 
-          if (_stage == _Stage.gate) _SeductionGate(onStart: _startCountdown),
+          if (_stage == _Stage.gate) _PresenceGate(onStart: _startCountdown),
           if (_stage == _Stage.countdown) _CountdownOverlay(value: _countdown),
           if (_cameraError) const _CameraError(),
         ],
@@ -459,12 +459,12 @@ class _Vignette extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-//  Pre-test gate — dark seduction framing
+//  Pre-test gate — presence framing
 // ──────────────────────────────────────────────────────────────────────────
 
-class _SeductionGate extends StatelessWidget {
+class _PresenceGate extends StatelessWidget {
   final VoidCallback onStart;
-  const _SeductionGate({required this.onStart});
+  const _PresenceGate({required this.onStart});
 
   @override
   Widget build(BuildContext context) {

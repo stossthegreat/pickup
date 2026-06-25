@@ -297,9 +297,9 @@ class CharismaTestEngine {
                   _blinkBonus(m.blinkRate) * 0.3);
         break;
 
-      // Seduction-lesson + seduction-test phases — engine doesn't score
-      // these. Their dedicated engines (SeductionLessonEngine /
-      // SeductionTestEngine) handle their own rubrics.
+      // Presence-lesson + presence-test phases — engine doesn't score
+      // these. Their dedicated engines (PresenceLessonEngine /
+      // PresenceTestEngine) handle their own rubrics.
       case TestPhaseId.lookUp:
       case TestPhaseId.slowBlink:
       case TestPhaseId.sideGlance:
@@ -471,22 +471,22 @@ enum TestPhaseId {
   breakAway,
   returnHome,
   still,
-  // Seduction-lesson phases (5) — used by SeductionLessonEngine
+  // Presence-lesson phases (5) — used by PresenceLessonEngine
   lookUp,
   slowBlink,
   sideGlance,
   knowingSmile,
   theFlow,
-  // Viral SEDUCTION TEST phases (5) — used by SeductionTestEngine
-  // The dark-charisma research distilled into a 60-second scripted test.
+  // Viral PRESENCE TEST phases (5) — used by PresenceTestEngine
+  // The presence-and-charisma research distilled into a 60-second scripted test.
   smolder,        // squinch / lower-lid raise + locked gaze
   theFall,        // vulnerability break — chin drops, slow look-back-up
   stillness,      // zero motion under a flash distraction
   slowBurn,       // eyes-narrow precedes mouth-smile (timing matters)
   takeAway,       // lock → look away (side) → snap-back (push-pull)
-  // Legacy seduction-test slot kept so existing data structures
+  // Legacy presence-test slot kept so existing data structures
   // referencing TestPhaseId.stickyEyes still compile. Not used by the
-  // current SeductionTestEngine.
+  // current PresenceTestEngine.
   stickyEyes,
 }
 

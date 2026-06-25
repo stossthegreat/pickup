@@ -5,7 +5,7 @@ import '../../models/face_metrics.dart';
 import '../voice/voice_coach.dart';
 import 'charisma_test_engine.dart';
 
-/// AURALAY Seduction Lesson — 60-second guided choreography.
+/// AURALAY Presence Lesson — 60-second guided choreography.
 ///
 ///   PHASE                 TIME  WHAT THE USER DOES                       WHY IT WORKS
 ///   ────────────────────  ────  ───────────────────────────────────────  ──────────────────────
@@ -43,8 +43,8 @@ import 'charisma_test_engine.dart';
 ///                landmarks; we approximate with smile-growth rate.
 ///   THE FLOW   — accumulator that ticks any of the above signals up
 ///                in the final 18-second window.
-class SeductionLessonEngine {
-  SeductionLessonEngine({required this.voice});
+class PresenceLessonEngine {
+  PresenceLessonEngine({required this.voice});
 
   final VoiceCoach voice;
 

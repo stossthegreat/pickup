@@ -128,11 +128,11 @@ class AuraVerdictService {
     return 'RAW';
   }
 
-  /// Dark-charisma tier ladder for the SEDUCTION TEST specifically.
-  /// Hits a different register than the charisma-test ladder — pulls
-  /// vocabulary from the seduction-research framing (predator / phantom /
-  /// apex). Use [seductionTierFor] when reporting a seduction-test score.
-  static String seductionTierFor(int score) {
+  /// Presence-index tier ladder for the PRESENCE TEST specifically.
+  /// Hits a different register than the charisma-test ladder — a
+  /// higher-stakes archetype framing (phantom / apex / operator).
+  /// Use [presenceTierFor] when reporting a presence-test score.
+  static String presenceTierFor(int score) {
     if (score >= 92) return 'THE PHANTOM';
     if (score >= 85) return 'THE APEX';
     if (score >= 75) return 'THE HEARTBREAKER';

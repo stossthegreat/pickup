@@ -28,8 +28,8 @@ import '../models/gaze/gaze_syllabus.dart';
 import '../screens/lessons/lesson_detail_screen.dart';
 import '../screens/test/charisma_test_screen.dart';
 import '../screens/test/result_reveal_screen.dart';
-import '../screens/test/seduction_lesson_screen.dart';
-import '../screens/test/seduction_test_screen.dart';
+import '../screens/test/seduction_lesson_screen.dart' show PresenceLessonScreen;
+import '../screens/test/seduction_test_screen.dart' show PresenceTestScreen;
 import '../screens/train/post_session_screen.dart';
 import '../screens/train/train_screen.dart';
 import '../services/test/charisma_test_engine.dart';
@@ -157,7 +157,7 @@ final appRouter = GoRouter(
     ),
 
     // ── Auralay-imported routes ─────────────────────────────────────────
-    // Charisma test + result reveal + seduction test (onboarding viral
+    // Charisma test + result reveal + presence test (onboarding viral
     // hook funnel from Auralay — pushed by some lesson flows + post-
     // session screens). Result-reveal needs the photo + score extras.
     GoRoute(
@@ -165,12 +165,12 @@ final appRouter = GoRouter(
       builder: (_, __) => const CharismaTestScreen(),
     ),
     GoRoute(
-      path: '/seduction-test',
-      builder: (_, __) => const SeductionTestScreen(),
+      path: '/presence-test',
+      builder: (_, __) => const PresenceTestScreen(),
     ),
     GoRoute(
-      path: '/seduction-lesson',
-      builder: (_, __) => const SeductionLessonScreen(),
+      path: '/presence-lesson',
+      builder: (_, __) => const PresenceLessonScreen(),
     ),
     GoRoute(
       path: '/test-result',
@@ -187,7 +187,7 @@ final appRouter = GoRouter(
           photoBytes:      extra?['photoBytes'] as Uint8List?,
           eyeY:            extra?['eyeY'] as double?,
           isFreeTraining:  (extra?['isFreeTraining'] as bool?)   ?? false,
-          isSeductionTest: (extra?['isSeductionTest'] as bool?)  ?? false,
+          isPresenceTest: (extra?['isPresenceTest'] as bool?)  ?? false,
         );
       },
     ),

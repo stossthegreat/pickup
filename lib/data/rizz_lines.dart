@@ -215,7 +215,7 @@ abstract final class RizzArsenal {
       label:    'HEAT',
       slug:     'heat',
       headline: 'The burn.',
-      hint:     'Convo is warm. Escalate without spilling it.',
+      hint:     'Convo is warm. Build on it without overplaying your hand.',
       lines: [
         RizzLine('stop texting with that energy on a tuesday, it\'s reckless',
                  'META-FLIRT'),
@@ -404,7 +404,7 @@ abstract final class RizzArsenal {
     //
     // The survivors are the ones that still slap because they're
     // either short, self-aware, or cinematic. The sunset / storm /
-    // gravity quartet stays because the seductive-pun framing actually
+    // gravity quartet stays because the smooth-pun framing actually
     // lands on Hinge in 2026 — those four are the modern keepers.
     RizzCategory(
       label:    'CHEESY',
@@ -429,19 +429,19 @@ abstract final class RizzArsenal {
         RizzLine('i had a whole speech. you completely ruined it by being this attractive',
                  'SELF-AWARE'),
         RizzLine('are you a sunset? i\'d stop everything just to watch you',
-                 'SEDUCTIVE PUN'),
+                 'SMOOTH PUN'),
         RizzLine('are you a storm? you walked in and changed the whole atmosphere',
-                 'SEDUCTIVE PUN'),
+                 'SMOOTH PUN'),
         RizzLine('are you gravity? everything in me just moves towards you',
-                 'SEDUCTIVE PUN'),
+                 'SMOOTH PUN'),
         RizzLine('are you a compass? every version of me points towards you',
-                 'SEDUCTIVE PUN'),
+                 'SMOOTH PUN'),
         RizzLine('are you a library? i\'d come back to you every day for the rest of my life',
-                 'SEDUCTIVE PUN'),
+                 'SMOOTH PUN'),
         RizzLine('are you a melody? i\'ve had you stuck in my head all morning',
-                 'SEDUCTIVE PUN'),
+                 'SMOOTH PUN'),
         RizzLine('are you a memory? i don\'t want to forget a single detail',
-                 'SEDUCTIVE PUN'),
+                 'SMOOTH PUN'),
         RizzLine('hi. you looked interesting. i had to',
                  'UNDEFEATED'),
         RizzLine('this is the bit where i\'m supposed to be smooth. i\'m not. but you\'re still here',
