@@ -163,11 +163,18 @@ class _PaywallScreenState extends State<PaywallScreen> {
     _Tier.rescue  => _offerings.rescue,
   };
 
-  /// The rescue one-time IAP is only configured on the Play Store
-  /// (App Store Connect rescue product is "Not found" in RevenueCat
-  /// per the dashboard). Hide the rescue card on iOS so users don't
-  /// tap a permanently-empty third tile.
-  bool get _showRescueCard => Platform.isAndroid;
+  /// Rescue one-time IAP card — DISABLED on every platform.
+  ///
+  /// It was previously Android-only (the App Store rescue product is
+  /// "Not found" in RevenueCat). Bro wants the Android paywall to look
+  /// EXACTLY like iOS — just Weekly + Annual, no third tile — so the
+  /// card is now hidden everywhere. The layout below renders the rescue
+  /// block as a conditional spread, so with this false the third card
+  /// (and its 10px spacer) simply don't build and the CTA slides up to
+  /// sit directly under the Annual card, identical to iOS.
+  ///
+  /// To bring it back on Android only, restore `Platform.isAndroid`.
+  bool get _showRescueCard => false;
 
   // ─────────────────────────────────────────────────────────────────────────
   //  ACTIONS

@@ -116,13 +116,10 @@ class ProtocolService {
         now.year * 10000 + now.month * 100 + now.day,
       );
     } catch (_) {}
-    // Reschedule the 8pm nudge against the NEW state — live vs at-risk vs
-    // broken copy changes, and "completed today" pushes the next nudge to
-    // tomorrow automatically.
-    await NotificationService.scheduleStreakNudge(updated);
-    // Reschedule the unified daily nudge — a check-in flips state
-    // from PROTOCOL_BROKEN back into PROTOCOL_ACTIVE, so tonight's
-    // 7:30pm copy needs to switch.
+    // Rebuild the retention horizon against the NEW state — a check-in
+    // flips PROTOCOL_BROKEN back to PROTOCOL_ACTIVE, so the queued
+    // evening copy needs to switch. DailyNudgeService owns all retention
+    // notifications now (the legacy 8pm streak scheduler is retired).
     await DailyNudgeService.reschedule();
     return updated;
   }
@@ -160,7 +157,9 @@ class ProtocolService {
     // "we'll remind you at 8pm" value prop lands. Silent if already
     // granted or declined.
     await NotificationService.requestPermissionIfNeeded();
-    await NotificationService.scheduleStreakNudge(protocol);
+    // DailyNudgeService owns the streak/dream horizon; just rebuild it so
+    // the new protocol immediately shows up in tonight's evening copy.
+    await DailyNudgeService.reschedule();
     await NotificationService.scheduleRescanReminders(protocol);
 
     return protocol;

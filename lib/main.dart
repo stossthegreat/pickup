@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'config/dev_flags.dart';
 import 'navigation/app_router.dart';
 import 'providers/auralay_app_provider.dart';
@@ -42,24 +41,14 @@ void main() async {
   // ("your streak reminder").
   await NotificationService.init();
 
-  // Daily retention nudge — single 7:30pm notification, state-picked
-  // copy. Marks app-open + reschedules; this replaces the legacy
-  // streak/training/rescan schedulers which fired too often.
+  // Retention engine — rolling 14-day horizon, morning DREAM pump +
+  // evening STREAK nudge, refreshed on every app open. markAppOpened
+  // stamps the open time then rebuilds the whole horizon. This is the
+  // SINGLE source of truth for retention notifications now; the legacy
+  // streak/training/rescan schedulers are no longer wired in (they'd
+  // only fight the horizon by competing for the same OS slots).
   // ignore: discarded_futures
   DailyNudgeService.markAppOpened();
-
-  // ── Auralay training-streak nudge ──────────────────────────────────────
-  // Reschedule the 9pm training nudge with the latest streak state every
-  // launch. Reads streak count directly from prefs so it works even
-  // before the Provider has loaded. Idempotent — call site can be called
-  // again from session log without conflict.
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final streak = prefs.getInt('streak_days') ?? 0;
-    await NotificationService.scheduleTrainingNudge(streakDays: streak);
-  } catch (_) {
-    // Non-fatal — the next session will reschedule.
-  }
 
   // Dev-flag bypass: force the subscribed flag true so every gate in the
   // app (scan → report, Mirror tab, Progress tab, etc.) reads the user

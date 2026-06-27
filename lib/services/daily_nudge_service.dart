@@ -7,35 +7,75 @@ import 'local_store_service.dart';
 import 'notification_service.dart';
 import 'protocol_service.dart';
 
-/// THE DAILY NUDGE — one notification per day, 7:30pm local, picked
-/// from a state-aware copy pool that hits the actual wound.
+/// THE RETENTION ENGINE — a rolling 14-day notification horizon, two
+/// beats a day, refreshed on every app open.
 ///
-/// Replaces the three legacy schedulers (streakNudge + trainingNudge
-/// + rescan reminders) which were firing too often and sounded like
-/// marketing. Cancel all of those once at app boot; from then on only
-/// this one notification ID (`_kNotifId`) lives in the queue.
+/// WHY A HORIZON (and not one repeating notification):
+/// The old build scheduled ONE nudge with `matchDateTimeComponents.time`,
+/// so the OS replayed the SAME frozen line every night until the app was
+/// reopened. Two fatal consequences:
+///   1. The copy never changed — the user saw one line on loop.
+///   2. The STATE never changed — a user who stopped opening the app kept
+///      getting the "you're active" line forever and NEVER escalated into
+///      the win-back ladder. The comeback system was dead for exactly the
+///      users it existed to recover.
 ///
-/// THE STATE MACHINE — read once, pick exactly one line:
-///   NO_SCAN          — never scanned
-///   POST_SCAN_NO_GAME— scanned but never opened Free Flow
-///   PROTOCOL_ACTIVE  — currently checked in on at least one axis
-///   PROTOCOL_BROKEN  — at least one protocol's streak just broke
-///   GAME_STALE_3D    — 3-6 days since last Free Flow
-///   GAME_STALE_7D    — 7-13 days since last Free Flow
-///   DORMANT_7D       — 7-13 days since last app open
-///   DORMANT_14D      — 14+ days since last app open
-///   DEFAULT          — fallback (active user, no specific signal)
+/// THE FIX: schedule a distinct one-shot notification for every slot over
+/// the next [_horizonDays] days. Each day's copy is computed for that day's
+/// PROJECTED state (days-since-open keeps growing across the horizon), so
+/// the ladder escalates on its own — Active → at-risk → dormant-7d →
+/// dormant-14d — even if the user never reopens. Every app open resets the
+/// clock and rebuilds the whole horizon from the current state, so the
+/// ladder only ever fires when the user actually goes quiet.
 ///
-/// THE COPY — every line is the friend-warning voice. No emojis.
-/// No "Hey [name]!". Specific. Loss-framed. Friend telling you you're
-/// slipping. Each state has 6-10 lines; we hash by date so the same
-/// state on consecutive days doesn't repeat.
+/// TWO BEATS A DAY, mapped to the brand story "Looks get attention.
+/// Game keeps it.":
+///   • MORNING (09:00) — the DREAM pump. Aspirational, identity-forward.
+///     "Become the guy she notices." Pulls the user toward the version of
+///     himself the app builds.
+///   • EVENING (19:30) — the STREAK / loss nudge. Powerful, loss-framed,
+///     state-aware. "Don't fold on yourself." Drives the daily ritual.
+///
+/// THE STATE MACHINE — one read, projected forward per day:
+///   NO_SCAN            — never scanned
+///   POST_SCAN_NO_GAME  — scanned but never opened Free Flow
+///   PROTOCOL_ACTIVE    — currently checked in on at least one axis
+///   PROTOCOL_BROKEN    — at least one protocol's streak just broke
+///   GAME_STALE_3D      — 3-6 days since last Free Flow
+///   GAME_STALE_7D      — 7-13 days since last Free Flow
+///   DORMANT_7D         — 7-13 days since last app open
+///   DORMANT_14D        — 14+ days since last app open
+///   DEFAULT            — active user, no specific signal
+///
+/// THE COPY — friend-warning + every-man's-dream voice. No emojis. No
+/// "Hey [name]!". Specific, identity-anchored, never corporate cheer.
 class DailyNudgeService {
-  static const _kNotifId        = 9001;
+  // ── Horizon shape ───────────────────────────────────────────────────
+  /// How many days ahead we keep notifications queued. Refreshed on every
+  /// app open, so this is a worst-case "if you stop now" win-back ladder.
+  /// 14 days × 2 slots = 28 pending notifications — comfortably under the
+  /// iOS 64-pending cap (rescan reminders add at most 2 more).
+  static const _horizonDays = 14;
+
+  /// Morning DREAM pump fires at 09:00; evening STREAK nudge at 19:30.
+  static const _morningHour   = 9;
+  static const _eveningHour   = 19;
+  static const _eveningMinute = 30;
+
+  /// ID blocks — one stable id per horizon day per slot so a refresh
+  /// overwrites the previous horizon cleanly.
+  static const _morningBase = 9100; // 9100 .. 9100+_horizonDays-1
+  static const _eveningBase = 9200; // 9200 .. 9200+_horizonDays-1
+  /// Legacy single-nudge id (pre-horizon). Cancelled on migrate.
+  static const _legacyDailyId = 9001;
+
   static const _kLastFreeFlowKey = 'nudge.last_freeflow_ms';
   static const _kLastAppOpenKey  = 'nudge.last_app_open_ms';
 
-  // ── Event marks — call these wherever the user does the thing.
+  static FlutterLocalNotificationsPlugin get _plugin =>
+      NotificationService.plugin;
+
+  // ── Event marks — call these wherever the user does the thing. ───────
 
   static Future<void> markAppOpened() async {
     final prefs = await SharedPreferences.getInstance();
@@ -49,126 +89,208 @@ class DailyNudgeService {
     await reschedule();
   }
 
-  /// Cancel every legacy notification and any prior daily nudge,
-  /// then schedule today's (or tomorrow's, if 7:30pm passed). Safe
-  /// to call repeatedly — every call is a fresh-state read.
+  /// Wipe every legacy + prior-horizon notification, then queue a fresh
+  /// 14-day, two-beats-a-day horizon picked from the current state. Safe
+  /// to call repeatedly — every call is a clean rebuild.
   static Future<void> reschedule() async {
     try {
-      // 1) Wipe the legacy schedule. The old service queued
-      // streak/training/rescan notifications; cancelAll guarantees
-      // only THIS nudge lives in the OS queue.
+      // 1) Clear legacy schedulers (streak/training/rescan) + the old
+      // single daily nudge + any previous horizon we laid down.
       await NotificationService.cancelAllProtocolNotifications();
       await NotificationService.cancelTrainingNudge();
-      await _plugin.cancel(_kNotifId);
+      await _plugin.cancel(_legacyDailyId);
+      for (var d = 0; d < _horizonDays; d++) {
+        await _plugin.cancel(_morningBase + d);
+        await _plugin.cancel(_eveningBase + d);
+      }
 
-      final state = await _readState();
-      final (title, body) = _copyForState(state);
-      final fireAt = _next730pm();
+      // 2) One state read; projected forward per day inside the loop.
+      final sig = await _readSignals();
+      final now = tz.TZDateTime.now(tz.local);
 
-      await _plugin.zonedSchedule(
-        _kNotifId,
-        title,
-        body,
-        fireAt,
-        const NotificationDetails(
-          iOS: DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-            // v280 — set the app-icon badge count to 1 so the iOS
-            // launcher shows a red dot with "1" until the user opens
-            // the app. Cleared by NotificationService.clearIconBadge
-            // from the foreground lifecycle hook in main.dart.
-            badgeNumber: 1,
-          ),
-          android: AndroidNotificationDetails(
-            'daily_nudge',
-            'Daily nudge',
-            channelDescription:
-                'One notification per day — the friend warning that you\'re slipping.',
-            importance: Importance.high,
-            priority:   Priority.high,
-          ),
-        ),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
+      // 3) Lay down the horizon. Each slot is a distinct one-shot with its
+      // own fireDate + its own pre-baked copy — NO matchDateTimeComponents,
+      // because we WANT a different line every day, not a daily clone.
+      for (var d = 0; d < _horizonDays; d++) {
+        // MORNING — dream / identity pump.
+        final morningAt = _slot(now, d, _morningHour, 0);
+        if (morningAt.isAfter(now)) {
+          final (t, b) = _dreamCopy(sig, d);
+          await _schedule(_morningBase + d, t, b, morningAt, morning: true);
+        }
+        // EVENING — streak / loss, escalating with projected dormancy.
+        final eveningAt = _slot(now, d, _eveningHour, _eveningMinute);
+        if (eveningAt.isAfter(now)) {
+          final state = _stateFor(sig, d);
+          final (t, b) = _streakCopy(state, d);
+          await _schedule(_eveningBase + d, t, b, eveningAt, morning: false);
+        }
+      }
     } catch (e) {
       debugPrint('DailyNudgeService.reschedule failed: $e');
     }
   }
 
-  // ── Internals ───────────────────────────────────────────────────────
+  // ── Scheduling helpers ──────────────────────────────────────────────
 
-  static FlutterLocalNotificationsPlugin get _plugin =>
-      NotificationService.plugin;
-
-  static tz.TZDateTime _next730pm() {
-    final now    = tz.TZDateTime.now(tz.local);
-    var target   = tz.TZDateTime(
-        tz.local, now.year, now.month, now.day, 19, 30);
-    if (now.isAfter(target)) {
-      target = target.add(const Duration(days: 1));
-    }
-    return target;
+  static tz.TZDateTime _slot(
+      tz.TZDateTime now, int dayOffset, int hour, int minute) {
+    final base = now.add(Duration(days: dayOffset));
+    return tz.TZDateTime(tz.local, base.year, base.month, base.day, hour, minute);
   }
 
-  static Future<_NudgeState> _readState() async {
-    final prefs = await SharedPreferences.getInstance();
-    final scan  = await LocalStoreService.latestScan();
+  static Future<void> _schedule(
+    int id,
+    String title,
+    String body,
+    tz.TZDateTime at, {
+    required bool morning,
+  }) async {
+    await _plugin.zonedSchedule(
+      id,
+      title,
+      body,
+      at,
+      NotificationDetails(
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          // Red app-icon dot until the user opens the app; cleared by
+          // NotificationService.clearIconBadge on foreground.
+          badgeNumber: 1,
+        ),
+        android: AndroidNotificationDetails(
+          morning ? 'daily_dream' : 'daily_streak',
+          morning ? 'Daily motivation' : 'Streak reminders',
+          channelDescription: morning
+              ? 'Morning push toward the man you\'re building.'
+              : 'Evening nudge to keep your streak alive.',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  // ── State read + projection ─────────────────────────────────────────
+
+  static Future<_Signals> _readSignals() async {
+    final prefs    = await SharedPreferences.getInstance();
+    final scan     = await LocalStoreService.latestScan();
     final gameUsed = await LocalStoreService.gameFreeUsed();
     final actives  = await ProtocolService.loadAllActive();
 
     final now = DateTime.now();
     final lastFreeFlowMs = prefs.getInt(_kLastFreeFlowKey) ?? 0;
-    final lastOpenMs     = prefs.getInt(_kLastAppOpenKey) ?? now.millisecondsSinceEpoch;
+    final lastOpenMs =
+        prefs.getInt(_kLastAppOpenKey) ?? now.millisecondsSinceEpoch;
 
     final daysSinceFreeFlow = lastFreeFlowMs == 0
         ? 9999
-        : now.difference(DateTime.fromMillisecondsSinceEpoch(lastFreeFlowMs)).inDays;
-    final daysSinceOpen = now.difference(
-        DateTime.fromMillisecondsSinceEpoch(lastOpenMs)).inDays;
+        : now
+            .difference(DateTime.fromMillisecondsSinceEpoch(lastFreeFlowMs))
+            .inDays;
+    final daysSinceOpen = now
+        .difference(DateTime.fromMillisecondsSinceEpoch(lastOpenMs))
+        .inDays;
 
-    if (scan == null) return _NudgeState.noScan;
-    if (daysSinceOpen >= 14) return _NudgeState.dormant14d;
-    if (daysSinceOpen >= 7)  return _NudgeState.dormant7d;
+    final broken = actives.values.any(
+        (p) => p.completedDays.isNotEmpty && p.effectiveStreak == 0);
 
-    // Protocol-broken trumps everything else for daily focus.
-    final broken = actives.values.any((p) {
-      // A protocol counts as "broken" if it has at least one logged
-      // day but the streak fell to zero.
-      return p.completedDays.isNotEmpty && p.effectiveStreak == 0;
-    });
-    if (broken) return _NudgeState.protocolBroken;
+    return _Signals(
+      hasScan:           scan != null,
+      gameUsed:          gameUsed,
+      hasActiveProtocol: actives.isNotEmpty,
+      hasBrokenProtocol: broken,
+      daysSinceFreeFlow: daysSinceFreeFlow,
+      daysSinceOpen:     daysSinceOpen,
+    );
+  }
 
-    if (actives.isNotEmpty) return _NudgeState.protocolActive;
+  /// Project the state [dayOffset] days into the future, assuming the user
+  /// does NOT reopen (every real open rebuilds the horizon from scratch).
+  /// days-since-open and days-since-free-flow both grow with the offset, so
+  /// the dormancy ladder escalates on its own across the queued horizon.
+  static _NudgeState _stateFor(_Signals s, int dayOffset) {
+    final dso  = s.daysSinceOpen + dayOffset;
+    final dsff = s.daysSinceFreeFlow + dayOffset;
 
-    if (!gameUsed) return _NudgeState.postScanNoGame;
-
-    if (daysSinceFreeFlow >= 7) return _NudgeState.gameStale7d;
-    if (daysSinceFreeFlow >= 3) return _NudgeState.gameStale3d;
-
+    if (!s.hasScan)            return _NudgeState.noScan;
+    if (dso >= 14)            return _NudgeState.dormant14d;
+    if (dso >= 7)             return _NudgeState.dormant7d;
+    if (s.hasBrokenProtocol)  return _NudgeState.protocolBroken;
+    if (s.hasActiveProtocol)  return _NudgeState.protocolActive;
+    if (!s.gameUsed)          return _NudgeState.postScanNoGame;
+    if (dsff >= 7)            return _NudgeState.gameStale7d;
+    if (dsff >= 3)            return _NudgeState.gameStale3d;
     return _NudgeState.defaultState;
   }
 
-  // ── COPY POOL ───────────────────────────────────────────────────────
-  // 8-12 lines per state. (title, body). No emojis. Two voices mixed
-  // in every pool so the daily hash alternates between them:
-  //
-  //   1. Loss-framed friend warning  ("Other men know theirs", "She
-  //      moved on") — wakes the user up when they're slipping.
-  //   2. Aspirational every-man's-dream  ("Practice roleplay until
-  //      you're the smoothest", "Scan and get instant glow-up wins")
-  //      — pulls the user toward the version of themselves the app
-  //      builds. Designed for retention + conversion: every line
-  //      promises a beat-by-beat win the user actually wants.
-  //
-  // The picker hashes by today's date so consecutive days inside the
-  // same state never repeat the same line.
+  // ── MORNING: dream / identity pump ──────────────────────────────────
+  // The aspirational beat. Pulls the user toward the man the app builds —
+  // the guy she notices, the guy whose game means any room is handled.
+  // Pre-scan users get the "start the build" variant; everyone else gets
+  // the full identity pump. Varied by day so the week never repeats.
 
-  static const _copyPool = <_NudgeState, List<(String, String)>>{
+  static (String, String) _dreamCopy(_Signals s, int dayOffset) {
+    final pool = s.hasScan ? _dreamPool : _dreamPreScanPool;
+    return pool[(dayOffset) % pool.length];
+  }
+
+  static const _dreamPreScanPool = <(String, String)>[
+    ('Meet the version she chooses',
+     'It starts with one 30-second scan. Find your starting line.'),
+    ('Become impossible to overlook',
+     'Scan tonight. Get the plan. Build the man.'),
+    ('Looks get attention. Game keeps it',
+     'You haven\'t even scanned yet. Start today.'),
+    ('The guy she notices is one scan away',
+     '30 seconds. Then we build him together.'),
+  ];
+
+  static const _dreamPool = <(String, String)>[
+    ('Become the guy she notices',
+     'Looks get attention. Game keeps it. Put in today\'s reps.'),
+    ('The room turns for the prepared',
+     'Two minutes today on the man it turns for.'),
+    ('She remembers the one who knew what to say',
+     'Not the loudest. The smoothest. Train it today.'),
+    ('Any room. Any conversation. Handled',
+     'That\'s the goal. One rep a day gets you there.'),
+    ('Looks open the door',
+     'Game walks you through it. Sharpen both today.'),
+    ('Be the hardest man to ignore',
+     'Built daily — scan, train, repeat. Today counts.'),
+    ('The guy with real game never runs dry',
+     'Two minutes with Lucien builds him. Start.'),
+    ('You weren\'t born smooth. You train it',
+     'Today is a rep. Don\'t skip the man you\'re building.'),
+    ('Walk in like the room is yours',
+     'Because you did the reps they didn\'t. Begin today.'),
+    ('Magnetic isn\'t luck',
+     'It\'s looks dialed in and game rehearsed. Both. Today.'),
+    ('The version she chooses',
+     'is the one who showed up every day. Be him today.'),
+    ('Confidence is a trained skill',
+     'Not a gift. Two minutes today. Compounds for life.'),
+  ];
+
+  // ── EVENING: streak / loss nudge ────────────────────────────────────
+  // The daily-ritual beat. Loss-framed, identity-anchored. Same proven
+  // state pools as before — picked per horizon day, salted by state +
+  // offset so consecutive days never land the same line.
+
+  static (String, String) _streakCopy(_NudgeState s, int dayOffset) {
+    final pool = _streakPool[s] ?? _streakPool[_NudgeState.defaultState]!;
+    final i = (s.index * 7 + dayOffset) % pool.length;
+    return pool[i];
+  }
+
+  static const _streakPool = <_NudgeState, List<(String, String)>>{
     _NudgeState.noScan: [
       ('Still unscanned',
        '30 seconds tells you what she actually sees.'),
@@ -210,7 +332,7 @@ class DailyNudgeService {
        'Free Flow turns the face into the man. Tap in.'),
     ],
     _NudgeState.protocolActive: [
-      ('Don\'t break the spell',
+      ('Don\'t break the chain',
        'Log today before midnight. Two minutes.'),
       ('You\'re mid-streak',
        'Keep going. The version of you it builds is worth it.'),
@@ -230,7 +352,7 @@ class DailyNudgeService {
        'Tonight\'s log is tomorrow\'s confidence. Tap in.'),
     ],
     _NudgeState.protocolBroken: [
-      ('Two days off',
+      ('Don\'t fold on yourself',
        'You can still save the streak. Restart tonight.'),
       ('You broke',
        'Get back. Today. One day off is a slip — two becomes the story.'),
@@ -300,7 +422,7 @@ class DailyNudgeService {
        'Reload one rep. Tomorrow you\'re sharp again.'),
     ],
     _NudgeState.dormant14d: [
-      ('Three weeks. He didn\'t pause',
+      ('Two weeks. He didn\'t pause',
        'Open the app. Last call to keep what you built.'),
       ('You almost made it',
        'Then you stopped. Come back. The reps are still here.'),
@@ -334,18 +456,23 @@ class DailyNudgeService {
        'One rep. Every night. The compounding is silent.'),
     ],
   };
+}
 
-  static (String, String) _copyForState(_NudgeState s) {
-    final pool = _copyPool[s] ?? _copyPool[_NudgeState.defaultState]!;
-    // Hash by today's date so the same state on consecutive days
-    // never picks the same line. Two users on the same day with the
-    // same state will see the same line — that's fine, it's daily,
-    // not personalised.
-    final now = DateTime.now();
-    final dayKey = now.year * 10000 + now.month * 100 + now.day;
-    final i = (dayKey + s.index) % pool.length;
-    return pool[i];
-  }
+class _Signals {
+  final bool hasScan;
+  final bool gameUsed;
+  final bool hasActiveProtocol;
+  final bool hasBrokenProtocol;
+  final int  daysSinceFreeFlow;
+  final int  daysSinceOpen;
+  const _Signals({
+    required this.hasScan,
+    required this.gameUsed,
+    required this.hasActiveProtocol,
+    required this.hasBrokenProtocol,
+    required this.daysSinceFreeFlow,
+    required this.daysSinceOpen,
+  });
 }
 
 enum _NudgeState {
