@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/auralay_app_state.dart';
-import '../services/notification_service.dart';
+import '../services/daily_nudge_service.dart';
 
 /// Auralay-side global state — bridged into Mirrorly's main `ChangeNotifierProvider`.
 ///
@@ -94,11 +94,11 @@ class AuralayAppProvider extends ChangeNotifier {
     );
     notifyListeners();
 
-    // Reschedule the training-streak nudge with the new state. Fire-and-
-    // forget — the notification service catches its own errors so a
-    // permission-denied state never blocks the session log.
+    // Rebuild the retention horizon with the new state. Fire-and-forget —
+    // DailyNudgeService catches its own errors so a permission-denied
+    // state never blocks the session log.
     // ignore: discarded_futures
-    NotificationService.scheduleTrainingNudge(streakDays: newStreak);
+    DailyNudgeService.reschedule();
   }
 
   // ──────────────────────────────────────────────────────────────────────

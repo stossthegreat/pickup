@@ -74,6 +74,16 @@ class _PaywallScreenState extends State<PaywallScreen> {
     if (kBypassPaywall && !force) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+        // Unlock-in-place (locked report teaser) → pop back so the report
+        // re-resolves and unlocks itself, same as the live purchase path.
+        if (ctx['unlockInPlace'] == true) {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/home');
+          }
+          return;
+        }
         final after = ctx['afterPurchase'] as String?;
         if (after != null && ctx.isNotEmpty) {
           context.go(after, extra: ctx);
@@ -163,11 +173,18 @@ class _PaywallScreenState extends State<PaywallScreen> {
     _Tier.rescue  => _offerings.rescue,
   };
 
-  /// The rescue one-time IAP is only configured on the Play Store
-  /// (App Store Connect rescue product is "Not found" in RevenueCat
-  /// per the dashboard). Hide the rescue card on iOS so users don't
-  /// tap a permanently-empty third tile.
-  bool get _showRescueCard => Platform.isAndroid;
+  /// Rescue one-time IAP card — DISABLED on every platform.
+  ///
+  /// It was previously Android-only (the App Store rescue product is
+  /// "Not found" in RevenueCat). Bro wants the Android paywall to look
+  /// EXACTLY like iOS — just Weekly + Annual, no third tile — so the
+  /// card is now hidden everywhere. The layout below renders the rescue
+  /// block as a conditional spread, so with this false the third card
+  /// (and its 10px spacer) simply don't build and the CTA slides up to
+  /// sit directly under the Annual card, identical to iOS.
+  ///
+  /// To bring it back on Android only, restore `Platform.isAndroid`.
+  bool get _showRescueCard => false;
 
   // ─────────────────────────────────────────────────────────────────────────
   //  ACTIONS
@@ -269,6 +286,16 @@ class _PaywallScreenState extends State<PaywallScreen> {
         'geometry':    ctx['geometry'],
         'extraImages': ctx['extraImages'] ?? const <dynamic>[],
       });
+    } else if (ctx != null && ctx['unlockInPlace'] == true) {
+      // Opened from the locked report teaser. Pop back to the report,
+      // which re-resolves Pro and rebuilds itself as the full unlocked
+      // report (results + glow-up render) from the analysis it already
+      // has — no re-scan. Fall back to /home if there's nothing to pop.
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/home');
+      }
     } else {
       context.go('/home');
     }

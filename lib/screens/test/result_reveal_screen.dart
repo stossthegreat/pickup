@@ -35,10 +35,10 @@ class ResultRevealScreen extends StatefulWidget {
   /// rather than the scripted /charisma-test. Changes the retake button
   /// copy + route ("TRAIN AGAIN" → /train vs "RETAKE TEST" → /charisma-test).
   final bool isFreeTraining;
-  /// True when this reveal came from the viral SEDUCTION TEST. Switches
-  /// the tier ladder to the dark-charisma names (PHANTOM / APEX /
-  /// HEARTBREAKER…) and labels the share card 'SEDUCTION INDEX'.
-  final bool isSeductionTest;
+  /// True when this reveal came from the viral PRESENCE TEST. Switches
+  /// the tier ladder to the presence-index names (PHANTOM / APEX /
+  /// HEARTBREAKER…) and labels the share card 'PRESENCE INDEX'.
+  final bool isPresenceTest;
 
   const ResultRevealScreen({
     super.key,
@@ -46,7 +46,7 @@ class ResultRevealScreen extends StatefulWidget {
     required this.photoBytes,
     required this.eyeY,
     this.isFreeTraining = false,
-    this.isSeductionTest = false,
+    this.isPresenceTest = false,
   });
 
   @override
@@ -106,12 +106,12 @@ class _ResultRevealScreenState extends State<ResultRevealScreen>
       warmthPct:    widget.result.avgWarmth,
       rangePct:     widget.result.avgRange,
     );
-    // Swap the tier word for the dark-charisma ladder when the reveal is
-    // for the SEDUCTION TEST. Same score, different brand register.
-    if (widget.isSeductionTest) {
+    // Swap the tier word for the presence-index ladder when the reveal is
+    // for the PRESENCE TEST. Same score, different brand register.
+    if (widget.isPresenceTest) {
       return AuraVerdict(
         score: base.score,
-        tier:  AuraVerdictService.seductionTierFor(base.score),
+        tier:  AuraVerdictService.presenceTierFor(base.score),
         roast: base.roast,
         strongestDimension: base.strongestDimension,
         weakestDimension:   base.weakestDimension,
@@ -333,7 +333,7 @@ class _ResultRevealScreenState extends State<ResultRevealScreen>
         widget.result.phaseScores.containsKey(TestPhaseId.lookUp);
     final hasTestPhases =
         widget.result.phaseScores.containsKey(TestPhaseId.smolder) ||
-        widget.isSeductionTest;
+        widget.isPresenceTest;
     final cardLabel = hasTestPhases
         ? 'PRESENCE INDEX'
         : hasLessonPhases

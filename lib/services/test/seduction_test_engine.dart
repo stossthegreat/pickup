@@ -5,10 +5,10 @@ import '../../models/face_metrics.dart';
 import '../voice/voice_coach.dart';
 import 'charisma_test_engine.dart';
 
-/// AURALAY VIRAL SEDUCTION TEST — 60-second scripted hook.
+/// AURALAY VIRAL PRESENCE TEST — 60-second scripted hook.
 ///
 /// Post-paywall first-experience. Five measurable, viral moves drawn
-/// from the dark-charisma research. The Vulnerability Break (THE FALL)
+/// from the presence-and-charisma research. The Vulnerability Break (THE FALL)
 /// is the differentiator — most apps teach dominance posturing only.
 ///
 ///   PHASE             TIME  WHAT THE USER DOES                   DETECTION
@@ -29,8 +29,8 @@ import 'charisma_test_engine.dart';
 ///
 /// All five are detectable with MLKit signals + the existing gazePoint
 /// estimate. No iris required — works today on every device.
-class SeductionTestEngine {
-  SeductionTestEngine({required this.voice});
+class PresenceTestEngine {
+  PresenceTestEngine({required this.voice});
 
   final VoiceCoach voice;
 

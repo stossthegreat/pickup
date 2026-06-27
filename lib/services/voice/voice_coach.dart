@@ -42,9 +42,9 @@ class VoiceCoach {
   static const blinkLess     = 'blink_less';
   static const lockIn        = 'lock_in';
 
-  // ── SEDUCTION LESSON CUES ──────────────────────────────────────────────
-  // 60-second guided choreography — fired by SeductionLessonEngine.
-  // Each falls back to one of the charisma-test cues when the seduction-
+  // ── PRESENCE LESSON CUES ───────────────────────────────────────────────
+  // 60-second guided choreography — fired by PresenceLessonEngine.
+  // Each falls back to one of the charisma-test cues when the presence-
   // specific MP3 hasn't been recorded yet (the engine plays both — the
   // alt + the fallback — and silent assets are skipped).
   static const chinDownEyesUp = 'chin_down_eyes_up';
@@ -53,8 +53,8 @@ class VoiceCoach {
   static const halfSmile      = 'half_smile';
   static const theFlow        = 'the_flow';
 
-  // ── VIRAL SEDUCTION TEST CUES ──────────────────────────────────────────
-  // 60-second post-paywall first-experience hook — SeductionTestEngine.
+  // ── VIRAL PRESENCE TEST CUES ───────────────────────────────────────────
+  // 60-second post-paywall first-experience hook — PresenceTestEngine.
   // Each phase has its own brand-defining one-liner. Falls back to a
   // matching charisma-test cue if the alt isn't recorded yet.
   static const theSmolder    = 'the_smolder';

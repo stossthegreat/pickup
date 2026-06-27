@@ -899,7 +899,16 @@ class _ReportScreenState extends State<ReportScreen> {
         // ignore: discarded_futures
         AnalyticsService.reportUnlockTapped(src);
       }
-      await context.push('/paywall', extra: {'source': src});
+      // Unlock-in-place: on a successful purchase the paywall pops back
+      // to THIS still-mounted report instead of routing to /home, and we
+      // re-resolve Pro below so the locked teaser rebuilds as the full
+      // unlocked report — results + glow-up render — using the analysis
+      // we already loaded. No re-scan, no second backend call.
+      await context.push('/paywall', extra: {
+        'source':        src,
+        'unlockInPlace': true,
+      });
+      if (mounted) await _resolvePro();
     }
 
     return SingleChildScrollView(
@@ -919,8 +928,9 @@ class _ReportScreenState extends State<ReportScreen> {
             .animate().fadeIn(delay: 100.ms, duration: 400.ms),
           const SizedBox(height: Sp.lg),
 
-          // Same dual-score hero the unlocked report ships.
-          _DualScoreHero(honest: _honest, geometry: score.value),
+          // Same dual-score hero the unlocked report ships — but with the
+          // secondary geometry score withheld behind a green "?".
+          _DualScoreHero(honest: _honest, geometry: score.value, locked: true),
           const SizedBox(height: Sp.md),
 
           // Same HeroCard — only difference is locked=true on the
@@ -1699,8 +1709,17 @@ class _Verdict extends StatelessWidget {
 class _DualScoreHero extends StatelessWidget {
   final HonestRating? honest;
   final int geometry;
+  /// Locked teaser variant — the secondary BONE STRUCTURE number is
+  /// withheld behind a green "?" (same curiosity gap as the HeroCard's
+  /// projected score). The headline out-of-100 stays visible so the
+  /// card still proves the app actually read the face.
+  final bool locked;
 
-  const _DualScoreHero({required this.honest, required this.geometry});
+  const _DualScoreHero({
+    required this.honest,
+    required this.geometry,
+    this.locked = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1829,21 +1848,32 @@ class _DualScoreHero extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text('$geometry',
-                style: AppTypography.measurement.copyWith(
-                  color: AppColors.textPrimary,
-                  fontSize: 30, height: 1,
-                  letterSpacing: -1.2,
-                  fontWeight: FontWeight.w800)),
-              const SizedBox(width: 4),
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Text('/100',
-                  style: AppTypography.label.copyWith(
-                    color: AppColors.textTertiary,
-                    fontSize: 9, letterSpacing: 1.4,
-                    fontWeight: FontWeight.w700)),
-              ),
+              if (locked)
+                // Withheld geometry score — green "?" sized to sit where
+                // the number was so the row stays perfectly balanced.
+                Text('?',
+                  style: AppTypography.measurement.copyWith(
+                    color: AppColors.signalGreen,
+                    fontSize: 30, height: 1,
+                    letterSpacing: -1.2,
+                    fontWeight: FontWeight.w800))
+              else ...[
+                Text('$geometry',
+                  style: AppTypography.measurement.copyWith(
+                    color: AppColors.textPrimary,
+                    fontSize: 30, height: 1,
+                    letterSpacing: -1.2,
+                    fontWeight: FontWeight.w800)),
+                const SizedBox(width: 4),
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text('/100',
+                    style: AppTypography.label.copyWith(
+                      color: AppColors.textTertiary,
+                      fontSize: 9, letterSpacing: 1.4,
+                      fontWeight: FontWeight.w700)),
+                ),
+              ],
             ],
           ),
         ],
