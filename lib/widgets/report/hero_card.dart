@@ -150,6 +150,22 @@ class _HeroCardState extends State<HeroCard>
             ],
           ).animate().fadeIn(delay: 1500.ms, duration: 400.ms),
 
+          // When the projected score is held back as a "?", sell the gap
+          // with one clean line — no number, just the promise that there's
+          // a higher version of them waiting behind the unlock.
+          if (widget.hideProjected) ...[
+            const SizedBox(height: 10),
+            Center(
+              child: Text('Your ceiling is higher than this.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: HeroCard.projectedGreen.withValues(alpha: 0.92),
+                  fontSize: 12.5, letterSpacing: 0.2,
+                  fontWeight: FontWeight.w700,
+                )),
+            ).animate().fadeIn(delay: 1750.ms, duration: 400.ms),
+          ],
+
           const SizedBox(height: 12),
 
           // Image — 10:9 crop (25% shorter than the old 5:6 portrait),
@@ -284,15 +300,23 @@ class _HeroCardState extends State<HeroCard>
                   ),
                   const SizedBox(height: 10),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    child: Text('TAP TO UNLOCK',
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text('SEE YOUR\nGLOW-UP',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
                         color: Colors.white,
-                        fontSize: 12, letterSpacing: 2.6,
+                        fontSize: 15, letterSpacing: 1.6, height: 1.12,
                         fontWeight: FontWeight.w900,
                       )),
                   ),
+                  const SizedBox(height: 5),
+                  Text('TAP TO UNLOCK',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      color: Colors.white.withValues(alpha: 0.72),
+                      fontSize: 9, letterSpacing: 2.4,
+                      fontWeight: FontWeight.w700,
+                    )),
                 ],
               ),
             ),

@@ -74,6 +74,16 @@ class _PaywallScreenState extends State<PaywallScreen> {
     if (kBypassPaywall && !force) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+        // Unlock-in-place (locked report teaser) → pop back so the report
+        // re-resolves and unlocks itself, same as the live purchase path.
+        if (ctx['unlockInPlace'] == true) {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/home');
+          }
+          return;
+        }
         final after = ctx['afterPurchase'] as String?;
         if (after != null && ctx.isNotEmpty) {
           context.go(after, extra: ctx);
@@ -276,6 +286,16 @@ class _PaywallScreenState extends State<PaywallScreen> {
         'geometry':    ctx['geometry'],
         'extraImages': ctx['extraImages'] ?? const <dynamic>[],
       });
+    } else if (ctx != null && ctx['unlockInPlace'] == true) {
+      // Opened from the locked report teaser. Pop back to the report,
+      // which re-resolves Pro and rebuilds itself as the full unlocked
+      // report (results + glow-up render) from the analysis it already
+      // has — no re-scan. Fall back to /home if there's nothing to pop.
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/home');
+      }
     } else {
       context.go('/home');
     }
