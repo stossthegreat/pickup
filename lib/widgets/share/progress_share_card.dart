@@ -160,7 +160,8 @@ class ProgressShareCard extends StatelessWidget {
           Padding(
             // Top inset nudged 90 → 120 so the header cluster sits a
             // touch lower (bro: "content's a bit high, half a cm down").
-            padding: const EdgeInsets.fromLTRB(56, 120, 56, 48),
+            // Bottom trimmed to 32 to keep room for the full-bleed pair.
+            padding: const EdgeInsets.fromLTRB(56, 120, 56, 32),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -189,7 +190,7 @@ class ProgressShareCard extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   )),
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 28),
 
                 // ── IMHIM SCORE HERO. The unified composite.
                 _ImHimScoreShareHero(
@@ -221,7 +222,7 @@ class ProgressShareCard extends StatelessWidget {
                     )),
                 ),
 
-                const SizedBox(height: 44),
+                const SizedBox(height: 26),
 
                 // ── BEFORE / NOW — the glow-up receipt, the same face
                 // pair the Progress screen shows. Only when we have two
@@ -229,23 +230,36 @@ class ProgressShareCard extends StatelessWidget {
                 if (beforePhotoPath != null &&
                     nowPhotoPath != null &&
                     beforePhotoPath != nowPhotoPath) ...[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _FacePane(
-                        path:       beforePhotoPath!,
-                        label:      'BEFORE',
-                        labelColor: AppColors.textTertiary,
-                      )),
-                      const SizedBox(width: 22),
-                      Expanded(child: _FacePane(
-                        path:       nowPhotoPath!,
-                        label:      'NOW',
-                        labelColor: base.AppColors.red,
-                      )),
-                    ],
+                  // Full-bleed BEFORE/NOW — break out of the 56px gutter
+                  // with an OverflowBox so the pair spans the whole card
+                  // edge-to-edge, the two halves flush against each other
+                  // (bro: "left side to right side, no gaps"). Labels are
+                  // overlaid on each half so the photos stay full height.
+                  SizedBox(
+                    // Two 4:5 panes at half the card width each. A fixed
+                    // height is required because an OverflowBox in a
+                    // Column otherwise gets unbounded height.
+                    height: size.width * 0.625,
+                    child: OverflowBox(
+                      minWidth: size.width,
+                      maxWidth: size.width,
+                      child: Row(
+                        children: [
+                          Expanded(child: _FacePane(
+                            path:       beforePhotoPath!,
+                            label:      'BEFORE',
+                            labelColor: Colors.white,
+                          )),
+                          Expanded(child: _FacePane(
+                            path:       nowPhotoPath!,
+                            label:      'NOW',
+                            labelColor: base.AppColors.red,
+                          )),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 22),
                 ],
 
                 // ── LOOKS / GAME pills — the two inputs, in the same
@@ -426,34 +440,50 @@ class _FacePane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: AspectRatio(
-            aspectRatio: 4 / 5,
-            child: Image.file(
-              File(path),
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const ColoredBox(
-                color: Color(0xFF161616),
-                child: Center(
-                  child: Icon(Icons.person_outline_rounded,
-                    color: Colors.white24, size: 80),
+    return AspectRatio(
+      aspectRatio: 4 / 5,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.file(
+            File(path),
+            fit: BoxFit.cover,
+            alignment: const Alignment(0, -0.2),
+            errorBuilder: (_, __, ___) => const ColoredBox(
+              color: Color(0xFF161616),
+              child: Center(
+                child: Icon(Icons.person_outline_rounded,
+                  color: Colors.white24, size: 90),
+              ),
+            ),
+          ),
+          // Bottom scrim so the overlaid label always reads.
+          Positioned(
+            left: 0, right: 0, bottom: 0,
+            child: Container(
+              height: 170,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black87],
                 ),
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        Text(label,
-          style: AppTypography.label.copyWith(
-            color: labelColor,
-            fontSize: 26, letterSpacing: 5,
-            fontWeight: FontWeight.w900,
-          )),
-      ],
+          Positioned(
+            left: 0, right: 0, bottom: 30,
+            child: Center(
+              child: Text(label,
+                style: AppTypography.label.copyWith(
+                  color: labelColor,
+                  fontSize: 30, letterSpacing: 6,
+                  fontWeight: FontWeight.w900,
+                )),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

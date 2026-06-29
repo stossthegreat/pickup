@@ -420,7 +420,7 @@ class ShareService {
     required int gameEnd,
     required int consistencyStart,
     required int consistencyEnd,
-    String verdict = '60 days. Locked in.',
+    String verdict = '60 days. You\'re not the man who started this.',
     String? text,
   }) async {
     HapticFeedback.lightImpact();
@@ -432,6 +432,20 @@ class ShareService {
         barrierColor: Colors.black54,
         builder: (_) => const _RenderingOverlay(),
       );
+    }
+
+    // Warm the cache so the full-bleed BEFORE/NOW faces paint in the
+    // single off-screen layout pass. Best-effort — a pruned file just
+    // falls back to the card's placeholder.
+    if (beforePhotoPath != null && context.mounted) {
+      try {
+        await precacheImage(FileImage(File(beforePhotoPath)), context);
+      } catch (_) {}
+    }
+    if (afterPhotoPath != null && context.mounted) {
+      try {
+        await precacheImage(FileImage(File(afterPhotoPath)), context);
+      } catch (_) {}
     }
 
     final mq = MediaQuery.of(context);

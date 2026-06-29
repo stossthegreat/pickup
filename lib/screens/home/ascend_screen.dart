@@ -62,9 +62,12 @@ class AscendScreen extends StatefulWidget {
   /// in the timeline). Empty list when fresh-install.
   final List<ScanRecord> allScans;
 
-  /// Composite day-streak from home_screen — the bigger of the protocol
-  /// streak and the triple-pillar streak. Used in the streak panel.
+  /// Current daily streak from StreakService (via home_screen). Used in
+  /// the masthead flame + the streak panel.
   final int dayStreak;
+
+  /// Longest daily streak the user has ever reached (StreakService).
+  final int longestStreak;
 
   /// Did the user complete their protocol check-in today?
   final bool looksDoneToday;
@@ -90,6 +93,7 @@ class AscendScreen extends StatefulWidget {
     super.key,
     required this.onJumpToTab,
     this.onRefresh,
+    this.longestStreak = 0,
     this.protocol,
     this.latest,
     this.allScans = const [],
@@ -156,7 +160,9 @@ class _AscendScreenState extends State<AscendScreen> {
       day: day, streak: widget.dayStreak);
     final milestones     = _buildMilestones();
     final finalUnlocked  = AscensionService.finalFormUnlockedFor(p);
-    final longestStreak  = p?.longestStreak ?? widget.dayStreak;
+    final longestStreak  = widget.longestStreak > widget.dayStreak
+        ? widget.longestStreak
+        : widget.dayStreak;
 
     return Scaffold(
       backgroundColor: AppColors.base,
