@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -91,6 +93,13 @@ class ProgressShareCard extends StatelessWidget {
   /// the quote block is hidden.
   final String verdict;
 
+  /// Oldest scan photo (BEFORE) + newest scan photo (NOW), as on-disk
+  /// file paths. When both are present and distinct, the card renders
+  /// the BEFORE/NOW face pair the Progress screen shows. Null / equal
+  /// → the pair is hidden and the card stays clean.
+  final String? beforePhotoPath;
+  final String? nowPhotoPath;
+
   const ProgressShareCard({
     super.key,
     required this.day,
@@ -106,6 +115,8 @@ class ProgressShareCard extends StatelessWidget {
     this.imhimNow,
     this.imhimDelta,
     this.verdict = '',
+    this.beforePhotoPath,
+    this.nowPhotoPath,
   });
 
   String get _date {
@@ -147,7 +158,9 @@ class ProgressShareCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(56, 90, 56, 48),
+            // Top inset nudged 90 → 120 so the header cluster sits a
+            // touch lower (bro: "content's a bit high, half a cm down").
+            padding: const EdgeInsets.fromLTRB(56, 120, 56, 48),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -208,45 +221,54 @@ class ProgressShareCard extends StatelessWidget {
                     )),
                 ),
 
-                const Spacer(),
+                const SizedBox(height: 44),
 
-                // ── BUILT FROM — the input row underneath the hero.
-                // Looks + Game (and Aura if active) demoted from their
-                // old hero-twin treatment so the IMHIM number on top
-                // gets the full read; viewers still see the inputs so
-                // the composite reads as honest, not magic.
-                Text('BUILT FROM',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.label.copyWith(
-                    color: AppColors.textTertiary,
-                    fontSize: 18, letterSpacing: 4,
-                    fontWeight: FontWeight.w900,
-                  )),
-                const SizedBox(height: 16),
-                _BuiltFromRow(
-                  label: 'LOOKS',
-                  value: aestheticNow,
-                  delta: aestheticDelta,
-                  accent: AppColors.accent,
-                ),
-                const SizedBox(height: 10),
-                _BuiltFromRow(
-                  label: 'GAME',
-                  value: voiceNow,
-                  delta: voiceDelta,
-                  accent: AppColors.signalAmber,
-                ),
-                if (auraNow != null && auraNow! > 0) ...[
-                  const SizedBox(height: 10),
-                  _BuiltFromRow(
-                    label: 'AURA',
-                    value: auraNow,
-                    delta: null,
-                    accent: AppColors.signalGreen,
+                // ── BEFORE / NOW — the glow-up receipt, the same face
+                // pair the Progress screen shows. Only when we have two
+                // distinct scan photos; otherwise the card stays clean.
+                if (beforePhotoPath != null &&
+                    nowPhotoPath != null &&
+                    beforePhotoPath != nowPhotoPath) ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: _FacePane(
+                        path:       beforePhotoPath!,
+                        label:      'BEFORE',
+                        labelColor: AppColors.textTertiary,
+                      )),
+                      const SizedBox(width: 22),
+                      Expanded(child: _FacePane(
+                        path:       nowPhotoPath!,
+                        label:      'NOW',
+                        labelColor: base.AppColors.red,
+                      )),
+                    ],
                   ),
+                  const SizedBox(height: 30),
                 ],
 
-                const SizedBox(height: 20),
+                // ── LOOKS / GAME pills — the two inputs, in the same
+                // pill language the Progress screen uses (LOOKS blue,
+                // GAME gold). Replaces the old BUILT FROM bar rows.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _ScorePill(
+                      label: 'LOOKS',
+                      value: aestheticNow,
+                      accent: AppColors.accent,
+                    ),
+                    const SizedBox(width: 22),
+                    _ScorePill(
+                      label: 'GAME',
+                      value: voiceNow,
+                      accent: AppColors.signalAmber,
+                    ),
+                  ],
+                ),
+
+                const Spacer(),
 
                 // ── Activity strip — single line of proof.
                 Text(_activityLine,
@@ -388,95 +410,98 @@ class _ImHimScoreShareHero extends StatelessWidget {
   }
 }
 
-/// v290 — BUILT FROM input row. One label on the left, a thin
-/// progress bar through the middle, the value pinned right. Three
-/// stacked rows under the IMHIM hero make the composite read as
-/// honest evidence rather than a magic number. Optional delta chip
-/// hangs off the right when we have a non-zero delta for the
-/// component.
-class _BuiltFromRow extends StatelessWidget {
+/// One BEFORE/NOW face tile — rounded portrait photo with a label
+/// beneath, mirroring the Progress screen's glow-up pair. The image is
+/// loaded from disk; [ShareService.shareProgress] precaches it before
+/// the off-screen capture so it paints in the single render pass.
+class _FacePane extends StatelessWidget {
+  final String path;
   final String label;
-  final int?   value;
-  final int?   delta;
-  final Color  accent;
-  const _BuiltFromRow({
+  final Color labelColor;
+  const _FacePane({
+    required this.path,
+    required this.label,
+    required this.labelColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: AspectRatio(
+            aspectRatio: 4 / 5,
+            child: Image.file(
+              File(path),
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const ColoredBox(
+                color: Color(0xFF161616),
+                child: Center(
+                  child: Icon(Icons.person_outline_rounded,
+                    color: Colors.white24, size: 80),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(label,
+          style: AppTypography.label.copyWith(
+            color: labelColor,
+            fontSize: 26, letterSpacing: 5,
+            fontWeight: FontWeight.w900,
+          )),
+      ],
+    );
+  }
+}
+
+/// LOOKS / GAME score pill — accent-outlined capsule with the label in
+/// the accent colour and the value in big white italic, matching the
+/// pills on the Progress screen (LOOKS blue, GAME gold).
+class _ScorePill extends StatelessWidget {
+  final String label;
+  final int? value;
+  final Color accent;
+  const _ScorePill({
     required this.label,
     required this.value,
-    required this.delta,
     required this.accent,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasValue   = value != null;
-    final hasDelta   = hasValue && delta != null && delta != 0;
-    final positive   = (delta ?? 0) >= 0;
-    final deltaColor = positive ? AppColors.signalGreen : AppColors.signalRed;
-    final width      = hasValue ? (value! / 100).clamp(0.0, 1.0) : 0.0;
-
-    return Row(
-      children: [
-        SizedBox(
-          width: 130,
-          child: Text(label,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 34, vertical: 18),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(
+          color: accent.withValues(alpha: 0.55), width: 2.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(label,
             style: AppTypography.label.copyWith(
               color: accent,
-              fontSize: 26, letterSpacing: 4,
+              fontSize: 30, letterSpacing: 3,
               fontWeight: FontWeight.w900,
             )),
-        ),
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: Stack(
-              children: [
-                Container(
-                  height: 10,
-                  color: AppColors.textTertiary.withValues(alpha: 0.25),
-                ),
-                FractionallySizedBox(
-                  widthFactor: width,
-                  child: Container(
-                    height: 10,
-                    color: accent,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        SizedBox(
-          width: 80,
-          child: Text(hasValue ? '${value!}' : '—',
-            textAlign: TextAlign.right,
+          const SizedBox(width: 16),
+          Text(value != null ? '$value' : '—',
             style: AppTypography.display.copyWith(
               color: AppColors.textPrimary,
-              fontSize: 36, height: 1,
+              fontSize: 52, height: 1,
               fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w900,
-              letterSpacing: -1.4,
+              letterSpacing: -1.5,
             )),
-        ),
-        if (hasDelta) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: deltaColor.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text('${positive ? "+" : ""}$delta',
-              style: AppTypography.label.copyWith(
-                color: deltaColor,
-                fontSize: 16, letterSpacing: 1.4,
-                fontWeight: FontWeight.w900,
-              )),
-          ),
-        ] else
-          const SizedBox(width: 44), // align even when no chip
-      ],
+        ],
+      ),
     );
   }
 }

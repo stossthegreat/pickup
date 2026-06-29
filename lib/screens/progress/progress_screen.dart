@@ -309,6 +309,12 @@ class _ProgressScreenState extends State<ProgressScreen> {
       auraNow:        aux.auraScore > 0 ? aux.auraScore : null,
       imhimNow:       imhimNow,
       imhimDelta:     imhimDelta,
+      // BEFORE = oldest scan photo, NOW = newest — the same pair the
+      // Progress screen renders. sortedScans is oldest → newest.
+      beforePhotoPath: sortedScans.isNotEmpty
+          ? sortedScans.first.capturedImagePath : null,
+      nowPhotoPath:    sortedScans.isNotEmpty
+          ? sortedScans.last.capturedImagePath : null,
     );
   }
 
