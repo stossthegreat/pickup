@@ -310,6 +310,9 @@ class ShareService {
     int? imhimDelta,
     String verdict = '',
     String? text,
+    // Oldest + newest scan photos for the BEFORE/NOW pair on the card.
+    String? beforePhotoPath,
+    String? nowPhotoPath,
   }) async {
     HapticFeedback.lightImpact();
 
@@ -320,6 +323,21 @@ class ShareService {
         barrierColor: Colors.black54,
         builder: (_) => const _RenderingOverlay(),
       );
+    }
+
+    // Warm the image cache so the BEFORE/NOW photos paint in the single
+    // off-screen layout pass (the capture pipeline doesn't await async
+    // image decode). Best-effort — a missing file just falls back to
+    // the card's placeholder tile.
+    if (beforePhotoPath != null && context.mounted) {
+      try {
+        await precacheImage(FileImage(File(beforePhotoPath)), context);
+      } catch (_) {}
+    }
+    if (nowPhotoPath != null && context.mounted) {
+      try {
+        await precacheImage(FileImage(File(nowPhotoPath)), context);
+      } catch (_) {}
     }
 
     final mq = MediaQuery.of(context);
@@ -343,6 +361,8 @@ class ShareService {
         imhimNow:       imhimNow,
         imhimDelta:     imhimDelta,
         verdict:        verdict,
+        beforePhotoPath: beforePhotoPath,
+        nowPhotoPath:    nowPhotoPath,
       );
       final bytes = await _captureOffscreen(
         context:     context,
@@ -400,7 +420,7 @@ class ShareService {
     required int gameEnd,
     required int consistencyStart,
     required int consistencyEnd,
-    String verdict = '60 days. Locked in.',
+    String verdict = '60 days. You\'re not the man who started this.',
     String? text,
   }) async {
     HapticFeedback.lightImpact();
@@ -412,6 +432,20 @@ class ShareService {
         barrierColor: Colors.black54,
         builder: (_) => const _RenderingOverlay(),
       );
+    }
+
+    // Warm the cache so the full-bleed BEFORE/NOW faces paint in the
+    // single off-screen layout pass. Best-effort — a pruned file just
+    // falls back to the card's placeholder.
+    if (beforePhotoPath != null && context.mounted) {
+      try {
+        await precacheImage(FileImage(File(beforePhotoPath)), context);
+      } catch (_) {}
+    }
+    if (afterPhotoPath != null && context.mounted) {
+      try {
+        await precacheImage(FileImage(File(afterPhotoPath)), context);
+      } catch (_) {}
     }
 
     final mq = MediaQuery.of(context);

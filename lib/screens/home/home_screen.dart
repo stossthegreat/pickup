@@ -14,6 +14,7 @@ import '../../services/notification_service.dart';
 import '../../services/paywall_gate.dart';
 import '../../services/protocol_service.dart';
 import '../../services/review_prompt_service.dart';
+import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/common/imhim_wordmark.dart';
@@ -65,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _auraScore  = 0;
   int _gameScore  = 0;
   int _dayStreak  = 0;
+  int _longestStreak = 0;
   // v289 — raw 0-100 versions surfaced separately because the
   // Ascend tab's IMHIM-score formula needs the original precision;
   // the /10 fields above stay around for the home-tab pillar tiles
@@ -136,15 +138,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final prefs    = await SharedPreferences.getInstance();
 
-    // Bro: "why are streaks not showing when I\'ve done all three
-    // lessons." Compute the TRIPLE STREAK — consecutive days where
-    // all 3 pillars (LOOKS / AURA / GAME) were completed. The old
-    // _dayStreak only read protocol.effectiveStreak, which is a
-    // per-protocol streak — it didn\'t know about pillar completion
-    // at all. We now stamp triple_streak_count on the first reload
-    // each day where all 3 are done; the home masthead reads
-    // max(protocol streak, triple streak) so whichever the user
-    // earned is what they see.
+    // ── DAILY STREAK ─────────────────────────────────────────────────────
+    // Centralised in StreakService so the Looks / Rizz / Ascend surfaces
+    // all read the same number. A day counts the moment ANY daily mission
+    // is done (scan-or-protocol / roleplay / rizz / pickup). The old
+    // "triple streak" required the AURA pillar, whose only completion path
+    // was the now-removed Eyes tab — so it was permanently stuck at 0.
     final today    = _todayYmd();
     final looksOk  = (prefs.getInt('looks_done_ymd') ?? 0) == today;
     final auraOk   = (prefs.getInt('aura_done_ymd')  ?? 0) == today;
@@ -155,30 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final pickupOk = (prefs.getInt('pickup_line_done_ymd') ?? 0) == today;
     // v302 — Pro flag for the POTENTIAL lock on THE READ card.
     final pro = await PaywallGate.isPro();
-    final allThree = looksOk && auraOk && gameOk;
-    int tripleStreak = prefs.getInt('triple_streak_count') ?? 0;
-    final lastTripleYmd = prefs.getInt('triple_streak_last_ymd') ?? 0;
-    if (allThree && lastTripleYmd != today) {
-      // Update once per day. If yesterday was a hit, continue;
-      // otherwise reset to 1 (first day of a new streak).
-      final yYesterdayDate = DateTime.now().subtract(const Duration(days: 1));
-      final yesterdayYmd = yYesterdayDate.year * 10000 +
-          yYesterdayDate.month * 100 + yYesterdayDate.day;
-      tripleStreak = (lastTripleYmd == yesterdayYmd) ? tripleStreak + 1 : 1;
-      await prefs.setInt('triple_streak_count',   tripleStreak);
-      await prefs.setInt('triple_streak_last_ymd', today);
-    } else if (!allThree && lastTripleYmd != today) {
-      // User hasn\'t hit 3/3 today AND yesterday wasn\'t a hit
-      // either — streak is dead. Reset so we don\'t falsely
-      // resurrect a stale count.
-      final yYesterdayDate = DateTime.now().subtract(const Duration(days: 1));
-      final yesterdayYmd = yYesterdayDate.year * 10000 +
-          yYesterdayDate.month * 100 + yYesterdayDate.day;
-      if (lastTripleYmd != yesterdayYmd && lastTripleYmd != 0) {
-        tripleStreak = 0;
-        await prefs.setInt('triple_streak_count', 0);
-      }
-    }
+    final (curStreak, longStreak) = await StreakService.refresh();
 
     if (!mounted) return;
     setState(() {
@@ -204,11 +180,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _gameScore     = (gameRaw / 10).round().clamp(0, 10);
       _looksScore100 = looksRaw.clamp(0, 100);
       _gameScore100  = gameRaw.clamp(0, 100);
-      // _dayStreak is the bigger of the protocol streak and the
-      // triple-pillar streak — whichever the user actually
-      // earned, that\'s what the masthead chip displays.
-      final protocolStreak = protocol?.effectiveStreak ?? 0;
-      _dayStreak = protocolStreak > tripleStreak ? protocolStreak : tripleStreak;
+      // Daily streak from StreakService — the single source every
+      // masthead + the Ascend panel now read.
+      _dayStreak     = curStreak;
+      _longestStreak = longStreak;
       _looksDoneToday = looksOk;
       _auraDoneToday  = auraOk;
       _gameDoneToday  = gameOk;
@@ -230,10 +205,11 @@ class _HomeScreenState extends State<HomeScreen> {
       // ignore: discarded_futures
       AnalyticsService.tabOpened(tabNames[i]);
     }
-    // Re-read scan + pillar prefs whenever the user returns to the
-    // Looks tab — keeps the masthead live the moment they finish a
-    // lesson elsewhere in the app.
-    if (i == 0) {
+    // Re-read scan + pillar prefs + advance the streak whenever the user
+    // returns to the Looks OR Ascend tab — keeps the masthead flame and
+    // the Ascend streak panel live the moment they finish a mission
+    // elsewhere in the app.
+    if (i == 0 || i == 3) {
       // ignore: discarded_futures
       _reload();
     }
@@ -279,6 +255,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   latest:               _latest,
                   allScans:             _scans,
                   dayStreak:            _dayStreak,
+                  longestStreak:        _longestStreak,
                   looksDoneToday:       _looksDoneToday,
                   gameDoneToday:        _gameDoneToday,
                   rizzDoneToday:        _rizzDoneToday,

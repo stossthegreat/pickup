@@ -3,11 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/analytics_service.dart';
 import '../../services/paywall_gate.dart';
-import '../../services/protocol_service.dart';
+import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/mirrorly_components.dart';
@@ -37,12 +36,8 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
   bool _pro = false;
   bool _screenshotUsed = false;
   bool _loaded = false;
-  /// Mirrors the Looks-tab masthead streak — the bigger of the
-  /// triple-pillar streak (LOOKS+AURA+GAME hit on consecutive days)
-  /// and whatever protocol streak the user is currently riding.
-  /// Triple streak is the primary signal; we just read its
-  /// SharedPref directly so the Rizz tab doesn't need to spin up
-  /// ProtocolService.
+  /// Mirrors the Looks + Ascend masthead streak — the daily streak from
+  /// StreakService (a day counts when any mission is done).
   int _dayStreak = 0;
 
   @override
@@ -54,19 +49,10 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
   Future<void> _refresh() async {
     final pro = await PaywallGate.isPro();
     final ssUsed = await PaywallGate.rizzScreenshotCapReached();
-    final prefs = await SharedPreferences.getInstance();
-    final triple = prefs.getInt('triple_streak_count') ?? 0;
-    // v298 — match HomeScreen: streak == max(triple-pillar streak,
-    // protocol streak). The previous read only saw triple-streak,
-    // so a user mid-protocol with no triple-streak day saw a
-    // hidden chip (gate is > 0). Now reads both and picks the
-    // bigger one — same chip the Looks tab shows.
-    int protocolStreak = 0;
-    try {
-      final p = await ProtocolService.loadActive();
-      protocolStreak = p?.effectiveStreak ?? 0;
-    } catch (_) {/* protocol read best-effort */}
-    final streak = triple > protocolStreak ? triple : protocolStreak;
+    // Single source of truth — same daily streak the Looks + Ascend
+    // mastheads show. (Was reading the dead `triple_streak_count` pref,
+    // which never left 0 once the AURA pillar's Eyes tab was removed.)
+    final streak = await StreakService.current();
     if (!mounted) return;
     setState(() {
       _pro = pro;

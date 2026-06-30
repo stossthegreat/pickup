@@ -85,7 +85,7 @@ class CertificateShareCard extends StatelessWidget {
     required this.consistencyEnd,
     this.beforePhotoPath,
     this.afterPhotoPath,
-    this.verdict = '60 days. Locked in.',
+    this.verdict = '60 days. You\'re not the man who started this.',
   });
 
   String get _date {
@@ -154,27 +154,35 @@ class CertificateShareCard extends StatelessWidget {
 
                 const SizedBox(height: 36),
 
-                // ── Before / After photo pair. Real face photos
-                // from Day 1 and the Day-60-window scan. This is
-                // THE share — the score arc explains it.
-                Row(
-                  children: [
-                    Expanded(
-                      child: _CertFacePanel(
-                        label:     'BEFORE',
-                        imagePath: beforePhotoPath,
-                        accent:    AppColors.textTertiary,
-                      ),
+                // ── Before / NOW photo pair — Day 1 vs the Day-60-window
+                // scan. This IS the share; the score arc explains it.
+                // Full-bleed: breaks out of the 56px gutter so the pair
+                // spans the whole card edge-to-edge, the two halves flush
+                // against each other, labels overlaid. The transformation
+                // is the hero.
+                SizedBox(
+                  // Two 4:5 panes at half the card width each. Fixed
+                  // height — an OverflowBox in a Column would otherwise
+                  // get unbounded height.
+                  height: size.width * 0.625,
+                  child: OverflowBox(
+                    minWidth: size.width,
+                    maxWidth: size.width,
+                    child: Row(
+                      children: [
+                        Expanded(child: _CertFacePanel(
+                          label:     'BEFORE',
+                          imagePath: beforePhotoPath,
+                          accent:    Colors.white,
+                        )),
+                        Expanded(child: _CertFacePanel(
+                          label:     'NOW',
+                          imagePath: afterPhotoPath,
+                          accent:    base.AppColors.red,
+                        )),
+                      ],
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _CertFacePanel(
-                        label:     'AFTER',
-                        imagePath: afterPhotoPath,
-                        accent:    base.AppColors.red,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
 
                 const SizedBox(height: 32),
@@ -303,32 +311,43 @@ class _CertFacePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final file = imagePath == null ? null : File(imagePath!);
     final hasFile = file != null && file.existsSync();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        AspectRatio(
-          aspectRatio: 0.82, // a touch portrait — face-friendly
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface2,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: accent, width: 3),
+    return AspectRatio(
+      aspectRatio: 4 / 5,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          hasFile
+              ? Image.file(file, fit: BoxFit.cover,
+                  alignment: const Alignment(0, -0.2),
+                  errorBuilder: (_, __, ___) => _facePlaceholder())
+              : _facePlaceholder(),
+          // Bottom scrim so the overlaid label always reads.
+          Positioned(
+            left: 0, right: 0, bottom: 0,
+            child: Container(
+              height: 180,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black87],
+                ),
+              ),
             ),
-            clipBehavior: Clip.antiAlias,
-            child: hasFile
-                ? Image.file(file, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _facePlaceholder())
-                : _facePlaceholder(),
           ),
-        ),
-        const SizedBox(height: 14),
-        Text(label,
-          style: AppTypography.label.copyWith(
-            color: accent,
-            fontSize: 26, letterSpacing: 6,
-            fontWeight: FontWeight.w900,
-          )),
-      ],
+          Positioned(
+            left: 0, right: 0, bottom: 30,
+            child: Center(
+              child: Text(label,
+                style: AppTypography.label.copyWith(
+                  color: accent,
+                  fontSize: 32, letterSpacing: 6,
+                  fontWeight: FontWeight.w900,
+                )),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
