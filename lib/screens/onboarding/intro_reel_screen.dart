@@ -8,15 +8,13 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../theme/app_colors.dart';
 
-/// Cinematic onboarding reel — an 8-screen cold-open that plays like a
-/// movie. Each screen reveals its lines one at a time (fade + rise), with
-/// deliberate holds: the gut-punch lines sit longer so they land. Screens
-/// 4-7 carry a visual asset (glow-up / roleplay / message rewrite / the
-/// future) that fades in after the copy; assets degrade to a clean
-/// placeholder so the reel runs before the files are dropped in.
+/// Cinematic onboarding reel — the original engine: black surface, italic
+/// Playfair serif, red accents. Words reveal left-to-right inside each
+/// line (130ms/word), the line holds ~620ms, then the next line drops in.
+/// One line on screen at a time — never stacked. No images.
 ///
-/// Tap anywhere to move to the next screen; SKIP (top-right) exits to the
-/// flow. The last screen reveals BEGIN.
+/// Progress dashes track the 8 story beats (screens); the finale reveals
+/// BEGIN.
 class IntroReelScreen extends StatefulWidget {
   /// Route to advance to when the user taps BEGIN or SKIP.
   final String next;
@@ -27,22 +25,36 @@ class IntroReelScreen extends StatefulWidget {
 }
 
 class _IntroReelScreenState extends State<IntroReelScreen> {
-  int  _screen = 0;
-  int  _revealed = 0;     // how many lines of the current screen are visible
-  bool _showAsset = false;
-  bool _showCaption = false;
-  bool _showBegin = false;
+  int _i = 0;
   Timer? _t;
 
-  // Every line fades in over this long; each line then holds for its own
-  // `holdMs` before the next drops. Movie pacing: unhurried, with air.
-  static const _beatFade = 560;
+  static const _wordMs   = 130;   // gap between word reveals
+  static const _wordFade = 320;   // each word fades in over this long
+  static const _holdMs   = 620;   // line sits for this long after last word
+  static const _gapMs    = 260;   // extra breath when [_Line.bigBreath]
+
+  // Number of story beats — drives the progress dashes.
+  static const _screenCount = 8;
 
   @override
   void initState() {
     super.initState();
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
-    _play();
+    _queueNext();
+  }
+
+  void _queueNext() {
+    if (_i >= _lines.length - 1) return;
+    final line = _lines[_i];
+    final words = line.words.length;
+    final lifetimeMs = (words - 1) * _wordMs + _wordFade + _holdMs
+        + (line.bigBreath ? _gapMs : 0);
+    _t?.cancel();
+    _t = Timer(Duration(milliseconds: lifetimeMs), () {
+      if (!mounted) return;
+      setState(() => _i++);
+      _queueNext();
+    });
   }
 
   @override
@@ -51,109 +63,29 @@ class _IntroReelScreenState extends State<IntroReelScreen> {
     super.dispose();
   }
 
-  // ── Playback ────────────────────────────────────────────────────────
-  void _play() => _revealBeat(0);
-
-  void _revealBeat(int i) {
-    final s = _screens[_screen];
-    if (i >= s.beats.length) {
-      _afterBeats();
-      return;
-    }
-    setState(() => _revealed = i + 1);
-    _t = Timer(Duration(milliseconds: _beatFade + s.beats[i].holdMs), () {
-      if (mounted) _revealBeat(i + 1);
-    });
-  }
-
-  void _afterBeats() {
-    final s = _screens[_screen];
-    if (s.asset != null && !_showAsset) {
-      setState(() => _showAsset = true);
-      _t = Timer(const Duration(milliseconds: 1300),
-          () { if (mounted) _afterAsset(); });
-      return;
-    }
-    _afterAsset();
-  }
-
-  void _afterAsset() {
-    final s = _screens[_screen];
-    if (s.caption != null && !_showCaption) {
-      setState(() => _showCaption = true);
-      _t = Timer(const Duration(milliseconds: 1500),
-          () { if (mounted) _afterCaption(); });
-      return;
-    }
-    _afterCaption();
-  }
-
-  void _afterCaption() {
-    if (_screen >= _screens.length - 1) {
-      setState(() => _showBegin = true);
-      return;
-    }
-    _t = Timer(const Duration(milliseconds: 900), () {
-      if (!mounted) return;
-      setState(() {
-        _screen++;
-        _revealed = 0;
-        _showAsset = false;
-        _showCaption = false;
-      });
-      _play();
-    });
-  }
-
-  /// Tap anywhere → hurry to the next screen (or, on the last screen,
-  /// reveal everything + the BEGIN button).
-  void _tapAdvance() {
-    HapticFeedback.selectionClick();
-    _t?.cancel();
-    if (_screen >= _screens.length - 1) {
-      final s = _screens[_screen];
-      setState(() {
-        _revealed     = s.beats.length;
-        _showAsset    = s.asset != null;
-        _showCaption  = s.caption != null;
-        _showBegin    = true;
-      });
-      return;
-    }
-    setState(() {
-      _screen++;
-      _revealed = 0;
-      _showAsset = false;
-      _showCaption = false;
-      _showBegin = false;
-    });
-    _play();
-  }
-
   void _go() {
     HapticFeedback.mediumImpact();
     context.go(widget.next);
   }
 
-  // ── Build ───────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final line = _lines[_i];
+    final isLast = _i == _lines.length - 1;
     return Scaffold(
       backgroundColor: Colors.black,
-      body: GestureDetector(
-        onTap: _showBegin ? null : _tapAdvance,
-        behavior: HitTestBehavior.opaque,
+      body: SafeArea(
         child: Stack(
           children: [
-            // Faint red halo behind the copy — cinematic depth.
+            // Faint red halo behind the copy.
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: RadialGradient(
-                    center: const Alignment(0, -0.25),
+                    center: const Alignment(0, -0.2),
                     radius: 1.1,
                     colors: [
-                      AppColors.red.withValues(alpha: 0.12),
+                      AppColors.red.withValues(alpha: 0.10),
                       Colors.transparent,
                     ],
                   ),
@@ -161,85 +93,79 @@ class _IntroReelScreenState extends State<IntroReelScreen> {
               ),
             ),
 
-            SafeArea(
-              child: Stack(
-                children: [
-                  // SKIP — top-right.
-                  Positioned(
-                    top: 6, right: 12,
-                    child: GestureDetector(
-                      onTap: _go,
-                      behavior: HitTestBehavior.opaque,
-                      child: Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Text('SKIP',
-                          style: GoogleFonts.inter(
-                            color: AppColors.textTertiary,
-                            fontSize: 11, letterSpacing: 2.6,
-                            fontWeight: FontWeight.w800,
-                          )),
-                      ),
-                    ),
-                  ),
+            // SKIP — top right.
+            Positioned(
+              top: 8, right: 14,
+              child: GestureDetector(
+                onTap: _go,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Text('SKIP',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textTertiary,
+                      fontSize: 11, letterSpacing: 2.6,
+                      fontWeight: FontWeight.w800,
+                    )),
+                ),
+              ),
+            ),
 
-                  // The reel body — cross-fades between screens.
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(30, 40, 30, 90),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 480),
-                        switchInCurve: Curves.easeOut,
-                        switchOutCurve: Curves.easeIn,
-                        child: _ScreenView(
-                          key:         ValueKey(_screen),
-                          screen:      _screens[_screen],
-                          revealed:    _revealed,
-                          showAsset:   _showAsset,
-                          showCaption: _showCaption,
+            // Centred line — words reveal in sequence, one line at a time.
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 30),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  switchInCurve:  Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, anim) =>
+                      FadeTransition(opacity: anim, child: child),
+                  child: _SentenceView(
+                    key:      ValueKey(_i),
+                    line:     line,
+                    wordMs:   _wordMs,
+                    wordFade: _wordFade,
+                  ),
+                ),
+              ),
+            ),
+
+            // BEGIN — only on the last line.
+            if (isLast)
+              Positioned(
+                bottom: 56, left: 28, right: 28,
+                child: _BeginButton(onTap: _go)
+                    .animate()
+                    .fadeIn(duration: 400.ms, delay: 900.ms)
+                    .slideY(begin: 0.18, end: 0, duration: 400.ms,
+                        delay: 900.ms, curve: Curves.easeOut),
+              ),
+
+            // Progress dashes — one per story beat (screen).
+            Positioned(
+              bottom: 22, left: 0, right: 0,
+              child: Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var s = 0; s < _screenCount; s++)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 240),
+                          width:  s == line.screen ? 16 : 5,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: s <= line.screen
+                                ? AppColors.red
+                                : AppColors.surface3,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-
-                  // BEGIN — only once the finale has fully landed.
-                  if (_showBegin)
-                    Positioned(
-                      bottom: 54, left: 28, right: 28,
-                      child: _BeginButton(onTap: _go)
-                          .animate()
-                          .fadeIn(duration: 460.ms)
-                          .slideY(begin: 0.2, end: 0,
-                              duration: 460.ms, curve: Curves.easeOut),
-                    ),
-
-                  // Progress dashes.
-                  Positioned(
-                    bottom: 22, left: 0, right: 0,
-                    child: Center(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          for (var i = 0; i < _screens.length; i++)
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 2.5),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 240),
-                                width:  i == _screen ? 14 : 4,
-                                height: 3,
-                                decoration: BoxDecoration(
-                                  color: i <= _screen
-                                      ? AppColors.red
-                                      : AppColors.surface3,
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -249,129 +175,84 @@ class _IntroReelScreenState extends State<IntroReelScreen> {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-//  One screen — eyebrow, stacked lines, optional asset, optional caption.
-// ══════════════════════════════════════════════════════════════════════
-class _ScreenView extends StatelessWidget {
-  final _Screen screen;
-  final int  revealed;
-  final bool showAsset;
-  final bool showCaption;
-  const _ScreenView({
+/// A single line. Words fade + rise in sequence, left to right.
+class _SentenceView extends StatelessWidget {
+  final _Line line;
+  final int wordMs;
+  final int wordFade;
+  const _SentenceView({
     super.key,
-    required this.screen,
-    required this.revealed,
-    required this.showAsset,
-    required this.showCaption,
+    required this.line,
+    required this.wordMs,
+    required this.wordFade,
   });
 
   @override
   Widget build(BuildContext context) {
-    final maxAssetH = MediaQuery.of(context).size.height * 0.30;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 10,
+      runSpacing: 6,
       children: [
-        if (screen.label != null) ...[
-          Text(screen.label!,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              color: AppColors.red,
-              fontSize: 12, letterSpacing: 4.2,
-              fontWeight: FontWeight.w900,
-            )).animate().fadeIn(duration: 360.ms),
-          const SizedBox(height: 22),
-        ],
-
-        // Stacked lines — each revealed one keeps a stable key so it
-        // animates in exactly once and never replays on rebuild.
-        for (var i = 0; i < revealed; i++) ...[
-          if (i > 0) SizedBox(height: screen.beats[i].gapBefore),
-          _BeatView(key: ValueKey('b$i'), beat: screen.beats[i]),
-        ],
-
-        // Visual asset (screens 4-7).
-        if (showAsset && screen.asset != null) ...[
-          const SizedBox(height: 26),
-          ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxAssetH),
-            child: _AssetView(path: screen.asset!),
+        for (var i = 0; i < line.words.length; i++)
+          _Word(
+            text:   line.words[i],
+            color:  line.colorFor(i),
+            size:   line.size,
+            italic: line.italicFor(i),
+            weight: line.weightFor(i),
+            delayMs: i * wordMs,
+            fadeMs:  wordFade,
           ),
-        ],
-
-        // Bottom caption.
-        if (showCaption && screen.caption != null) ...[
-          const SizedBox(height: 22),
-          Text(screen.caption!,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              color: Colors.white.withValues(alpha: 0.88),
-              fontSize: 15, height: 1.4, letterSpacing: 0.2,
-              fontWeight: FontWeight.w700,
-            )).animate().fadeIn(duration: 520.ms)
-              .slideY(begin: 0.2, end: 0, duration: 520.ms,
-                  curve: Curves.easeOut),
-        ],
       ],
     );
   }
 }
 
-class _BeatView extends StatelessWidget {
-  final _Beat beat;
-  const _BeatView({super.key, required this.beat});
+class _Word extends StatelessWidget {
+  final String text;
+  final Color color;
+  final double size;
+  final bool italic;
+  final FontWeight weight;
+  final int delayMs;
+  final int fadeMs;
+  const _Word({
+    required this.text,
+    required this.color,
+    required this.size,
+    required this.italic,
+    required this.weight,
+    required this.delayMs,
+    required this.fadeMs,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Text(beat.text,
+    return Text(text,
       textAlign: TextAlign.center,
       style: GoogleFonts.playfairDisplay(
-        color: beat.red ? AppColors.red : Colors.white,
-        fontSize: beat.size,
-        height: 1.15,
+        color: color,
+        fontSize: size,
+        height: 1.12,
         letterSpacing: -0.8,
-        fontStyle: FontStyle.italic,
-        fontWeight: beat.red ? FontWeight.w900 : FontWeight.w700,
+        fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+        fontWeight: weight,
       ),
     )
         .animate()
-        .fadeIn(duration: _IntroReelScreenState._beatFade.ms,
-            curve: Curves.easeOutCubic)
-        .slideY(begin: 0.28, end: 0,
-            duration: _IntroReelScreenState._beatFade.ms,
-            curve: Curves.easeOutCubic);
-  }
-}
-
-class _AssetView extends StatelessWidget {
-  final String path;
-  const _AssetView({required this.path});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: Image.asset(
-        path,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
-          decoration: BoxDecoration(
-            color: AppColors.surface1,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: AppColors.red.withValues(alpha: 0.28), width: 1),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 44),
-          child: const Center(
-            child: Icon(Icons.play_circle_outline_rounded,
-              color: Colors.white24, size: 54),
-          ),
-        ),
-      ),
-    ).animate()
-      .fadeIn(duration: 620.ms)
-      .scale(begin: const Offset(0.96, 0.96), end: const Offset(1, 1),
-          duration: 620.ms, curve: Curves.easeOut);
+        .fadeIn(
+          duration: Duration(milliseconds: fadeMs),
+          delay:    Duration(milliseconds: delayMs),
+          curve:    Curves.easeOutCubic,
+        )
+        .slideY(
+          begin: 0.22, end: 0,
+          duration: Duration(milliseconds: fadeMs),
+          delay:    Duration(milliseconds: delayMs),
+          curve:    Curves.easeOutCubic,
+        );
   }
 }
 
@@ -421,132 +302,117 @@ class _BeginButton extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-//  Script model
-// ══════════════════════════════════════════════════════════════════════
-class _Beat {
-  final String text;
-  final bool   red;
+/// One line + its styling. [words] reveal one by one. [screen] is the
+/// story-beat index (0-7) so the progress dashes track which of the 8
+/// screens we're on.
+class _Line {
+  final List<String> words;
+  final int screen;
   final double size;
-  /// Pause after this line lands, before the next drops (ms).
-  final int    holdMs;
-  /// Vertical space above this line when stacked under the previous.
-  final double gapBefore;
-  const _Beat(
-    this.text, {
-    this.red = false,
-    this.size = 29,
-    this.holdMs = 820,
-    this.gapBefore = 14,
+  final bool italic;
+  /// Word indices that render in brand red.
+  final List<int> redIndices;
+  /// Word indices that render bold non-italic (LOOKS / GAME / ImHim).
+  final List<int> boldIndices;
+  /// Extra breath after lines that end a thought.
+  final bool bigBreath;
+
+  const _Line(
+    this.words, {
+    required this.screen,
+    this.size = 32,
+    this.italic = true,
+    this.redIndices  = const [],
+    this.boldIndices = const [],
+    this.bigBreath   = false,
   });
+
+  Color colorFor(int i) =>
+      redIndices.contains(i) ? AppColors.red : Colors.white;
+
+  bool italicFor(int i) =>
+      boldIndices.contains(i) ? false : italic;
+
+  FontWeight weightFor(int i) =>
+      boldIndices.contains(i) ? FontWeight.w900 : FontWeight.w700;
 }
 
-class _Screen {
-  final String? label;
-  final List<_Beat> beats;
-  final String? asset;
-  final String? caption;
-  const _Screen({this.label, required this.beats, this.asset, this.caption});
-}
+// Sizes tuned per line so every sentence fits clean: short punchy lines
+// run big, longer sentences step down so they never overflow.
+const _lines = <_Line>[
+  // ── SCREEN 1 · THE PAIN
+  _Line(['Every', 'man', 'knows', 'that', 'feeling…'],
+      screen: 0, size: 36),
+  _Line(['Watching', 'another', 'guy', 'become', 'the', 'man', 'you',
+      'always', 'wanted', 'to', 'be.'],
+      screen: 0, size: 27, bigBreath: true),
 
-// Hold tuning: … suspense lines breathe (~1.1s); the gut-punch lines sit
-// ~1.8-2.0s so they land like a movie beat.
-const _screens = <_Screen>[
-  // 1 — THE PAIN
-  _Screen(
-    beats: [
-      _Beat('Ever watched another guy…', holdMs: 1150),
-      _Beat('…become everything you\nwanted to be?', size: 33, holdMs: 1500),
-      _Beat('He walks in.\nEvery eye turns.',
-          size: 20, holdMs: 1400, gapBefore: 26),
-    ],
-  ),
+  // ── SCREEN 2 · THE WOUND
+  _Line(['You', 'tell', 'yourself', 'it', 'doesn\'t', 'matter…'],
+      screen: 1, size: 32),
+  _Line(['But', 'every', 'rejection', 'makes', 'you', 'question',
+      'yourself', 'a', 'little', 'more.'],
+      screen: 1, size: 27, bigBreath: true),
 
-  // 2 — THE WOUND
-  _Screen(
-    beats: [
-      _Beat('Meanwhile…', holdMs: 1100),
-      _Beat('You get ignored.', holdMs: 900),
-      _Beat('Left on read.', holdMs: 900),
-      _Beat('Passed over.', holdMs: 1150),
-      _Beat('Eventually…', size: 26, holdMs: 1050, gapBefore: 22),
-      _Beat('you stop believing.', size: 26, holdMs: 1250),
-      _Beat('"Maybe I\'m just not him."',
-          red: true, size: 32, holdMs: 2000, gapBefore: 24),
-    ],
-  ),
+  // ── SCREEN 3 · THE SPIRAL
+  _Line(['Eventually…'], screen: 2, size: 42),
+  _Line(['You', 'stop', 'wondering', 'why', 'she', 'didn\'t', 'choose',
+      'you…'],
+      screen: 2, size: 29),
+  _Line(['…and', 'start', 'believing', 'nobody', 'ever', 'will.'],
+      screen: 2, size: 31, redIndices: [3, 4, 5], bigBreath: true),
 
-  // 3 — THE REVEAL
-  _Screen(
-    beats: [
-      _Beat('You weren\'t fixing\nthe whole problem.', size: 31, holdMs: 1500),
-      _Beat('It isn\'t one skill.', holdMs: 1050),
-      _Beat('It\'s two.', red: true, size: 48, holdMs: 1700),
-      _Beat('Looks.', size: 40, holdMs: 900, gapBefore: 30),
-      _Beat('Game.', red: true, size: 40, holdMs: 1500),
-    ],
-  ),
+  // ── SCREEN 4 · THE REVEAL
+  _Line(['What', 'if', 'you\'ve', 'been', 'fighting', 'with', 'half',
+      'the', 'system?'],
+      screen: 3, size: 28),
+  _Line(['👤', 'Looks', 'get', 'you', 'noticed.'],
+      screen: 3, size: 34, boldIndices: [1]),
+  _Line(['💬', 'Game', 'gets', 'you', 'chosen.'],
+      screen: 3, size: 34, redIndices: [1], boldIndices: [1]),
+  _Line(['Master', 'both…', 'and', 'everything', 'changes.'],
+      screen: 3, size: 32, redIndices: [3, 4], bigBreath: true),
 
-  // 4 — LOOKS
-  _Screen(
-    label: 'LOOKS',
-    beats: [
-      _Beat('Imagine walking\ninto a room…', size: 31, holdMs: 1250),
-      _Beat('…and finally\nbeing noticed.', size: 31, holdMs: 1400),
-      _Beat('Not because you got lucky.', size: 22, holdMs: 950, gapBefore: 22),
-      _Beat('Because you became\nthe best version of you.',
-          size: 24, holdMs: 1200),
-    ],
-    asset: 'assets/onboarding/looks.jpg',
-    caption: 'Know exactly what to change. Then become him.',
-  ),
+  // ── SCREEN 5 · LOOKS
+  _Line(['Imagine', 'walking', 'into', 'a', 'room…'],
+      screen: 4, size: 34),
+  _Line(['…and', 'being', 'the', 'guy', 'everyone', 'notices.'],
+      screen: 4, size: 31),
+  _Line(['See', 'your', 'future', 'glow-up.'],
+      screen: 4, size: 35),
+  _Line(['Know', 'exactly', 'what', 'to', 'improve.'],
+      screen: 4, size: 32),
+  _Line(['Then', 'become', 'him.'],
+      screen: 4, size: 44, redIndices: [2], bigBreath: true),
 
-  // 5 — GAME
-  _Screen(
-    label: 'GAME',
-    beats: [
-      _Beat('Imagine never\nfreezing again.', size: 31, holdMs: 1300),
-      _Beat('Walking over.', holdMs: 850),
-      _Beat('Making her laugh.', holdMs: 850),
-      _Beat('Leading the conversation.', size: 26, holdMs: 1000),
-      _Beat('Like you\'ve done it\na thousand times.', size: 26, holdMs: 1300),
-    ],
-    asset: 'assets/onboarding/game.jpg',
-    caption: 'Practice until confidence becomes natural.',
-  ),
+  // ── SCREEN 6 · GAME
+  _Line(['Imagine', 'never', 'freezing', 'again.'],
+      screen: 5, size: 36),
+  _Line(['Walk', 'over.'], screen: 5, size: 44),
+  _Line(['Start', 'the', 'conversation.'], screen: 5, size: 38),
+  _Line(['Flirt', 'naturally.'], screen: 5, size: 44),
+  _Line(['Lead', 'with', 'confidence.'], screen: 5, size: 38),
+  _Line(['Until', 'the', 'man', 'you', 'always', 'wanted', 'to', 'be…',
+      'becomes', 'who', 'you', 'are.'],
+      screen: 5, size: 26, bigBreath: true),
 
-  // 6 — MESSAGES
-  _Screen(
-    label: 'MESSAGES',
-    beats: [
-      _Beat('Imagine opening\nher message…', size: 31, holdMs: 1200),
-      _Beat('…and smiling.', size: 31, holdMs: 1400),
-      _Beat('Because you already\nknow what to say.', size: 26, holdMs: 1300),
-      _Beat('No guessing. No overthinking.',
-          size: 20, holdMs: 1100, gapBefore: 22),
-    ],
-    asset: 'assets/onboarding/messages.jpg',
-    caption: 'Become the conversation she remembers.',
-  ),
+  // ── SCREEN 7 · BECOME HIM
+  _Line(['Imagine', 'becoming', 'unforgettable.'],
+      screen: 6, size: 37),
+  _Line(['The', 'guy', 'she', 'notices.'],
+      screen: 6, size: 35, redIndices: [3]),
+  _Line(['The', 'guy', 'she', 'remembers.'],
+      screen: 6, size: 35, redIndices: [3]),
+  _Line(['The', 'guy', 'she', 'chooses.'],
+      screen: 6, size: 40, redIndices: [3], bigBreath: true),
 
-  // 7 — THE FUTURE
-  _Screen(
-    beats: [
-      _Beat('Six months from now…', holdMs: 1300),
-      _Beat('You won\'t be asking…', size: 26, holdMs: 1050),
-      _Beat('"Why him?"', size: 30, holdMs: 1500, gapBefore: 18),
-      _Beat('You\'ll be hearing…', size: 26, holdMs: 1050, gapBefore: 28),
-      _Beat('"What changed?"', red: true, size: 42, holdMs: 1900, gapBefore: 18),
-    ],
-    asset: 'assets/onboarding/future.jpg',
-  ),
-
-  // 8 — CLOSE
-  _Screen(
-    beats: [
-      _Beat('The man you\'ve imagined\nyour whole life…', size: 30, holdMs: 1500),
-      _Beat('starts today.', red: true, size: 46, holdMs: 1500),
-      _Beat('Welcome to ImHim.', size: 30, holdMs: 800, gapBefore: 34),
-    ],
-  ),
+  // ── SCREEN 8 · CLOSE
+  _Line(['The', 'next', 'time', 'someone', 'asks…'],
+      screen: 7, size: 32),
+  _Line(['"How', 'did', 'you', 'change', 'so', 'much?"'],
+      screen: 7, size: 33),
+  _Line(['You\'ll', 'know', 'the', 'answer.'],
+      screen: 7, size: 37, bigBreath: true),
+  _Line(['Welcome', 'to', 'ImHim.'],
+      screen: 7, size: 46, redIndices: [2], boldIndices: [2]),
 ];
