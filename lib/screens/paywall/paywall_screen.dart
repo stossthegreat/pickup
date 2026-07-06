@@ -22,7 +22,7 @@ import '../../theme/app_colors.dart';
 /// pinned at the bottom.
 ///
 /// Auto-tour behaviour (matches the mock): on open the carousel
-/// advances one panel every 3 s, plays through all five, returns to
+/// advances one panel every 4 s, plays through all five, returns to
 /// panel 1 (the photo) and then STOPS — from there the user swipes
 /// manually. Any manual touch also stops the tour immediately.
 ///
@@ -144,7 +144,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
   // panel 0 (the photo), then stop — from there it's swipe-only. Any
   // manual touch cancels the tour early (see the Listener in build()).
   void _startTour() {
-    _tourTimer = Timer.periodic(const Duration(seconds: 3), (t) {
+    _tourTimer = Timer.periodic(const Duration(seconds: 4), (t) {
       if (_interacted || !mounted) {
         t.cancel();
         return;
@@ -555,70 +555,62 @@ class _PhotoPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: Center(
-        // Aspect ratio matches the cropped before/after asset (914×778)
-        // so the baked-in NOW / FIXED labels never get clipped.
-        child: AspectRatio(
-          aspectRatio: 914 / 778,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.asset(
-                  'assets/marketing/beforeafter.jpg',
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) =>
-                      const ColoredBox(color: _tile),
-                ),
-                // Top scrim carrying the two scores.
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.only(top: 10, bottom: 22),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Color(0xD9000000), Color(0x00000000)],
-                        stops: [0.35, 1.0],
-                      ),
-                    ),
-                    child: Row(
-                      children: const [
-                        _ScoreHalf(
-                            n: '54',
-                            label: 'CURRENT',
-                            color: Color(0xFFC4C4CB)),
-                        _ScoreHalf(
-                            n: '84',
-                            label: 'PROJECTED',
-                            color: _neon,
-                            glow: true),
-                      ],
-                    ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Scores sit ABOVE the image on black — each column stacks the
+          // label over the number, the number sitting right on the photo.
+          Row(
+            children: const [
+              _ScoreHead(
+                  label: 'CURRENT',
+                  n: '54',
+                  labelColor: AppColors.textSecondary,
+                  numColor: Color(0xFFC4C4CB)),
+              _ScoreHead(
+                  label: 'PROJECTED',
+                  n: '84',
+                  labelColor: Colors.white,
+                  numColor: _neon,
+                  glow: true),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Aspect ratio matches the cropped before/after asset (914×778)
+          // so the baked-in NOW / FIXED labels never get clipped.
+          Flexible(
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: 914 / 778,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset(
+                    'assets/marketing/beforeafter.jpg',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        const ColoredBox(color: _tile),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _ScoreHalf extends StatelessWidget {
-  final String n, label;
-  final Color color;
+class _ScoreHead extends StatelessWidget {
+  final String label, n;
+  final Color labelColor, numColor;
   final bool glow;
-  const _ScoreHalf(
-      {required this.n,
-      required this.label,
-      required this.color,
-      this.glow = false});
+  const _ScoreHead({
+    required this.label,
+    required this.n,
+    required this.labelColor,
+    required this.numColor,
+    this.glow = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -626,29 +618,29 @@ class _ScoreHalf extends StatelessWidget {
       child: Column(
         children: [
           Text(
+            label,
+            style: GoogleFonts.inter(
+              color: labelColor,
+              fontSize: 11,
+              letterSpacing: 4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
             n,
             style: GoogleFonts.inter(
-              color: color,
-              fontSize: 38,
+              color: numColor,
+              fontSize: 46,
               height: 1,
               fontWeight: FontWeight.w900,
               shadows: glow
                   ? [
                       Shadow(
-                          color: _neon.withValues(alpha: 0.55),
-                          blurRadius: 26),
+                          color: _neon.withValues(alpha: 0.6),
+                          blurRadius: 30),
                     ]
                   : null,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: AppColors.textSecondary,
-              fontSize: 9,
-              letterSpacing: 4,
-              fontWeight: FontWeight.w700,
             ),
           ),
         ],
