@@ -34,6 +34,13 @@ class ScanScreen extends StatefulWidget {
 class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   CameraController? _camera;
   FaceDetector?     _faceDetector;
+  // All cameras on the device + the lens we're currently on. Populated
+  // once in _initCamera so the flip-camera button (top row) can swap
+  // front ↔ back without re-enumerating hardware. Empty / single-camera
+  // devices simply don't show the flip control.
+  List<CameraDescription> _cameras = const [];
+  CameraLensDirection _lens = CameraLensDirection.front;
+  bool _switchingCam = false;
   // Per-platform dense-mesh sources. Android uses Google ML Kit's
   // face mesh detector (Android-only plugin). On iOS we don't run a
   // third-party detector — _buildSemanticMesh below synthesises a
@@ -141,6 +148,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   Future<void> _initCamera() async {
     final cameras = await availableCameras();
     if (cameras.isEmpty) return;
+    _cameras = cameras;
     final front = cameras.firstWhere(
       (c) => c.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
@@ -156,18 +164,27 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       ),
     );
 
+    _lens = front.lensDirection;
+    await _openCamera(front);
+  }
+
+  /// Build + start the controller for a specific camera. Shared by first
+  /// launch (_initCamera) and the flip button (_flipCamera) so both paths
+  /// set rotation / front-cam / mesh source and start the frame stream
+  /// identically — the flip can never leave the overlay mapping stale.
+  Future<void> _openCamera(CameraDescription desc) async {
     _rotation = Platform.isIOS
         ? InputImageRotation.rotation0deg
-        : (InputImageRotationValue.fromRawValue(front.sensorOrientation)
+        : (InputImageRotationValue.fromRawValue(desc.sensorOrientation)
               ?? InputImageRotation.rotation270deg);
-    _isFrontCam = front.lensDirection == CameraLensDirection.front;
+    _isFrontCam = desc.lensDirection == CameraLensDirection.front;
 
     // Android gets the full 468-point mesh via google_mlkit_face_mesh_detection
     // (Android-only plugin). iOS doesn't get a separate detector — instead
     // _buildSemanticMesh synthesises a dense canonical-MediaPipe-indexed
     // mesh from ML Kit contour data so the painter renders identically.
     if (Platform.isAndroid) {
-      _meshService = FaceMeshService();
+      _meshService ??= FaceMeshService();
     } else {
       _meshService = null;
     }
@@ -179,7 +196,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     // modes (uvRow > w/2 * uvPx) which silently produces garbage and makes
     // the detector return zero faces. Don't roll your own.
     _camera = CameraController(
-      front,
+      desc,
       ResolutionPreset.high,
       enableAudio: false,
       imageFormatGroup: Platform.isAndroid
@@ -195,6 +212,37 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     } catch (e) {
       debugPrint('Camera init: $e');
     }
+  }
+
+  /// Flip front ↔ back. Tears the live controller down (stops the frame
+  /// stream first so no callback fires against a disposed camera), then
+  /// reopens on the other lens. Guarded against double-taps and no-ops on
+  /// single-camera devices. Great for content — point the back cam at a
+  /// mate and show them their glow-up.
+  Future<void> _flipCamera() async {
+    if (_switchingCam || _cameras.length < 2) return;
+    _switchingCam = true;
+    HapticFeedback.selectionClick();
+    final want = _lens == CameraLensDirection.front
+        ? CameraLensDirection.back
+        : CameraLensDirection.front;
+    final desc = _cameras.firstWhere(
+      (c) => c.lensDirection == want,
+      orElse: () => _cameras.firstWhere(
+        (c) => c.lensDirection != _lens,
+        orElse: () => _cameras.first,
+      ),
+    );
+    final old = _camera;
+    _camera = null;
+    if (mounted) setState(() {}); // preview blanks for the swap beat
+    try {
+      await old?.stopImageStream();
+    } catch (_) {}
+    await old?.dispose();
+    _lens = desc.lensDirection;
+    await _openCamera(desc);
+    _switchingCam = false;
   }
 
   // Canonical single-plane InputImage — per google_ml_kit_flutter sample
@@ -514,6 +562,8 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
 
   Future<void> _processFrame(CameraImage image) async {
     if (_processing ||
+        _switchingCam ||
+        _camera == null ||
         _phase == ScanPhase.capturing ||
         _phase == ScanPhase.analysing) { return; }
     _processing = true;
@@ -1331,26 +1381,30 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // Settings button — gold-lined, minimal
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => context.push('/settings'),
-                          borderRadius: BorderRadius.circular(22),
-                          child: Container(
-                            width: 36, height: 36,
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.4),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppColors.red.withValues(alpha: 0.4),
-                                width: 0.8),
+                      // Flip camera — front ↔ back. Sits where settings
+                      // used to; lets you point the back cam at someone
+                      // else and scan their face (content gold). Hidden
+                      // on single-camera devices.
+                      if (_cameras.length > 1)
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: _switchingCam ? null : _flipCamera,
+                            borderRadius: BorderRadius.circular(22),
+                            child: Container(
+                              width: 36, height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppColors.red.withValues(alpha: 0.4),
+                                  width: 0.8),
+                              ),
+                              child: const Icon(Icons.flip_camera_ios_rounded,
+                                size: 18, color: AppColors.red),
                             ),
-                            child: const Icon(Icons.tune,
-                              size: 16, color: AppColors.red),
                           ),
                         ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 2),
