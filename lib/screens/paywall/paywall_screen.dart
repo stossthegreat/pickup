@@ -555,69 +555,71 @@ class _PhotoPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // NUMBERS sit on the black ledge just above the image, one
-          // centered over each half (54 over current, 84 over projected).
-          Row(
-            children: const [
-              Expanded(child: _ScoreNum(n: '54', color: Color(0xFFC4C4CB))),
-              Expanded(
-                  child: _ScoreNum(n: '84', color: _neon, glow: true)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          // Aspect ratio matches the cropped before/after asset (914×778)
-          // so the baked-in NOW / FIXED labels never get clipped.
-          Flexible(
-            child: Center(
-              child: AspectRatio(
-                aspectRatio: 914 / 778,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.asset(
-                        'assets/marketing/beforeafter.jpg',
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            const ColoredBox(color: _tile),
-                      ),
-                      // LABELS ride ON the image at the very top, centered
-                      // over each half, on a subtle scrim for legibility.
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.only(top: 8, bottom: 16),
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Color(0xB3000000), Color(0x00000000)],
-                            ),
-                          ),
-                          child: Row(
-                            children: const [
-                              Expanded(
-                                  child: _ScoreLabel(
-                                      'CURRENT', Color(0xFFC4C4CB))),
-                              Expanded(
-                                  child: _ScoreLabel('PROJECTED', Colors.white)),
-                            ],
+      // Center the whole [numbers + image] group as ONE unit so the
+      // numbers hug the image's top ledge instead of floating away from it.
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // NUMBERS sit on the black ledge directly above the image, one
+            // centered over each half (54 over current, 84 over projected).
+            Row(
+              children: const [
+                Expanded(child: _ScoreNum(n: '54', color: Color(0xFFC4C4CB))),
+                Expanded(
+                    child: _ScoreNum(n: '84', color: _neon, glow: true)),
+              ],
+            ),
+            const SizedBox(height: 2),
+            // Aspect ratio matches the cropped before/after asset (914×778)
+            // so the baked-in NOW / FIXED labels never get clipped. Width-
+            // constrained, so its height is fixed — no Flexible/Center gap.
+            AspectRatio(
+              aspectRatio: 914 / 778,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(
+                      'assets/marketing/beforeafter.jpg',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const ColoredBox(color: _tile),
+                    ),
+                    // LABELS ride ON the image at the very top, centered
+                    // over each half, on a subtle scrim for legibility.
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.only(top: 8, bottom: 16),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xB3000000), Color(0x00000000)],
                           ),
                         ),
+                        child: Row(
+                          children: const [
+                            Expanded(
+                                child: _ScoreLabel(
+                                    'CURRENT', Color(0xFFC4C4CB))),
+                            Expanded(
+                                child:
+                                    _ScoreLabel('PROJECTED', Colors.white)),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
