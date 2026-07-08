@@ -39,3 +39,9 @@
 ///                  Lines + Chat are Pro-only outright
 ///   · Lessons    — Pro-only from Day 1
 const kBypassPaywall = false;
+
+/// Human-readable build tag shown tiny on the paywall so we can instantly
+/// tell which build is actually installed on-device (TestFlight lag has
+/// repeatedly made us debug a stale build). Bump this with every pubspec
+/// build-number bump.
+const kBuildTag = 'b342';
