@@ -14,6 +14,7 @@ import '../../../services/local_store_service.dart';
 import '../../../services/paywall_gate.dart';
 import '../../../services/rizz_reply_service.dart';
 import '../../../theme/app_colors.dart';
+import '../../../widgets/common/ai_consent_dialog.dart';
 import '../../../widgets/common/imhim_wordmark.dart';
 
 /// Debug pane visibility — flip true to surface the OCR / endpoint /
@@ -151,6 +152,10 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
 
   Future<void> _generate() async {
     if (!_canGenerate) return;
+    // AI consent gate (App Store 5.1.2(i)) — no screenshot/text reaches
+    // OpenAI without permission. Silent for anyone who already granted it.
+    if (!await AiConsentDialog.ensure(context)) return;
+    if (!mounted) return;
     // Paywall gate — non-pro users get ONE free rizz generation.
     // The second tap (after the bool flips) lands on the paywall.
     // Pro users always pass.

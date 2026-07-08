@@ -81,16 +81,18 @@ class AiConsentDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('SHARE PHOTO WITH AI PROVIDERS?',
+              Text('SHARE DATA WITH AI PROVIDERS?',
                 style: GoogleFonts.inter(
                   color: AppColors.red,
                   fontSize: 11, letterSpacing: 2.4,
                   fontWeight: FontWeight.w800)),
               const SizedBox(height: 12),
-              Text('To produce your analysis and rendered preview, '
-                   'your selfie is sent over an encrypted connection '
-                   'to two AI providers. Geometry measurements are '
-                   'computed on-device first.',
+              Text('ImHim uses AI to power your scans, live voice '
+                   'roleplay, and Rizz replies. The data each feature '
+                   'needs is sent over an encrypted connection to our '
+                   'AI providers. Face geometry is computed on your '
+                   'device first, and dating-app screenshots are read '
+                   'on your device (OCR) first.',
                 style: GoogleFonts.inter(
                   color: AppColors.textPrimary,
                   fontSize: 14, height: 1.5,
@@ -99,16 +101,18 @@ class AiConsentDialog extends StatelessWidget {
 
               _Bullet(
                 head: 'WHAT IS SENT',
-                body: 'Your selfie photo + the on-device geometry '
-                      'measurements. Nothing else — no name, email, '
-                      'contacts, location, or tracking IDs.'),
+                body: 'Your selfie photo (scans), your voice during '
+                      'live roleplay and voice drills, and the '
+                      'screenshots or text you submit in Rizz. Nothing '
+                      'else — no name, email, contacts, location, or '
+                      'tracking IDs.'),
               const SizedBox(height: 12),
               _Bullet(
                 head: 'WHO RECEIVES IT',
-                body: 'OpenAI (analysis text + honest-looks rating) '
-                      'and Replicate (rendered "maximised" preview). '
-                      'Both providers process the photo for one '
-                      'request only and exclude it from training '
+                body: 'OpenAI (analysis, ratings, voice roleplay, and '
+                      'Rizz replies) and Replicate (rendered "after" '
+                      'previews). Each processes your data for one '
+                      'request only and excludes it from training '
                       'under their standard API terms.'),
               const SizedBox(height: 12),
               _Bullet(
@@ -126,10 +130,10 @@ class AiConsentDialog extends StatelessWidget {
                       'Policy.'),
 
               const SizedBox(height: 18),
-              Text('Tap ALLOW to share your photo with OpenAI and '
-                   'Replicate. Tap CANCEL to keep it on this '
-                   'device — analysis and renders cannot be '
-                   'produced without permission.',
+              Text('Tap ALLOW to use ImHim\'s AI features with OpenAI '
+                   'and Replicate. Tap CANCEL to keep everything on '
+                   'this device — scans, roleplay, and Rizz cannot run '
+                   'without permission.',
                 style: GoogleFonts.inter(
                   color: AppColors.textSecondary,
                   fontSize: 12.5, height: 1.5,

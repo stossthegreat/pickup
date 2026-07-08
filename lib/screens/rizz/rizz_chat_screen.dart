@@ -14,6 +14,7 @@ import '../../services/paywall_gate.dart';
 import '../../services/rizz_reply_service.dart' show RizzVibe, RizzVibeLabel;
 import '../../services/screenshot_ocr_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/common/ai_consent_dialog.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 
 /// CHAT WITH MIRRORLY — clean, sexy, no-bullshit dating + self-improvement
@@ -167,6 +168,10 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
   Future<void> _send(String text, {Uint8List? image, String? apiText}) async {
     final msg = text.trim();
     if ((msg.isEmpty && image == null) || _sending) return;
+    // AI consent gate (App Store 5.1.2(i)) — no chat/screenshot reaches
+    // OpenAI without permission. Silent once granted.
+    if (!await AiConsentDialog.ensure(context)) return;
+    if (!mounted) return;
     HapticFeedback.selectionClick();
     // v275 — apiText lets the caller display a SHORT label in the
     // chat bubble while sending a LONGER, self-contained prompt to
