@@ -110,6 +110,13 @@ class AspectProtocolCards extends StatelessWidget {
       color:          AppColors.red,
     ),
     _Aspect(
+      axisKey:        'eyes',
+      pulldownString: 'Hunter Eyes',
+      title:          'Eyes',
+      oneLiner:       'Depuff, brighten, hunter eyes.',
+      color:          AppColors.accent,
+    ),
+    _Aspect(
       axisKey:        'debloat',
       pulldownString: 'Puffiness',
       title:          'Debloat',

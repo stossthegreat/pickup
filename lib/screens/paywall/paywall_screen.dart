@@ -688,10 +688,10 @@ class _ProtoPanel extends StatelessWidget {
 
   static const _rows = <(String, String, String)>[
     ('🔥', 'Debloat', 'Less puffiness. Visible changes can begin within days.'),
-    ('🔴', 'Jaw', 'Build a sharper, more defined profile.'),
+    ('🗿', 'Jaw', 'Build a sharper, more defined profile.'),
     ('👁', 'Eye Area', 'Look more awake, healthier and more attractive.'),
-    ('🟢', 'Skin', 'Clearer skin. Better texture. Better first impressions.'),
-    ('🔵', 'Hair', 'The right cut, style and long-term hair plan.'),
+    ('✨', 'Skin', 'Clearer skin. Better texture. Better first impressions.'),
+    ('💇', 'Hair', 'The right cut, style and long-term hair plan.'),
   ];
 
   @override
