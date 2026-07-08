@@ -222,6 +222,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
     switch (outcome) {
       case PurchaseOutcome.success:
+        // Belt-and-suspenders: force the local subscribed flag true here
+        // too (purchase() already does, but this guarantees it's on disk
+        // before _forwardOnSuccess pops and the report re-reads isPro).
+        await LocalStoreService.setSubscribed(true);
         await LocalStoreService.setOnboarded(true);
         if (!mounted) return;
         _forwardOnSuccess();
@@ -475,14 +479,27 @@ class _PaywallScreenState extends State<PaywallScreen> {
   /// the auto-renew / cancel notice. Full disclosure lives in Terms.
   Widget _priceLine() {
     final price = _priceFor(_Tier.weekly);
-    return Text(
-      '$price per week · auto-renews · cancel anytime',
-      textAlign: TextAlign.center,
-      style: GoogleFonts.inter(
-        color: AppColors.textSecondary,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
+    return Column(
+      children: [
+        Text(
+          '$price per week · auto-renews · cancel anytime',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(
+            color: AppColors.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        // Tiny build tag so we can confirm the installed build on-device.
+        Text(
+          kBuildTag,
+          style: GoogleFonts.inter(
+            color: AppColors.textTertiary,
+            fontSize: 8,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }
