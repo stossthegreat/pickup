@@ -313,15 +313,47 @@ class PurchaseService {
         AnalyticsService.purchaseCancelled(pkg.identifier);
         return PurchaseOutcome.cancelled;
       }
+      // SAFETY NET: the purchase threw (product already owned, receipt
+      // still validating, StoreKit hiccup) — but the user may ALREADY
+      // have an active subscription. Extremely common in sandbox when
+      // re-testing weekly on the same Apple ID: buying again throws
+      // "already purchased" even though the sub is live. Check for an
+      // active entitlement/subscription and, if found, unlock — they've
+      // paid.
+      if (await _hasActiveSubNow()) {
+        await LocalStoreService.setSubscribed(true);
+        AnalyticsService.purchaseCompleted(pkg.identifier);
+        return PurchaseOutcome.success;
+      }
       lastErrorMessage = _humanise(code, err.message);
       AnalyticsService.purchaseFailed(pkg.identifier, code?.name ?? 'unknown');
       return PurchaseOutcome.error;
     } catch (err) {
       // ignore: avoid_print
       print('[PurchaseService] purchase failed (unknown): $err');
+      if (await _hasActiveSubNow()) {
+        await LocalStoreService.setSubscribed(true);
+        AnalyticsService.purchaseCompleted(pkg.identifier);
+        return PurchaseOutcome.success;
+      }
       lastErrorMessage = err.toString();
       AnalyticsService.purchaseFailed(pkg.identifier, 'exception');
       return PurchaseOutcome.error;
+    }
+  }
+
+  /// True when RevenueCat currently reports ANY active entitlement or
+  /// subscription for this user. Used as the post-throw safety net so a
+  /// "product already owned" error on an actually-active sub still
+  /// unlocks. Best-effort with a short timeout.
+  static Future<bool> _hasActiveSubNow() async {
+    try {
+      final info = await Purchases.getCustomerInfo()
+          .timeout(const Duration(seconds: 3));
+      return info.entitlements.active.isNotEmpty ||
+          info.activeSubscriptions.isNotEmpty;
+    } catch (_) {
+      return false;
     }
   }
 
