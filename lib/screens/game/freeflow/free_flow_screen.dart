@@ -26,6 +26,7 @@ import '../../../services/user_memory.dart';
 import '../../../services/villain/villain_api.dart';
 import '../../../theme/auralay_app_colors.dart';
 import '../../../theme/auralay_app_typography.dart';
+import '../../../widgets/common/ai_consent_dialog.dart';
 import '../../../widgets/common/imhim_wordmark.dart';
 import '../../../widgets/common/mirrorly_components.dart';
 import '../../../widgets/debug_panel.dart';
@@ -480,6 +481,18 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
   // ─── Go live ────────────────────────────────────────────────────────
 
   Future<void> _goLive(_Vibe vibe) async {
+    // AI consent gate (App Store 5.1.2(i)) — no voice reaches OpenAI
+    // without permission. Silent + instant for anyone who already
+    // granted it (nearly everyone, via the one-time launch prompt); only
+    // a user who declined upfront sees it here, and declining again just
+    // keeps them on the pick screen. This sits BEFORE any session /
+    // socket / timer work — it does not touch the roleplay mechanics.
+    if (!await AiConsentDialog.ensure(context)) {
+      if (mounted) _resetToPicker();
+      return;
+    }
+    if (_disposed || !mounted) return;
+
     // v225 leak fix — REAL root cause of "had to hard close the app".
     //
     // _pcmWatchdog is a Timer.periodic created on EVERY _goLive call

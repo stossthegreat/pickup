@@ -563,14 +563,20 @@ class _PhotoPanel extends StatelessWidget {
           children: [
             // NUMBERS sit on the black ledge directly above the image, one
             // centered over each half (54 over current, 84 over projected).
-            Row(
-              children: const [
-                Expanded(child: _ScoreNum(n: '54', color: Color(0xFFC4C4CB))),
-                Expanded(
-                    child: _ScoreNum(n: '84', color: _neon, glow: true)),
-              ],
+            // Translated down to eat the font's descent so the digits
+            // literally kiss the image's top ledge (no floating gap).
+            Transform.translate(
+              offset: const Offset(0, 12),
+              child: Row(
+                children: const [
+                  Expanded(
+                      child: _ScoreNum(n: '54', color: Color(0xFFC4C4CB))),
+                  Expanded(
+                      child: _ScoreNum(n: '84', color: _neon, glow: true)),
+                ],
+              ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 0),
             // Aspect ratio matches the cropped before/after asset (914×778)
             // so the baked-in NOW / FIXED labels never get clipped. Width-
             // constrained, so its height is fixed — no Flexible/Center gap.
@@ -682,10 +688,10 @@ class _ProtoPanel extends StatelessWidget {
 
   static const _rows = <(String, String, String)>[
     ('🔥', 'Debloat', 'Less puffiness. Visible changes can begin within days.'),
-    ('🔴', 'Jaw', 'Build a sharper, more defined profile.'),
+    ('🗿', 'Jaw', 'Build a sharper, more defined profile.'),
     ('👁', 'Eye Area', 'Look more awake, healthier and more attractive.'),
-    ('🟢', 'Skin', 'Clearer skin. Better texture. Better first impressions.'),
-    ('🔵', 'Hair', 'The right cut, style and long-term hair plan.'),
+    ('✨', 'Skin', 'Clearer skin. Better texture. Better first impressions.'),
+    ('💇', 'Hair', 'The right cut, style and long-term hair plan.'),
   ];
 
   @override

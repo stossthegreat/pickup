@@ -7,6 +7,7 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../config/auralay_dev_flags.dart';
+import 'local_store_service.dart';
 
 /// OpenAI Realtime API session — sub-second turn-taking voice
 /// conversation with Diablo. Architecture:
@@ -58,6 +59,16 @@ class RealtimeSession {
   /// Practice body shape:
   ///   { teacherId, mode: "practice", topic }
   Future<void> connect({required Map<String, dynamic> body}) async {
+    // AI consent backstop (App Store 5.1.2(i)) — never open a voice
+    // session to OpenAI without permission. Every voice surface (roleplay,
+    // gaze drills, etc.) funnels through here, so this one check guarantees
+    // no live audio path can start unconsented. The one-time launch prompt
+    // means this only ever blocks a user who explicitly declined.
+    if (!await LocalStoreService.hasAiConsent()) {
+      throw const RealtimeError('consent_required',
+          'AI permission is required for voice features. Enable it in '
+          'Settings to continue.');
+    }
     if (!AuralayDevFlags.hasBackend) {
       throw const RealtimeError('backend_not_configured',
           'AURALAY_API not set at build time — realtime needs Railway.');

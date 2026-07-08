@@ -410,54 +410,105 @@ const _jaw = _Template(
 
 const _hunterEyes = _Template(
   title: 'Hunter Eyes',
-  summary: 'Canthal tilt is bone-dominant, but orbital fluid, brow line, and '
-           'upper-lid exposure all read as tilt. Target what you control: '
-           'depuff the lower pad, recruit orbicularis, shape the brow.',
+  summary: 'Canthal tilt is bone, but orbital fluid, dark circles, the brow '
+           'line, and upper-lid puffiness all read as the eye. Depuff the '
+           'lower pad, brighten the under-eye, recruit the orbicularis, and '
+           'lift the brow. Sixty days is the real rescan.',
   dailyTasks: [
-    DailyTask(
-      title: 'Hard mew — upward palate pressure',
-      detail: 'Active mewing, tongue pushed UP into the palate (not just '
-              'forward). Frames the eye socket from below. All-day habit.',
-      duration: 'ongoing', category: TaskCategory.habit,
-      timeBand: TimeBand.ongoing),
+    // ── MORNING ──
     DailyTask(
       title: 'Cold roller + caffeine eye serum',
-      detail: 'Caffeine 5 % (The Ordinary) under-eye, then cold jade/steel '
-              'roller 2 min. Shrinks the lower fat pad, the fastest visible '
-              'win for hunter-eye reading.',
+      detail: 'Caffeine 5 % (The Ordinary) under-eye, then a cold jade/steel '
+              'roller 2 min. Shrinks the lower fat pad — the fastest visible '
+              'depuff for the hunter-eye read.',
       duration: '5 min', category: TaskCategory.skin,
       timeBand: TimeBand.am),
     DailyTask(
+      title: 'Vitamin C + SPF around the orbital',
+      detail: 'Brightens dark circles and blocks the UV that thins under-eye '
+              'skin and etches crow\'s feet. Pat it in — never rub.',
+      duration: '1 min', category: TaskCategory.skin,
+      timeBand: TimeBand.am),
+    DailyTask(
       title: 'Sunmaxx — 10 min direct AM light',
-      detail: 'No sunglasses, no screen. Vitamin D, skin tone, and the squint '
-              'itself trains the orbicularis lateral lift.',
+      detail: 'No sunglasses on the way out, no screen. Circadian reset + '
+              'vitamin D, and the light trains the orbicularis squint.',
       duration: '10 min', category: TaskCategory.habit,
       timeBand: TimeBand.am),
+    // ── MIDDAY ──
     DailyTask(
       title: 'Squint isometrics',
       detail: '3 × 20 firm squints, 2 s hold each. Orbicularis oculi pulls '
               'the lateral canthus up — low-yield but free.',
       duration: '3 min', category: TaskCategory.exercise,
       timeBand: TimeBand.midday),
+    // ── EVENING ──
     DailyTask(
-      title: 'Brow lift — trim + brush',
-      detail: 'Clear brow gel, brush up-and-out. Trim length, preserve the '
-              'tail arch. A lifted brow reads as positive tilt even when the '
-              'bone itself is neutral.',
+      title: 'Brow lift — trim + brush up-and-out',
+      detail: 'Clear brow gel, brush up and out; trim length, keep the tail '
+              'arch. A lifted brow reads as positive tilt even on neutral '
+              'bone.',
       duration: '3 min', category: TaskCategory.grooming,
       timeBand: TimeBand.pm),
     DailyTask(
+      title: 'Retinal eye cream — 3 nights a week',
+      detail: 'A dedicated low-strength retinal/retinol eye product, pea-size, '
+              'patted in. Builds collagen and fades pigment on the thin lid '
+              'over weeks. Start slow — this skin is delicate.',
+      duration: '1 min', category: TaskCategory.skin,
+      timeBand: TimeBand.pm),
+    // ── NIGHT ──
+    DailyTask(
       title: 'Sodium cut after 6pm',
-      detail: 'Under 1 g after dinner. Sodium is 90 % of morning under-eye '
+      detail: 'Under 1 g after dinner. Sodium is ~90 % of morning under-eye '
               'puff. Hold 30 days to see the difference in your rescan.',
       duration: 'ongoing', category: TaskCategory.nutrition,
       timeBand: TimeBand.night),
     DailyTask(
       title: 'Back-sleep, head elevated 15°',
-      detail: 'Silk pillowcase, small wedge. Prone sleep pools fluid in the '
-              'lower lid — the #1 cause of morning bags.',
+      detail: 'Silk pillowcase, small wedge. Face-down sleep pools fluid in '
+              'the lower lid — the #1 cause of morning bags.',
       duration: 'all night', category: TaskCategory.habit,
       timeBand: TimeBand.night),
+    DailyTask(
+      title: 'Sleep 8 hours — dark, cool room',
+      detail: 'Short sleep spikes cortisol and dilates the under-eye vessels '
+              '— instant dark circles. Lights out, cool room.',
+      duration: '8 h', category: TaskCategory.habit,
+      timeBand: TimeBand.night),
+    // ── ALL DAY ──
+    DailyTask(
+      title: 'Hard mew — upward palate pressure',
+      detail: 'Whole tongue pressed UP into the palate, not just forward. '
+              'Frames the eye socket from below. All-day habit.',
+      duration: 'ongoing', category: TaskCategory.habit,
+      timeBand: TimeBand.ongoing),
+    DailyTask(
+      title: 'Hands off — never rub the eyes',
+      detail: 'Rubbing breaks capillaries and darkens circles, and drags the '
+              'thin lid skin into fine lines. Catch yourself every time.',
+      duration: 'all day', category: TaskCategory.habit,
+      timeBand: TimeBand.ongoing),
+    DailyTask(
+      title: 'Hydrate — 3 L water',
+      detail: 'Dehydration hollows and shadows the under-eye. Spread it '
+              'across the day.',
+      duration: 'all day', category: TaskCategory.nutrition,
+      timeBand: TimeBand.ongoing),
+  ],
+  donts: [
+    'Rub, scratch, or prop on your eyes',
+    'Doom-scroll in the dark (squint lines + strain)',
+    'Skip SPF around the eyes',
+    'Sleep face-down',
+    'Load up on salt or alcohol at night',
+    'Expect canthal-tilt bone to move — work what reads',
+  ],
+  successMetrics: [
+    'Less morning puffiness and fewer bags',
+    'Brighter, less shadowed under-eye',
+    'A more lifted, awake "hunter" read',
+    'Fresher, more rested overall look',
   ],
 );
 
