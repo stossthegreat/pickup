@@ -124,6 +124,29 @@ class PurchaseService {
     await Purchases.configure(PurchasesConfiguration(apiKey));
     _initialized = true;
 
+    // v285 SAFETY NET — the TestFlight "sheet said Done but nothing
+    // unlocked" bug. The StoreKit sheet can complete while the Flutter
+    // purchasePackage() future hangs or resolves as cancelled (seen on
+    // TestFlight builds where the sheet is presented by TestFlight
+    // itself, not the app). When that happens the success path in
+    // purchase() never runs, so the unlock flag never flips — silently.
+    // RevenueCat still learns about the transaction out-of-band and
+    // fires this listener, so mirror it into the local flag here.
+    //
+    // UNLOCK-ONLY on purpose: this listener never writes `false`.
+    // Right after a purchase RC can briefly report no active
+    // entitlement (propagation lag) and a false write here would
+    // re-lock a user who just paid. Lock-downs stay where they are —
+    // _refreshEntitlementCache() on launch + isProLive() reads.
+    Purchases.addCustomerInfoUpdateListener((info) {
+      final active = info.entitlements.active.isNotEmpty ||
+          info.activeSubscriptions.isNotEmpty;
+      if (active) {
+        // ignore: discarded_futures
+        LocalStoreService.setSubscribed(true);
+      }
+    });
+
     // Mirror current entitlement state into the local cache so a
     // cancellation-from-App-Store-settings correctly flips the app to
     // locked the next time it opens.
@@ -165,22 +188,18 @@ class PurchaseService {
       }
 
       Package? weekly;
-      Package? annual;
       Package? rescue;
-      // v284 — pass 2 holding bucket. Anything that doesn't match a
-      // canonical slot on the first pass lands here so we can claim
-      // it as weekly if the matcher missed (bro's iOS weekly product
-      // was set up after annual and the SKU id didn't contain the
-      // word "weekly", so the strict matcher rejected it). Annual is
-      // assumed working — that's the one bro confirmed live.
-      final leftovers = <Package>[];
 
-      // Two paid tiers + the Android rescue IAP. Weekly is the
-      // entry tier ($6.99/wk), Annual ($139.99/yr) is the lock-in.
-      // Match by canonical RC slot first ($rc_weekly / $rc_annual +
-      // the custom `rescue` slot), with fallback to bare strings and
-      // underlying store-product ids so a misnamed dashboard package
-      // still gets picked up.
+      // v285 — WEEKLY ONLY. The app sells exactly ONE subscription:
+      // mirrorly_pro_weekly. The legacy monthly/yearly SKUs still
+      // exist in the stores (long-standing subscribers keep their
+      // access via restore/isProLive), but the paywall must NEVER
+      // select or sell them. The v284 "leftovers" fallback is gone —
+      // it could silently claim the monthly/yearly package as
+      // "weekly" and sell the wrong product under a per-week label.
+      // If the weekly package is genuinely missing from the current
+      // offering, the paywall now shows "—" and the CTA surfaces the
+      // diagnose() dialog instead of selling a dead SKU.
       for (final pkg in current.availablePackages) {
         final pkgId = pkg.identifier.toLowerCase();
         final prodId = pkg.storeProduct.identifier.toLowerCase();
@@ -190,54 +209,33 @@ class PurchaseService {
             || pkgId.contains('rescue')
             || prodId.contains('rescue');
 
-        // v284 — broadened from `weekly` only to also catch `week`,
-        // `7day`, `7d`, and the canonical $rc_weekly slot. Same
-        // lenient policy annual already enjoys via the `yearly`
-        // alias. Bro's TestFlight weekly SKU was approved but the
-        // strict matcher rejected it — broadening fixes it without
-        // changing the dashboard config.
-        final isWeekly = !isRescue && (
+        // Dead SKUs — monthly/yearly must never be matched, even by
+        // the lenient weekly aliases below.
+        final isDeadSku =
+               pkgId.contains('month')  || prodId.contains('month')
+            || pkgId.contains('annual') || prodId.contains('annual')
+            || pkgId.contains('year')   || prodId.contains('year');
+
+        final isWeekly = !isRescue && !isDeadSku && (
                pkgId == r'$rc_weekly'
-            || pkgId == 'weekly'
+            || prodId == PurchaseConfig.productIds.weekly
             || pkgId.contains('week')
             || prodId.contains('week')
             || prodId.contains('7day')
             || prodId.contains('7d'));
 
-        final isAnnual = !isRescue && !isWeekly && (
-               pkgId == r'$rc_annual'
-            || pkgId == 'annual' || pkgId == 'yearly'
-            || pkgId.contains('annual')
-            || pkgId.contains('year')
-            || prodId.contains('annual')
-            || prodId.contains('yearly')
-            || prodId.contains('year'));
-
         if (isRescue && rescue == null) {
           rescue = pkg;
         } else if (isWeekly && weekly == null) {
           weekly = pkg;
-        } else if (isAnnual && annual == null) {
-          annual = pkg;
-        } else if (!isRescue) {
-          leftovers.add(pkg);
         }
-      }
-
-      // v284 — last-resort fallback. If the dashboard registered the
-      // weekly product under a custom name the strict matcher missed
-      // (e.g. `mirrorly_starter` or `pro_intro`), claim the first
-      // remaining non-rescue, non-annual subscription as weekly. The
-      // priceString the SDK returns is still the real StoreKit /
-      // Play Billing price, so we ship the user the right number —
-      // we just stop showing "—" for a SKU bro already has live.
-      if (weekly == null && leftovers.isNotEmpty) {
-        weekly = leftovers.first;
+        // Everything else (monthly, yearly, unknown) is deliberately
+        // dropped on the floor.
       }
 
       _cached = PurchaseOfferings(
         weekly: weekly,
-        annual: annual,
+        annual: null, // voided — never populated, never purchasable
         rescue: rescue,
       );
       return _cached!;
@@ -267,6 +265,20 @@ class PurchaseService {
     if (!_initialized) {
       lastErrorMessage = 'Store not configured.';
       return PurchaseOutcome.notConfigured;
+    }
+    // v285 HARD BLOCK — monthly/yearly are dead SKUs. loadOfferings()
+    // already never surfaces them, but this is the last line of
+    // defence: no code path may ever charge a user for them again.
+    final blockPkg  = pkg.identifier.toLowerCase();
+    final blockProd = pkg.storeProduct.identifier.toLowerCase();
+    final isDeadSku =
+           blockPkg.contains('month')  || blockProd.contains('month')
+        || blockPkg.contains('annual') || blockProd.contains('annual')
+        || blockPkg.contains('year')   || blockProd.contains('year');
+    if (isDeadSku) {
+      lastErrorMessage = 'This plan is no longer available.';
+      AnalyticsService.purchaseFailed(pkg.identifier, 'dead_sku_blocked');
+      return PurchaseOutcome.error;
     }
     AnalyticsService.purchaseStarted(pkg.identifier);
     try {
