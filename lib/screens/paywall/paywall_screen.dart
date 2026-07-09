@@ -241,8 +241,38 @@ class _PaywallScreenState extends State<PaywallScreen> {
     HapticFeedback.mediumImpact();
     setState(() => _purchasing = true);
 
+    // v285 WATCHDOG — covers the TestFlight failure where the StoreKit
+    // sheet completes ("Done") but the Flutter purchase future hangs or
+    // resolves as cancelled, so none of the outcome handling below ever
+    // runs. The customer-info listener in PurchaseService.init() flips
+    // the local subscribed flag the moment RevenueCat registers the
+    // transaction; poll it while the future is in flight so a completed
+    // payment ALWAYS routes the user forward. Skipped when the user was
+    // already subscribed before tapping (nothing to detect).
+    var settled = false;
+    final wasSubscribed = await LocalStoreService.isSubscribed();
+    if (!wasSubscribed) {
+      Timer.periodic(const Duration(seconds: 2), (t) async {
+        if (settled || !mounted) {
+          t.cancel();
+          return;
+        }
+        if (await LocalStoreService.isSubscribed()) {
+          t.cancel();
+          if (settled || !mounted) return;
+          settled = true;
+          await LocalStoreService.setOnboarded(true);
+          if (!mounted) return;
+          setState(() => _purchasing = false);
+          _forwardOnSuccess();
+        }
+      });
+    }
+
     final outcome = await PurchaseService.purchase(pkg);
 
+    if (settled) return; // watchdog already routed forward
+    settled = true;
     if (!mounted) return;
     setState(() => _purchasing = false);
 
@@ -257,6 +287,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
         _forwardOnSuccess();
         break;
       case PurchaseOutcome.cancelled:
+        // Never silent — if StoreKit misreports a completed sheet as a
+        // cancel we need to SEE it on-device instead of guessing. The
+        // watchdog above still unlocks if the transaction actually went
+        // through. Harmless for a genuine cancel.
+        _snack('Purchase cancelled — you were not charged.');
         break;
       case PurchaseOutcome.noPriorPurchases:
         _snack('No previous purchases found.');
@@ -267,6 +302,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
         if (mounted) _forwardOnSuccess();
         break;
       case PurchaseOutcome.error:
+        // Last chance: the RC listener may have registered the
+        // transaction even though the purchase call errored. If the
+        // flag flipped, the user PAID — forward, don't scare them.
+        if (await LocalStoreService.isSubscribed()) {
+          await LocalStoreService.setOnboarded(true);
+          if (mounted) _forwardOnSuccess();
+          break;
+        }
         // Purchase didn't unlock. Surface the FULL RevenueCat state so we
         // can see exactly what the store returned (offering, weekly
         // product id, active subs, "pro" entitlement) instead of a vague
