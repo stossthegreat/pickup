@@ -1,6 +1,19 @@
 # Mirrorly iOS Podfile — pinned to iOS 15.5 for ML Kit compatibility
 platform :ios, '15.5'
 
+# SELF-HEAL the SwiftPM binary-artifact cache on CI. An interrupted build
+# leaves half-written Firebase zips in ~/Library/Caches/org.swift.swiftpm/
+# artifacts, and every later build restored onto that cache fails package
+# resolution with "... already exists in file system" before a single
+# Dart line compiles. Purging the artifacts dir here (pod install runs
+# before xcodebuild's package resolution) forces a clean ~1-min
+# re-download instead of a dead build. CI-only (Codemagic sets
+# CM_BUILD_ID) so local dev machines keep their cache.
+if ENV['CI'] || ENV['CM_BUILD_ID']
+  require 'fileutils'
+  FileUtils.rm_rf(File.expand_path('~/Library/Caches/org.swift.swiftpm/artifacts'))
+end
+
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
