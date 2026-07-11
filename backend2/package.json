@@ -1,0 +1,21 @@
+{
+  "name": "auralay-backend",
+  "version": "1.0.0",
+  "description": "AURALAY backend — Diablo persona, scoring, TTS streaming. Deployed on Railway.",
+  "main": "server.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@fastify/multipart": "^9.0.1",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.1.0",
+    "openai": "^4.77.0"
+  }
+}
