@@ -1595,9 +1595,15 @@ class _ProgressImhimHeroState extends State<_ProgressImhimHero> {
     Protocol? p;
     try { p = await ProtocolService.loadActive(); } catch (_) {}
     final looks = widget.scans.isEmpty ? 0 : widget.scans.last.score;
-    final game  = widget.gameScores.isEmpty
-        ? 0
-        : widget.gameScores.map((g) => g.score).reduce(math.max);
+    // MOST RECENT game score, matching how Looks reads — showing the
+    // all-time best made the number feel stuck; the latest score gives
+    // the user a live reason to run another session and beat it.
+    int game = 0;
+    if (widget.gameScores.isNotEmpty) {
+      final sorted = [...widget.gameScores]
+        ..sort((a, b) => a.takenAt.compareTo(b.takenAt));
+      game = sorted.last.score;
+    }
     final snap = await StreakService.progress();
     final consistency = snap.consistency;
     final imhim = AscensionService.imhimScoreFromComponents(

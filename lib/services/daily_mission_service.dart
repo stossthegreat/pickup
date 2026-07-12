@@ -69,44 +69,71 @@ class DailyMissionService {
     return [for (final id in ids) DailyMission(id: id, done: done[id] ?? false)];
   }
 
-  /// Build today's set: protocol anchor + 4 rotated quota-aware slots.
+  /// Build today's set — THE MASTER PLAN, every slot completable
+  /// within the user's real weekly credits:
+  ///
+  ///   1. PROTOCOL — every single day, always slot 1. Ticking the
+  ///      protocol log on the Looks tab completes it (looks_done_ymd).
+  ///   2. ROLEPLAY — while weekly voice minutes remain (≈5 sessions).
+  ///   3. SCAN — max 2/week, SPACED: the first any time, the second
+  ///      only once the first is ≥3 days old, so both scans land in
+  ///      different halves of the week instead of back-to-back.
+  ///   4. MIRROR RENDER — while the 3/week render budget remains.
+  ///   5. RIZZ — a DIFFERENT challenge each day, rotating screenshot
+  ///      read → pickup line → rizz chat; also backfills any empty
+  ///      slot above so the day always carries 5 missions when the
+  ///      unlimited challenges can cover it.
   static Future<List<String>> _generate(int today) async {
-    // Candidate pool in priority order, each gated on remaining budget.
-    final pool = <String>[];
+    final ids = <String>[protocol];
+
+    // ── ROLEPLAY — ≈5 sessions/week via the voice-minute budget.
+    bool roleplayOk = true;
     try {
-      if (!await LocalStoreService.voiceCapReached()) pool.add(roleplay);
-    } catch (_) { pool.add(roleplay); }
+      roleplayOk = !await LocalStoreService.voiceCapReached();
+    } catch (_) {}
+    if (roleplayOk) ids.add(roleplay);
+
+    // ── SCAN — 2/week, spaced ≥3 days apart.
     try {
-      if (await LocalStoreService.scansThisWeek() <
-          LocalStoreService.kScansPerWeek) {
-        pool.add(scan);
+      final used = await LocalStoreService.scansThisWeek();
+      if (used < LocalStoreService.kScansPerWeek) {
+        var eligible = used == 0;
+        if (!eligible) {
+          final latest = await LocalStoreService.latestScan();
+          eligible = latest == null ||
+              DateTime.now().difference(latest.takenAt).inDays >= 3;
+        }
+        if (eligible) ids.add(scan);
       }
     } catch (_) {}
+
+    // ── MIRROR RENDER — while the 3/week budget remains.
     try {
       if (await LocalStoreService.mirrorRendersThisWeek() <
           LocalStoreService.kRendersPerWeek) {
-        pool.add(render);
+        ids.add(render);
       }
     } catch (_) {}
+
+    // ── RIZZ — one different challenge per day (rotating), then
+    // backfill from the same rotation until the day holds 5.
+    final rot = DateTime.now().difference(DateTime(2026)).inDays % 3;
+    final rizzOrder = const [
+      [rizzSs, pickup, rizzChat],
+      [pickup, rizzChat, rizzSs],
+      [rizzChat, rizzSs, pickup],
+    ][rot];
+    bool ssOk = true;
     try {
-      if (!await LocalStoreService.screenshotRizzCapReached()) pool.add(rizzSs);
-    } catch (_) { pool.add(rizzSs); }
-    // Unlimited fillers — always eligible.
-    pool.add(pickup);
-    pool.add(rizzChat);
+      ssOk = !await LocalStoreService.screenshotRizzCapReached();
+    } catch (_) {}
+    for (final r in rizzOrder) {
+      if (ids.length >= 5) break;
+      if (r == rizzSs && !ssOk) continue;
+      ids.add(r);
+    }
 
-    // Rotate by calendar day so the daily mix changes. Deterministic
-    // within a day (no reshuffling on rebuild).
-    final daysSinceEpoch =
-        DateTime.now().difference(DateTime(2026)).inDays;
-    final offset = pool.isEmpty ? 0 : daysSinceEpoch % pool.length;
-    final rotated = [
-      ...pool.sublist(offset),
-      ...pool.sublist(0, offset),
-    ];
-    final picked = rotated.take(4).toList();
-
-    return [protocol, ...picked];
+    return ids;
   }
 
   /// Per-mission "done today" reads. Each maps to the day stamp the
