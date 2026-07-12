@@ -528,7 +528,21 @@ class _ReportScreenState extends State<ReportScreen> {
     if (used >= LocalStoreService.kRendersPerWeek) {
       if (!mounted) return;
       HapticFeedback.mediumImpact();
-      context.push('/paywall', extra: {'source': 'render_quota_capped'});
+      // Pro user out of weekly renders — nothing to sell, so no paywall
+      // trip. Explicit white text so it can't render black-on-black.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+            'Weekly renders used. They renew at the start of your next '
+            'billing week.',
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                height: 1.35)),
+        backgroundColor: Color(0xFF16161B),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 5),
+      ));
       return;
     }
     HapticFeedback.heavyImpact();

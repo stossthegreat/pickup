@@ -379,8 +379,15 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: Colors.black,
+      // Explicit white text — default snackbar styling rendered this
+      // black-on-black (invisible strip) on the black background.
+      content: Text(msg,
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+              height: 1.35)),
+      backgroundColor: const Color(0xFF16161B),
       behavior: SnackBarBehavior.floating,
     ));
   }

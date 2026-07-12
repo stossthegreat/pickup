@@ -1212,8 +1212,10 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
           // ignore: discarded_futures
           AnalyticsService.freeflowVoiceCapHit();
           HapticFeedback.mediumImpact();
-          await context.push('/paywall',
-              extra: {'source': 'game_voice_monthly_capped'});
+          // Pro user out of weekly minutes — nothing to sell, so no
+          // paywall trip. Clear white-text notice with the renewal.
+          _capNotice('Weekly roleplay minutes used. They renew at the '
+              'start of your next billing week.');
           return;
         }
         if (!mounted) return;
@@ -1324,8 +1326,9 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         // ignore: discarded_futures
         AnalyticsService.freeflowVoiceCapHit();
         HapticFeedback.mediumImpact();
-        await context.push('/paywall',
-            extra: {'source': 'game_voice_monthly_capped'});
+        // Pro user out of weekly minutes — readable notice, no paywall.
+        _capNotice('Weekly roleplay minutes used. They renew at the '
+            'start of your next billing week.');
         return;
       }
     } else {
@@ -1598,6 +1601,24 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       _phase = _Phase.error;
       _error = msg;
     });
+  }
+
+  /// Weekly-cap notice — EXPLICIT white text so it can never render
+  /// black-on-black (the invisible strip bro hit when credits ran out).
+  void _capNotice(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg,
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+              height: 1.35)),
+      backgroundColor: const Color(0xFF16161B),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 5),
+    ));
   }
 
   void _closeScreen() {
