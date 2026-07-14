@@ -128,7 +128,7 @@ class EyeStripShareCard extends StatelessWidget {
                             fontWeight: FontWeight.w900,
                           )),
                         const SizedBox(height: 16),
-                        // ─── WORDMARK ROW — two-tone italic Playfair ImHim
+                        // ─── WORDMARK ROW — two-tone italic Playfair FirstMove
                         // + red dot. Replaces the old all-caps MIRRORLY so
                         // the eye-strip card matches the rest of the share
                         // family.
@@ -146,9 +146,9 @@ class EyeStripShareCard extends StatelessWidget {
                                   fontWeight: FontWeight.w900,
                                 ),
                                 children: [
-                                  const TextSpan(text: 'Im'),
+                                  const TextSpan(text: 'First'),
                                   TextSpan(
-                                    text: 'Him',
+                                    text: 'Move',
                                     style: GoogleFonts.playfairDisplay(
                                       color: AppColors.accent,
                                       fontSize: 64, height: 1,
@@ -231,7 +231,7 @@ class EyeStripShareCard extends StatelessWidget {
                                 fontSize: 14, letterSpacing: 3.4,
                                 fontWeight: FontWeight.w700,
                               )),
-                            Text('IMHIM.APP',
+                            Text('FIRSTMOVE.APP',
                               style: AppTypography.label.copyWith(
                                 color: AppColors.accent,
                                 fontSize: 15, letterSpacing: 3.8,

@@ -122,10 +122,10 @@ class _RizzTabScreenState extends State<RizzTabScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 32),
           children: [
-            // v274 — keep ImHim wordmark + right-side chip stack.
+            // v274 — keep FirstMove wordmark + right-side chip stack.
             // Subheader ("Looks get attention. Game keeps it.")
             // removed per bro: "take the sub header out of rizz
-            // tab not the ImHim, just the sub header." The Looks
+            // tab not the FirstMove, just the sub header." The Looks
             // tab keeps its subhead because it carries the brand
             // pitch on first impression; the Rizz tab doesn't need
             // it (the three cards already say what the tab is).

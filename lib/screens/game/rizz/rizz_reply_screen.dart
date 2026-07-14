@@ -328,7 +328,7 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
     // Share-extension mode — the user arrived from the iOS Share
     // Sheet, the screenshot is already in hand, the scanner is
     // already running. Swap the "Drop her chat." headline for the
-    // ImHim wordmark so the experience reads as ours from the
+    // FirstMove wordmark so the experience reads as ours from the
     // moment we open. Plays the same WingAI mental model: their
     // app opens with the brand on top + the scanning UI below.
     final fromShare = widget.preloadedScreenshot != null;
@@ -432,7 +432,7 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
 
   // ── RESULTS STATE ──────────────────────────────────────────────────
   Widget _resultsLayout() {
-    // Carry the ImHim wordmark into the results view too when the
+    // Carry the FirstMove wordmark into the results view too when the
     // flow began at the Share Extension. Keeps the WingAI-style
     // brand-on-top continuity all the way through to the chips.
     final fromShare = widget.preloadedScreenshot != null;
@@ -698,7 +698,7 @@ class _Header extends StatelessWidget {
                 color: Colors.white, size: 18),
           ),
           const SizedBox(width: 2),
-          // v300 — every Rizz surface now carries the ImHim two-tone
+          // v300 — every Rizz surface now carries the FirstMove two-tone
           // wordmark in the masthead so the brand is baked into any
           // screenshot the user takes of the output. Bro: "let's also
           // brand all our rizz screens good for marketing, content

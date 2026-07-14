@@ -1,6 +1,6 @@
 {
-    "name": "aura2",
-    "short_name": "aura2",
+    "name": "FirstMove",
+    "short_name": "FirstMove",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
