@@ -62,10 +62,10 @@
 
         <!-- Play Console upload-key fingerprints, embedded in the AAB. -->
         <meta-data
-            android:name="com.mirrorly.PLAY_UPLOAD_KEY_SHA1"
+            android:name="com.firstmove.PLAY_UPLOAD_KEY_SHA1"
             android:value="C2:27:D7:BE:A2:38:70:40:16:6A:E3:D9:BD:23:39:8D:60:DC:08:DE" />
         <meta-data
-            android:name="com.mirrorly.PLAY_UPLOAD_KEY_SHA256"
+            android:name="com.firstmove.PLAY_UPLOAD_KEY_SHA256"
             android:value="76:E1:49:7A:35:36:DD:9A:02:8C:DB:46:5F:F8:D2:38:18:C0:FC:40:A2:55:53:C5:C7:AB:CF:2B:A7:5C:BD:ED" />
         <meta-data
             android:name="asset_statements"

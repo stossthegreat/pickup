@@ -6,7 +6,7 @@
 	     read the screenshot the share extension wrote. -->
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.mirrorly.app.shared</string>
+		<string>group.com.firstmove.app.shared</string>
 	</array>
 </dict>
 </plist>

@@ -28,7 +28,7 @@ import UniformTypeIdentifiers
 @objc(ShareViewController)
 class ShareViewController: UIViewController {
 
-    static let appGroupID      = "group.com.mirrorly.app.shared"
+    static let appGroupID      = "group.com.firstmove.app.shared"
     static let urlScheme       = "imhim"
     static let payloadName     = "shared_screenshot.jpg"
     static let payloadStampKey = "share.screenshot.timestamp"

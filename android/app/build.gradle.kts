@@ -26,7 +26,7 @@ val playUploadKeySha1   = playFingerprints.getProperty("play.upload.key.sha1",  
 val playUploadKeySha256 = playFingerprints.getProperty("play.upload.key.sha256", "")
 
 android {
-    namespace = "com.mirrorly.mirrorly"
+    namespace = "com.firstmove.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -49,7 +49,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.mirrorly.mirrorly"
+        applicationId = "com.firstmove.app"
 
         // Bake the registered Play Console fingerprints into BuildConfig
         // so any in-app integrity check or asset_links logic can read

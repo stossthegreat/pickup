@@ -11,10 +11,10 @@ import UserNotifications
     //  lib/services/share_intake_service.dart — they're the three
     //  surfaces that have to agree.
     // ─────────────────────────────────────────────────────────────
-    static let appGroupID  = "group.com.mirrorly.app.shared"
+    static let appGroupID  = "group.com.firstmove.app.shared"
     static let payloadName = "shared_screenshot.jpg"
     static let payloadStampKey = "share.screenshot.timestamp"
-    static let methodChannelName = "com.mirrorly.app/share_intake"
+    static let methodChannelName = "com.firstmove.app/share_intake"
 
     private var shareChannel: FlutterMethodChannel?
 
