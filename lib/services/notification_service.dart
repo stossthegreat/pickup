@@ -478,7 +478,7 @@ class NotificationService {
   /// On Android the per-icon dot is system-managed and clears
   /// automatically when the user opens / dismisses; no code path
   /// needed there.
-  static const _kBadgeChannel = MethodChannel('com.firstmove.app/share_intake');
+  static const _kBadgeChannel = MethodChannel('com.firstmove.app/native');
 
   static Future<void> clearIconBadge() async {
     if (!_initialized) return;
