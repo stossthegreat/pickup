@@ -1,4 +1,4 @@
-package com.mirrorly.mirrorly
+package com.firstmove.app
 
 import io.flutter.embedding.android.FlutterActivity
 

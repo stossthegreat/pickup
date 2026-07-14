@@ -39,7 +39,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '18046958403',
     projectId:         'mirrorly-f5a1b',
     storageBucket:     'mirrorly-f5a1b.firebasestorage.app',
-    iosBundleId:       'com.mirrorly.app',
+    iosBundleId:       'com.firstmove.app',
   );
 
   static const _android = FirebaseOptions(

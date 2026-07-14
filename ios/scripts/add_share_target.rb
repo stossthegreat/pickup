@@ -11,8 +11,8 @@
 #   ruby ios/scripts/add_share_target.rb
 #
 # After running:
-#   1. Register the bundle id com.mirrorly.app.share AND the App Group
-#      group.com.mirrorly.app.shared on the Apple Developer portal.
+#   1. Register the bundle id com.firstmove.app.share AND the App Group
+#      group.com.firstmove.app.shared on the Apple Developer portal.
 #      Apple Developer iOS app on a phone works.
 #   2. Make sure your provisioning workflow regenerates profiles that
 #      include the new bundle id + the App Groups capability.
@@ -22,10 +22,10 @@ require 'xcodeproj'
 
 PROJECT_PATH       = File.expand_path('../Runner.xcodeproj', __dir__)
 EXTENSION_NAME     = 'ImHimShare'
-EXTENSION_BUNDLE_ID = 'com.mirrorly.app.share'
+EXTENSION_BUNDLE_ID = 'com.firstmove.app.share'
 DEPLOYMENT_TARGET  = '15.5'
 SWIFT_VERSION      = '5.0'
-APP_GROUP          = 'group.com.mirrorly.app.shared'
+APP_GROUP          = 'group.com.firstmove.app.shared'
 SOURCE_FILES = %w[ShareViewController.swift].freeze
 
 abort "project not found at #{PROJECT_PATH}" unless File.exist?(PROJECT_PATH)
@@ -147,5 +147,5 @@ puts
 puts 'Before the next CI build, the Apple Developer portal needs:'
 puts "  1. App ID #{EXTENSION_BUNDLE_ID} registered (App IDs / +)."
 puts "  2. App Group #{APP_GROUP} registered (App Groups / +)."
-puts "  3. App ID com.mirrorly.app capability ticked: App Groups."
+puts "  3. App ID com.firstmove.app capability ticked: App Groups."
 puts '  Automatic provisioning regenerates the profile after that.'

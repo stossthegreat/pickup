@@ -6,7 +6,7 @@
 # Wires the ImHimMessages iMessage-app extension into
 # ios/Runner.xcodeproj. Idempotent.
 #
-# Run AFTER the bundle id com.mirrorly.app.imessage is registered on
+# Run AFTER the bundle id com.firstmove.app.imessage is registered on
 # the Apple Developer portal. Same single-click flow as the share
 # extension's bundle id was. Without that, the next CI build fails on
 # signing.
@@ -15,7 +15,7 @@ require 'xcodeproj'
 
 PROJECT_PATH       = File.expand_path('../Runner.xcodeproj', __dir__)
 EXTENSION_NAME     = 'ImHimMessages'
-EXTENSION_BUNDLE_ID = 'com.mirrorly.app.imessage'
+EXTENSION_BUNDLE_ID = 'com.firstmove.app.imessage'
 DEPLOYMENT_TARGET  = '15.5'
 SWIFT_VERSION      = '5.0'
 SOURCE_FILES = %w[MessagesViewController.swift].freeze

@@ -53,7 +53,7 @@ git push
 The script:
 
 1. Creates the `ImHimShare` app-extension target with bundle id
-   `com.mirrorly.app.share`.
+   `com.firstmove.app.share`.
 2. Adds `ShareViewController.swift` to the new target.
 3. Links `Social.framework`.
 4. Sets `INFOPLIST_FILE`, `CODE_SIGN_ENTITLEMENTS`, deployment
@@ -71,21 +71,21 @@ Open the **Apple Developer** app on phone, sign in:
 1. **Certificates, Identifiers & Profiles → Identifiers → +**
    - App IDs → App → Continue.
    - Description: "ImHim Share Extension".
-   - Bundle ID: `com.mirrorly.app.share` (Explicit).
+   - Bundle ID: `com.firstmove.app.share` (Explicit).
    - Capabilities: tick **App Groups**.
    - Continue → Register.
 
 2. **Certificates, Identifiers & Profiles → Identifiers → +**
    - App Groups → Continue.
    - Description: "ImHim Shared Container".
-   - Identifier: `group.com.mirrorly.app.shared`.
+   - Identifier: `group.com.firstmove.app.shared`.
    - Continue → Register.
 
-3. Back to the existing `com.mirrorly.app` App ID:
+3. Back to the existing `com.firstmove.app` App ID:
    - Tick **App Groups** capability.
-   - Configure → check `group.com.mirrorly.app.shared`. Save.
+   - Configure → check `group.com.firstmove.app.shared`. Save.
 
-4. Same for the new `com.mirrorly.app.share` App ID:
+4. Same for the new `com.firstmove.app.share` App ID:
    - Configure App Groups → check the same group. Save.
 
 5. **Profiles** — let Xcode / Codemagic automatic provisioning
