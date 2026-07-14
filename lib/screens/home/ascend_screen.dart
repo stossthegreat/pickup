@@ -37,7 +37,7 @@ import '../../widgets/common/imhim_wordmark.dart';
 ///   3. TODAY'S ASCENSION — 5 daily MISSIONS (not tasks). 4/5 COMPLETE
 ///      header, each tick visibly feeds the flame.
 ///   4. RANK PROGRESSION — Observer → Initiate → Contender →
-///      Dangerous → Magnetic → ImHim. Status ladder, not stats.
+///      Dangerous → Magnetic → FirstMove. Status ladder, not stats.
 ///   5. ASCENSION RECORD — timeline of milestones. "This becomes
 ///      their story."
 ///   6. STREAK — huge flame number. Users protect streaks, not scores.
@@ -77,7 +77,7 @@ class AscendScreen extends StatefulWidget {
 
   /// Rolling 7-day mission-completion consistency (0..100) from
   /// StreakService.progress. The 30% CONSISTENCY component of the
-  /// IMHIM score.
+  /// FIRSTMOVE score.
   final int consistency;
 
   /// Today's mission set from the quota-aware DailyMissionService —
@@ -99,11 +99,11 @@ class AscendScreen extends StatefulWidget {
   final bool pickupLineDoneToday;
 
   /// v289 — latest Looks pillar score, 0-100 raw scale. Feeds the
-  /// IMHIM-score formula.
+  /// FIRSTMOVE-score formula.
   final int looksScore100;
 
   /// v289 — best Free Flow / Game pillar score, 0-100 raw scale.
-  /// Feeds the IMHIM-score formula.
+  /// Feeds the FIRSTMOVE-score formula.
   final int gameScore100;
 
   const AscendScreen({
@@ -132,7 +132,7 @@ class AscendScreen extends StatefulWidget {
 
 class _AscendScreenState extends State<AscendScreen> {
   /// Cached weekly delta — the diff between the user's current
-  /// IMHIM score and the prior weekly snapshot. Pre-loaded on first
+  /// FIRSTMOVE score and the prior weekly snapshot. Pre-loaded on first
   /// build so the score hero can render the arrow synchronously.
   int _weeklyDelta = 0;
   bool _deltaLoaded = false;
@@ -236,7 +236,7 @@ class _AscendScreenState extends State<AscendScreen> {
 
             const SizedBox(height: Sp.lg),
 
-            // ── 2 — IMHIM SCORE. The composite number that unifies
+            // ── 2 — FIRSTMOVE SCORE. The composite number that unifies
             // the four surfaces. Consultant's biggest call: "Without
             // this, users are managing 4 systems. With this, users
             // are levelling one character." Built from Looks + Game
@@ -497,7 +497,7 @@ class _AscendScreenState extends State<AscendScreen> {
         eyebrow:  'MID-PROTOCOL SCAN · DAY 28',
         title:    'Capture the delta.',
         subtitle: 'A new scan locks in the week-4 receipt and refreshes '
-                  'your IMHIM score.',
+                  'your FIRSTMOVE score.',
         doneCopy: 'Mid-protocol scan locked in.',
         cta:      'Take the scan',
       );
@@ -509,7 +509,7 @@ class _AscendScreenState extends State<AscendScreen> {
         to:       60,
         eyebrow:  'FINAL SCAN · DAY 60',
         title:    'Your before / after lands now.',
-        subtitle: 'The Day-60 scan unlocks the IMHIM CERTIFIED card. '
+        subtitle: 'The Day-60 scan unlocks the FIRSTMOVE CERTIFIED card. '
                   'This is the receipt people share.',
         doneCopy: 'Final scan logged. Certificate is ready.',
         cta:      'Take the final scan',
@@ -532,11 +532,11 @@ class _AscendScreenState extends State<AscendScreen> {
     return false;
   }
 
-  /// v291 — Generate the IMHIM CERTIFIED Day-60 share card.
+  /// v291 — Generate the FIRSTMOVE CERTIFIED Day-60 share card.
   /// Collects:
   ///   - BEFORE photo: first scan in history (chronological)
   ///   - AFTER photo:  last scan in history (the Day-60-window scan)
-  ///   - IMHIM SCORE arc: composite computed at Day-1 conditions
+  ///   - FIRSTMOVE SCORE arc: composite computed at Day-1 conditions
   ///     (first scan's looks, first game score, consistency = 0)
   ///     vs the current composite
   ///   - LOOKS arc:  first scan score → latest scan score
@@ -571,7 +571,7 @@ class _AscendScreenState extends State<AscendScreen> {
     final int consistencyEnd = widget.consistency;
     const int consistencyStart = 0;
 
-    // IMHIM SCORE arc — same formula AscensionService runs in the
+    // FIRSTMOVE SCORE arc — same formula AscensionService runs in the
     // hero so the certificate reads as continuous with the live tab.
     final int imhimStart = AscensionService.imhimScoreFromComponents(
       looks:       looksStart,
@@ -860,7 +860,7 @@ class _ProgressRingPainter extends CustomPainter {
 //  SECTION 2 — COST OF QUITTING
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// v289 — IMHIM SCORE hero. The composite that levels the whole
+/// v289 — FIRSTMOVE SCORE hero. The composite that levels the whole
 /// app into one character. Hero number in red, weekly delta arrow
 /// underneath, three component pillars stacked below as the
 /// "built from" credit row. Sits directly under the flame so the
@@ -909,7 +909,7 @@ class _ImHimScoreHero extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text('IMHIM SCORE',
+            Text('FIRSTMOVE SCORE',
               style: GoogleFonts.inter(
                 color: AppColors.red,
                 fontSize: 10.5, letterSpacing: 3.2,
@@ -1745,7 +1745,7 @@ class _FinalFormCard extends StatelessWidget {
   final int daysLeft;
   /// v291 — invoked when the user taps GENERATE CERTIFICATE on the
   /// unlocked card. The State subclass owns the data collection
-  /// (first/last scan, looks/game arcs, IMHIM start/end) and the
+  /// (first/last scan, looks/game arcs, FIRSTMOVE start/end) and the
   /// ShareService call. Null when locked so the build path can
   /// hide the CTA entirely.
   final Future<void> Function()? onGenerate;
@@ -1794,7 +1794,7 @@ class _FinalFormCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Text('IMHIM CERTIFIED',
+            Text('FIRSTMOVE CERTIFIED',
               style: GoogleFonts.playfairDisplay(
                 color: AppColors.textPrimary,
                 fontSize: 28, height: 1.1,
@@ -1806,7 +1806,7 @@ class _FinalFormCard extends StatelessWidget {
             Text(
               unlocked
                 ? 'You finished the protocol. Generate the receipt — '
-                  'real before / after photos, the IMHIM SCORE arc, '
+                  'real before / after photos, the FIRSTMOVE SCORE arc, '
                   'and the Looks + Game lift, on one card people will '
                   'screenshot.'
                 : 'Reach Day 60 to unlock:',
@@ -1819,7 +1819,7 @@ class _FinalFormCard extends StatelessWidget {
             const SizedBox(height: 12),
             for (final line in const [
               'Before / after face pair',
-              'IMHIM SCORE arc — start to Day 60',
+              'FIRSTMOVE SCORE arc — start to Day 60',
               'Looks + Game arcs with deltas',
               'Consistency receipt',
               'Shareable certificate card',

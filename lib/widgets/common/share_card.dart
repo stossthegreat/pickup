@@ -91,9 +91,9 @@ class ShareCard extends StatelessWidget {
                       fontWeight: FontWeight.w800, height: 1,
                     ),
                     children: [
-                      const TextSpan(text: 'Im'),
+                      const TextSpan(text: 'First'),
                       TextSpan(
-                        text: 'Him',
+                        text: 'Move',
                         style: GoogleFonts.playfairDisplay(
                           color: ShareCard.accentRed,
                           fontSize: 72, letterSpacing: -1.6,
@@ -201,7 +201,7 @@ class ShareCard extends StatelessWidget {
                           fontWeight: FontWeight.w900, height: 1,
                         )),
                       const SizedBox(height: 8),
-                      Text('IMHIM.APP',
+                      Text('FIRSTMOVE.APP',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           color: Colors.white.withValues(alpha: 0.92),
@@ -284,9 +284,9 @@ class ShareCard extends StatelessWidget {
                   ],
                 ),
                 children: [
-                  const TextSpan(text: 'Im'),
+                  const TextSpan(text: 'First'),
                   TextSpan(
-                    text: 'Him',
+                    text: 'Move',
                     style: GoogleFonts.playfairDisplay(
                       color: ShareCard.accentRed,
                       fontSize: 34, letterSpacing: -0.8,

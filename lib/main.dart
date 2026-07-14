@@ -128,7 +128,7 @@ class _MirrorAppState extends State<MirrorApp> with WidgetsBindingObserver {
     return ChangeNotifierProvider(
       create: (_) => AuralayAppProvider()..load(),
       child: MaterialApp.router(
-        title: 'MIRROR',
+        title: 'FirstMove',
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
         routerConfig: appRouter,

@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../theme/app_colors.dart';
 
-/// The ImHim wordmark. "Im" in white, "Him" in red, italic editorial
+/// The FirstMove wordmark. "Im" in white, "Him" in red, italic editorial
 /// Playfair — the same letterforms the rest of the app uses for its
 /// title display. Drop this anywhere we used to render "Mirrorly":
 /// splash, paywall, settings, share card, masthead, intro reel,
@@ -45,9 +45,9 @@ class ImHimWordmark extends StatelessWidget {
       text: TextSpan(
         style: base.copyWith(color: Colors.white),
         children: [
-          const TextSpan(text: 'Im'),
+          const TextSpan(text: 'First'),
           TextSpan(
-            text: 'Him',
+            text: 'Move',
             style: base.copyWith(color: AppColors.red),
           ),
         ],

@@ -802,7 +802,7 @@ class _Header extends StatelessWidget {
               color: Colors.white, size: 18),
           ),
           const SizedBox(width: 2),
-          // v300 — wordmark replaces the old "IMHIM" pill so the
+          // v300 — wordmark replaces the old "FIRSTMOVE" pill so the
           // brand reads at full weight in any chat screenshot the
           // user posts. Same italic Playfair lockup as every other
           // Rizz surface.
