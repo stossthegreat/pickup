@@ -4,9 +4,6 @@ import java.io.FileInputStream
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // Reads android/app/google-services.json and exposes the Firebase
-    // config to the app at build time. Required by firebase_analytics.
-    id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -49,7 +46,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.mirrorly.mirrorly"
+        applicationId = "com.firstmove.app"
 
         // Bake the registered Play Console fingerprints into BuildConfig
         // so any in-app integrity check or asset_links logic can read

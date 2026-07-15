@@ -1,21 +1,21 @@
 {
-  "name": "mirror-backend",
-  "version": "0.1.0",
-  "description": "MIRROR backend — Flux Kontext image harness + GPT-4o analysis",
-  "main": "src/server.js",
+  "name": "auralay-backend",
+  "version": "1.0.0",
+  "description": "AURALAY backend — Diablo persona, scoring, TTS streaming. Deployed on Railway.",
+  "main": "server.js",
   "type": "module",
-  "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
-  },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "cors": "^2.8.5",
-    "replicate": "^1.0.1",
-    "openai": "^4.77.0",
-    "dotenv": "^16.4.7"
+    "@fastify/cors": "^10.0.1",
+    "@fastify/multipart": "^9.0.1",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.1.0",
+    "openai": "^4.77.0"
   }
 }

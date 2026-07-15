@@ -4,7 +4,7 @@ providers = ["node"]
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["cd backend2 && npm ci --omit=dev"]
+cmds = ["cd backend && npm ci --omit=dev"]
 
 [start]
-cmd = "cd backend2 && npm start"
+cmd = "cd backend && npm start"

@@ -13,7 +13,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>ImHim reads the screenshot you select so the RIZZ tab can extract the messages on-device and generate three reply options. The screenshot never leaves your device — only the extracted text is sent for generation.</string>
 	<key>CFBundleDisplayName</key>
-	<string>ImHim</string>
+	<string>Charmr</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -64,7 +64,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.mirrorly.app</string>
+			<string>com.firstmove.app</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>

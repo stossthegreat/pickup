@@ -1,13 +1,13 @@
 {
   "name": "pickup-monorepo",
   "private": true,
-  "description": "Pickup monorepo root — Railway deploys the unified backend (backend2) from here",
+  "description": "Pickup monorepo root — Railway deploys the unified backend (backend) from here",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "start": "cd backend2 && npm start",
-    "install-backend": "cd backend2 && npm install --omit=dev",
-    "postinstall": "cd backend2 && npm install --omit=dev"
+    "start": "cd backend && npm start",
+    "install-backend": "cd backend && npm install --omit=dev",
+    "postinstall": "cd backend && npm install --omit=dev"
   }
 }
