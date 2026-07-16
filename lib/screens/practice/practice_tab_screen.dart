@@ -1,38 +1,83 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
-import '../../models/villain/scenes.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/common/mirrorly_components.dart';
-import '../game/arena/arena_session_screen.dart';
+import '../game/freeflow/free_flow_screen.dart';
 
-/// PRACTICE — a 2×2 grid of six AI women. Tap one and her realtime VOICE
-/// roleplay opens (red record button, Lucien cutting in). Reuses the
-/// existing ArenaSessionScreen; this screen is just the elite picker.
+/// PRACTICE — a 2×3 grid of six AI women. Tap one and her REALTIME VOICE
+/// roleplay opens straight onto the live orb (red HOLD-TO-SPEAK circle,
+/// Lucien step-in, END & GET SCORED) with that character preselected.
+///
+/// This is the exact screen that was the main surface of ImHim's Game
+/// tab — [FreeFlowScreen]. Each card just pushes it with the matching
+/// `initialVibeKey`, so the OpenAI Realtime session, scoring, and every
+/// backend endpoint are identical to the tab + picker paths. Nothing new
+/// to wire when the backend is plugged in — it already speaks this
+/// contract.
 class PracticeTabScreen extends StatelessWidget {
   const PracticeTabScreen({super.key});
 
-  // Six scenes, each paired with its render. Order chosen for visual variety.
-  static const _cast = <(String sceneId, String asset, Color accent)>[
-    ('ice_girl', 'assets/characters/women/ice_queen.png', Color(0xFF38BDF8)),
-    ('chaos_girl', 'assets/characters/women/chaos_girl.png', Color(0xFFE8222A)),
-    ('hot_girl_who_knows_it', 'assets/characters/women/socialite.png', Color(0xFFFBBF24)),
-    ('intellectual_girl', 'assets/characters/women/intellectual.png', Color(0xFF8B94F5)),
-    ('sweet_girl', 'assets/characters/women/shy_girl.png', Color(0xFF4ADE80)),
-    ('first_date_girl', 'assets/characters/women/arena.png', Color(0xFFF472B6)),
+  // Six women, each mapped 1:1 to a realtime roleplay persona
+  // (`_Vibe.key` inside free_flow_screen.dart). Portrait + accent chosen
+  // to match her vibe; the hook mirrors her in-session tagline so the
+  // card and the live persona read as the same character.
+  static const _cast = <_CastMember>[
+    _CastMember(
+      vibe: 'cold',
+      name: 'Ice Queen',
+      hook: 'Selective. Gives you nothing. Earn every inch.',
+      asset: 'assets/characters/women/ice_queen.png',
+      accent: Color(0xFF38BDF8),
+    ),
+    _CastMember(
+      vibe: 'into_you',
+      name: 'Into You',
+      hook: 'Already a little into you. Don\'t get needy.',
+      asset: 'assets/characters/women/arena.png',
+      accent: Color(0xFFF472B6),
+    ),
+    _CastMember(
+      vibe: 'chaos',
+      name: 'Chaos',
+      hook: 'Fast, loud, jumps topics. Keep up.',
+      asset: 'assets/characters/women/chaos_girl.png',
+      accent: Color(0xFFE8222A),
+    ),
+    _CastMember(
+      vibe: 'testing',
+      name: 'Testing You',
+      hook: 'Smart. Testing you constantly. Don\'t fold.',
+      asset: 'assets/characters/women/intellectual.png',
+      accent: Color(0xFF8B94F5),
+    ),
+    _CastMember(
+      vibe: 'ice_then_fire',
+      name: 'Ice Then Fire',
+      hook: 'Starts ice cold. Warms only if you hold.',
+      asset: 'assets/characters/women/socialite.png',
+      accent: Color(0xFFFBBF24),
+    ),
+    _CastMember(
+      vibe: 'sweet',
+      name: 'Sweet',
+      hook: 'Warm and genuine. Kill the arrogance.',
+      asset: 'assets/characters/women/shy_girl.png',
+      accent: Color(0xFF4ADE80),
+    ),
   ];
 
-  VillainScene _scene(String id) =>
-      VillainScenes.all.firstWhere((s) => s.id == id, orElse: () => VillainScenes.all.first);
-
-  String _pretty(String title) {
-    // "ICE GIRL" -> "Ice Girl"
-    return title
-        .toLowerCase()
-        .split(' ')
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
+  void _openRoleplay(BuildContext context, String vibeKey) {
+    // Push on the ROOT navigator so the live session covers the bottom
+    // nav bar (true full-screen), and so SafeCloseButton / safePop can
+    // reliably pop back to this grid. tabMode stays false → the
+    // standalone close button renders.
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        builder: (_) => FreeFlowScreen(initialVibeKey: vibeKey),
+      ),
+    );
   }
 
   @override
@@ -62,16 +107,13 @@ class PracticeTabScreen extends StatelessWidget {
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, i) {
-                  final (id, asset, accent) = _cast[i];
-                  final scene = _scene(id);
+                  final member = _cast[i];
                   return _GirlCard(
-                    name: _pretty(scene.title),
-                    hook: scene.oneLine,
-                    asset: asset,
-                    accent: accent,
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => ArenaSessionScreen(scene: scene),
-                    )),
+                    name: member.name,
+                    hook: member.hook,
+                    asset: member.asset,
+                    accent: member.accent,
+                    onTap: () => _openRoleplay(context, member.vibe),
                   )
                       .animate()
                       .fadeIn(delay: (60 * i).ms, duration: 320.ms)
@@ -85,6 +127,23 @@ class PracticeTabScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// One woman in the Practice roster — her realtime persona key plus the
+/// card's display fields.
+class _CastMember {
+  final String vibe;
+  final String name;
+  final String hook;
+  final String asset;
+  final Color accent;
+  const _CastMember({
+    required this.vibe,
+    required this.name,
+    required this.hook,
+    required this.asset,
+    required this.accent,
+  });
 }
 
 class _GirlCard extends StatelessWidget {
