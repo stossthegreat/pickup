@@ -38,7 +38,18 @@
 ///   · Rizz       — 1 free screenshot reply, then paywall;
 ///                  Lines + Chat are Pro-only outright
 ///   · Lessons    — Pro-only from Day 1
-const kBypassPaywall = false;
+///
+/// v353 (Charmr 4-tab build) — flipped back to TRUE. The scan flow
+/// routes every non-Pro user to /paywall right after capture, and on a
+/// dev / TestFlight build with no live RevenueCat products the paywall
+/// has no way forward (BECOME HIM can't complete a purchase), so the
+/// whole app was un-reachable behind it. TRUE force-sets the local
+/// subscribed flag at launch, auto-bounces the paywall, and lands the
+/// user on /home so the Missions / Practice / Texts / Progress tabs are
+/// fully usable while testing.
+///
+/// **FLIP THIS BACK TO FALSE BEFORE SHIPPING A PAID BUILD.**
+const kBypassPaywall = true;
 
 /// Human-readable build tag shown tiny on the paywall so we can instantly
 /// tell which build is actually installed on-device (TestFlight lag has
