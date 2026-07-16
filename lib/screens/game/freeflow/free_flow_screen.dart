@@ -56,7 +56,23 @@ class FreeFlowScreen extends StatefulWidget {
   /// The session lifecycle (tap-and-hold, scoring, Lucien step-in)
   /// behaves identically to the standalone push.
   final bool tabMode;
-  const FreeFlowScreen({super.key, this.tabMode = false});
+
+  /// When set (and [tabMode] is false), the screen is pushed with ONE
+  /// character preselected — the Practice tab's six-woman grid opens a
+  /// card straight onto that persona's live orb. The picker phase is
+  /// skipped and [_goLive] fires on the matching vibe after the first
+  /// frame, using the exact same realtime-session / scoring path the
+  /// tab + picker use. Because [tabMode] stays false, the standalone
+  /// close button renders and returns the user to the grid. Value is a
+  /// `_Vibe.key` (e.g. 'cold', 'into_you', 'chaos', 'testing',
+  /// 'ice_then_fire', 'sweet'); an unknown key falls back to the first.
+  final String? initialVibeKey;
+
+  const FreeFlowScreen({
+    super.key,
+    this.tabMode = false,
+    this.initialVibeKey,
+  });
 
   @override
   State<FreeFlowScreen> createState() => _FreeFlowScreenState();
@@ -145,6 +161,21 @@ const _vibes = <_Vibe>[
     'Rooftop bar. She\'s by the railing, arms crossed, looking at the '
         'view like it bores her. Open the conversation.',
     MirrorlyAssets.socialite,
+  ),
+  _Vibe(
+    'sweet',
+    'SWEET',
+    'Warm and genuine. Kill the arrogance.',
+    'She is warm, sweet, and genuinely kind — she smiles easily and '
+        'gives you real openings. She is not a pushover, though: canned '
+        'lines, arrogance, or crude moves make her retreat and go '
+        'polite-distant. She rewards a man who is warm back, present, '
+        'and real without losing his edge.',
+    'coral',
+    'Bookshop cafe, Sunday afternoon. She\'s at the counter deciding '
+        'between two pastries and catches your eye with a smile. Open '
+        'the conversation.',
+    MirrorlyAssets.shyGirl,
   ),
 ];
 
@@ -349,6 +380,23 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         );
         // ignore: discarded_futures
         _goLive(defaultVibe);
+      });
+    } else if (widget.initialVibeKey != null) {
+      // PRACTICE-card mode: pushed with one character preselected.
+      // Skip the picker and drop straight onto the live orb for that
+      // persona — identical _goLive → realtime_session path as the tab
+      // + picker, so the backend contract is unchanged. tabMode is
+      // false here, so the standalone close button pops back to the
+      // Practice grid.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _tabAutoStartFired) return;
+        _tabAutoStartFired = true;
+        final startVibe = _vibes.firstWhere(
+          (v) => v.key == widget.initialVibeKey,
+          orElse: () => _vibes.first,
+        );
+        // ignore: discarded_futures
+        _goLive(startVibe);
       });
     }
   }
@@ -2539,13 +2587,17 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                           return;
                         }
                         // Tab mode resets inline so the user stays in
-                        // the GAME tab. Standalone push replaces.
+                        // the GAME tab. Standalone push replaces —
+                        // carrying the current persona's key so a
+                        // Practice-card session runs the SAME woman back
+                        // (null key just falls back to the picker).
                         if (widget.tabMode) {
                           _restartTabSession();
                         } else {
                           Navigator.of(context, rootNavigator: true)
                               .pushReplacement(MaterialPageRoute(
-                            builder: (_) => const FreeFlowScreen(),
+                            builder: (_) =>
+                                FreeFlowScreen(initialVibeKey: _vibe?.key),
                           ));
                         }
                       },
