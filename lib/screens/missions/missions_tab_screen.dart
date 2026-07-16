@@ -1,294 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../models/villain/scenes.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
-import '../../widgets/common/mirrorly_components.dart';
+import '../game/arena/arena_session_screen.dart';
 
-/// MISSIONS tab — real-world action + AI drills, one daily slate. Reuses the
-/// app's elite components so it reads as one system with Roleplay + Progress.
-///
-/// [onOpenRoleplay] switches the shell to the Roleplay tab when an AI drill is
-/// tapped (wired from HomeScreen). Real-world missions open an honor check-in.
-class MissionsTabScreen extends StatefulWidget {
-  final VoidCallback? onOpenRoleplay;
-  const MissionsTabScreen({super.key, this.onOpenRoleplay});
-
-  @override
-  State<MissionsTabScreen> createState() => _MissionsTabScreenState();
-}
-
-class _RealMission {
-  final String title, sub, tier, xp;
-  const _RealMission(this.title, this.sub, this.tier, this.xp);
-}
-
-class _Drill {
-  final String name, line, asset;
-  final bool locked;
-  const _Drill(this.name, this.line, this.asset, {this.locked = false});
-}
-
-class _MissionsTabScreenState extends State<MissionsTabScreen> {
-  final Set<int> _done = {};
-
-  static const _real = <_RealMission>[
-    _RealMission('Hold eye contact with 3 strangers',
-        'One beat longer than comfortable. Then look away calm.', 'WARM-UP', '120'),
-    _RealMission('Give one genuine compliment out loud',
-        'Specific, not looks. To a stranger. No agenda.', 'STANDARD', '200'),
-    _RealMission('Start one conversation with someone new',
-        'Twenty seconds. That is the whole mission.', 'BOLD', '350'),
-  ];
-
-  static const _drills = <_Drill>[
-    _Drill('The Ice Queen', 'Open her without a boring "hey".',
-        'assets/characters/women/ice_queen.png'),
-    _Drill('The Chaos Girl', 'Make her laugh in four messages.',
-        'assets/characters/women/chaos_girl.png'),
-    _Drill('The Intellectual', 'Hold your frame — don\'t posture.',
-        'assets/characters/women/intellectual.png', locked: true),
-  ];
+/// MISSIONS — the front door. Beautiful, clean cards. Three kinds:
+///   • AI  — "Talk to her" → opens her voice roleplay right away.
+///   • Texts — real-world messaging (comment on her story, DM your crush)
+///            → routes to the Texts tab to practice the line first.
+///   • Approach — real-world in-person → routes to the Practice tab.
+class MissionsTabScreen extends StatelessWidget {
+  final ValueChanged<int> onGoToTab; // 1 = Practice, 2 = Texts
+  const MissionsTabScreen({super.key, required this.onGoToTab});
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       bottom: false,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.md, Sp.lg, 120),
-        children: [
-          const MirrorlyMasthead(eyebrow: 'TODAY', title: 'Missions'),
-          const SizedBox(height: Sp.lg),
-          const StatStrip(stats: [
-            StatPoint(icon: Icons.local_fire_department_rounded, value: '4', label: 'STREAK'),
-            StatPoint(icon: Icons.check_circle_outline_rounded, value: '2/6', label: 'DONE'),
-            StatPoint(icon: Icons.bolt_rounded, value: '640', label: 'XP TODAY'),
-          ]),
-          const SizedBox(height: Sp.xl),
-          const DisplayBlock(
-            lineOne: 'The real',
-            lineTwo: 'world.',
-            body: 'Where the level-up actually happens. Weighs the most — you '
-                'can\'t max out from the couch.',
-          ),
-          const SizedBox(height: Sp.lg),
-          for (var i = 0; i < _real.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: Sp.sm + 2),
-              child: _realCard(i)
-                  .animate()
-                  .fadeIn(delay: (60 * i).ms, duration: 300.ms)
-                  .slideY(begin: 0.08, curve: Curves.easeOut),
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(child: _TopBar()),
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(Sp.lg, Sp.lg, Sp.lg, Sp.sm),
+              child: _Heading(),
             ),
-          const SizedBox(height: Sp.xl),
-          const DisplayBlock(
-            lineOne: 'AI',
-            lineTwo: 'drills.',
-            body: 'Train the move on AI first. Scored, endless, laddered.',
           ),
-          const SizedBox(height: Sp.lg),
-          for (final d in _drills)
-            Padding(
-              padding: const EdgeInsets.only(bottom: Sp.sm + 2),
-              child: RoleplayTile(
-                name: d.name,
-                line: d.line,
-                assetPath: d.asset,
-                locked: d.locked,
-                onTap: () {
-                  if (!d.locked) widget.onOpenRoleplay?.call();
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _realCard(int i) {
-    final m = _real[i];
-    final done = _done.contains(i);
-    return _MissionCard(
-      title: m.title,
-      sub: m.sub,
-      tier: m.tier,
-      xp: m.xp,
-      done: done,
-      onTap: () => _checkIn(i),
-    );
-  }
-
-  void _checkIn(int i) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _DebriefSheet(
-        mission: _real[i],
-        onLogged: () => setState(() => _done.add(i)),
-      ),
-    );
-  }
-}
-
-// ── Elite real-world mission card ─────────────────────────────────────────
-class _MissionCard extends StatelessWidget {
-  final String title, sub, tier, xp;
-  final bool done;
-  final VoidCallback onTap;
-  const _MissionCard({
-    required this.title,
-    required this.sub,
-    required this.tier,
-    required this.xp,
-    required this.done,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(Rd.lg),
-        child: Ink(
-          padding: const EdgeInsets.all(Sp.md),
-          decoration: BoxDecoration(
-            color: AppColors.surface2,
-            borderRadius: BorderRadius.circular(Rd.lg),
-            border: Border.all(
-                color: done
-                    ? AppColors.signalGreen.withOpacity(0.4)
-                    : AppColors.red.withOpacity(0.28)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.redGlow,
-                  borderRadius: BorderRadius.circular(Rd.md),
-                  border: Border.all(color: AppColors.red.withOpacity(0.3)),
-                ),
-                child: Center(
-                    child: Text(done ? '✓' : '🌍',
-                        style: TextStyle(
-                            fontSize: done ? 18 : 16,
-                            color: done ? AppColors.signalGreen : null))),
-              ),
-              const SizedBox(width: Sp.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      _pill(tier, AppColors.red),
-                      const SizedBox(width: 6),
-                      _pill('+$xp XP', AppColors.textTertiary),
-                    ]),
-                    const SizedBox(height: 8),
-                    Text(title,
-                        style: AppTypography.h3.copyWith(
-                            decoration: done ? TextDecoration.lineThrough : null,
-                            color: done ? AppColors.textTertiary : AppColors.textPrimary)),
-                    const SizedBox(height: 3),
-                    Text(sub,
-                        style: AppTypography.bodySmall
-                            .copyWith(color: AppColors.textTertiary)),
-                  ],
-                ),
-              ),
-              Icon(done ? Icons.replay_rounded : Icons.chevron_right_rounded,
-                  size: 18, color: AppColors.textTertiary),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _pill(String t, Color c) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: c.withOpacity(0.14),
-          borderRadius: BorderRadius.circular(Rd.sm),
-          border: Border.all(color: c.withOpacity(0.4)),
-        ),
-        child: Text(t.toUpperCase(),
-            style: AppTypography.label.copyWith(color: c, fontSize: 9, letterSpacing: 1.4)),
-      );
-}
-
-// ── Honor check-in sheet ──────────────────────────────────────────────────
-class _DebriefSheet extends StatefulWidget {
-  final _RealMission mission;
-  final VoidCallback onLogged;
-  const _DebriefSheet({required this.mission, required this.onLogged});
-  @override
-  State<_DebriefSheet> createState() => _DebriefSheetState();
-}
-
-class _DebriefSheetState extends State<_DebriefSheet> {
-  int _outcome = -1;
-  final _c = TextEditingController();
-  static const _opts = [('I did it', '💪'), ('Partial', '◐'), ('Chickened out', '🫥')];
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        left: Sp.lg,
-        right: Sp.lg,
-        top: Sp.lg,
-        bottom: MediaQuery.of(context).viewInsets.bottom + Sp.lg,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(Rd.xxl)),
-        border: Border(top: BorderSide(color: AppColors.red, width: 2)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                    color: AppColors.surface3,
-                    borderRadius: BorderRadius.circular(2))),
-          ),
-          const SizedBox(height: Sp.lg),
-          Text(widget.mission.title, style: AppTypography.h2),
-          const SizedBox(height: Sp.lg),
-          Text('HOW DID IT GO?', style: AppTypography.label),
-          const SizedBox(height: Sp.sm),
-          Row(children: [
-            for (var i = 0; i < _opts.length; i++) ...[
-              if (i > 0) const SizedBox(width: Sp.sm),
-              Expanded(child: _tile(i)),
-            ],
-          ]),
-          const SizedBox(height: Sp.lg),
-          SizedBox(
-            width: double.infinity,
-            child: PrimaryCta(
-              label: _outcome < 0 ? 'PICK AN OUTCOME' : 'LOG IT',
-              icon: Icons.check_rounded,
-              locked: _outcome < 0,
-              onTap: () {
-                if (_outcome < 0) return;
-                widget.onLogged();
-                Navigator.of(context).pop();
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(Sp.lg, 0, Sp.lg, 120),
+            sliver: SliverList.builder(
+              itemCount: _seed.length,
+              itemBuilder: (context, i) {
+                final m = _seed[i];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: Sp.sm + 4),
+                  child: _MissionCard(
+                    mission: m,
+                    onTap: () => _launch(context, m),
+                  )
+                      .animate()
+                      .fadeIn(delay: (70 * i).ms, duration: 340.ms)
+                      .slideY(begin: 0.07, curve: Curves.easeOut),
+                );
               },
             ),
           ),
@@ -297,27 +53,258 @@ class _DebriefSheetState extends State<_DebriefSheet> {
     );
   }
 
-  Widget _tile(int i) {
-    final sel = _outcome == i;
-    return GestureDetector(
-      onTap: () => setState(() => _outcome = i),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: Sp.md),
-        decoration: BoxDecoration(
-          color: sel ? AppColors.redGlow : AppColors.surface2,
-          borderRadius: BorderRadius.circular(Rd.md),
-          border: Border.all(color: sel ? AppColors.red : AppColors.surface3),
-        ),
-        child: Column(children: [
-          Text(_opts[i].$2, style: const TextStyle(fontSize: 20)),
-          const SizedBox(height: 6),
-          Text(_opts[i].$1.toUpperCase(),
-              textAlign: TextAlign.center,
-              style: AppTypography.label
-                  .copyWith(color: sel ? AppColors.red : AppColors.textTertiary)),
-        ]),
+  void _launch(BuildContext context, _Mission m) {
+    switch (m.kind) {
+      case _Kind.ai:
+        final scene = VillainScenes.all
+            .firstWhere((s) => s.id == m.sceneId, orElse: () => VillainScenes.all.first);
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => ArenaSessionScreen(scene: scene),
+        ));
+      case _Kind.texts:
+        onGoToTab(2);
+      case _Kind.approach:
+        onGoToTab(1);
+    }
+  }
+}
+
+// ── Data ────────────────────────────────────────────────────────────────
+enum _Kind { ai, texts, approach }
+
+class _Mission {
+  final _Kind kind;
+  final String title, sub, tier, xp;
+  final String? asset; // AI missions show her render
+  final String? sceneId;
+  const _Mission(this.kind, this.title, this.sub, this.tier, this.xp,
+      {this.asset, this.sceneId});
+}
+
+const _seed = <_Mission>[
+  _Mission(_Kind.ai, 'Talk to the Ice Queen',
+      'She gives nothing for free. Warm her up on voice.', 'AI · VOICE', '80',
+      asset: 'assets/characters/women/ice_queen.png', sceneId: 'ice_girl'),
+  _Mission(_Kind.texts, 'Comment on her story',
+      'Someone you like posted. One line that makes her reply.', 'REAL · TEXTS', '150'),
+  _Mission(_Kind.approach, 'Approach one girl today',
+      'When you\'re out. Twenty seconds. Practice on voice first.', 'REAL · APPROACH', '350'),
+  _Mission(_Kind.texts, 'Message your crush',
+      'Open the chat you keep re-reading. Send something real.', 'REAL · TEXTS', '200'),
+  _Mission(_Kind.ai, 'Make the Chaos Girl laugh',
+      'Match her tempo. Four lines to a real laugh.', 'AI · VOICE', '120',
+      asset: 'assets/characters/women/chaos_girl.png', sceneId: 'chaos_girl'),
+  _Mission(_Kind.texts, 'Reopen a dead conversation',
+      'One that went cold. Revive it without "hey".', 'REAL · TEXTS', '180'),
+];
+
+// ── Top bar: streak · XP · progress · settings ───────────────────────────
+class _TopBar extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.md, 0),
+      child: Row(
+        children: [
+          _Chip(icon: Icons.local_fire_department_rounded, label: '4', color: AppColors.red),
+          const SizedBox(width: Sp.sm),
+          _Chip(icon: Icons.bolt_rounded, label: '2,140 XP', color: AppColors.accent),
+          const Spacer(),
+          _IconBtn(icon: Icons.insights_rounded, onTap: () => context.push('/progress')),
+          _IconBtn(icon: Icons.settings_outlined, onTap: () => context.push('/settings')),
+        ],
       ),
     );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _Chip({required this.icon, required this.label, required this.color});
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(Rd.sm),
+          border: Border.all(color: color.withOpacity(0.35)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 5),
+          Text(label,
+              style: AppTypography.label.copyWith(color: color, letterSpacing: 1)),
+        ]),
+      );
+}
+
+class _IconBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _IconBtn({required this.icon, required this.onTap});
+  @override
+  Widget build(BuildContext context) => IconButton(
+        onPressed: onTap,
+        icon: Icon(icon, color: AppColors.textSecondary, size: 22),
+        splashRadius: 22,
+      );
+}
+
+class _Heading extends StatelessWidget {
+  const _Heading();
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('TODAY', style: AppTypography.label),
+        const SizedBox(height: 6),
+        Text('Go get her.', style: AppTypography.h1Italic),
+        const SizedBox(height: 6),
+        Text('Your missions for today. Practice on AI, then do it for real.',
+            style: AppTypography.bodySmall),
+      ],
+    );
+  }
+}
+
+// ── The elite mission card ───────────────────────────────────────────────
+class _MissionCard extends StatelessWidget {
+  final _Mission mission;
+  final VoidCallback onTap;
+  const _MissionCard({required this.mission, required this.onTap});
+
+  Color get _accent => mission.kind == _Kind.ai ? AppColors.accent : AppColors.red;
+  String get _action => switch (mission.kind) {
+        _Kind.ai => 'START',
+        _Kind.texts => 'PRACTICE',
+        _Kind.approach => 'TRAIN',
+      };
+  IconData get _icon => switch (mission.kind) {
+        _Kind.ai => Icons.graphic_eq_rounded,
+        _Kind.texts => Icons.chat_bubble_outline_rounded,
+        _Kind.approach => Icons.directions_walk_rounded,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _accent;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Rd.xl),
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.surface2, AppColors.surface1],
+            ),
+            borderRadius: BorderRadius.circular(Rd.xl),
+            border: Border.all(color: accent.withOpacity(0.22)),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.35),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8)),
+            ],
+          ),
+          padding: const EdgeInsets.all(Sp.md),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _leading(accent),
+              const SizedBox(width: Sp.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _pillRow(accent),
+                    const SizedBox(height: 8),
+                    Text(mission.title,
+                        style: AppTypography.h3.copyWith(
+                            color: AppColors.textPrimary, height: 1.15)),
+                    const SizedBox(height: 4),
+                    Text(mission.sub,
+                        style: AppTypography.bodySmall
+                            .copyWith(color: AppColors.textTertiary, height: 1.35)),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Text(_action,
+                          style: AppTypography.label
+                              .copyWith(color: accent, letterSpacing: 2)),
+                      const SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_rounded, size: 13, color: accent),
+                    ]),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _leading(Color accent) {
+    if (mission.asset != null) {
+      // AI mission — her render in a rounded tile with an accent ring.
+      return Container(
+        width: 62,
+        height: 62,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(Rd.lg),
+          border: Border.all(color: accent.withOpacity(0.6), width: 1.5),
+          boxShadow: [BoxShadow(color: accent.withOpacity(0.25), blurRadius: 10)],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(Rd.lg - 2),
+          child: Image.asset(mission.asset!, fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) =>
+                  Container(color: AppColors.surface3, child: Icon(_icon, color: accent))),
+        ),
+      );
+    }
+    // Real-world mission — accent-tinted icon tile.
+    return Container(
+      width: 62,
+      height: 62,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [accent.withOpacity(0.22), accent.withOpacity(0.06)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(Rd.lg),
+        border: Border.all(color: accent.withOpacity(0.4)),
+      ),
+      child: Icon(_icon, color: accent, size: 26),
+    );
+  }
+
+  Widget _pillRow(Color accent) {
+    return Row(children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: accent.withOpacity(0.14),
+          borderRadius: BorderRadius.circular(Rd.sm),
+        ),
+        child: Text(mission.tier,
+            style: AppTypography.label
+                .copyWith(color: accent, fontSize: 8.5, letterSpacing: 1.4)),
+      ),
+      const SizedBox(width: 6),
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.bolt_rounded, size: 11, color: AppColors.textTertiary),
+        const SizedBox(width: 2),
+        Text('+${mission.xp}',
+            style: AppTypography.label
+                .copyWith(color: AppColors.textTertiary, fontSize: 9)),
+      ]),
+    ]);
   }
 }

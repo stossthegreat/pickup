@@ -22,7 +22,10 @@ import '../../widgets/common/imhim_wordmark.dart';
 /// coach. Editorial bubbles, preset chips, screenshot upload, tap-to-
 /// dismiss keyboard. Backed by /chat with mode=rizz_mentor.
 class RizzChatScreen extends StatefulWidget {
-  const RizzChatScreen({super.key});
+  /// When embedded in the Texts tab we drop the im-him header — the tab
+  /// supplies its own chrome (the two red action cards).
+  final bool embedded;
+  const RizzChatScreen({super.key, this.embedded = false});
 
   @override
   State<RizzChatScreen> createState() => _RizzChatScreenState();
@@ -634,7 +637,8 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              _Header(onBack: () => Navigator.of(context).maybePop()),
+              if (!widget.embedded)
+                _Header(onBack: () => Navigator.of(context).maybePop()),
               Expanded(
                 child: ListView.separated(
                   controller: _scrollCtrl,

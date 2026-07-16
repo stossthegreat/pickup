@@ -15,6 +15,7 @@ import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/common/imhim_wordmark.dart';
+import '../../widgets/charmr/metrics_panel.dart';
 
 /// v281 — ASCENSION home tab.
 ///
@@ -236,19 +237,12 @@ class _AscendScreenState extends State<AscendScreen> {
 
             const SizedBox(height: Sp.lg),
 
-            // ── 2 — IMHIM SCORE. The composite number that unifies
-            // the four surfaces. Consultant's biggest call: "Without
-            // this, users are managing 4 systems. With this, users
-            // are levelling one character." Built from Looks + Game
-            // + Consistency; Rizz is too soft to score honestly.
-            _ImHimScoreHero(
-              score:        imhimScore,
-              delta:        _weeklyDelta,
-              deltaReady:   _deltaLoaded,
-              looks:        widget.looksScore100,
-              game:         widget.gameScore100,
-              consistency:  consistency,
-            ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
+            // ── 2 — THE FIVE. Charmr's scored dimensions replace the
+            // old im-him composite: Confidence, Presence, Humor,
+            // Listening, Game → a weighted total. One character to level.
+            const MetricsPanel()
+                .animate()
+                .fadeIn(delay: 200.ms, duration: 400.ms),
 
             const SizedBox(height: Sp.lg),
 
@@ -731,11 +725,11 @@ class _FlameHeroState extends State<_FlameHero>
                           shape: BoxShape.circle,
                           gradient: RadialGradient(
                             colors: [
-                              AppColors.red,
-                              AppColors.red.withValues(alpha: 0.65),
-                              const Color(0xFF3A0A0E),
+                              const Color(0xFF14141A),
+                              AppColors.red.withValues(alpha: 0.55),
+                              AppColors.accentDeep.withValues(alpha: 0.9),
                             ],
-                            stops: const [0.0, 0.55, 1.0],
+                            stops: const [0.34, 0.8, 1.0],
                           ),
                           boxShadow: [
                             BoxShadow(

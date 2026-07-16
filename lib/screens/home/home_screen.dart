@@ -21,11 +21,9 @@ import '../../theme/app_typography.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/mirrorly_components.dart';
 import '../../widgets/report/aspect_protocol_cards.dart';
-import '../eyes/eyes_tab_screen.dart';
-import '../game/game_tab_screen.dart';
-import '../rizz/rizz_tab_screen.dart';
 import '../missions/missions_tab_screen.dart';
-import '../her/her_tab_screen.dart';
+import '../practice/practice_tab_screen.dart';
+import '../texts/texts_tab_screen.dart';
 import 'ascend_screen.dart';
 
 /// The hub. Four surfaces, one promise per tab:
@@ -255,14 +253,12 @@ class _HomeScreenState extends State<HomeScreen> {
           : IndexedStack(
               index: _tab,
               children: [
-                // Charmr nav: Roleplay · Missions · Her · Progress.
-                const GameTabScreen(),                      // 0 · ROLEPLAY
-                MissionsTabScreen(                          // 1 · MISSIONS
-                  onOpenRoleplay: () => _switchTab(0),
+                // Charmr nav: Missions · Practice · Texts · Progress.
+                MissionsTabScreen(                          // 0 · MISSIONS
+                  onGoToTab: _switchTab,
                 ),
-                HerTabScreen(                               // 2 · HER
-                  onMessage: () => _switchTab(0),
-                ),
+                const PracticeTabScreen(),                  // 1 · PRACTICE
+                const TextsTabScreen(),                     // 2 · TEXTS
                 // v281 — ASCEND restored as tab index 3. Pulls
                 // the protocol + scan history + per-pillar
                 // completion booleans from this screen's state so
@@ -1389,9 +1385,9 @@ class _NavBar extends StatelessWidget {
     // pre-existing index map (Looks=0, Game=1, Rizz=2) stays
     // valid for every legacy caller of initialTab + onJumpToTab.
     final items = const <({String label, IconData icon, bool italic})>[
-      (label: 'Roleplay', icon: Icons.chat_bubble_outline_rounded,      italic: true),
-      (label: 'Missions', icon: Icons.public_rounded,                   italic: true),
-      (label: 'Her',      icon: Icons.favorite_outline_rounded,         italic: true),
+      (label: 'Missions', icon: Icons.bolt_rounded,                     italic: true),
+      (label: 'Practice', icon: Icons.graphic_eq_rounded,              italic: true),
+      (label: 'Texts',    icon: Icons.chat_bubble_outline_rounded,      italic: true),
       (label: 'Progress', icon: Icons.local_fire_department_rounded,    italic: true),
     ];
     // v303 — bottom nav rebuilt in the Skeletal-PT pattern bro
