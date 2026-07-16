@@ -6,6 +6,7 @@ import '../../models/villain/scenes.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../game/arena/arena_session_screen.dart';
+import 'task_chat_screen.dart';
 
 /// MISSIONS — the front door. Beautiful, clean cards. Three kinds:
 ///   • AI  — "Talk to her" → opens her voice roleplay right away.
@@ -62,7 +63,16 @@ class MissionsTabScreen extends StatelessWidget {
           builder: (_) => ArenaSessionScreen(scene: scene),
         ));
       case _Kind.texts:
-        onGoToTab(2);
+        // REAL · TEXTS missions open a coached chat with the AI girl +
+        // task banner at the top. Missions without a chat config fall
+        // back to the general Texts tab.
+        if (m.chat != null) {
+          Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
+            builder: (_) => TaskChatScreen(config: m.chat!),
+          ));
+        } else {
+          onGoToTab(2);
+        }
       case _Kind.approach:
         onGoToTab(1);
     }
@@ -77,8 +87,11 @@ class _Mission {
   final String title, sub, tier, xp;
   final String? asset; // AI missions show her render
   final String? sceneId;
+  /// REAL · TEXTS missions carry a coached-chat config; tapping the card
+  /// opens [TaskChatScreen] with the AI girl + task banner up top.
+  final MissionChatConfig? chat;
   const _Mission(this.kind, this.title, this.sub, this.tier, this.xp,
-      {this.asset, this.sceneId});
+      {this.asset, this.sceneId, this.chat});
 }
 
 const _seed = <_Mission>[
@@ -86,17 +99,113 @@ const _seed = <_Mission>[
       'She gives nothing for free. Warm her up on voice.', 'AI · VOICE', '80',
       asset: 'assets/characters/women/ice_queen.png', sceneId: 'ice_girl'),
   _Mission(_Kind.texts, 'Comment on her story',
-      'Someone you like posted. One line that makes her reply.', 'REAL · TEXTS', '150'),
+      'Someone you like posted. One line that makes her reply.', 'REAL · TEXTS', '150',
+      chat: _commentOnStoryChat),
   _Mission(_Kind.approach, 'Approach one girl today',
       'When you\'re out. Twenty seconds. Practice on voice first.', 'REAL · APPROACH', '350'),
   _Mission(_Kind.texts, 'Message your crush',
-      'Open the chat you keep re-reading. Send something real.', 'REAL · TEXTS', '200'),
+      'Open the chat you keep re-reading. Send something real.', 'REAL · TEXTS', '200',
+      chat: _messageCrushChat),
   _Mission(_Kind.ai, 'Make the Chaos Girl laugh',
       'Match her tempo. Four lines to a real laugh.', 'AI · VOICE', '120',
       asset: 'assets/characters/women/chaos_girl.png', sceneId: 'chaos_girl'),
   _Mission(_Kind.texts, 'Reopen a dead conversation',
-      'One that went cold. Revive it without "hey".', 'REAL · TEXTS', '180'),
+      'One that went cold. Revive it without "hey".', 'REAL · TEXTS', '180',
+      chat: _reopenDeadChat),
 ];
+
+// ── Coached-chat configs for the REAL · TEXTS missions ────────────────────
+// Each pairs an AI-girl portrait + task banner with a seeded opener and a
+// hidden backend context so the coach is on-mission from the first turn.
+// All run on the same /rizz/chat endpoint the Texts tab uses.
+
+const _commentOnStoryChat = MissionChatConfig(
+  taskTitle: 'Comment on her story',
+  tier: 'REAL · TEXTS',
+  xp: '150',
+  girlAsset: 'assets/characters/women/socialite.png',
+  accent: AppColors.red,
+  situation: 'She just posted. One comment that pulls a reply — not a 🔥.',
+  opening:
+      'She posted a story — that\'s an open door, not a dead end.\n\n'
+      'Tell me what it showed — a gym mirror pic, a sunset, her dog, a '
+      'night out — or paste a screenshot, and I\'ll hand you ONE comment '
+      'that actually gets a reply. No "nice pic." No fire emoji. Something '
+      'she has to answer.',
+  starters: [
+    'She posted a gym pic',
+    'A night out with friends',
+    'Her on holiday',
+    'Just a selfie',
+  ],
+  backendContext:
+      'You are my dating text coach. Real-world mission: COMMENT ON HER '
+      'STORY. A girl I\'m into just posted a story or photo on Instagram '
+      'or Snapchat. I want a comment/reply that stands out and makes her '
+      'actually respond — never a generic "nice pic" or a fire emoji. '
+      'Keep every suggested line short, specific, and reply-baiting, the '
+      'way a confident 22-year-old texts. Put the exact line(s) to send '
+      'in double quotes with one short sentence on why it lands. Be real '
+      'and brief — not a self-help lecture.',
+);
+
+const _messageCrushChat = MissionChatConfig(
+  taskTitle: 'Message your crush',
+  tier: 'REAL · TEXTS',
+  xp: '200',
+  girlAsset: 'assets/characters/women/arena.png',
+  accent: Color(0xFFF472B6),
+  situation: 'The chat you keep re-reading. Time to send something real.',
+  opening:
+      'The one you keep opening and closing without typing. Let\'s end '
+      'that tonight.\n\n'
+      'Who is she to you — a match that went quiet, a friend you want to '
+      'shift things with, someone from your past? Tell me where it\'s at '
+      'and I\'ll build you an opener that doesn\'t read as try-hard.',
+  starters: [
+    'A match that went quiet',
+    'A friend I want more with',
+    'Someone from my past',
+    'We\'ve never really talked',
+  ],
+  backendContext:
+      'You are my dating text coach. Real-world mission: MESSAGE YOUR '
+      'CRUSH. There\'s a girl I\'ve been hesitating to text. I want to '
+      'open (or re-open) the conversation with something real and '
+      'confident that does NOT come off needy or try-hard. Give me a '
+      'specific opener tailored to what I tell you about her, in double '
+      'quotes, plus one short line on why it works. Keep it tight, warm, '
+      'and high-agency.',
+);
+
+const _reopenDeadChat = MissionChatConfig(
+  taskTitle: 'Reopen a dead conversation',
+  tier: 'REAL · TEXTS',
+  xp: '180',
+  girlAsset: 'assets/characters/women/ice_queen.png',
+  accent: Color(0xFF38BDF8),
+  situation: 'It went cold. Revive it without "hey".',
+  opening:
+      'A chat that flatlined isn\'t dead — it\'s waiting for a reason to '
+      'move.\n\n'
+      'Tell me how it went cold — left on read, it just fizzled, you '
+      'dropped the ball — and roughly how long it\'s been. I\'ll give you '
+      'a reopen that skips "hey" and "you up?" and actually earns a reply.',
+  starters: [
+    'Left on read',
+    'It just fizzled out',
+    'I went quiet on her',
+    'It\'s been weeks',
+  ],
+  backendContext:
+      'You are my dating text coach. Real-world mission: REOPEN A DEAD '
+      'CONVERSATION. A text conversation with a girl went cold and I want '
+      'to revive it. I need a reopener that does NOT start with "hey", '
+      '"you up", or an apology — something high-agency and a little '
+      'intriguing, ideally a callback to something from earlier in the '
+      'chat or a fresh hook. Give me the exact line in double quotes plus '
+      'one short sentence on the move. Keep it brief.',
+);
 
 // ── Top bar: streak · XP · progress · settings ───────────────────────────
 class _TopBar extends StatelessWidget {

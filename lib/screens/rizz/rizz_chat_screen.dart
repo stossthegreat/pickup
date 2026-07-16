@@ -41,24 +41,10 @@ class _RizzMsg {
 class _RizzChatScreenState extends State<RizzChatScreen> {
   final _ctrl = TextEditingController();
   final _scrollCtrl = ScrollController();
-  final List<_RizzMsg> _msgs = [
-    const _RizzMsg('assistant',
-        // v298 — copy stripped to ONLY what the model actually does
-        // well in production. Profile-pic + single-photo paths kept
-        // hallucinating ("I can\'t view images") even after the v296
-        // vision hardening, so we don\'t promise them in the intro
-        // any more. Bro: "just take profile pic talk in the ai
-        // intro on chat page — coz it don\'t fucking work. Clean
-        // message about paste your chat for a breakdown or a rizz
-        // line."
-        'what\'s good. paste a screenshot of your chat with her '
-        'and i\'ll break down what\'s working, what flopped, and '
-        'the exact line to send next.\n\n'
-        'or just ask me anything — "what should i open with", '
-        '"how do i get her back", "tell me a banger" — i\'ll give '
-        'you the line and tell you why it lands.\n\n'
-        'tap any line in quotes to copy it.'),
-  ];
+  // Welcome bubble is set in initState so the embedded Texts-tab surface
+  // can carry its own tighter, mission-aware copy while the standalone
+  // Rizz chat keeps the original opener.
+  late final List<_RizzMsg> _msgs;
   bool _sending = false;
   /// Active tone preset. Matches the rizz reply screen so picking
   /// SENSUAL / PLAYFUL / etc here behaves identically — the next
@@ -136,6 +122,26 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
   @override
   void initState() {
     super.initState();
+    // Welcome bubble. The Texts tab (embedded) gets a SHORT, punchy
+    // opener that says what this is and WHY it exists — it's the coach
+    // that helps you land the app's real-world text missions. The
+    // standalone Rizz chat keeps the original screenshot-first opener.
+    _msgs = [
+      _RizzMsg('assistant',
+          widget.embedded
+              ? 'I help with your texts. That\'s the whole job.\n\n'
+                  'The app hands you real missions — comment on her story, '
+                  'reopen a dead chat, message your crush. Tap one and I\'m '
+                  'right here to help you find the exact line before you send '
+                  'it for real. Or paste a screenshot and I\'ll break it down.'
+              : 'what\'s good. paste a screenshot of your chat with her '
+                  'and i\'ll break down what\'s working, what flopped, and '
+                  'the exact line to send next.\n\n'
+                  'or just ask me anything — "what should i open with", '
+                  '"how do i get her back", "tell me a banger" — i\'ll give '
+                  'you the line and tell you why it lands.\n\n'
+                  'tap any line in quotes to copy it.'),
+    ];
     // Pro-only route — re-check on mount so a deep link or stale
     // navigation push from before subscription expired bounces to
     // the paywall instead of leaking the coach.
