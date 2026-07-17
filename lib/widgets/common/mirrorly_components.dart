@@ -1203,6 +1203,10 @@ abstract final class MirrorlyAssets {
   static const chaosGirl      = 'assets/characters/women/chaos_girl.png';
   static const socialite      = 'assets/characters/women/socialite.png';
   static const intellectual   = 'assets/characters/women/intellectual.png';
+  static const amara          = 'assets/characters/women/amara.png';
+  static const daisy          = 'assets/characters/women/daisy.png';
+  static const valentina      = 'assets/characters/women/valentina.png';
+  static const simone         = 'assets/characters/women/simone.png';
 
   static const gazeNeutral    = 'assets/eyes/partners/neutral.jpg';
   static const gazeSharp      = 'assets/eyes/partners/sharp.jpg';
