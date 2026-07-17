@@ -759,7 +759,11 @@ export default async function villainRoute(app) {
       creator: creator === true || creator === 'true',
     });
 
-    let parsed = { score: 5, verdict: 'Forgettable. She already forgot your name.', landed: '', flopped: '', line: '' };
+    let parsed = {
+      score: 5, verdict: 'Forgettable. She already forgot your name.',
+      landed: '', flopped: '', line: '',
+      dimensions: null, breakdown: '',
+    };
     try {
       const chat = await openai.chat.completions.create({
         model: MODELS.chat,
@@ -769,7 +773,7 @@ export default async function villainRoute(app) {
               `Here is the conversation. Score it.\n\n${convo || '(he barely said anything)'}` },
         ],
         temperature: 0.8,
-        max_tokens: 300,
+        max_tokens: 420,
         response_format: { type: 'json_object' },
       });
       const raw = chat.choices?.[0]?.message?.content || '{}';
@@ -780,6 +784,8 @@ export default async function villainRoute(app) {
         landed:  String(j.landed || '').trim(),
         flopped: String(j.flopped || '').trim(),
         line:    String(j.line || '').trim(),
+        dimensions: scoreDimensions(j.dimensions),
+        breakdown: String(j.breakdown || '').trim().slice(0, 400),
       };
     } catch (e) {
       req.log.error({ err: e }, 'freeflow score failed');
@@ -807,4 +813,20 @@ export default async function villainRoute(app) {
 
     return reply.send({ ...parsed, audio: audioB64 });
   });
+}
+
+// Sanitise the model's dimension object → { confidence, presence, game,
+// humor, listening } each 0-100. Returns null if nothing usable so the
+// client can hide the section rather than show five zeros.
+function scoreDimensions(d) {
+  if (!d || typeof d !== 'object') return null;
+  const keys = ['confidence', 'presence', 'game', 'humor', 'listening'];
+  const out = {};
+  let any = false;
+  for (const k of keys) {
+    const n = parseInt(d[k], 10);
+    if (Number.isFinite(n)) { out[k] = Math.max(0, Math.min(100, n)); any = true; }
+    else out[k] = 0;
+  }
+  return any ? out : null;
 }

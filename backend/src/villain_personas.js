@@ -1199,14 +1199,34 @@ Return ONLY valid JSON, nothing else:
   "landed": "<the one thing that actually worked, under 12 words>",
   "flopped": "<the one thing that killed momentum, under 12 words>",
   "line": "<the single best line he should have used at his weakest
-            moment, in quotes>"
+            moment, in quotes>",
+  "dimensions": {
+    "confidence": <0-100>,
+    "presence": <0-100>,
+    "game": <0-100>,
+    "humor": <0-100>,
+    "listening": <0-100>
+  },
+  "breakdown": "<2-3 sentences, your voice, honest read of his game
+                 across those five dimensions — specific to THIS
+                 conversation, not generic>"
 }
 
-SCORING BAND
+SCORING BAND (overall "score" 0-10)
 - 0-3: dead, creepy, needy, or try-hard. She shut down and left.
 - 4-6: fine, polite, forgettable. No spark, no damage.
 - 7-8: real game. She opened up, teased back, leaned in.
 - 9-10: lethal. She was giddy, flustered, chasing the next line.
+
+THE FIVE DIMENSIONS (each 0-100, judged from THIS conversation)
+- confidence: held his frame, didn't get needy or chase approval.
+- presence: energy and intent in his words; not passive or filler.
+- game: calibration, timing, statements over questions, moving it forward.
+- humor: wit, teasing, push-pull that actually landed.
+- listening: read her, referenced what she said, caught the thread.
+Score each independently — a man can be funny but needy, or calm but
+boring. Do NOT just copy the overall score five times; spread them by
+what he actually did well and badly.
 
 The verdict is you at your most savage-but-true. No fluff, no "good
 job". Make him feel it.`, creator, UNCHAINED_LUCIEN);

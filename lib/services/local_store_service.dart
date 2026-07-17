@@ -693,6 +693,31 @@ class LocalStoreService {
     }
   }
 
+  // ── Dimension scores (Confidence · Presence · Game · Humour ·
+  //    Listening, each 0-100) — the latest AI-scored performance, shown
+  //    on the Progress tab's YOUR SCORES panel. ──────────────────────────
+  static const List<String> kScoreDimensions = [
+    'confidence', 'presence', 'game', 'humor', 'listening',
+  ];
+
+  static Future<void> saveDimensionScores(Map<String, int> dims) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final k in kScoreDimensions) {
+      final v = dims[k];
+      if (v != null) await prefs.setInt('scores.dim.$k.v1', v.clamp(0, 100).toInt());
+    }
+  }
+
+  static Future<Map<String, int>> dimensionScores() async {
+    final prefs = await SharedPreferences.getInstance();
+    final out = <String, int>{};
+    for (final k in kScoreDimensions) {
+      final v = prefs.getInt('scores.dim.$k.v1');
+      if (v != null) out[k] = v;
+    }
+    return out;
+  }
+
   // ── Nuke ────────────────────────────────────────────────────────────────
   /// Wipe every on-device user-generated key (scans, generations,
   /// protocol). Subscription and onboarding flags are preserved —
