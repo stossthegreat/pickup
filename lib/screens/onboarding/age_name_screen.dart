@@ -116,10 +116,17 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
                     )
                   else
                     const SizedBox(height: 8),
-                  const SizedBox(height: 14),
-                  const Center(
-                    child: ImHimWordmark(fontSize: 40, letterSpacing: -1.2),
-                  ),
+                  // Scrollable so the keyboard can never overflow the form.
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 14),
+                          const Center(
+                            child: ImHimWordmark(fontSize: 40, letterSpacing: -1.2),
+                          ),
                   const SizedBox(height: 30),
 
                   Text('Before we start.',
@@ -210,7 +217,12 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
                     ],
                   ),
 
-                  const Spacer(),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
 
                   // ── Continue ─────────────────────────────────────────
                   SizedBox(
