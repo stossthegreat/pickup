@@ -36,6 +36,8 @@ class LocalStoreService {
   ///   'f' → women's beauty
   ///   null → unspecified (backend defaults to general)
   static const _kUserGender   = 'user.gender.v1';
+  static const _kUserName     = 'user.name.v1';
+  static const _kUserAgeGroup = 'user.agegroup.v1';
   /// Free-tier allowance flags for the Auralay Eyes + Game tabs. A
   /// non-subscribed user gets exactly ONE eye-contact lesson and ONE
   /// Free Flow live conversation; both are consumed on first open and
@@ -650,6 +652,44 @@ class LocalStoreService {
       assert(code == 'm' || code == 'f',
           'userGender must be "m", "f", or null');
       await prefs.setString(_kUserGender, code);
+    }
+  }
+
+  // ── User name + age group (onboarding) ──────────────────────────────────
+  // Fed to the AI so characters use his name (first-date / texting scenes)
+  // and pitch their register to his age band. Both optional — absence just
+  // means the AI gets no ABOUT-HIM block.
+  static Future<String?> userName() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getString(_kUserName)?.trim();
+    return (v == null || v.isEmpty) ? null : v;
+  }
+
+  static Future<void> setUserName(String? name) async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = name?.trim();
+    if (v == null || v.isEmpty) {
+      await prefs.remove(_kUserName);
+    } else {
+      await prefs.setString(_kUserName, v.length > 40 ? v.substring(0, 40) : v);
+    }
+  }
+
+  /// Age band, e.g. '18-25' / '26-35' / '36-45' / '46+'. Free-form string
+  /// kept small; the AI reads it as a register hint.
+  static Future<String?> userAgeGroup() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getString(_kUserAgeGroup)?.trim();
+    return (v == null || v.isEmpty) ? null : v;
+  }
+
+  static Future<void> setUserAgeGroup(String? band) async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = band?.trim();
+    if (v == null || v.isEmpty) {
+      await prefs.remove(_kUserAgeGroup);
+    } else {
+      await prefs.setString(_kUserAgeGroup, v);
     }
   }
 

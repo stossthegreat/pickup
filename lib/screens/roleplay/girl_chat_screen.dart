@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 
 import '../../config/auralay_dev_flags.dart';
 import '../../services/creator_mode_store.dart';
+import '../../services/local_store_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/ai_consent_dialog.dart';
 import '../game/freeflow/free_flow_screen.dart';
@@ -62,18 +63,17 @@ class GirlChatConfig {
 }
 
 class _Msg {
-  final String who; // 'her' | 'you' | 'coach'
+  final String who; // 'her' | 'you' | 'lucien' | 'error'
   final String text;
-  final String? coachMove; // when who == 'coach'
-  const _Msg(this.who, this.text, {this.coachMove});
+  const _Msg(this.who, this.text);
 }
 
 /// GIRL CHAT — texting roleplay with an AI girl. She replies in
-/// character; a coach cut-in lands every few turns; her interest meter
-/// moves with every line. Tap the 📞 to take it live on voice.
+/// character; her interest meter moves with every line. Tap "Get help
+/// from Lucien" for an on-demand rizz line, or 📞 to take it live on
+/// voice.
 ///
-/// Runs on POST /v1/date/turn (unified backend). Backend-down degrades
-/// to a graceful in-character beat so the screen is always demoable.
+/// Runs on POST /v1/date/turn + /v1/date/help (unified backend).
 class GirlChatScreen extends StatefulWidget {
   final GirlChatConfig config;
   const GirlChatScreen({super.key, required this.config});
@@ -87,8 +87,13 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   final _scrollCtrl = ScrollController();
   final List<_Msg> _msgs = [];
   bool _sending = false;
+  bool _helping = false; // Lucien "Get Help" request in flight
   bool _creator = false;
   int _turnIndex = 0;
+
+  // Fed to the AI so she uses his name + pitches to his age band.
+  String? _name;
+  String? _ageGroup;
 
   /// Her interest, 0–100. Starts guarded, moves with each turn's delta.
   double _heat = 32;
@@ -105,6 +110,29 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     CreatorModeStore.isActive().then((v) {
       if (mounted) setState(() => _creator = v);
     });
+    // ignore: discarded_futures
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final name = await LocalStoreService.userName();
+    final age = await LocalStoreService.userAgeGroup();
+    if (!mounted) return;
+    setState(() {
+      _name = name;
+      _ageGroup = age;
+    });
+  }
+
+  Map<String, dynamic>? get _profilePayload {
+    if ((_name == null || _name!.isEmpty) &&
+        (_ageGroup == null || _ageGroup!.isEmpty)) {
+      return null;
+    }
+    return {
+      if (_name != null && _name!.isNotEmpty) 'name': _name,
+      if (_ageGroup != null && _ageGroup!.isNotEmpty) 'ageGroup': _ageGroup,
+    };
   }
 
   @override
@@ -156,9 +184,6 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
         _msgs.add(_Msg('error', result.error!));
       } else {
         if (result.her.isNotEmpty) _msgs.add(_Msg('her', result.her));
-        if (result.coach != null) {
-          _msgs.add(_Msg('coach', result.coach!.$2, coachMove: result.coach!.$1));
-        }
         _heat = (_heat + result.delta * 3).clamp(0.0, 100.0).toDouble();
       }
     });
@@ -189,6 +214,7 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
               'history': history,
               'text': text,
               'turnIndex': _turnIndex,
+              if (_profilePayload != null) 'userProfile': _profilePayload,
             }),
           )
           .timeout(const Duration(seconds: 30));
@@ -197,18 +223,8 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
         final her = (b['her'] as String?)?.trim() ?? '';
         final delta = (b['delta'] as num?)?.toDouble() ?? 0.0;
         final strong = b['strong'] == true;
-        (String, String)? coach;
-        final c = b['coach'];
-        if (c is Map && (c['line'] != null || c['move'] != null)) {
-          coach = (
-            (c['move'] as String?)?.trim().isNotEmpty == true
-                ? (c['move'] as String).trim()
-                : 'THE MOVE',
-            (c['line'] as String?)?.trim() ?? '',
-          );
-        }
         if (her.isNotEmpty && her != '…') {
-          return _TurnResult(her: her, delta: delta, strong: strong, coach: coach);
+          return _TurnResult(her: her, delta: delta, strong: strong);
         }
         // 200 but she gave nothing — the backend degraded its own reply,
         // almost always because OPENAI_API_KEY isn't set on the server.
@@ -225,6 +241,61 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     } catch (e) {
       return _TurnResult.err('Couldn\'t reach $base/v1/date/turn — $e');
     }
+  }
+
+  // ── Lucien "Get Help" — on-demand rizz suggestion for the live convo ──
+  Future<void> _getHelp() async {
+    if (_helping || _sending) return;
+    if (!await AiConsentDialog.ensure(context)) return;
+    if (!mounted) return;
+    HapticFeedback.selectionClick();
+    setState(() => _helping = true);
+    _scrollToBottom();
+
+    final history = _msgs
+        .where((m) => m.who == 'her' || m.who == 'you')
+        .map((m) => {'who': m.who, 'text': m.text})
+        .toList();
+    final base = AuralayDevFlags.apiBaseUrl;
+    String? help;
+    String? err;
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$base/v1/date/help'),
+            headers: {'content-type': 'application/json'},
+            body: jsonEncode({
+              'characterId': widget.config.characterId,
+              'creator': _creator,
+              'history': history,
+              if (_profilePayload != null) 'userProfile': _profilePayload,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+      if (res.statusCode == 200) {
+        final b = jsonDecode(res.body) as Map<String, dynamic>;
+        final h = (b['help'] as String?)?.trim() ?? '';
+        if (h.isNotEmpty) {
+          help = h;
+        } else {
+          err = 'Lucien got no reply — set OPENAI_API_KEY on the backend.';
+        }
+      } else {
+        err = 'Lucien unavailable (${res.statusCode}).';
+      }
+    } catch (e) {
+      err = 'Couldn\'t reach Lucien — $e';
+    }
+    if (!mounted) return;
+    setState(() {
+      _helping = false;
+      if (help != null) {
+        _msgs.add(_Msg('lucien', help));
+      } else {
+        _msgs.add(_Msg('error', err ?? 'Lucien unavailable.'));
+      }
+    });
+    _scrollToBottom();
   }
 
   @override
@@ -268,9 +339,12 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
                       const SizedBox(height: 12),
                     ],
                     if (_sending) const _TypingBubble(),
+                    if (_helping) const _LucienThinking(),
                   ],
                 ),
               ),
+              // Lucien "Get Help" bar — on-demand rizz, no sporadic cut-ins.
+              _HelpBar(busy: _helping || _sending, onTap: _getHelp),
               _InputBar(
                 controller: _ctrl,
                 sending: _sending,
@@ -293,13 +367,11 @@ class _TurnResult {
   final String her;
   final double delta;
   final bool strong;
-  final (String, String)? coach; // (move, line)
   final String? error; // set when the turn failed — shown on-device
   const _TurnResult({
     required this.her,
     required this.delta,
     required this.strong,
-    required this.coach,
     this.error,
   });
 
@@ -307,7 +379,6 @@ class _TurnResult {
       : her = '',
         delta = 0,
         strong = false,
-        coach = null,
         error = message;
 }
 
@@ -490,75 +561,69 @@ class _PostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: config.accent.withOpacity(0.35)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
+    // Snapchat-style story reply: the WHOLE post shown as a small
+    // portrait thumbnail on the left, the caption + context on the right.
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Small whole-image portrait — the full post, just shrunk.
+        Container(
+          width: 122,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: config.accent.withOpacity(0.5), width: 1.2),
+            color: AppColors.surface2,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: AspectRatio(
+            aspectRatio: 9 / 16,
+            child: Image.asset(config.portraitAsset, fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                      color: AppColors.surface2,
+                      child: Icon(Icons.person_rounded,
+                          color: config.accent, size: 32),
+                    )),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AspectRatio(
-                aspectRatio: 16 / 10,
-                child: Image.asset(config.portraitAsset, fit: BoxFit.cover,
-                    alignment: const Alignment(0, -0.2),
-                    errorBuilder: (_, __, ___) =>
-                        Container(color: AppColors.surface2)),
-              ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.7),
-                      ],
-                      stops: const [0.45, 1.0],
-                    ),
+              const SizedBox(height: 2),
+              Text(post.context.toUpperCase(),
+                  style: GoogleFonts.inter(
+                    color: config.accent,
+                    fontSize: 9,
+                    letterSpacing: 1.6,
+                    fontWeight: FontWeight.w800,
+                  )),
+              const SizedBox(height: 8),
+              // Her caption, in a story-reply bubble.
+              Container(
+                padding: const EdgeInsets.fromLTRB(13, 10, 13, 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surface1,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(4),
+                    topRight: Radius.circular(14),
+                    bottomLeft: Radius.circular(14),
+                    bottomRight: Radius.circular(14),
                   ),
+                  border: Border.all(color: AppColors.surface3, width: 0.6),
                 ),
-              ),
-              Positioned(
-                left: 12,
-                top: 12,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(post.context.toUpperCase(),
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 8.5,
-                        letterSpacing: 1.6,
-                        fontWeight: FontWeight.w800,
-                      )),
-                ),
-              ),
-              Positioned(
-                left: 14,
-                right: 14,
-                bottom: 12,
                 child: Text(post.caption,
                     style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 16,
-                      height: 1.25,
-                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                      fontSize: 14.5,
+                      height: 1.3,
+                      fontWeight: FontWeight.w600,
                     )),
               ),
             ],
           ),
-        ],
-      ),
+        ),
+      ],
     ).animate().fadeIn(duration: 320.ms).slideY(begin: 0.05, curve: Curves.easeOut);
   }
 }
@@ -573,7 +638,7 @@ class _MsgView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (msg.who == 'coach') return _CoachNote(msg: msg);
+    if (msg.who == 'lucien') return _LucienCard(text: msg.text);
     if (msg.who == 'error') return _ErrorNote(msg: msg);
     final isYou = msg.who == 'you';
     if (isYou) {
@@ -660,45 +725,135 @@ class _MsgView extends StatelessWidget {
   }
 }
 
-/// Bro's coach cut-in — a distinct, tighter note so it never reads as
-/// the girl talking.
-class _CoachNote extends StatelessWidget {
-  final _Msg msg;
-  const _CoachNote({required this.msg});
+/// Lucien's on-demand rizz — the SAME brilliant-rizz voice as the Texts
+/// tab, in a clean indigo card. Any "quoted line" pops out as a
+/// tap-to-copy SEND THIS card underneath.
+class _LucienCard extends StatelessWidget {
+  final String text;
+  const _LucienCard({required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: AppColors.accent.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.accent.withOpacity(0.4), width: 0.8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.accent.withOpacity(0.45), width: 0.9),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.bolt_rounded, size: 13, color: AppColors.accent),
-              const SizedBox(width: 5),
-              Text('BRO · ${(msg.coachMove ?? 'THE MOVE').toUpperCase()}',
+              Icon(Icons.auto_awesome_rounded, size: 14, color: AppColors.accent),
+              const SizedBox(width: 6),
+              Text('LUCIEN',
                   style: GoogleFonts.inter(
                     color: AppColors.accent,
-                    fontSize: 9,
-                    letterSpacing: 1.6,
+                    fontSize: 10,
+                    letterSpacing: 2.4,
                     fontWeight: FontWeight.w900,
                   )),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(msg.text,
+          const SizedBox(height: 8),
+          if (text.trim().isNotEmpty)
+            SelectableText(text,
+                style: GoogleFonts.inter(
+                  color: AppColors.textPrimary,
+                  fontSize: 14.5,
+                  height: 1.5,
+                  fontWeight: FontWeight.w500,
+                )),
+          ..._copyLines(),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _copyLines() {
+    final out = <Widget>[];
+    final matches = RegExp(r'"([^"\n]{6,160})"').allMatches(text);
+    final seen = <String>{};
+    for (final m in matches) {
+      final line = (m.group(1) ?? '').trim();
+      if (line.length < 6 || seen.contains(line)) continue;
+      seen.add(line);
+      out.add(const SizedBox(height: 8));
+      out.add(_SendThisCard(line: line, accent: AppColors.red));
+      if (out.length > 8) break;
+    }
+    return out;
+  }
+}
+
+/// The "Get help from Lucien" pill above the input bar. Replaces the old
+/// sporadic Bro cut-ins with on-demand help.
+class _HelpBar extends StatelessWidget {
+  final bool busy;
+  final VoidCallback onTap;
+  const _HelpBar({required this.busy, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(99),
+          child: InkWell(
+            onTap: busy ? null : onTap,
+            borderRadius: BorderRadius.circular(99),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(99),
+                border:
+                    Border.all(color: AppColors.accent.withOpacity(0.5), width: 0.9),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.auto_awesome_rounded,
+                      size: 14,
+                      color: busy ? AppColors.textTertiary : AppColors.accent),
+                  const SizedBox(width: 6),
+                  Text('Get help from Lucien',
+                      style: GoogleFonts.inter(
+                        color: busy ? AppColors.textTertiary : AppColors.accent,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                      )),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LucienThinking extends StatelessWidget {
+  const _LucienThinking();
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(Icons.auto_awesome_rounded, size: 14, color: AppColors.accent),
+          const SizedBox(width: 8),
+          Text('Lucien\'s thinking…',
               style: GoogleFonts.inter(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-                height: 1.35,
-                fontWeight: FontWeight.w500,
+                color: AppColors.accent,
+                fontSize: 12.5,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w600,
               )),
         ],
       ),

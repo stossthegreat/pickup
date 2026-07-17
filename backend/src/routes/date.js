@@ -10,16 +10,15 @@
 
 import { openai } from '../openai.js';
 import { DATE_WOMEN, buildDateTurnPrompt } from '../date_personas.js';
+import { rizzChat } from '../rizz_brain.js';
 
 // Text roleplay runs on gpt-4o-mini: cheap, fast, and — because the turn
 // prompt is heavily directive (explicit reward/punish persona, JSON
-// response_format, move examples) — it holds character fine for text
-// where mini struggled for open-ended VOICE. One call returns HER reply
-// + Bro's coach cut-in as JSON.
+// response_format) — it holds character fine for text. A turn returns HER
+// reply + the score delta; coaching is on-demand via /help (Lucien).
 const MODEL = 'gpt-4o-mini';
 
 const VALID_FOCUS = ['confidence', 'presence', 'humor', 'listening', 'game'];
-const CUT_IN_EVERY = 3; // Bro proactively teaches every Nth turn.
 
 export default async function dateRoute(app) {
   app.get('/health', async () => ({
@@ -48,7 +47,7 @@ export default async function dateRoute(app) {
     const creator = body.creator === true || body.creator === 'true';
     const text = String(body.text || '').trim();
     const history = Array.isArray(body.history) ? body.history.slice(-12) : [];
-    const turnIndex = Number(body.turnIndex || history.length + 1);
+    const userProfile = normaliseProfile(body.userProfile);
 
     if (!DATE_WOMEN[characterId]) {
       return reply.code(400).send({
@@ -58,8 +57,7 @@ export default async function dateRoute(app) {
     }
     if (!text) return reply.code(400).send({ error: 'text required' });
 
-    const cutIn = turnIndex % CUT_IN_EVERY === 0;
-    const system = buildDateTurnPrompt({ woman: characterId, focus, creator, cutIn });
+    const system = buildDateTurnPrompt({ woman: characterId, focus, creator, userProfile });
 
     // Rebuild the conversation for the model. history items: {who:'her'|'you', text}
     const msgs = [{ role: 'system', content: system }];
@@ -84,12 +82,10 @@ export default async function dateRoute(app) {
       const parsed = safeParse(res.choices?.[0]?.message?.content);
       // Clamp + sanitise so the client never gets junk.
       const delta = clamp(Number(parsed.delta ?? 0), -8, 14);
-      const coach = normaliseCoach(parsed.coach);
       return {
         her: String(parsed.her || '…').slice(0, 400),
         delta,
         strong: parsed.strong === true || delta >= 6,
-        coach,
       };
     } catch (err) {
       req.log.error({ err }, 'date/turn failed');
@@ -98,11 +94,57 @@ export default async function dateRoute(app) {
         her: '…',
         delta: 0,
         strong: false,
-        coach: null,
         error: 'ai_unavailable',
       });
     }
   });
+
+  // ─── /help — Lucien steps in on demand ──────────────────────────────────
+  // The "Get Help" button. Lucien reads the live convo and hands over the
+  // exact line to send next, in the SAME brilliant-rizz voice as the Texts
+  // tab (rizz_brain CHAT_SYSTEM). Quoted lines render as tap-to-copy cards.
+  //
+  // Body: { characterId, history:[{who,text}], creator, userProfile }
+  // Returns: { help: string }  (rizz prose + one or more "quoted" lines)
+  app.post('/help', async (req, reply) => {
+    const body = req.body || {};
+    const w = DATE_WOMEN[body.characterId];
+    const creator = body.creator === true || body.creator === 'true';
+    const history = Array.isArray(body.history) ? body.history.slice(-14) : [];
+    const profile = normaliseProfile(body.userProfile);
+
+    const convo = history
+      .filter((h) => h && h.text)
+      .map((h) => `${h.who === 'you' ? 'ME' : 'HER'}: ${h.text}`)
+      .join('\n');
+    const archetype = w ? w.archetype : 'a girl i just matched with';
+    const who = profile.name ? ` my name's ${profile.name}.` : '';
+    const ask =
+      `i'm texting a girl — the ${archetype} type.${who} here's the convo so far:\n\n` +
+      `${convo || '(i haven\'t said anything yet)'}\n\n` +
+      `what do i send back right now? give me the exact line.`;
+
+    try {
+      const out = await rizzChat({
+        messages: [{ role: 'user', content: creator ? `${ask}\n\n(no filter, be savage)` : ask }],
+      });
+      const help = (out && typeof out.reply === 'string') ? out.reply.trim() : '';
+      if (!help) return reply.code(200).send({ help: '', error: 'ai_unavailable' });
+      return { help };
+    } catch (err) {
+      req.log.error({ err }, 'date/help failed');
+      return reply.code(200).send({ help: '', error: 'ai_unavailable' });
+    }
+  });
+}
+
+// Sanitise the optional user profile → { name, ageGroup } (strings only,
+// bounded). Anything malformed collapses to empty and is simply omitted.
+function normaliseProfile(p) {
+  if (!p || typeof p !== 'object') return {};
+  const name = typeof p.name === 'string' ? p.name.trim().slice(0, 40) : '';
+  const ageGroup = typeof p.ageGroup === 'string' ? p.ageGroup.trim().slice(0, 20) : '';
+  return { name, ageGroup };
 }
 
 function safeParse(s) {
@@ -119,18 +161,6 @@ function safeParse(s) {
     }
     return {};
   }
-}
-
-function normaliseCoach(c) {
-  if (!c || typeof c !== 'object') return null;
-  const move = String(c.move || '').trim();
-  const line = String(c.line || '').trim();
-  if (!move && !line) return null;
-  return {
-    move: move.slice(0, 40) || 'The Move',
-    line: line.slice(0, 160),
-    note: String(c.note || '').trim().slice(0, 200),
-  };
 }
 
 function clamp(n, lo, hi) {
