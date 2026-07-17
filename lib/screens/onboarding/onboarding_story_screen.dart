@@ -194,7 +194,7 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
           options: ['1–5', '5–20', 'More than I want to admit'],
         ),
         _ImageBeat(
-          asset: 'assets/onboarding/mirror.jpg',
+          asset: 'assets/onboarding/mirror.png',
           headline: 'You\'re getting used to watching.',
           body: 'Not because you don\'t care.\nBecause when the moment comes,\nyou freeze.',
         ),
@@ -489,7 +489,14 @@ class _BeatView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Spacer(),
-          const _MockDashboard(),
+          // Designed dashboard preview; falls back to the in-code mock
+          // if the asset isn't bundled yet.
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Image.asset('assets/onboarding/dashboard.png',
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const _MockDashboard()),
+          ),
           const SizedBox(height: 26),
           Text(b.headline,
               style: GoogleFonts.playfairDisplay(
