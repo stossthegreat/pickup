@@ -43,10 +43,9 @@ class GenderPickScreen extends StatelessWidget {
     if (fromSettings) {
       context.pop();
     } else {
-      // New users pass through the AI-data consent screen before the
-      // first scan; it forwards to /scan on agree (or immediately if
-      // consent was already granted).
-      context.go('/onboarding/consent');
+      // New users give their name + age band next (feeds the AI), then
+      // the AI-data consent gate, then straight into the app.
+      context.go('/onboarding/profile');
     }
   }
 

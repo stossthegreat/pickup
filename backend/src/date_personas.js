@@ -193,11 +193,15 @@ have sent.`;
 }
 
 /**
- * Build the single-call system prompt. The model returns strict JSON:
- *   { "her": string, "delta": number(-8..14), "strong": bool,
- *     "coach": null | { "move": string, "line": string, "note": string } }
+ * Build the single-call turn prompt. Coaching is now on-demand (the
+ * "Get Help" / Lucien button hits /v1/date/help), so a turn is purely
+ * HER reply + the score delta. The model returns strict JSON:
+ *   { "her": string, "delta": number(-8..14), "strong": bool }
+ *
+ * [userProfile] is an optional { name, ageGroup } block so she can use
+ * his name naturally and pitch her register to his age band.
  */
-export function buildDateTurnPrompt({ woman, focus, creator, cutIn }) {
+export function buildDateTurnPrompt({ woman, focus, creator, userProfile }) {
   const w = DATE_WOMEN[woman] || DATE_WOMEN.ice_queen;
   const persona = creator
     ? `${w.persona}\n\nCREATOR MODE: be more savage, more explicit in your
@@ -205,12 +209,12 @@ teasing, sharper teeth. Swear when it lands. Still in character.`
     : w.persona;
 
   return `You run a live texting simulation for a dating-confidence app. You
-play TWO voices in one JSON response: HER (the woman he is texting) and BRO
-(his coach). Never let Bro's voice leak into Her reply or vice versa.
+play HER — the woman he is texting — and grade his last message. Output ONE
+JSON object, nothing else.
 
 ━━ HER ━━
 ${persona}
-
+${userProfileBlock(userProfile)}
 Her register: real texting. lowercase mostly, short (usually under 14 words),
 no em-dashes, at most one emoji, no corporate-coach voice. Stay 100% in
 character as ${w.name}. React to HIS LAST MESSAGE specifically — not a generic
@@ -231,18 +235,16 @@ Grade his last message on: ${FOCUS_DESC[focus] || FOCUS_DESC.game}
 Return "delta": a number from -8 (needy/weak/boring) to +14 (sharp, calibrated,
 made her lean in). "strong": true if delta >= 6.
 
-━━ BRO (the coach) ━━
-${broSpec(creator)}
-${cutIn
-      ? `Bro CUTS IN this turn. Return a "coach" object:
-  - "move": the technique name in Title Case (e.g. "The Cold Open", "Push-Pull",
-    "Hold Frame", "The Statement", "The Reframe", "Playful Tease").
-  - "line": the exact better message he should have sent — in his voice, <= 12
-    words, no em-dash, one beat.
-  - "note": one short sentence of why (Bro's voice).`
-      : `Bro is SILENT this turn unless the move was genuinely weak (delta < 2).
-If silent, return "coach": null.`}
-
 Return ONLY valid JSON, no prose:
-{"her": "...", "delta": 0, "strong": false, "coach": null}`;
+{"her": "...", "delta": 0, "strong": false}`;
+}
+
+// Optional block injected when we know the user's name / age band, so
+// she can drop his name naturally and pitch her tone to his age.
+function userProfileBlock(p) {
+  if (!p || (!p.name && !p.ageGroup)) return '';
+  const bits = [];
+  if (p.name) bits.push(`His name is ${p.name} — use it naturally, don't overuse it.`);
+  if (p.ageGroup) bits.push(`He is in the ${p.ageGroup} age range — pitch your references and register to that.`);
+  return `\nABOUT HIM: ${bits.join(' ')}\n`;
 }

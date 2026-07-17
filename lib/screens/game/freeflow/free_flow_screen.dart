@@ -739,6 +739,9 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       _log('info', 'WS', 'creator mode: $_creator');
       // ignore: avoid_print
       print('[FREEFLOW] creator mode: $_creator');
+      // Onboarding profile — she uses his name + pitches to his age band.
+      final userName = await LocalStoreService.userName();
+      final userAge  = await LocalStoreService.userAgeGroup();
       final memoryBlock = await UserMemory.buildSystemPromptBlock(
         filterTopic: 'rizz',
       );
@@ -764,6 +767,11 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         'scenarioSetting': vibe.setting,
         'creator':         _creator,
         'memoryBlock':     memoryBlock,
+        if (userName != null || userAge != null)
+          'userProfile': {
+            if (userName != null) 'name': userName,
+            if (userAge != null) 'ageGroup': userAge,
+          },
       }).timeout(const Duration(seconds: 12),
         onTimeout: () => throw 'WS connect timeout');
       _log('ok', 'WS', 'connect returned — WS open');

@@ -4,6 +4,7 @@ import '../models/face_geometry.dart';
 import '../screens/chat/chat_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/legal/legal_screen.dart';
+import '../screens/onboarding/age_name_screen.dart';
 import '../screens/onboarding/ai_consent_screen.dart';
 import '../screens/onboarding/gender_pick_screen.dart';
 import '../screens/onboarding/intro_reel_screen.dart';
@@ -63,6 +64,18 @@ final appRouter = GoRouter(
     // AI-data consent — sits between the gender pick and the first scan
     // so every new user grants permission before any data reaches a
     // third-party AI service (App Store 5.1.1(i) / 5.1.2(i)).
+    // Name + age band — feeds the AI (his name in scenes, register by
+    // age). Sits between the manifesto and the AI-consent gate. Also
+    // re-openable from Settings with extra {fromSettings:true}.
+    GoRoute(
+      path: '/onboarding/profile',
+      builder: (context, state) {
+        final extra = state.extra is Map<String, dynamic>
+            ? state.extra as Map<String, dynamic>
+            : const <String, dynamic>{};
+        return AgeNameScreen(fromSettings: extra['fromSettings'] == true);
+      },
+    ),
     GoRoute(
       path: '/onboarding/consent',
       builder: (_, __) => const AiConsentScreen(),
