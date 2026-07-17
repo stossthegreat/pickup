@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/common/imhim_wordmark.dart';
+import '../../widgets/common/streak_badge.dart';
 import '../game/freeflow/free_flow_screen.dart';
 import '../roleplay/girl_chat_screen.dart';
 import 'task_chat_screen.dart';
@@ -268,47 +269,28 @@ class _TopBar extends StatelessWidget {
       child: Column(
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const ImHimWordmark(fontSize: 28, letterSpacing: -0.6),
+              // Bigger wordmark, matching the Progress masthead.
+              const ImHimWordmark(fontSize: 34, letterSpacing: -0.6),
               const Spacer(),
+              // The same clean streak flame the Progress tab uses.
+              const StreakBadge(days: 4),
+              const SizedBox(width: 8),
               _IconBtn(icon: Icons.settings_outlined, onTap: () => context.push('/settings')),
             ],
           ),
-          const SizedBox(height: Sp.sm),
-          Row(
+          const SizedBox(height: Sp.md),
+          const Row(
             children: [
-              _Chip(icon: Icons.local_fire_department_rounded, label: '4', color: AppColors.red),
-              const SizedBox(width: Sp.sm),
-              _Chip(icon: Icons.bolt_rounded, label: '2,140 XP', color: AppColors.accent),
-              const Spacer(),
+              XpBadge(label: '2,140 XP'),
+              Spacer(),
             ],
           ),
         ],
       ),
     );
   }
-}
-
-class _Chip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  const _Chip({required this.icon, required this.label, required this.color});
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(Rd.sm),
-          border: Border.all(color: color.withOpacity(0.35)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 5),
-          Text(label,
-              style: AppTypography.label.copyWith(color: color, letterSpacing: 1)),
-        ]),
-      );
 }
 
 class _IconBtn extends StatelessWidget {
@@ -332,7 +314,7 @@ class _Heading extends StatelessWidget {
       children: [
         Text('TODAY', style: AppTypography.label),
         const SizedBox(height: 6),
-        Text('Go get her.', style: AppTypography.h1Italic),
+        Text('Make your move.', style: AppTypography.h1Italic),
         const SizedBox(height: 6),
         Text('Your missions for today. Practice on AI, then do it for real.',
             style: AppTypography.bodySmall),
