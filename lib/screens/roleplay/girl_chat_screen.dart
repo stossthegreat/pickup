@@ -176,19 +176,37 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
 
     final result = await _turn(text);
     if (!mounted) return;
+    if (result.error != null) {
+      // Surface the REAL reason instead of a silent "…" so a broken
+      // backend is obvious on-device (not deployed / no key / bad URL).
+      setState(() {
+        _sending = false;
+        _msgs.add(_Msg('error', result.error!));
+      });
+      _scrollToBottom();
+      return;
+    }
+    // Real girls double-text. The model marks separate bubbles with '\n';
+    // reveal them one at a time so it reads like she's firing off texts.
+    final bubbles = result.her
+        .split('\n')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
     setState(() {
       _sending = false;
-      if (result.error != null) {
-        // Surface the REAL reason instead of a silent "…" so a broken
-        // backend is obvious on-device (not deployed / no key / bad URL).
-        _msgs.add(_Msg('error', result.error!));
-      } else {
-        if (result.her.isNotEmpty) _msgs.add(_Msg('her', result.her));
-        _heat = (_heat + result.delta * 3).clamp(0.0, 100.0).toDouble();
-      }
+      _heat = (_heat + result.delta * 3).clamp(0.0, 100.0).toDouble();
+      if (bubbles.isNotEmpty) _msgs.add(_Msg('her', bubbles.first));
     });
-    if (result.strong) HapticFeedback.lightImpact();
     _scrollToBottom();
+    if (result.strong) HapticFeedback.lightImpact();
+    for (var i = 1; i < bubbles.length; i++) {
+      await Future.delayed(Duration(milliseconds: 650 + bubbles[i].length * 22));
+      if (!mounted) return;
+      setState(() => _msgs.add(_Msg('her', bubbles[i])));
+      HapticFeedback.selectionClick();
+      _scrollToBottom();
+    }
   }
 
   Future<_TurnResult> _turn(String text) async {
@@ -785,6 +803,76 @@ class _LucienCard extends StatelessWidget {
       if (out.length > 8) break;
     }
     return out;
+  }
+}
+
+/// A tap-to-copy "SEND THIS" line — one of Lucien's suggested replies,
+/// lifted out of his card so the user can drop it straight into the chat.
+class _SendThisCard extends StatefulWidget {
+  final String line;
+  final Color accent;
+  const _SendThisCard({required this.line, required this.accent});
+
+  @override
+  State<_SendThisCard> createState() => _SendThisCardState();
+}
+
+class _SendThisCardState extends State<_SendThisCard> {
+  bool _copied = false;
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.line));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    HapticFeedback.selectionClick();
+    Future.delayed(const Duration(milliseconds: 1400), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: _copy,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+          decoration: BoxDecoration(
+            color: widget.accent.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: widget.accent.withOpacity(0.45), width: 0.9),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(widget.line,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textPrimary,
+                      fontSize: 14.5,
+                      height: 1.4,
+                      fontWeight: FontWeight.w600,
+                    )),
+              ),
+              const SizedBox(width: 8),
+              Icon(_copied ? Icons.check_rounded : Icons.copy_rounded,
+                  size: 15, color: widget.accent),
+              const SizedBox(width: 3),
+              Text(_copied ? 'COPIED' : 'SEND THIS',
+                  style: GoogleFonts.inter(
+                    color: widget.accent,
+                    fontSize: 9,
+                    letterSpacing: 1.4,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
