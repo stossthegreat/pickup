@@ -16,15 +16,18 @@ abstract final class AuralayDevFlags {
   static const creatorPassword = 'LET.HIM.COOK';
 
   /// Backend base URL — the Railway service that owns the OpenAI key.
-  /// Default is the live production deployment. Override at build time
-  /// with --dart-define=AURALAY_API=https://other-url.up.railway.app
-  /// (useful for hitting a staging service from a TestFlight build).
+  /// This is ImHim's OWN unified backend (the `pickup` repo backend), which
+  /// serves every /v1/* route: realtime voice, /v1/date text roleplay,
+  /// villain, and presence. The previous default pointed at an OLD Railway
+  /// service from a different app that never had the /v1/date route — which
+  /// is why the text roleplay only ever returned the "…" fallback.
   ///
-  /// If this string is empty at runtime, the app falls back to local
-  /// stubs (heuristic scorer + canned Diablo lines) so it never goes dark.
+  /// Override at build time with
+  ///   --dart-define=AURALAY_API=https://other-url.up.railway.app
+  /// (useful for hitting a staging service from a TestFlight build).
   static const apiBaseUrl = String.fromEnvironment(
     'AURALAY_API',
-    defaultValue: 'https://auralayai-production-65c2.up.railway.app',
+    defaultValue: 'https://pickup-production-1900.up.railway.app',
   );
 
   /// True when [apiBaseUrl] is set — the call sites read this to decide
