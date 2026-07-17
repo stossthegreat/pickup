@@ -102,6 +102,15 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
 
   // ── The 10 beats ──────────────────────────────────────────────────────
   List<_Beat> _buildBeats() => const [
+        // 00 — HERO. What the app IS, up front: the fun (rizz + roleplay
+        // with AI girls) AND the mission (real confidence, humour, game).
+        _HeroBeat(
+          headline: 'Rizz her.\nFor real this time.',
+          body: 'Practice on AI girls, then prove it with real-world '
+              'missions. 60 days to the confidence, humour and game that '
+              'actually get the girl.',
+          cta: 'SHOW ME HOW',
+        ),
         _ImageBeat(
           kicker: '01 — THE PATTERN',
           asset: 'assets/onboarding/hesitation.png',
@@ -111,9 +120,10 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
         _QuestionBeat(
           kicker: '02 — BE HONEST',
           question: 'Which one hurts\nbecause it\'s true?',
+          note: 'This is the pattern we\'re here to break.',
           options: [
+            'I knew exactly what to say… afterwards.',
             'I\'ll do it next time.',
-            'I knew what to say… afterwards.',
             'I watched someone else do what I couldn\'t.',
             'I keep waiting until I feel confident.',
           ],
@@ -122,51 +132,54 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
           kicker: '03 — THE REGRET',
           asset: 'assets/onboarding/1am.png',
           headline: 'The worst part\nisn\'t rejection.',
-          body: 'It\'s wondering what would\'ve happened\nif you had just moved.',
+          body: 'It\'s wondering what would\'ve happened\nif you\'d just moved.',
         ),
         _QuestionBeat(
-          kicker: '04 — THE COST',
-          question: 'How many chances\nhas hesitation cost you?',
-          options: ['A few', 'More than I\'d like', 'More than I want to admit'],
+          kicker: '04 — YOUR LEVEL',
+          question: 'Let\'s start where\nyou actually are.',
+          sub: 'How confident are you approaching someone you\'re attracted to?',
+          note: 'This sets where your Day 1 begins.',
+          options: [
+            'I never do it.',
+            'I\'ve done it once or twice.',
+            'Sometimes.',
+            'I\'m already comfortable.',
+          ],
         ),
-        _ImageBeat(
-          kicker: '05 — THE MIRROR',
-          asset: 'assets/onboarding/mirror.png',
-          headline: 'You\'re getting\nused to watching.',
-          body: 'Not because you don\'t care.\nBecause when it matters, you freeze.',
+        _StatementBeat(
+          kicker: '05 — THE TRUTH',
+          headline: 'This isn\'t personality.\nIt\'s a skill.',
+          body: 'Nobody becomes socially confident by hoping.\n'
+              'They become socially confident by practicing.',
         ),
-        _QuestionBeat(
-          kicker: '06 — THE TRUTH',
-          question: 'Be honest.',
-          sub: 'When did you last actually train this?',
-          options: ['Never', 'A few times', 'Regularly'],
+        _HowBeat(
+          kicker: '06 — HOW IMHIM WORKS',
+          headline: 'Every day,\nthree things.',
+          footer: 'That\'s it. Repeat for 60 days.',
         ),
         _DashboardBeat(
-          kicker: '07 — THE PLAN',
-          headline: 'This is what the\nnext 60 days changes.',
-          body: 'Not what you say you\'ll become.\nWhat you measurably become.',
+          kicker: '07 — YOUR TRANSFORMATION',
+          headline: 'You\'ll measure\nwhat actually changes.',
+          body: 'Confidence · Presence · Game · Humour · Listening.\n'
+              'You won\'t guess if you\'re improving — you\'ll see it.',
         ),
-        _TextBeat(
-          kicker: '08 — THE WORK',
-          headline: 'You do the reps.\nThe reps change you.',
-          body: 'Every single day:',
-          bullets: [
-            'Real AI conversations',
-            'Real-world missions',
-            'A correction after every miss',
-            'Progress you can actually see',
-          ],
-          footer: 'No guessing. No hoping. Measurable change.',
+        _StatementBeat(
+          kicker: '08 — THE RULE',
+          headline: 'Rejection is not failure.\nAvoidance is.',
+          body: 'For the next 60 days, every conversation is progress.\n'
+              'Every excuse keeps you exactly where you are.',
         ),
         _BarsBeat(
           kicker: '09 — THE SHIFT',
           headline: 'One day, something\nfeels different.',
-          body: 'You stop overthinking.\nYou stop standing there.\nYou just move.',
+          body: 'You stop rehearsing. You stop overthinking.\n'
+              'You stop watching. You move.\nAnd every week, your scores prove it.',
         ),
         _FinaleBeat(
           headline: 'The next 60 days\nwill pass anyway.',
-          body: 'At the end of them you\'ll either still be watching —\nor you\'ll be ImHim.',
-          cta: 'SEE MY PLAN',
+          body: 'At the end of them you\'ll either still be on the sidelines —\n'
+              'or you\'ll be him.',
+          cta: 'SEE MY 60-DAY PLAN',
         ),
       ];
 }
@@ -354,25 +367,37 @@ class _ImageBeat extends _Beat {
 class _QuestionBeat extends _Beat {
   final String kicker, question;
   final String? sub;
+  final String? note; // small clarifier under the options
   final List<String> options;
   const _QuestionBeat({
     required this.kicker,
     required this.question,
     this.sub,
+    this.note,
     required this.options,
   });
 }
 
-class _TextBeat extends _Beat {
-  final String kicker, headline, body, footer;
-  final List<String> bullets;
-  const _TextBeat({
-    required this.kicker,
-    required this.headline,
-    required this.body,
-    required this.bullets,
-    required this.footer,
-  });
+class _HeroBeat extends _Beat {
+  final String headline, body;
+  final String _cta;
+  const _HeroBeat(
+      {required this.headline, required this.body, required String cta})
+      : _cta = cta;
+  @override
+  String get cta => _cta;
+}
+
+class _StatementBeat extends _Beat {
+  final String kicker, headline, body;
+  const _StatementBeat(
+      {required this.kicker, required this.headline, required this.body});
+}
+
+class _HowBeat extends _Beat {
+  final String kicker, headline, footer;
+  const _HowBeat(
+      {required this.kicker, required this.headline, required this.footer});
 }
 
 class _DashboardBeat extends _Beat {
@@ -414,9 +439,11 @@ class _BeatView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = beat;
+    if (b is _HeroBeat) return _scroll(_heroBeat(b), center: true);
     if (b is _ImageBeat) return _imageBeat(b);
     if (b is _QuestionBeat) return _scroll(_questionBeat(b), top: true);
-    if (b is _TextBeat) return _scroll(_textBeat(b), top: true);
+    if (b is _StatementBeat) return _scroll(_statementBeat(b), center: true);
+    if (b is _HowBeat) return _scroll(_howBeat(b), top: true);
     if (b is _DashboardBeat) return _scroll(_dashboardBeat(b), top: true);
     if (b is _BarsBeat) return _scroll(_barsBeat(b), top: true);
     if (b is _FinaleBeat) return _scroll(_finaleBeat(b), center: true);
@@ -489,11 +516,84 @@ class _BeatView extends StatelessWidget {
               .slideY(begin: 0.06, end: 0),
           if (i != b.options.length - 1) const SizedBox(height: 12),
         ],
+        if (b.note != null) ...[
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Icon(Icons.lock_outline_rounded,
+                  size: 13, color: AppColors.textTertiary),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(b.note!,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textTertiary,
+                      fontSize: 12.5,
+                      height: 1.35,
+                      fontStyle: FontStyle.italic,
+                      fontWeight: FontWeight.w500,
+                    )),
+              ),
+            ],
+          ).animate().fadeIn(delay: 400.ms, duration: 400.ms),
+        ],
       ],
     );
   }
 
-  Widget _textBeat(_TextBeat b) {
+  // ── Hero: brand + the promise, front and centre ───────────────────────
+  Widget _heroBeat(_HeroBeat b) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const ImHimWordmark(fontSize: 60, letterSpacing: -1.8)
+            .animate()
+            .fadeIn(duration: 560.ms)
+            .scale(begin: const Offset(0.96, 0.96), end: const Offset(1, 1)),
+        const SizedBox(height: 34),
+        Text(b.headline,
+                textAlign: TextAlign.center, style: _headlineStyle(38))
+            .animate()
+            .fadeIn(delay: 200.ms, duration: 560.ms)
+            .slideY(begin: 0.05, end: 0),
+        const SizedBox(height: 20),
+        Text(b.body,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: Colors.white.withValues(alpha: 0.82),
+              fontSize: 16.5,
+              height: 1.55,
+              fontWeight: FontWeight.w500,
+            )).animate().fadeIn(delay: 420.ms, duration: 560.ms),
+      ],
+    );
+  }
+
+  // ── Statement: a pure, bold truth (no bullets) ────────────────────────
+  Widget _statementBeat(_StatementBeat b) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _kicker(b.kicker),
+        const SizedBox(height: 18),
+        _headline(b.headline, size: 38),
+        const SizedBox(height: 22),
+        _body(b.body, size: 16.5),
+      ],
+    );
+  }
+
+  // ── How it works: three clean steps ───────────────────────────────────
+  Widget _howBeat(_HowBeat b) {
+    const steps = <(IconData, String, String)>[
+      (Icons.smart_toy_rounded, 'Practice with AI',
+          'Roleplay real conversations with AI girls — voice or text.'),
+      (Icons.public_rounded, 'One real-world mission',
+          'Take what you practised out into real life.'),
+      (Icons.trending_up_rounded, 'Watch your scores climb',
+          'See your confidence, humour and game improve.'),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -501,38 +601,61 @@ class _BeatView extends StatelessWidget {
         _kicker(b.kicker),
         const SizedBox(height: 16),
         _headline(b.headline),
-        const SizedBox(height: 20),
-        _body(b.body, color: AppColors.textSecondary, size: 15.5),
-        const SizedBox(height: 18),
-        for (final line in b.bullets)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded,
-                    color: AppColors.red, size: 21),
-                const SizedBox(width: 13),
-                Expanded(
-                  child: Text(line,
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 16.5,
-                        height: 1.3,
-                        fontWeight: FontWeight.w600,
-                      )),
+        const SizedBox(height: 30),
+        for (var i = 0; i < steps.length; i++) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppColors.red.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                  border:
+                      Border.all(color: AppColors.red.withValues(alpha: 0.4)),
                 ),
-              ],
-            ),
-          ).animate().fadeIn(delay: 160.ms, duration: 400.ms),
-        const SizedBox(height: 8),
+                child: Icon(steps[i].$1, color: AppColors.red, size: 22),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(steps[i].$2,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 17,
+                          height: 1.2,
+                          fontWeight: FontWeight.w700,
+                        )),
+                    const SizedBox(height: 4),
+                    Text(steps[i].$3,
+                        style: GoogleFonts.inter(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                          height: 1.35,
+                          fontWeight: FontWeight.w500,
+                        )),
+                  ],
+                ),
+              ),
+            ],
+          )
+              .animate()
+              .fadeIn(delay: (140 + i * 120).ms, duration: 420.ms)
+              .slideX(begin: 0.05, end: 0),
+          if (i != steps.length - 1) const SizedBox(height: 20),
+        ],
+        const SizedBox(height: 26),
         Text(b.footer,
             style: GoogleFonts.inter(
               color: AppColors.red,
-              fontSize: 14.5,
+              fontSize: 15,
               height: 1.4,
               fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w700,
-            )),
+            )).animate().fadeIn(delay: 560.ms, duration: 400.ms),
       ],
     );
   }
