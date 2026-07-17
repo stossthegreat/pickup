@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
+import '../../widgets/common/imhim_wordmark.dart';
 import '../game/freeflow/free_flow_screen.dart';
 import '../roleplay/girl_chat_screen.dart';
 import 'task_chat_screen.dart';
@@ -255,20 +256,33 @@ const _reopenDeadChat = MissionChatConfig(
       'one short sentence on the move. Keep it brief.',
 );
 
-// ── Top bar: streak · XP · progress · settings ───────────────────────────
+// ── Top bar: ImHim wordmark · streak · XP · settings ─────────────────────
+// The ImHim wordmark anchors the first tab (the brand belongs here). The
+// old progress chart icon is gone — the Progress tab in the bottom nav
+// already covers it, so the shortcut is redundant.
 class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.md, 0),
-      child: Row(
+      child: Column(
         children: [
-          _Chip(icon: Icons.local_fire_department_rounded, label: '4', color: AppColors.red),
-          const SizedBox(width: Sp.sm),
-          _Chip(icon: Icons.bolt_rounded, label: '2,140 XP', color: AppColors.accent),
-          const Spacer(),
-          _IconBtn(icon: Icons.insights_rounded, onTap: () => context.push('/progress')),
-          _IconBtn(icon: Icons.settings_outlined, onTap: () => context.push('/settings')),
+          Row(
+            children: [
+              const ImHimWordmark(fontSize: 28, letterSpacing: -0.6),
+              const Spacer(),
+              _IconBtn(icon: Icons.settings_outlined, onTap: () => context.push('/settings')),
+            ],
+          ),
+          const SizedBox(height: Sp.sm),
+          Row(
+            children: [
+              _Chip(icon: Icons.local_fire_department_rounded, label: '4', color: AppColors.red),
+              const SizedBox(width: Sp.sm),
+              _Chip(icon: Icons.bolt_rounded, label: '2,140 XP', color: AppColors.accent),
+              const Spacer(),
+            ],
+          ),
         ],
       ),
     );
