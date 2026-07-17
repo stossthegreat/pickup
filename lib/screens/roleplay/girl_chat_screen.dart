@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -96,11 +97,63 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   String? _ageGroup;
 
   /// Her interest, 0–100. Starts guarded, moves with each turn's delta.
-  double _heat = 32;
+  /// Set per-character in initState — cold girls start lower.
+  double _heat = 20;
+
+  /// How hard SHE is to win over. >1 = every degree of warmth costs more;
+  /// <1 = she warms faster. Keyed to the character so each girl feels
+  /// distinct — the Ice Queen is a grind, the girl who's into you isn't.
+  double get _difficulty => switch (widget.config.characterId) {
+        'ice_queen' => 1.7, // selective, gives nothing
+        'socialite' => 1.6, // ice → fire, earned across many turns
+        'intellectual' => 1.45, // tests you constantly
+        'chaos' => 1.2, // fun but a moving target
+        'shy' => 0.95, // warm, but arrogance sets her back
+        'into_you' => 0.8, // already leaning in
+        _ => 1.2,
+      };
+
+  /// Where her interest sits before you've said anything.
+  double get _startHeat => switch (widget.config.characterId) {
+        'ice_queen' => 8,
+        'socialite' => 10,
+        'intellectual' => 14,
+        'chaos' => 22,
+        'shy' => 30,
+        'into_you' => 40,
+        _ => 20,
+      };
+
+  /// Move her interest for one turn. This is the GAME: warmth is earned
+  /// slowly and the last stretch is the hardest.
+  ///  • A good line gives less the warmer she already is (headroom curve),
+  ///    so "closing" from 80→100 is a real grind, not two messages.
+  ///  • Difficulty divides the gains — the Ice Queen barely budges.
+  ///  • A bad line stings at closer to full value (loss aversion) and is
+  ///    NOT softened by difficulty — you can always blow it.
+  double _applyDelta(double heat, double delta) {
+    double next;
+    if (delta >= 0) {
+      // Headroom shrinks as she warms; ^1.2 makes the top sticky, so the
+      // "close" from 80→100 is a long grind, not two messages.
+      final headroom = (1 - heat / 100).clamp(0.0, 1.0);
+      var gain = delta * 1.5 * math.pow(headroom, 1.2).toDouble() / _difficulty;
+      // A genuinely strong line (delta ≥ 8) always creeps her forward, so
+      // a sustained flawless run can actually finish the close at 100.
+      if (delta >= 8) gain = math.max(gain, 0.9 / _difficulty);
+      next = heat + gain;
+    } else {
+      // Losses land hard and fast — one needy move should hurt, and
+      // difficulty does NOT soften it. You can always blow it.
+      next = heat + delta * 1.7;
+    }
+    return next.clamp(0.0, 100.0).toDouble();
+  }
 
   @override
   void initState() {
     super.initState();
+    _heat = _startHeat;
     // Practice mode: she opens. Post mode: the post IS the opener and she
     // waits for his comment, so no first bubble from her.
     if (widget.config.post == null) {
@@ -195,7 +248,7 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
         .toList();
     setState(() {
       _sending = false;
-      _heat = (_heat + result.delta * 3).clamp(0.0, 100.0).toDouble();
+      _heat = _applyDelta(_heat, result.delta);
       if (bubbles.isNotEmpty) _msgs.add(_Msg('her', bubbles.first));
     });
     _scrollToBottom();
