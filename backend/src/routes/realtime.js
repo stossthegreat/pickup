@@ -119,6 +119,7 @@ export default async function realtimeRoute(app) {
       lastHer,        // lucien step-in: the woman's last line
       lastYou,        // lucien step-in: the apprentice's last line
       memoryBlock,    // built client-side by UserMemory.buildSystemPromptBlock
+      userProfile,    // free-flow: { name, ageGroup } from onboarding
       drill,          // selene: which named eye-contact / aura move tonight
       metricsContext, // selene: optional initial MediaPipe snapshot text
     } = req.body || {};
@@ -151,6 +152,7 @@ export default async function realtimeRoute(app) {
         vibeLabel,
         scenarioSetting,
         creator: creator === true || creator === 'true',
+        userProfile,
       });
     } else if (isSelene) {
       instructions = buildSeleneInstructions({

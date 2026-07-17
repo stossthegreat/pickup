@@ -2984,13 +2984,15 @@ State HE_GOES_WEAK — he asks permission or apologises. Stay
 }
 
 export function buildFreeFlowInstructions({
-  vibeLabel, scenarioSetting, memoryBlock, creator,
+  vibeLabel, scenarioSetting, memoryBlock, creator, userProfile,
 }) {
+  const aboutHim = freeFlowAboutHim(userProfile);
   if (creator) {
     // Creator mode = single structured archetype (Taylor / Raven /
     // Maya creator-mode) per OpenAI's Realtime template. Three
     // distinct viral characters dispatched by vibe.
     const parts = [buildVixenInstructions(vibeLabel)];
+    if (aboutHim) parts.push('', aboutHim);
     if (memoryBlock && memoryBlock.trim().length > 0) {
       parts.push('', memoryBlock);
     }
@@ -3005,6 +3007,7 @@ export function buildFreeFlowInstructions({
   // config, signature sounds, and conversation flow. The dispatcher
   // picks by vibe label.
   const parts = [buildNormalModeCharacter(vibeLabel)];
+  if (aboutHim) parts.push('', aboutHim);
   if (memoryBlock && memoryBlock.trim().length > 0) {
     parts.push('', memoryBlock);
   }
@@ -3012,6 +3015,20 @@ export function buildFreeFlowInstructions({
     parts.push('', '# ADDITIONAL SCENE NOTE', scenarioSetting);
   }
   return parts.join('\n');
+}
+
+// ABOUT-HIM block for the live voice personas — his name (so she can say
+// it) + age band (so she pitches her references and register right).
+// Both optional; returns '' when we know nothing.
+function freeFlowAboutHim(p) {
+  if (!p || typeof p !== 'object') return '';
+  const name = typeof p.name === 'string' ? p.name.trim().slice(0, 40) : '';
+  const age = typeof p.ageGroup === 'string' ? p.ageGroup.trim().slice(0, 20) : '';
+  if (!name && !age) return '';
+  const bits = [];
+  if (name) bits.push(`His name is ${name} — use it naturally, sparingly, the way a real person drops a name. Don't repeat it every line.`);
+  if (age) bits.push(`He is in the ${age} age range — pitch your references, slang, and register to that.`);
+  return `# ABOUT HIM\n${bits.join(' ')}`;
 }
 
 // ─── LEGACY EXPORT — keep old code that imports `personaFor` compiling ──
