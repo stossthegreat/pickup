@@ -59,13 +59,20 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
     HapticFeedback.mediumImpact();
     await LocalStoreService.setUserName(_nameCtrl.text);
     await LocalStoreService.setUserAgeGroup(_ageGroup);
-    if (!mounted) return;
     if (widget.fromSettings) {
+      if (!mounted) return;
       context.pop();
-    } else {
-      // New users pass through the AI-data consent screen next.
-      context.go('/onboarding/consent');
+      return;
     }
+    // Stamp onboarding complete here (the gender picker is bypassed in
+    // the new funnel — this is a men's app, so pin male coding). Doing it
+    // now means a mid-flow bail still re-shows onboarding, but finishing
+    // this step routes returning users straight to /home.
+    await LocalStoreService.setUserGender('m');
+    await LocalStoreService.setOnboarded(true);
+    if (!mounted) return;
+    // AI-data consent gate next, then the paywall.
+    context.go('/onboarding/consent');
   }
 
   @override

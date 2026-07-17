@@ -7,6 +7,7 @@ import '../screens/legal/legal_screen.dart';
 import '../screens/onboarding/age_name_screen.dart';
 import '../screens/onboarding/ai_consent_screen.dart';
 import '../screens/onboarding/gender_pick_screen.dart';
+import '../screens/onboarding/onboarding_story_screen.dart';
 import '../screens/onboarding/intro_reel_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/paywall/paywall_screen.dart';
@@ -46,6 +47,8 @@ final appRouter = GoRouter(
   routes: [
     GoRoute(path: '/',           builder: (_, __) => const SplashScreen()),
     GoRoute(path: '/intro',      builder: (_, __) => const IntroReelScreen()),
+    // The 10-beat emotional onboarding funnel (first launch lands here).
+    GoRoute(path: '/onboarding/story', builder: (_, __) => const OnboardingStoryScreen()),
     GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
     // Pre-scan gender pick. First-launch users get routed here from
     // splash; existing users can re-open it from Settings → Glow-up

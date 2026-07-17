@@ -22,26 +22,16 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _boot() async {
-    final onboarded   = await LocalStoreService.isOnboarded();
-    final hasGender   = (await LocalStoreService.userGender()) != null;
+    final onboarded = await LocalStoreService.isOnboarded();
     await Future.delayed(const Duration(milliseconds: 2400));
     if (!mounted) return;
 
-    // Gating order (this is an AI-roleplay app — there is NO face scan
-    // anywhere in the funnel; onboarding always lands on /home = Missions):
-    //
-    // 0) FIRST EVER LAUNCH (no gender, never onboarded) → the cinematic
-    //    INTRO REEL, which flows into the manifesto + AI consent and
-    //    then straight to /home.
-    //
-    // 1) Onboarded but no gender pick yet (e.g. upgraded from an older
-    //    build) → /onboarding/gender to capture it, then /home.
-    //
-    // 2) Everyone else → /home (the Missions tab).
-    if (!hasGender && !onboarded) {
-      context.go('/intro');
-    } else if (!hasGender) {
-      context.go('/onboarding/gender');
+    // First ever launch → the 10-beat emotional onboarding funnel, which
+    // flows into name+age → AI consent → paywall → the app. Returning
+    // users go straight to /home (the Missions tab). There is NO face
+    // scan anywhere.
+    if (!onboarded) {
+      context.go('/onboarding/story');
     } else {
       context.go('/home');
     }
