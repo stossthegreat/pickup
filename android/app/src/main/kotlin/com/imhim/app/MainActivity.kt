@@ -1,4 +1,4 @@
-package com.mirrorly.mirrorly
+package com.imhim.app
 
 import io.flutter.embedding.android.FlutterActivity
 

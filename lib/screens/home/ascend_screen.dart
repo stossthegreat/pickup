@@ -14,7 +14,6 @@ import '../../services/local_store_service.dart';
 import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
-import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/charmr/metrics_panel.dart';
 
 /// v281 — ASCENSION home tab.
@@ -208,7 +207,8 @@ class _AscendScreenState extends State<AscendScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const ImHimWordmark(fontSize: 34),
+                  // Wordmark lives only on the Missions tab now — the
+                  // brand anchors the front door, not every screen.
                   const Spacer(),
                   if (widget.dayStreak > 0) ...[
                     _MastheadStreakBadge(days: widget.dayStreak),
