@@ -27,30 +27,23 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(milliseconds: 2400));
     if (!mounted) return;
 
-    // Gating order:
+    // Gating order (this is an AI-roleplay app — there is NO face scan
+    // anywhere in the funnel; onboarding always lands on /home = Missions):
     //
-    // 0) FIRST EVER LAUNCH (no gender, never onboarded) → play the
-    //    cinematic INTRO REEL. It pushes /onboarding/gender after BEGIN
-    //    so the rest of the funnel proceeds as designed.
+    // 0) FIRST EVER LAUNCH (no gender, never onboarded) → the cinematic
+    //    INTRO REEL, which flows into the manifesto + AI consent and
+    //    then straight to /home.
     //
-    // 1) Has the user picked Men's / Women's? If NOT — even if they've
-    //    already completed onboarding on a previous version of the app
-    //    — send them to /onboarding/gender and force a pick. Without
-    //    this every analysis + render downstream stays male-coded for
-    //    women, which is brand-killing.
+    // 1) Onboarded but no gender pick yet (e.g. upgraded from an older
+    //    build) → /onboarding/gender to capture it, then /home.
     //
-    // 2) Otherwise, returning user → /home.
-    //
-    // 3) Otherwise, fresh install (no onboarded flag, no gender) →
-    //    /onboarding/gender too. Same destination as case 1 but the
-    //    gender screen also serves as the entry funnel for first
-    //    launches.
+    // 2) Everyone else → /home (the Missions tab).
     if (!hasGender && !onboarded) {
       context.go('/intro');
     } else if (!hasGender) {
       context.go('/onboarding/gender');
     } else {
-      context.go(onboarded ? '/home' : '/scan');
+      context.go('/home');
     }
   }
 
