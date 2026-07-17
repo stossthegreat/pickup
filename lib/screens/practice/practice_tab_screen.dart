@@ -6,7 +6,7 @@ import '../../theme/app_typography.dart';
 import '../../widgets/common/mirrorly_components.dart';
 import '../roleplay/girl_chat_screen.dart';
 
-/// PRACTICE — a 2×3 grid of six AI women. Tap one and her TEXTING
+/// PRACTICE — a grid of ten AI women. Tap one and her TEXTING
 /// roleplay opens: flirt back and forth over text, her interest meter
 /// moving with every line. A 📞 in the header takes it live on the
 /// realtime VOICE orb ([FreeFlowScreen]) for the same character.
@@ -75,6 +75,42 @@ class PracticeTabScreen extends StatelessWidget {
       asset: 'assets/characters/women/shy_girl.png',
       accent: Color(0xFF4ADE80),
     ),
+    _CastMember(
+      vibe: 'into_you',
+      character: 'amara',
+      name: 'Amara',
+      hook: 'Everyone wants her. Stand out or blend in.',
+      opener: 'okay you actually came over. bold. i respect bold.',
+      asset: 'assets/characters/women/amara.png',
+      accent: Color(0xFFFB7185),
+    ),
+    _CastMember(
+      vibe: 'sweet',
+      character: 'daisy',
+      name: 'Daisy',
+      hook: 'Bubbly and scattered. Keep it fun, not deep.',
+      opener: 'omg hi — wait okay i totally forgot what i was gonna say. hi.',
+      asset: 'assets/characters/women/daisy.png',
+      accent: Color(0xFFFDBA74),
+    ),
+    _CastMember(
+      vibe: 'testing',
+      character: 'valentina',
+      name: 'Valentina',
+      hook: 'Grounded and dry. Flexing kills it.',
+      opener: 'hey. quick warning — i can smell a rehearsed line from here.',
+      asset: 'assets/characters/women/valentina.png',
+      accent: Color(0xFF34D399),
+    ),
+    _CastMember(
+      vibe: 'ice_then_fire',
+      character: 'simone',
+      name: 'Simone',
+      hook: 'High bar, short patience. Bring substance.',
+      opener: 'i\'ll give you thirty seconds. make them interesting.',
+      asset: 'assets/characters/women/simone.png',
+      accent: Color(0xFFA855F7),
+    ),
   ];
 
   void _openChat(BuildContext context, _CastMember m) {
@@ -110,7 +146,7 @@ class PracticeTabScreen extends StatelessWidget {
               child: MirrorlyMasthead(
                 eyebrow: 'PRACTICE · TEXT + VOICE',
                 title: 'Who\'s it tonight?',
-                subtitle: 'Text her. Tap 📞 to take it live. Six women, six ways to get read.',
+                subtitle: 'Text her. Tap 📞 to take it live. Ten women, ten ways to get read.',
               ),
             ),
           ),
