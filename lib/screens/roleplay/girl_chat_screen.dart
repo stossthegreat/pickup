@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -149,11 +150,17 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     if (!mounted) return;
     setState(() {
       _sending = false;
-      if (result.her.isNotEmpty) _msgs.add(_Msg('her', result.her));
-      if (result.coach != null) {
-        _msgs.add(_Msg('coach', result.coach!.$2, coachMove: result.coach!.$1));
+      if (result.error != null) {
+        // Surface the REAL reason instead of a silent "…" so a broken
+        // backend is obvious on-device (not deployed / no key / bad URL).
+        _msgs.add(_Msg('error', result.error!));
+      } else {
+        if (result.her.isNotEmpty) _msgs.add(_Msg('her', result.her));
+        if (result.coach != null) {
+          _msgs.add(_Msg('coach', result.coach!.$2, coachMove: result.coach!.$1));
+        }
+        _heat = (_heat + result.delta * 3).clamp(0.0, 100.0).toDouble();
       }
-      _heat = (_heat + result.delta * 3).clamp(0.0, 100.0).toDouble();
     });
     if (result.strong) HapticFeedback.lightImpact();
     _scrollToBottom();
@@ -169,10 +176,11 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     if (history.isNotEmpty && history.last['who'] == 'you') {
       history.removeLast();
     }
+    final base = AuralayDevFlags.apiBaseUrl;
     try {
       final res = await http
           .post(
-            Uri.parse('${AuralayDevFlags.apiBaseUrl}/v1/date/turn'),
+            Uri.parse('$base/v1/date/turn'),
             headers: {'content-type': 'application/json'},
             body: jsonEncode({
               'characterId': widget.config.characterId,
@@ -202,13 +210,21 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
         if (her.isNotEmpty && her != '…') {
           return _TurnResult(her: her, delta: delta, strong: strong, coach: coach);
         }
+        // 200 but she gave nothing — the backend degraded its own reply,
+        // almost always because OPENAI_API_KEY isn't set on the server.
+        final be = (b['error'] as String?) ?? 'empty reply';
+        return _TurnResult.err(
+            'Reached the backend but got no reply ($be). Set OPENAI_API_KEY '
+            'on the Railway backend.');
       }
-    } catch (_) {
-      // fall through to the graceful beat below
+      return _TurnResult.err(
+          'Backend returned ${res.statusCode} for /v1/date/turn. Deploy the '
+          'backend (it needs the /v1/date route) to $base.');
+    } on TimeoutException {
+      return _TurnResult.err('Timed out reaching $base/v1/date/turn.');
+    } catch (e) {
+      return _TurnResult.err('Couldn\'t reach $base/v1/date/turn — $e');
     }
-    // Backend not live yet / hiccup — keep the scene alive with a soft
-    // in-character beat instead of an error. The UI stays fully demoable.
-    return const _TurnResult(her: '…', delta: 0, strong: false, coach: null);
   }
 
   @override
@@ -278,12 +294,21 @@ class _TurnResult {
   final double delta;
   final bool strong;
   final (String, String)? coach; // (move, line)
+  final String? error; // set when the turn failed — shown on-device
   const _TurnResult({
     required this.her,
     required this.delta,
     required this.strong,
     required this.coach,
+    this.error,
   });
+
+  const _TurnResult.err(String message)
+      : her = '',
+        delta = 0,
+        strong = false,
+        coach = null,
+        error = message;
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -549,6 +574,7 @@ class _MsgView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (msg.who == 'coach') return _CoachNote(msg: msg);
+    if (msg.who == 'error') return _ErrorNote(msg: msg);
     final isYou = msg.who == 'you';
     if (isYou) {
       return Row(
@@ -674,6 +700,43 @@ class _CoachNote extends StatelessWidget {
                 height: 1.35,
                 fontWeight: FontWeight.w500,
               )),
+        ],
+      ),
+    );
+  }
+}
+
+/// Dev diagnostic bubble — shown when a turn fails so the real reason
+/// (backend not deployed / no OPENAI_API_KEY / bad URL) is visible
+/// on-device instead of a silent "…".
+class _ErrorNote extends StatelessWidget {
+  final _Msg msg;
+  const _ErrorNote({required this.msg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: AppColors.red.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.red.withOpacity(0.5), width: 0.8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.wifi_off_rounded, size: 15, color: AppColors.red),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(msg.text,
+                style: GoogleFonts.inter(
+                  color: AppColors.textSecondary,
+                  fontSize: 12.5,
+                  height: 1.4,
+                  fontWeight: FontWeight.w500,
+                )),
+          ),
         ],
       ),
     );
