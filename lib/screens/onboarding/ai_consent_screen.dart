@@ -30,10 +30,10 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
   @override
   void initState() {
     super.initState();
-    // Already granted (e.g. re-entering the funnel) → don't re-ask.
+    // Already granted (e.g. re-entering the funnel) → straight to home.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (await LocalStoreService.hasAiConsent() && mounted) {
-        context.go('/scan');
+        context.go('/home');
       }
     });
     AnalyticsService.consentShown();
@@ -45,7 +45,7 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
     await LocalStoreService.setAiConsent(true);
     AnalyticsService.consentGranted();
     if (!mounted) return;
-    context.go('/scan');
+    context.go('/home');
   }
 
   @override
@@ -84,8 +84,8 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
                           fontSize: 11, letterSpacing: 2.6,
                           fontWeight: FontWeight.w800)),
                     const SizedBox(height: 12),
-                    Text('ImHim uses AI to power your scans, live voice '
-                        'roleplay, and Rizz replies.',
+                    Text('ImHim uses AI to power your live voice '
+                        'roleplay, text roleplay, and Rizz replies.',
                         style: GoogleFonts.inter(
                           color: Colors.white,
                           fontSize: 24, height: 1.2,
@@ -93,10 +93,10 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
                           fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     Text('The data each feature needs is sent over an '
-                        'encrypted connection to our AI providers. Face '
-                        'geometry is computed on your device first, and '
+                        'encrypted connection to our AI provider. Your '
                         'dating-app screenshots are read on your device '
-                        '(OCR) first.',
+                        '(OCR) first, so only the text leaves for the '
+                        'common case.',
                         style: GoogleFonts.inter(
                           color: AppColors.textSecondary,
                           fontSize: 14, height: 1.5,
@@ -105,24 +105,23 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
 
                     const _Row(
                       head: 'WHAT IS SENT',
-                      body: 'Your selfie photo (scans), your voice during '
-                          'live roleplay and voice drills, and the '
+                      body: 'Your voice during live roleplay, the messages '
+                          'you type in roleplay and to the coach, and the '
                           'screenshots or text you submit in Rizz. Nothing '
                           'else — no name, email, contacts, location, or '
                           'tracking IDs.'),
                     const _Row(
                       head: 'WHO RECEIVES IT',
-                      body: 'OpenAI (analysis, ratings, voice roleplay, '
-                          'Rizz replies) and Replicate (rendered "after" '
-                          'previews). Each processes your data for one '
+                      body: 'OpenAI (voice roleplay, text roleplay, and '
+                          'Rizz replies). It processes your data for one '
                           'request only and excludes it from training '
-                          'under their standard API terms.'),
+                          'under its standard API terms.'),
                     const _Row(
                       head: 'EQUAL PROTECTION',
-                      body: 'Both providers contractually guarantee the '
-                          'same or equal privacy protection: encrypted in '
-                          'transit, no long-term retention, no training, '
-                          'no advertising, no resale.'),
+                      body: 'OpenAI contractually guarantees the same or '
+                          'equal privacy protection: encrypted in transit, '
+                          'no long-term retention, no training, no '
+                          'advertising, no resale.'),
                     const _Row(
                       head: 'YOU\'RE IN CONTROL',
                       body: 'You can revoke this permission any time in '
@@ -203,8 +202,8 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
                             child: Text(
                               'I agree to the Privacy Policy and Terms of '
                               'Use, and I consent to ImHim sharing the data '
-                              'described above with its AI providers '
-                              '(OpenAI and Replicate).',
+                              'described above with its AI provider '
+                              '(OpenAI).',
                               style: GoogleFonts.inter(
                                 color: Colors.white,
                                 fontSize: 12.5, height: 1.4,

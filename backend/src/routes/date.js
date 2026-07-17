@@ -8,8 +8,15 @@
 // One GPT call per turn returns HER reply AND Bro's coach cut-in as JSON,
 // so the app gets opponent + teacher in a single round-trip.
 
-import { openai, MODELS } from '../openai.js';
+import { openai } from '../openai.js';
 import { DATE_WOMEN, buildDateTurnPrompt } from '../date_personas.js';
+
+// Text roleplay runs on gpt-4o-mini: cheap, fast, and — because the turn
+// prompt is heavily directive (explicit reward/punish persona, JSON
+// response_format, move examples) — it holds character fine for text
+// where mini struggled for open-ended VOICE. One call returns HER reply
+// + Bro's coach cut-in as JSON.
+const MODEL = 'gpt-4o-mini';
 
 const VALID_FOCUS = ['confidence', 'presence', 'humor', 'listening', 'game'];
 const CUT_IN_EVERY = 3; // Bro proactively teaches every Nth turn.
@@ -67,7 +74,7 @@ export default async function dateRoute(app) {
 
     try {
       const res = await openai.chat.completions.create({
-        model: MODELS.chat,
+        model: MODEL,
         temperature: 0.9,
         max_tokens: 320,
         response_format: { type: 'json_object' },
