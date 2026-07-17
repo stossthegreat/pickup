@@ -4,78 +4,96 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/common/mirrorly_components.dart';
-import '../game/freeflow/free_flow_screen.dart';
+import '../roleplay/girl_chat_screen.dart';
 
-/// PRACTICE — a 2×3 grid of six AI women. Tap one and her REALTIME VOICE
-/// roleplay opens straight onto the live orb (red HOLD-TO-SPEAK circle,
-/// Lucien step-in, END & GET SCORED) with that character preselected.
+/// PRACTICE — a 2×3 grid of six AI women. Tap one and her TEXTING
+/// roleplay opens: flirt back and forth over text, her interest meter
+/// moving with every line. A 📞 in the header takes it live on the
+/// realtime VOICE orb ([FreeFlowScreen]) for the same character.
 ///
-/// This is the exact screen that was the main surface of ImHim's Game
-/// tab — [FreeFlowScreen]. Each card just pushes it with the matching
-/// `initialVibeKey`, so the OpenAI Realtime session, scoring, and every
-/// backend endpoint are identical to the tab + picker paths. Nothing new
-/// to wire when the backend is plugged in — it already speaks this
-/// contract.
+/// Text roleplay runs on POST /v1/date/turn; the voice handoff uses the
+/// matching realtime persona key. Both backends already speak these
+/// contracts, so nothing new is wired here.
 class PracticeTabScreen extends StatelessWidget {
   const PracticeTabScreen({super.key});
 
-  // Six women, each mapped 1:1 to a realtime roleplay persona
-  // (`_Vibe.key` inside free_flow_screen.dart). Portrait + accent chosen
-  // to match her vibe; the hook mirrors her in-session tagline so the
-  // card and the live persona read as the same character.
+  // Six women. `vibe` is the realtime VOICE persona key (FreeFlowScreen);
+  // `character` is the /v1/date TEXTING roleplay id. `opener` is her
+  // first text line.
   static const _cast = <_CastMember>[
     _CastMember(
       vibe: 'cold',
+      character: 'ice_queen',
       name: 'Ice Queen',
       hook: 'Selective. Gives you nothing. Earn every inch.',
+      opener: 'let me guess. you practised that in the mirror.',
       asset: 'assets/characters/women/ice_queen.png',
       accent: Color(0xFF38BDF8),
     ),
     _CastMember(
       vibe: 'into_you',
+      character: 'into_you',
       name: 'Into You',
       hook: 'Already a little into you. Don\'t get needy.',
+      opener: 'oh, it\'s you. i was kind of hoping you\'d text.',
       asset: 'assets/characters/women/arena.png',
       accent: Color(0xFFF472B6),
     ),
     _CastMember(
       vibe: 'chaos',
+      character: 'chaos',
       name: 'Chaos',
       hook: 'Fast, loud, jumps topics. Keep up.',
+      opener: 'you look like a bad decision. i love bad decisions.',
       asset: 'assets/characters/women/chaos_girl.png',
       accent: Color(0xFFE8222A),
     ),
     _CastMember(
       vibe: 'testing',
+      character: 'intellectual',
       name: 'Testing You',
       hook: 'Smart. Testing you constantly. Don\'t fold.',
+      opener: 'say something interesting. i\'ll wait.',
       asset: 'assets/characters/women/intellectual.png',
       accent: Color(0xFF8B94F5),
     ),
     _CastMember(
       vibe: 'ice_then_fire',
+      character: 'socialite',
       name: 'Ice Then Fire',
       hook: 'Starts ice cold. Warms only if you hold.',
+      opener: 'everyone here wants something from me. what do you want?',
       asset: 'assets/characters/women/socialite.png',
       accent: Color(0xFFFBBF24),
     ),
     _CastMember(
       vibe: 'sweet',
+      character: 'shy',
       name: 'Sweet',
       hook: 'Warm and genuine. Kill the arrogance.',
+      opener: 'oh — hi. i didn\'t think you\'d actually text first.',
       asset: 'assets/characters/women/shy_girl.png',
       accent: Color(0xFF4ADE80),
     ),
   ];
 
-  void _openRoleplay(BuildContext context, String vibeKey) {
-    // Push on the ROOT navigator so the live session covers the bottom
-    // nav bar (true full-screen), and so SafeCloseButton / safePop can
-    // reliably pop back to this grid. tabMode stays false → the
-    // standalone close button renders.
+  void _openChat(BuildContext context, _CastMember m) {
+    // Push the texting roleplay on the ROOT navigator so it covers the
+    // bottom nav (true full-screen) and pops cleanly back to the grid.
+    // The 📞 inside the chat opens the same girl on the voice orb.
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
-        builder: (_) => FreeFlowScreen(initialVibeKey: vibeKey),
+        builder: (_) => GirlChatScreen(
+          config: GirlChatConfig(
+            characterId: m.character,
+            vibeKey: m.vibe,
+            name: m.name,
+            archetype: m.hook,
+            portraitAsset: m.asset,
+            accent: m.accent,
+            opener: m.opener,
+          ),
+        ),
       ),
     );
   }
@@ -90,9 +108,9 @@ class PracticeTabScreen extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.fromLTRB(Sp.lg, Sp.md, Sp.lg, Sp.md),
               child: MirrorlyMasthead(
-                eyebrow: 'PRACTICE · VOICE',
+                eyebrow: 'PRACTICE · TEXT + VOICE',
                 title: 'Who\'s it tonight?',
-                subtitle: 'Six women, six ways to get read. Pick one — she picks up.',
+                subtitle: 'Text her. Tap 📞 to take it live. Six women, six ways to get read.',
               ),
             ),
           ),
@@ -113,7 +131,7 @@ class PracticeTabScreen extends StatelessWidget {
                     hook: member.hook,
                     asset: member.asset,
                     accent: member.accent,
-                    onTap: () => _openRoleplay(context, member.vibe),
+                    onTap: () => _openChat(context, member),
                   )
                       .animate()
                       .fadeIn(delay: (60 * i).ms, duration: 320.ms)
@@ -129,18 +147,22 @@ class PracticeTabScreen extends StatelessWidget {
   }
 }
 
-/// One woman in the Practice roster — her realtime persona key plus the
-/// card's display fields.
+/// One woman in the Practice roster — her voice persona key + text
+/// roleplay id plus the card's display fields.
 class _CastMember {
-  final String vibe;
+  final String vibe; // realtime VOICE persona key (FreeFlowScreen)
+  final String character; // /v1/date TEXTING roleplay id
   final String name;
   final String hook;
+  final String opener; // her first text line
   final String asset;
   final Color accent;
   const _CastMember({
     required this.vibe,
+    required this.character,
     required this.name,
     required this.hook,
+    required this.opener,
     required this.asset,
     required this.accent,
   });
@@ -183,7 +205,7 @@ class _GirlCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Voice badge, top-right
+            // Text + voice badge, top-right
             Positioned(
               top: Sp.sm + 2,
               right: Sp.sm + 2,
@@ -195,9 +217,11 @@ class _GirlCard extends StatelessWidget {
                   border: Border.all(color: accent.withOpacity(0.7)),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.mic_none_rounded, size: 11, color: accent),
+                  Icon(Icons.chat_bubble_outline_rounded, size: 10, color: accent),
+                  const SizedBox(width: 3),
+                  Icon(Icons.call_rounded, size: 10, color: accent),
                   const SizedBox(width: 4),
-                  Text('VOICE',
+                  Text('CHAT',
                       style: AppTypography.label
                           .copyWith(color: accent, fontSize: 8, letterSpacing: 1.4)),
                 ]),

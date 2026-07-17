@@ -2,16 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../models/villain/scenes.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
-import '../game/arena/arena_session_screen.dart';
+import '../game/freeflow/free_flow_screen.dart';
+import '../roleplay/girl_chat_screen.dart';
 import 'task_chat_screen.dart';
 
-/// MISSIONS — the front door. Beautiful, clean cards. Three kinds:
-///   • AI  — "Talk to her" → opens her voice roleplay right away.
-///   • Texts — real-world messaging (comment on her story, DM your crush)
-///            → routes to the Texts tab to practice the line first.
+/// MISSIONS — the front door. Beautiful, clean cards. Four kinds:
+///   • Voice   — "Talk to her" → opens her realtime VOICE orb.
+///   • AI text — "Comment on her post" → opens the girl roleplay chat
+///               (rizz the AI girl on her post; 📞 to go live).
+///   • Texts   — real-world messaging (comment on a real girl's story,
+///               DM your crush) → opens the coach with the scenario as
+///               the opening message, to use BEFORE the real task.
 ///   • Approach — real-world in-person → routes to the Practice tab.
 class MissionsTabScreen extends StatelessWidget {
   final ValueChanged<int> onGoToTab; // 1 = Practice, 2 = Texts
@@ -56,16 +59,20 @@ class MissionsTabScreen extends StatelessWidget {
 
   void _launch(BuildContext context, _Mission m) {
     switch (m.kind) {
-      case _Kind.ai:
-        final scene = VillainScenes.all
-            .firstWhere((s) => s.id == m.sceneId, orElse: () => VillainScenes.all.first);
-        Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => ArenaSessionScreen(scene: scene),
+      case _Kind.voice:
+        // AI · VOICE → straight onto the realtime voice orb for her.
+        Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
+          builder: (_) => FreeFlowScreen(initialVibeKey: m.vibeKey),
+        ));
+      case _Kind.aiText:
+        // AI · TEXT → the girl roleplay chat, scenario (her post) ready.
+        Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
+          builder: (_) => GirlChatScreen(config: m.girl!),
         ));
       case _Kind.texts:
-        // REAL · TEXTS missions open a coached chat with the AI girl +
-        // task banner at the top. Missions without a chat config fall
-        // back to the general Texts tab.
+        // REAL · TEXTS → the coach, with the scenario as the opening
+        // message, so the user warms up here BEFORE doing it for real.
+        // Missions without a chat config fall back to the Texts tab.
         if (m.chat != null) {
           Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
             builder: (_) => TaskChatScreen(config: m.chat!),
@@ -80,39 +87,80 @@ class MissionsTabScreen extends StatelessWidget {
 }
 
 // ── Data ────────────────────────────────────────────────────────────────
-enum _Kind { ai, texts, approach }
+enum _Kind { voice, aiText, texts, approach }
 
 class _Mission {
   final _Kind kind;
   final String title, sub, tier, xp;
   final String? asset; // AI missions show her render
-  final String? sceneId;
-  /// REAL · TEXTS missions carry a coached-chat config; tapping the card
-  /// opens [TaskChatScreen] with the AI girl + task banner up top.
+  /// VOICE missions → realtime persona key for [FreeFlowScreen].
+  final String? vibeKey;
+  /// REAL · TEXTS missions carry a coached-chat config; tapping opens
+  /// [TaskChatScreen] with the scenario as the opening message.
   final MissionChatConfig? chat;
+  /// AI · TEXT missions carry a girl roleplay config (scenario = her post).
+  final GirlChatConfig? girl;
   const _Mission(this.kind, this.title, this.sub, this.tier, this.xp,
-      {this.asset, this.sceneId, this.chat});
+      {this.asset, this.vibeKey, this.chat, this.girl});
 }
 
 const _seed = <_Mission>[
-  _Mission(_Kind.ai, 'Talk to the Ice Queen',
+  _Mission(_Kind.voice, 'Talk to the Ice Queen',
       'She gives nothing for free. Warm her up on voice.', 'AI · VOICE', '80',
-      asset: 'assets/characters/women/ice_queen.png', sceneId: 'ice_girl'),
+      asset: 'assets/characters/women/ice_queen.png', vibeKey: 'cold'),
+  _Mission(_Kind.aiText, 'Comment on Nyx\'s story',
+      'She just posted. Rizz your way into her DMs.', 'AI · TEXT', '90',
+      asset: 'assets/characters/women/chaos_girl.png', girl: _postNyx),
   _Mission(_Kind.texts, 'Comment on her story',
       'Someone you like posted. One line that makes her reply.', 'REAL · TEXTS', '150',
       chat: _commentOnStoryChat),
   _Mission(_Kind.approach, 'Approach one girl today',
       'When you\'re out. Twenty seconds. Practice on voice first.', 'REAL · APPROACH', '350'),
+  _Mission(_Kind.aiText, 'Slide onto Camila\'s post',
+      'The hot girl who knows it. Say something she hasn\'t heard.', 'AI · TEXT', '110',
+      asset: 'assets/characters/women/socialite.png', girl: _postCamila),
   _Mission(_Kind.texts, 'Message your crush',
       'Open the chat you keep re-reading. Send something real.', 'REAL · TEXTS', '200',
       chat: _messageCrushChat),
-  _Mission(_Kind.ai, 'Make the Chaos Girl laugh',
+  _Mission(_Kind.voice, 'Make the Chaos Girl laugh',
       'Match her tempo. Four lines to a real laugh.', 'AI · VOICE', '120',
-      asset: 'assets/characters/women/chaos_girl.png', sceneId: 'chaos_girl'),
+      asset: 'assets/characters/women/chaos_girl.png', vibeKey: 'chaos'),
   _Mission(_Kind.texts, 'Reopen a dead conversation',
       'One that went cold. Revive it without "hey".', 'REAL · TEXTS', '180',
       chat: _reopenDeadChat),
 ];
+
+// ── AI-girl POST roleplay configs (comment-on-her-post missions) ──────────
+// The scenario (her post) is ready at the top; the user rizzes her and she
+// replies in character via /v1/date. 📞 in the header takes it live on voice.
+
+const _postNyx = GirlChatConfig(
+  characterId: 'chaos',
+  vibeKey: 'chaos',
+  name: 'Nyx',
+  archetype: 'The Chaos Girl — wild, fast, unpredictable',
+  portraitAsset: 'assets/characters/women/chaos_girl.png',
+  accent: Color(0xFFE8222A),
+  opener: 'you look like a bad decision. i love bad decisions.',
+  post: GirlPost(
+    context: 'Posted a story · 2 min ago',
+    caption: '3am energy and nowhere to be. who\'s still up 👀',
+  ),
+);
+
+const _postCamila = GirlChatConfig(
+  characterId: 'socialite',
+  vibeKey: 'ice_then_fire',
+  name: 'Camila',
+  archetype: 'The Hot Girl — knows exactly what she is',
+  portraitAsset: 'assets/characters/women/socialite.png',
+  accent: Color(0xFFFBBF24),
+  opener: 'everyone here wants something from me. what do you want?',
+  post: GirlPost(
+    context: 'Posted a photo · just now',
+    caption: 'don\'t ask for my number.',
+  ),
+);
 
 // ── Coached-chat configs for the REAL · TEXTS missions ────────────────────
 // Each pairs an AI-girl portrait + task banner with a seeded opener and a
@@ -285,14 +333,19 @@ class _MissionCard extends StatelessWidget {
   final VoidCallback onTap;
   const _MissionCard({required this.mission, required this.onTap});
 
-  Color get _accent => mission.kind == _Kind.ai ? AppColors.accent : AppColors.red;
+  Color get _accent =>
+      mission.kind == _Kind.voice || mission.kind == _Kind.aiText
+          ? AppColors.accent
+          : AppColors.red;
   String get _action => switch (mission.kind) {
-        _Kind.ai => 'START',
+        _Kind.voice => 'START',
+        _Kind.aiText => 'RIZZ HER',
         _Kind.texts => 'PRACTICE',
         _Kind.approach => 'TRAIN',
       };
   IconData get _icon => switch (mission.kind) {
-        _Kind.ai => Icons.graphic_eq_rounded,
+        _Kind.voice => Icons.graphic_eq_rounded,
+        _Kind.aiText => Icons.favorite_rounded,
         _Kind.texts => Icons.chat_bubble_outline_rounded,
         _Kind.approach => Icons.directions_walk_rounded,
       };
