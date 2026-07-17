@@ -55,22 +55,25 @@ const OPENAI_REALTIME_MINI_MODEL = 'gpt-realtime-mini';
 
 /// Pick the right realtime model for the session.
 ///
-/// 2026-06-14 — mini A/B aborted. Mini failed in three ways the
-/// prompts can't compensate for:
-///   1. [laughter] token isn't trained on mini — reads "laughter"
-///      out loud as a word
-///   2. Sample dialogue gets copied verbatim (Sofia repeated the
-///      same OPEN FLIRT MOVE line three turns in a row)
-///   3. Character holds collapse — Lucien's register goes flat
-/// Reverted normal-mode women + Lucien step-in back to full
-/// gpt-realtime. Anti-repetition rule added in the prompts to
-/// stop the verbatim-sample-copy bug separately.
+/// COST SPLIT (the lever that makes the voice allowance affordable):
+///   • NORMAL-MODE women  → gpt-realtime-mini (~3× cheaper audio I/O).
+///     With the directive per-character prompts (identity + temperature
+///     + reward/punish + "never quote the tone samples verbatim") the
+///     quality gap is negligible for tight push-to-talk turns — this is
+///     the same setup that held up in production before.
+///   • CREATOR-MODE women → full gpt-realtime. Creator is a premium
+///     unlock (the unhinged Vixen personas), low volume, so the bigger
+///     model earns its keep there.
+///   • LUCIEN step-in     → full gpt-realtime. Coach cadence matters and
+///     volume is low.
+///
+/// Note: if mini ever reads a stage-direction token (e.g. "[laughter]")
+/// out loud, strip those tokens from the normal-mode VOICE prompt rather
+/// than reverting the model — the cost delta is too big to give back.
 function pickRealtimeModel({ mode, creator, isLucien }) {
-  if (isLucien) return OPENAI_REALTIME_MODEL;
-  const isFemaleVoice =
-    mode === 'freeflow' || mode === 'roleplay';
-  if (isFemaleVoice) return OPENAI_REALTIME_MODEL;
-  return OPENAI_REALTIME_MINI_MODEL;
+  if (isLucien) return OPENAI_REALTIME_MODEL;   // coach → full
+  if (creator)  return OPENAI_REALTIME_MODEL;   // creator mode → full
+  return OPENAI_REALTIME_MINI_MODEL;            // normal-mode women → mini
 }
 
 // Free Flow women are ALWAYS female. Older / merged app builds send some
