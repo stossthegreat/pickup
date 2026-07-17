@@ -73,8 +73,14 @@ export default async function dateRoute(app) {
     try {
       const res = await openai.chat.completions.create({
         model: MODEL,
-        temperature: 0.9,
-        max_tokens: 320,
+        // High temp + penalties push it off the bland "assistant" default
+        // into short, varied, real texting. Low max_tokens keeps her from
+        // monologuing — real girls fire off fragments, not paragraphs.
+        temperature: 1.05,
+        top_p: 0.92,
+        frequency_penalty: 0.6,
+        presence_penalty: 0.4,
+        max_tokens: 180,
         response_format: { type: 'json_object' },
         messages: msgs,
       });
