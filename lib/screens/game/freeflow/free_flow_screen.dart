@@ -1605,6 +1605,11 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // a fast back-tap was beating the SharedPreferences write and
       // the Ascend GAME pillar stayed at zero.
       await _persistGame(score.score);
+      // Persist the five dimension scores so the Progress tab's YOUR
+      // SCORES panel reflects the latest performance.
+      if (score.dimensions != null) {
+        await LocalStoreService.saveDimensionScores(score.dimensions!);
+      }
       if (_disposed || !mounted) return;
       setState(() {
         _result = score;
@@ -2469,7 +2474,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                       )),
                 ],
               ),
-              const Spacer(),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+              const SizedBox(height: 18),
               Text('YOUR GAME',
                   textAlign: TextAlign.center,
                   style: AppTypography.label.copyWith(
@@ -2562,7 +2572,21 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                   ),
                 ),
               ],
-              const Spacer(),
+              // ── The five dimensions + Lucien's breakdown (added to the
+              //    existing card, not replacing it). ─────────────────────
+              if (s.dimensions != null) ...[
+                const SizedBox(height: 24),
+                _ScoreDimensions(dims: s.dimensions!),
+              ],
+              if (s.breakdown.trim().isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _ScoreBreakdown(text: s.breakdown.trim()),
+              ],
+              const SizedBox(height: 18),
+                    ],
+                  ),
+                ),
+              ),
               _ScoreCta(
                 label: 'SHARE',
                 filled: true,
@@ -2754,6 +2778,131 @@ class _ScoreRow extends StatelessWidget {
                   height: 1.4,
                 )),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The five judged dimensions — Confidence · Presence · Game · Humour ·
+/// Listening, each 0-100 with a bar. Matches the Progress-tab scores.
+class _ScoreDimensions extends StatelessWidget {
+  final Map<String, int> dims;
+  const _ScoreDimensions({required this.dims});
+
+  static const _order = <(String, String)>[
+    ('confidence', 'CONFIDENCE'),
+    ('presence', 'PRESENCE'),
+    ('game', 'GAME'),
+    ('humor', 'HUMOUR'),
+    ('listening', 'LISTENING'),
+  ];
+
+  Color _tint(int v) => v >= 70
+      ? AppColors.signalGreen
+      : (v <= 45 ? AppColors.signalRed : AppColors.accent);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider, width: 0.8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('YOUR SCORES',
+              style: AppTypography.label.copyWith(
+                color: AppColors.accent,
+                fontSize: 10,
+                letterSpacing: 2.8,
+                fontWeight: FontWeight.w900,
+              )),
+          const SizedBox(height: 12),
+          for (final (key, label) in _order) ...[
+            _row(label, dims[key] ?? 0),
+            const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _row(String label, int v) {
+    final tint = _tint(v);
+    return Row(
+      children: [
+        SizedBox(
+          width: 92,
+          child: Text(label,
+              style: AppTypography.label.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 10,
+                letterSpacing: 1.4,
+                fontWeight: FontWeight.w800,
+              )),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: (v / 100).clamp(0.0, 1.0).toDouble(),
+              minHeight: 6,
+              backgroundColor: AppColors.surface3,
+              valueColor: AlwaysStoppedAnimation(tint),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 26,
+          child: Text('$v',
+              textAlign: TextAlign.right,
+              style: AppTypography.label.copyWith(
+                color: tint,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              )),
+        ),
+      ],
+    );
+  }
+}
+
+/// Lucien's short gpt breakdown across the five dimensions.
+class _ScoreBreakdown extends StatelessWidget {
+  final String text;
+  const _ScoreBreakdown({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.35), width: 0.8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('THE BREAKDOWN',
+              style: AppTypography.label.copyWith(
+                color: AppColors.accent,
+                fontSize: 9.5,
+                letterSpacing: 2.4,
+                fontWeight: FontWeight.w900,
+              )),
+          const SizedBox(height: 6),
+          Text(text,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textPrimary,
+                fontSize: 13.5,
+                height: 1.45,
+              )),
         ],
       ),
     );

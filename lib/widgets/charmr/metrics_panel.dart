@@ -1,13 +1,47 @@
 import 'package:flutter/material.dart';
+import '../../services/local_store_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 
 /// The five scored dimensions of game + a weighted total. Charmr's progress
-/// metrics — replaces the old im-him composite score on the Progress tab.
-class MetricsPanel extends StatelessWidget {
+/// metrics. Loads the latest AI-scored dimensions (Confidence · Presence ·
+/// Humor · Listening · Game) that the roleplay scorecards persist; falls
+/// back to [values] as a placeholder until the user has been scored.
+class MetricsPanel extends StatefulWidget {
   /// 0..100 each, in order: Confidence, Presence, Humor, Listening, Game.
   final List<double> values;
   const MetricsPanel({super.key, this.values = const [62, 48, 71, 55, 60]});
+
+  @override
+  State<MetricsPanel> createState() => _MetricsPanelState();
+}
+
+class _MetricsPanelState extends State<MetricsPanel> {
+  List<double>? _live;
+
+  @override
+  void initState() {
+    super.initState();
+    // ignore: discarded_futures
+    _load();
+  }
+
+  Future<void> _load() async {
+    final d = await LocalStoreService.dimensionScores();
+    if (!mounted || d.isEmpty) return;
+    // Map the persisted keys into the panel's row order.
+    setState(() {
+      _live = [
+        (d['confidence'] ?? 0).toDouble(),
+        (d['presence'] ?? 0).toDouble(),
+        (d['humor'] ?? 0).toDouble(),
+        (d['listening'] ?? 0).toDouble(),
+        (d['game'] ?? 0).toDouble(),
+      ];
+    });
+  }
+
+  List<double> get values => _live ?? widget.values;
 
   static const _rows = <(String glyph, String label, Color color)>[
     ('⚡', 'Confidence', AppColors.red),

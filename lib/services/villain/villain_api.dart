@@ -281,12 +281,24 @@ abstract final class VillainApi {
     ).timeout(const Duration(seconds: 45));
     if (resp.statusCode != 200) throw _err(resp);
     final json = jsonDecode(resp.body) as Map<String, dynamic>;
+    // Five dimension scores (0-100): confidence · presence · game ·
+    // humor · listening. Null when the model didn't return them.
+    Map<String, int>? dims;
+    final rawDims = json['dimensions'];
+    if (rawDims is Map) {
+      dims = {
+        for (final k in const ['confidence', 'presence', 'game', 'humor', 'listening'])
+          k: (((rawDims[k] as num?)?.toInt() ?? 0).clamp(0, 100)).toInt(),
+      };
+    }
     return FreeFlowScore(
       score:      (json['score'] as num?)?.toInt() ?? 0,
       verdict:    (json['verdict'] as String?) ?? '',
       landed:     (json['landed'] as String?) ?? '',
       flopped:    (json['flopped'] as String?) ?? '',
       line:       (json['line'] as String?) ?? '',
+      dimensions: dims,
+      breakdown:  (json['breakdown'] as String?) ?? '',
       audioBytes: _decodeAudio(json['audio'] as String?),
     );
   }
@@ -346,6 +358,11 @@ class FreeFlowScore {
   final String landed;        // what worked
   final String flopped;       // what killed it
   final String line;          // the line he should have used
+  /// Five dimension scores 0-100: confidence · presence · game · humor ·
+  /// listening. Null when the backend didn't return them.
+  final Map<String, int>? dimensions;
+  /// Short Lucien breakdown across the five dimensions.
+  final String breakdown;
   final Uint8List? audioBytes;
   const FreeFlowScore({
     required this.score,
@@ -353,6 +370,8 @@ class FreeFlowScore {
     required this.landed,
     required this.flopped,
     required this.line,
+    this.dimensions,
+    this.breakdown = '',
     required this.audioBytes,
   });
 }
