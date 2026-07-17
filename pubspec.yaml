@@ -1,7 +1,7 @@
 name: charmr
 description: "Charmr — roleplay your way to real confidence."
 publish_to: 'none'
-version: 1.2.2+365
+version: 1.2.2+366
 
 environment:
   sdk: ^3.8.0

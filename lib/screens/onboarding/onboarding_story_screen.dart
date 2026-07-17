@@ -171,7 +171,7 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
   // ── The 10 beats ──────────────────────────────────────────────────────
   List<_Beat> _buildBeats() => const [
         _ImageBeat(
-          asset: 'assets/onboarding/hesitation.jpg',
+          asset: 'assets/onboarding/hesitation.png',
           headline: 'You already know how this ends.',
           body: 'You see the moment.\nYou hesitate.\nSomeone else takes it.',
         ),
@@ -185,7 +185,7 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
           ],
         ),
         _ImageBeat(
-          asset: 'assets/onboarding/1am.jpg',
+          asset: 'assets/onboarding/1am.png',
           headline: 'The worst part isn\'t rejection.',
           body: 'It\'s wondering what would\'ve happened\nif you had just moved.',
         ),
