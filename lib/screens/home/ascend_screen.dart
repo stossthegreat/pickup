@@ -256,6 +256,43 @@ class _AscendScreenState extends State<AscendScreen> {
                 .animate()
                 .fadeIn(delay: 200.ms, duration: 400.ms),
 
+            const SizedBox(height: Sp.md),
+
+            // Flex your game — a sick share card of THE FIVE + your rank.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+              child: Material(
+                color: AppColors.red.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  onTap: () { HapticFeedback.mediumImpact(); _shareStats(); },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.red.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.ios_share_rounded,
+                            color: AppColors.red, size: 18),
+                        const SizedBox(width: 10),
+                        Text('SHARE MY GAME',
+                            style: GoogleFonts.inter(
+                              color: AppColors.red,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2,
+                            )),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ).animate().fadeIn(delay: 260.ms, duration: 400.ms),
+
             const SizedBox(height: Sp.lg),
 
             // ── 2b — SCAN MILESTONE. v290 — only renders inside the
@@ -423,6 +460,44 @@ class _AscendScreenState extends State<AscendScreen> {
       if (dayAt >= from && dayAt <= to) return true;
     }
     return false;
+  }
+
+  /// Share a flex card of THE FIVE + overall + rank. Reuses the proven
+  /// ScoreShareCard (ImHim wordmark = clear app name, big score, five metric
+  /// bars, a killer line) so it always reads as one brand.
+  Future<void> _shareStats() async {
+    final dims    = await LocalStoreService.dimensionScores();
+    final overall = await LocalStoreService.overallScore();
+    final day     = widget.ascensionDay;
+    final rank    = AscensionService.rankFor(day);
+    const order = <(String, String)>[
+      ('confidence', 'CONFIDENCE'),
+      ('presence', 'PRESENCE'),
+      ('game', 'GAME'),
+      ('humor', 'HUMOUR'),
+      ('listening', 'LISTENING'),
+    ];
+    final stats = [
+      for (final (k, l) in order)
+        (label: l, score: ((dims[k] ?? 0) / 10).round()),
+    ];
+    if (!mounted) return;
+    await ShareService.shareScore(
+      context:   context,
+      kindLabel: 'MY GAME',
+      subLabel:  'DAY $day',
+      score:     (overall / 10).round(),
+      badge:     rank.label,
+      verdict:   _killerLine(overall),
+      stats:     stats,
+    );
+  }
+
+  String _killerLine(int overall) {
+    if (overall >= 80) return 'The room already knows.';
+    if (overall >= 65) return 'I don\'t miss the moment anymore.';
+    if (overall >= 45) return 'Sharper every single rep.';
+    return 'Watch what 60 days does.';
   }
 
   /// Generate the BECOME HIM certificate — a commitment card, not a looks
