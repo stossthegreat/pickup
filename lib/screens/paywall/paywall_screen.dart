@@ -57,10 +57,10 @@ enum _Tier { weekly, annual, rescue }
 
 // Per-panel header copy — (headline, subhead). 1:1 with the mock.
 const List<(String, String)> _copy = [
-  ('Become the man who never misses the moment.', 'Calm under pressure. Confident by default.'),
-  ('Looks get attention. Game keeps it.', 'Train until confidence is automatic.'),
-  ('Never wonder what to say again.', 'Coach. Practice. Improve.'),
-  ('60 days. One decision.', 'Become the man you met on day one.'),
+  ('Practice Before It Matters.', 'Train with AI until confidence feels natural.'),
+  ('Practice Every Conversation.', 'Handle rejection, flirting and pressure before it\'s real.'),
+  ('Know What To Say. Before You Say It.', 'Upload chats, practise replies and build real game.'),
+  ('Practice With AI. Prove It In Real Life.', 'Complete daily missions and become him in 60 days.'),
 ];
 
 // Classified progress-tracker section labels, one per panel.
