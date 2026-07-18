@@ -25,23 +25,17 @@
 /// ever ship to the store.
 /// ──────────────────────────────────────────────────────────────────────
 class PurchaseConfig {
-  /// ── MASTER SWITCH — RevenueCat is DISABLED for this launch ──────────────
-  /// We're shipping on the existing kBypassPaywall allowance: everyone gets
-  /// Pro access plus the 15-minute weekly voice cap — exactly as it worked
-  /// before. RevenueCat (keys + purchase_service.dart + the paywall) all stay
-  /// in the codebase, untouched, for a future paid version.
+  /// ── MASTER SWITCH — RevenueCat is OUT for this launch ───────────────────
+  /// FALSE = RevenueCat never configures, makes zero store calls, and there is
+  /// no error 23. Combined with kBypassPaywall = true (dev_flags.dart), the app
+  /// ships FREE: every feature is unlocked for everyone and no paywall ever
+  /// shows. This is the launch build — no subscription, nothing for App Review
+  /// to purchase.
   ///
-  /// RE-ENABLED for the paid launch. RevenueCat is live and the paywall is
-  /// the hard lock (kBypassPaywall = false in dev_flags.dart).
-  ///
-  /// ⚠️ REQUIRES a working product in App Store Connect: the store screenshot
-  /// showed RevenueCat error 23 (CONFIGURATION_ERROR — "None of the products
-  /// could be fetched from App Store Connect"). Until `imhim_pro_weekly` is
-  /// fetchable, the paywall shows but CANNOT complete a purchase, so the app
-  /// is locked with no way in. Verify via the paywall's "Store status"
-  /// diagnostic BEFORE shipping. To test the app without paying, flip
-  /// kBypassPaywall back to true in dev_flags.dart.
-  static const bool enabled = true;
+  /// All the billing code (keys below, purchase_service.dart, the paywall UI)
+  /// stays in the repo, dormant, for the future paid version. To bring it back:
+  /// set this to `true` AND kBypassPaywall = false — nothing else changes.
+  static const bool enabled = false;
 
   /// RevenueCat public SDK key for iOS. Starts with `appl_`.
   static const iosApiKey     = 'appl_LZCBJirwBRyekXFKrBGdcdnyRLJ';
