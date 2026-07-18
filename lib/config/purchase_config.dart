@@ -25,6 +25,18 @@
 /// ever ship to the store.
 /// ──────────────────────────────────────────────────────────────────────
 class PurchaseConfig {
+  /// ── MASTER SWITCH — RevenueCat is DISABLED for this launch ──────────────
+  /// We're shipping on the existing kBypassPaywall allowance: everyone gets
+  /// Pro access plus the 15-minute weekly voice cap — exactly as it worked
+  /// before. RevenueCat (keys + purchase_service.dart + the paywall) all stay
+  /// in the codebase, untouched, for a future paid version.
+  ///
+  /// TO RE-ENABLE for a paid build: flip this to `true`. Everything wires
+  /// itself back up through `isConfigured` — no other change needed here.
+  /// (You'll also want kBypassPaywall = false in dev_flags.dart so the gates
+  /// go live again.)
+  static const bool enabled = false;
+
   /// RevenueCat public SDK key for iOS. Starts with `appl_`.
   static const iosApiKey     = 'appl_LZCBJirwBRyekXFKrBGdcdnyRLJ';
 
@@ -65,10 +77,12 @@ class PurchaseConfig {
     rescuePackage:  'rescue',
   );
 
-  /// Convenience — true once keys are filled in. Lets the app avoid
-  /// configuring RevenueCat at all during development when the fields
-  /// are blank, instead of hitting the SDK with an empty key and
-  /// crashing.
+  /// Convenience — true only when RevenueCat is [enabled] AND keys are
+  /// present. Every billing path (init, offerings, purchase, restore,
+  /// entitlement checks) is already guarded on this, so flipping [enabled]
+  /// to false makes the entire RevenueCat SDK go dormant: `init()` returns
+  /// early, nothing is ever configured, and no store calls are made. The
+  /// app then runs purely on the kBypassPaywall allowance.
   static bool get isConfigured =>
-      iosApiKey.isNotEmpty || androidApiKey.isNotEmpty;
+      enabled && (iosApiKey.isNotEmpty || androidApiKey.isNotEmpty);
 }
