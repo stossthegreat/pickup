@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
+import '../../services/streak_service.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/streak_badge.dart';
 import '../game/freeflow/free_flow_screen.dart';
@@ -261,7 +262,28 @@ const _reopenDeadChat = MissionChatConfig(
 // The ImHim wordmark anchors the first tab (the brand belongs here). The
 // old progress chart icon is gone — the Progress tab in the bottom nav
 // already covers it, so the shortcut is redundant.
-class _TopBar extends StatelessWidget {
+class _TopBar extends StatefulWidget {
+  @override
+  State<_TopBar> createState() => _TopBarState();
+}
+
+class _TopBarState extends State<_TopBar> {
+  // Live streak from the shared StreakService — the SAME source the
+  // Progress tab reads, so the two flames can never disagree.
+  int _streak = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // ignore: discarded_futures
+    _loadStreak();
+  }
+
+  Future<void> _loadStreak() async {
+    final s = await StreakService.current();
+    if (mounted) setState(() => _streak = s);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -274,9 +296,12 @@ class _TopBar extends StatelessWidget {
               // Bigger wordmark, matching the Progress masthead.
               const ImHimWordmark(fontSize: 34, letterSpacing: -0.6),
               const Spacer(),
-              // The same clean streak flame the Progress tab uses.
-              const StreakBadge(days: 4),
-              const SizedBox(width: 8),
+              // The same clean streak flame the Progress tab uses, wired to
+              // the real streak (hidden until it's actually running).
+              if (_streak > 0) ...[
+                StreakBadge(days: _streak),
+                const SizedBox(width: 8),
+              ],
               _IconBtn(icon: Icons.settings_outlined, onTap: () => context.push('/settings')),
             ],
           ),

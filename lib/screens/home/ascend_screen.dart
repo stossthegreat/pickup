@@ -15,6 +15,7 @@ import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/charmr/metrics_panel.dart';
+import '../../widgets/common/streak_badge.dart';
 
 /// v281 — ASCENSION home tab.
 ///
@@ -207,16 +208,15 @@ class _AscendScreenState extends State<AscendScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Wordmark lives only on the Missions tab now — the
-                  // brand anchors the front door, not every screen.
+                  // XP counter, matching the Missions tab. Wordmark lives
+                  // only on Missions now; the old progress-chart icon is
+                  // gone (this IS the progress tab).
+                  const XpBadge(label: '2,140 XP'),
                   const Spacer(),
                   if (widget.dayStreak > 0) ...[
-                    _MastheadStreakBadge(days: widget.dayStreak),
+                    StreakBadge(days: widget.dayStreak),
                     const SizedBox(width: 8),
                   ],
-                  _MastheadProgressChip(
-                    onTap: () => context.push('/progress')),
-                  const SizedBox(width: 8),
                   _MastheadSettingsCog(
                     onTap: () => context.push('/settings')),
                 ],
@@ -1907,69 +1907,6 @@ class _FinalFormCard extends StatelessWidget {
 /// chip reads as one of the strongest visual elements on the
 /// chrome row instead of disappearing into the background. Same
 /// lockup the Looks + Rizz mastheads now use for consistency.
-class _MastheadStreakBadge extends StatelessWidget {
-  final int days;
-  const _MastheadStreakBadge({required this.days});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppColors.red,
-        borderRadius: BorderRadius.circular(99),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.red.withValues(alpha: 0.45),
-            blurRadius: 14, spreadRadius: 0),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.local_fire_department_rounded,
-              color: Colors.white, size: 18),
-          const SizedBox(width: 5),
-          Text('$days',
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 14, height: 1,
-              letterSpacing: 0.2,
-              fontWeight: FontWeight.w900,
-            )),
-        ],
-      ),
-    );
-  }
-}
-
-class _MastheadProgressChip extends StatelessWidget {
-  final VoidCallback onTap;
-  const _MastheadProgressChip({required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      shape: const CircleBorder(),
-      child: InkWell(
-        onTap: () { HapticFeedback.selectionClick(); onTap(); },
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(
-            color: AppColors.surface1,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: AppColors.signalAmber.withValues(alpha: 0.55),
-              width: 0.8),
-          ),
-          alignment: Alignment.center,
-          child: const Icon(Icons.show_chart_rounded,
-              size: 18, color: AppColors.signalAmber),
-        ),
-      ),
-    );
-  }
-}
 
 class _MastheadSettingsCog extends StatelessWidget {
   final VoidCallback onTap;

@@ -20,7 +20,46 @@ class PracticeTabScreen extends StatelessWidget {
   // Six women. `vibe` is the realtime VOICE persona key (FreeFlowScreen);
   // `character` is the /v1/date TEXTING roleplay id. `opener` is her
   // first text line.
+  // New girls lead — each has her OWN dedicated realtime voice persona
+  // (vibe key), not a reused archetype. `vibe` == the FreeFlow voice key
+  // AND the backend persona router token.
   static const _cast = <_CastMember>[
+    _CastMember(
+      vibe: 'amara',
+      character: 'amara',
+      name: 'Amara',
+      hook: 'Everyone wants her. Stand out or blend in.',
+      opener: 'okay you actually came over. bold. i respect bold.',
+      asset: 'assets/characters/women/amara.png',
+      accent: Color(0xFFFB7185),
+    ),
+    _CastMember(
+      vibe: 'daisy',
+      character: 'daisy',
+      name: 'Daisy',
+      hook: 'Bubbly and scattered. Keep it fun, not deep.',
+      opener: 'omg hi — wait okay i totally forgot what i was gonna say. hi.',
+      asset: 'assets/characters/women/daisy.png',
+      accent: Color(0xFFFDBA74),
+    ),
+    _CastMember(
+      vibe: 'valentina',
+      character: 'valentina',
+      name: 'Valentina',
+      hook: 'Grounded and dry. Flexing kills it.',
+      opener: 'hey. quick warning — i can smell a rehearsed line from here.',
+      asset: 'assets/characters/women/valentina.png',
+      accent: Color(0xFF34D399),
+    ),
+    _CastMember(
+      vibe: 'simone',
+      character: 'simone',
+      name: 'Simone',
+      hook: 'High bar, short patience. Bring substance.',
+      opener: 'i\'ll give you thirty seconds. make them interesting.',
+      asset: 'assets/characters/women/simone.png',
+      accent: Color(0xFFA855F7),
+    ),
     _CastMember(
       vibe: 'cold',
       character: 'ice_queen',
@@ -74,42 +113,6 @@ class PracticeTabScreen extends StatelessWidget {
       opener: 'oh — hi. i didn\'t think you\'d actually text first.',
       asset: 'assets/characters/women/shy_girl.png',
       accent: Color(0xFF4ADE80),
-    ),
-    _CastMember(
-      vibe: 'into_you',
-      character: 'amara',
-      name: 'Amara',
-      hook: 'Everyone wants her. Stand out or blend in.',
-      opener: 'okay you actually came over. bold. i respect bold.',
-      asset: 'assets/characters/women/amara.png',
-      accent: Color(0xFFFB7185),
-    ),
-    _CastMember(
-      vibe: 'sweet',
-      character: 'daisy',
-      name: 'Daisy',
-      hook: 'Bubbly and scattered. Keep it fun, not deep.',
-      opener: 'omg hi — wait okay i totally forgot what i was gonna say. hi.',
-      asset: 'assets/characters/women/daisy.png',
-      accent: Color(0xFFFDBA74),
-    ),
-    _CastMember(
-      vibe: 'testing',
-      character: 'valentina',
-      name: 'Valentina',
-      hook: 'Grounded and dry. Flexing kills it.',
-      opener: 'hey. quick warning — i can smell a rehearsed line from here.',
-      asset: 'assets/characters/women/valentina.png',
-      accent: Color(0xFF34D399),
-    ),
-    _CastMember(
-      vibe: 'ice_then_fire',
-      character: 'simone',
-      name: 'Simone',
-      hook: 'High bar, short patience. Bring substance.',
-      opener: 'i\'ll give you thirty seconds. make them interesting.',
-      asset: 'assets/characters/women/simone.png',
-      accent: Color(0xFFA855F7),
     ),
   ];
 

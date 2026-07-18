@@ -938,9 +938,9 @@ class _ClimbingBarsState extends State<_ClimbingBars>
         ..forward();
 
   static const _rows = <(String, int, int)>[
-    ('CONFIDENCE', 59, 76),
-    ('PRESENCE', 48, 71),
-    ('GAME', 60, 83),
+    ('CONFIDENCE', 31, 78),
+    ('PRESENCE', 26, 71),
+    ('GAME', 38, 85),
   ];
 
   @override
