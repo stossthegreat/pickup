@@ -131,6 +131,39 @@ class AscensionService {
     return day >= _totalDays;
   }
 
+  // ── Commitment tier — the headline of the Become Him card ──────────────
+  //
+  // ImHim isn't a looks app; the certificate measures how hard the user
+  // showed up, not how their face changed. Commitment blends the three
+  // honest signals of showing up: CONSISTENCY (how fully you do each day's
+  // missions — the core), your BEST STREAK, and how far through the 60 days
+  // you've climbed. One 0-100 number, tiered into a status label the user
+  // wears.
+  static ({String label, int score}) commitmentTierFor({
+    required int day,
+    required int consistency,
+    required int streak,
+  }) {
+    final c = consistency.clamp(0, 100);
+    final streakRatio = (streak.clamp(0, _totalDays) / _totalDays) * 100;
+    final dayRatio = (day.clamp(0, _totalDays) / _totalDays) * 100;
+    final score =
+        (c * 0.55 + streakRatio * 0.25 + dayRatio * 0.20).round().clamp(0, 100);
+    final String label;
+    if (score >= 90) {
+      label = 'UNBREAKABLE';
+    } else if (score >= 72) {
+      label = 'RELENTLESS';
+    } else if (score >= 52) {
+      label = 'DISCIPLINED';
+    } else if (score >= 32) {
+      label = 'COMMITTED';
+    } else {
+      label = 'WARMING UP';
+    }
+    return (label: label, score: score);
+  }
+
   // ── The Cost of Quitting — rotating fear reminder ──────────────────────
   //
   // Bro: "Hit fear. This changes every few days." The reminders are

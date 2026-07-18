@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/protocol.dart';
-import '../../models/scan_record.dart' show GameScoreEntry, ScanRecord;
+import '../../models/scan_record.dart' show ScanRecord;
 import '../../services/ascension_service.dart';
 import '../../services/mission_catalog.dart';
 import '../../services/mission_engine.dart';
@@ -402,9 +402,9 @@ class _AscendScreenState extends State<AscendScreen> {
         to:       60,
         eyebrow:  'FINAL SCAN · DAY 60',
         title:    'Your before / after lands now.',
-        subtitle: 'The Day-60 scan unlocks the IMHIM CERTIFIED card. '
-                  'This is the receipt people share.',
-        doneCopy: 'Final scan logged. Certificate is ready.',
+        subtitle: 'Capture your Day-60 photo — mark how far you\'ve come '
+                  'across the 60 days.',
+        doneCopy: 'Final scan logged.',
         cta:      'Take the final scan',
       );
     }
@@ -425,71 +425,36 @@ class _AscendScreenState extends State<AscendScreen> {
     return false;
   }
 
-  /// v291 — Generate the IMHIM CERTIFIED Day-60 share card.
-  /// Collects:
-  ///   - BEFORE photo: first scan in history (chronological)
-  ///   - AFTER photo:  last scan in history (the Day-60-window scan)
-  ///   - IMHIM SCORE arc: composite computed at Day-1 conditions
-  ///     (first scan's looks, first game score, consistency = 0)
-  ///     vs the current composite
-  ///   - LOOKS arc:  first scan score → latest scan score
-  ///   - GAME arc:   first GameScoreEntry → best to-date
-  ///   - CONSISTENCY arc: 0 → current consistency
-  /// All data comes from existing on-device stores so the card can
-  /// generate offline. Falls back to safe defaults if any history
-  /// is missing so the user can always share something.
+  /// Generate the BECOME HIM certificate — a commitment card, not a looks
+  /// before/after. Pulls the honest "showed up" numbers straight from the
+  /// on-device stores so it renders offline: days shown up, best streak,
+  /// consistency, The Five (+ breakdown), total XP, and the reached rank.
   Future<void> _generateCertificate() async {
     if (!mounted) return;
-    final scans = [...widget.allScans]
-      ..sort((a, b) => a.takenAt.compareTo(b.takenAt));
-    final firstScan = scans.isNotEmpty ? scans.first : null;
-    final lastScan  = scans.isNotEmpty ? scans.last  : null;
-
-    // Game history (chronological). First and best — first reads as
-    // the user's starting point, best is what they shipped.
-    final gameScores = await LocalStoreService.loadGameScores();
-    final gameSorted = [...gameScores]
-      ..sort((a, b) => a.takenAt.compareTo(b.takenAt));
-    final int gameStart = gameSorted.isEmpty ? 0 : gameSorted.first.score;
-    final int gameEnd   = gameSorted.isEmpty
-        ? 0
-        : gameSorted.map((g) => g.score).reduce((a, b) => a > b ? a : b);
-
-    // Looks (out of 100) — direct off the scan record.
-    final int looksStart = firstScan?.score ?? 0;
-    final int looksEnd   = lastScan?.score  ?? 0;
-
-    // Consistency arc — 0 on Day 1 always; current today = the live
-    // rolling-7-day consistency the tab already shows.
-    final int consistencyEnd = widget.consistency;
-    const int consistencyStart = 0;
-
-    // IMHIM SCORE arc — same formula AscensionService runs in the
-    // hero so the certificate reads as continuous with the live tab.
-    final int imhimStart = AscensionService.imhimScoreFromComponents(
-      looks:       looksStart,
-      game:        gameStart,
-      consistency: consistencyStart,
-    );
-    final int imhimEnd = AscensionService.imhimScoreFromComponents(
-      looks:       looksEnd,
-      game:        gameEnd,
-      consistency: consistencyEnd,
-    );
+    final day = widget.ascensionDay;
+    final streak = widget.longestStreak > widget.dayStreak
+        ? widget.longestStreak
+        : widget.dayStreak;
+    final consistency = widget.consistency;
+    final dims    = await LocalStoreService.dimensionScores();
+    final overall = await LocalStoreService.overallScore();
+    final xp      = await LocalStoreService.xpTotal();
+    final commit  = AscensionService.commitmentTierFor(
+      day: day, consistency: consistency, streak: streak);
+    final rank    = AscensionService.rankFor(day);
 
     if (!mounted) return;
     await ShareService.shareCertificate(
-      context:          context,
-      beforePhotoPath:  firstScan?.capturedImagePath,
-      afterPhotoPath:   lastScan?.capturedImagePath,
-      imhimStart:       imhimStart,
-      imhimEnd:         imhimEnd,
-      looksStart:       looksStart,
-      looksEnd:         looksEnd,
-      gameStart:        gameStart,
-      gameEnd:          gameEnd,
-      consistencyStart: consistencyStart,
-      consistencyEnd:   consistencyEnd,
+      context:         context,
+      rankLabel:       rank.label,
+      day:             day,
+      streak:          streak,
+      consistency:     consistency,
+      overall:         overall,
+      dims:            dims,
+      commitmentLabel: commit.label,
+      commitmentScore: commit.score,
+      xp:              xp,
     );
   }
 
@@ -1687,10 +1652,10 @@ class _FinalFormCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Text('IMHIM CERTIFIED',
+            Text('BECOME HIM',
               style: GoogleFonts.playfairDisplay(
                 color: AppColors.textPrimary,
-                fontSize: 28, height: 1.1,
+                fontSize: 30, height: 1.1,
                 letterSpacing: -0.8,
                 fontWeight: FontWeight.w900,
                 fontStyle: FontStyle.italic,
@@ -1698,10 +1663,9 @@ class _FinalFormCard extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               unlocked
-                ? 'You finished the protocol. Generate the receipt — '
-                  'real before / after photos, the IMHIM SCORE arc, '
-                  'and the Looks + Game lift, on one card people will '
-                  'screenshot.'
+                ? 'You finished the 60 days. Generate your card — your '
+                  'commitment level, best streak, consistency, The Five and '
+                  'the XP you banked, on one card people will screenshot.'
                 : 'Reach Day 60 to unlock:',
               style: GoogleFonts.inter(
                 color: AppColors.textSecondary,
@@ -1711,11 +1675,11 @@ class _FinalFormCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             for (final line in const [
-              'Before / after face pair',
-              'IMHIM SCORE arc — start to Day 60',
-              'Looks + Game arcs with deltas',
-              'Consistency receipt',
-              'Shareable certificate card',
+              'Your commitment level — Warming Up → Unbreakable',
+              'Days shown up + best streak',
+              'Consistency + The Five breakdown',
+              'Total XP banked',
+              'Shareable Become Him card',
             ]) Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(

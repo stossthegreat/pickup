@@ -405,23 +405,22 @@ class ShareService {
     }
   }
 
-  /// Render + share the v291 IMHIM CERTIFIED Day-60 card. Unlocked
-  /// by [_FinalFormCard] in the Ascend tab once the user clears the
-  /// 60-day protocol. Same off-screen render pipeline as
-  /// [shareProgress] / [shareScore] so the share-sheet behaviour is
-  /// identical across cards.
+  /// Render + share the BECOME HIM certificate. Unlocked by
+  /// [_FinalFormCard] in the Ascend tab once the user clears the 60-day
+  /// ascension. A commitment card — how hard you showed up — not a looks
+  /// before/after. Same off-screen render pipeline as [shareScore].
   static Future<void> shareCertificate({
     required BuildContext context,
-    String? beforePhotoPath,
-    String? afterPhotoPath,
-    required int imhimStart,
-    required int imhimEnd,
-    required int looksStart,
-    required int looksEnd,
-    required int gameStart,
-    required int gameEnd,
-    required int consistencyStart,
-    required int consistencyEnd,
+    required String rankLabel,
+    required int day,
+    required int streak,
+    required int consistency,
+    required int overall,
+    required Map<String, int> dims,
+    required String commitmentLabel,
+    required int commitmentScore,
+    required int xp,
+    int totalDays = 60,
     String verdict = '60 days. You\'re not the man who started this.',
     String? text,
   }) async {
@@ -436,22 +435,6 @@ class ShareService {
       );
     }
 
-    // Resolve through the container-UUID rescue (raw path goes stale
-    // after an app update), then warm the cache so the full-bleed
-    // BEFORE/NOW faces paint in the single off-screen layout pass.
-    final beforeResolved = await FaceAssetService.resolvePath(beforePhotoPath);
-    final afterResolved  = await FaceAssetService.resolvePath(afterPhotoPath);
-    if (beforeResolved != null && context.mounted) {
-      try {
-        await precacheImage(FileImage(File(beforeResolved)), context);
-      } catch (_) {}
-    }
-    if (afterResolved != null && context.mounted) {
-      try {
-        await precacheImage(FileImage(File(afterResolved)), context);
-      } catch (_) {}
-    }
-
     final mq = MediaQuery.of(context);
     final origin = Rect.fromLTWH(
       mq.size.width / 2 - 1, mq.padding.top + 8, 2, 2);
@@ -460,17 +443,17 @@ class ShareService {
     try {
       if (!context.mounted) return;
       final card = CertificateShareCard(
-        beforePhotoPath:   beforeResolved,
-        afterPhotoPath:    afterResolved,
-        imhimStart:        imhimStart,
-        imhimEnd:          imhimEnd,
-        looksStart:        looksStart,
-        looksEnd:          looksEnd,
-        gameStart:         gameStart,
-        gameEnd:           gameEnd,
-        consistencyStart:  consistencyStart,
-        consistencyEnd:    consistencyEnd,
-        verdict:           verdict,
+        rankLabel:        rankLabel,
+        day:              day,
+        totalDays:        totalDays,
+        streak:           streak,
+        consistency:      consistency,
+        overall:          overall,
+        dims:             dims,
+        commitmentLabel:  commitmentLabel,
+        commitmentScore:  commitmentScore,
+        xp:               xp,
+        verdict:          verdict,
       );
       final bytes = await _captureOffscreen(
         context:     context,
@@ -486,7 +469,7 @@ class ShareService {
         }
         HapticFeedback.heavyImpact();
         final defaultText =
-          '60 days. ImHim Certified. ${imhimStart} → ${imhimEnd}.';
+          '$day days. ImHim Certified. Commitment: $commitmentLabel.';
         await _shareBytes(
           bytes,
           'imhim-certified-${DateTime.now().millisecondsSinceEpoch}.png',
