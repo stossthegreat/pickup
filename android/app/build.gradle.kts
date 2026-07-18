@@ -46,7 +46,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.imhim.app"
+        // Play Store + Firebase Android app is registered as com.imhim.imhim
+        // (com.imhim.app was unavailable). iOS stays com.imhim.app — the two
+        // platforms don't need to match. The Android namespace stays
+        // com.imhim.app (internal R/BuildConfig only; not the install id).
+        applicationId = "com.imhim.imhim"
 
         // Bake the registered Play Console fingerprints into BuildConfig
         // so any in-app integrity check or asset_links logic can read
