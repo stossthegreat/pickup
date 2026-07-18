@@ -295,24 +295,6 @@ class _AscendScreenState extends State<AscendScreen> {
 
             const SizedBox(height: Sp.lg),
 
-            // ── 2b — SCAN MILESTONE. v290 — only renders inside the
-            // two scan windows (Day 22-35 and Day 56-60). Bro's spec:
-            // three scans across the protocol (start / mid / final)
-            // give us the before/after evidence the certificate is
-            // built from. The card prompts the scan in the right
-            // window, then flips to a "captured" pill once the user
-            // has logged a scan inside it. Days outside both windows
-            // collapse the section to zero height — no clutter.
-            if (_scanMilestone(day) != null) ...[
-              _ScanMilestoneCard(
-                milestone: _scanMilestone(day)!,
-                done:      _scanLoggedInWindow(_scanMilestone(day)!.from,
-                                               _scanMilestone(day)!.to),
-                onTap:     () => context.push('/scan'),
-              ).animate().fadeIn(delay: 240.ms, duration: 400.ms),
-              const SizedBox(height: Sp.lg),
-            ],
-
             // ── 3 — TODAY'S MESSAGE. Single rotating identity line
             // (v289 replaced Cost of Quitting — fear was a one-shot
             // drug, identity is the loop).
@@ -361,34 +343,10 @@ class _AscendScreenState extends State<AscendScreen> {
     );
   }
 
-  // ── Mission builder — v308 all-five always visible ──────────────────────
-  //
-  // Bro: "on the first day streak you put no roleplay?? wtf is
-  // wrong with you, scan and roleplay need to be on the fucking
-  // list first day."
-  //
-  // v301 dropped Free Flow + Scan from the missions panel because
-  // they're weekly-capped. Wrong call — on Day 1 every user MUST
-  // see the full action set to commit to the app, and even on
-  // later days the weekly cap is enforced in the destination tab,
-  // not by hiding the row from the daily panel.
-  //
-  // All FIVE missions render every day:
-  //
-  //   PROTOCOL · looksDoneToday        (protocol_screen check-in)
-  //   ROLEPLAY · gameDoneToday         (Free Flow Lucien round)
-  //   SCAN     · _scanLoggedToday      (latest scan dated today)
-  //   PICKUP   · pickupLineDoneToday   (pickup_line_screen._copy)
-  //   READ     · rizzDoneToday         (rizz_reply_screen generate)
-  //
-  // Each row's done-flag is per-day so a user can tick it once
-  // each calendar day. Cap exhaustion ("0 / 5 Free Flows left
-  // this week") is surfaced inside the Game / Looks tabs at the
-  // moment they tap through — the missions panel doesn't
-  // pre-judge whether the cap is available.
-  //
-  // Copy stays in the leveling-up voice. Every line reads as a
-  // rep banked toward becoming Him.
+  // ── Mission builder ─────────────────────────────────────────────────────
+  // Mirrors the exact daily set the Missions tab shows (the MissionEngine),
+  // so the Progress panel and the Missions tab never disagree. Tapping any
+  // row jumps to the Missions tab to actually do it.
   List<AscendMission> _buildMissions() {
     // The NEW daily-missions engine — the exact set the Missions tab shows.
     // (The old looks / scan / render mission copy is gone.)
@@ -401,65 +359,6 @@ class _AscendScreenState extends State<AscendScreen> {
           onTap: () => widget.onJumpToTab(0),
         ),
     ];
-  }
-
-  /// True if the latest scan in widget.allScans landed today.
-  /// Same shape the v301-deleted _hasScanFromToday had — restored
-  /// because the SCAN mission needs to know if today's already
-  /// banked.
-  bool _scanLoggedToday() {
-    if (widget.latest == null) return false;
-    final now = DateTime.now();
-    final t   = widget.latest!.takenAt;
-    return t.year == now.year && t.month == now.month && t.day == now.day;
-  }
-
-  /// v290 — which scan milestone (if any) is currently in window
-  /// for the user. Returns null outside both windows so the Ascend
-  /// surface collapses the prompt section cleanly. The Day-1 scan
-  /// happens at onboarding so no Day-1 prompt is surfaced here.
-  _ScanMilestone? _scanMilestone(int day) {
-    if (day >= 22 && day <= 35) {
-      return const _ScanMilestone(
-        kind:     _ScanMilestoneKind.mid,
-        from:     22,
-        to:       35,
-        eyebrow:  'MID-PROTOCOL SCAN · DAY 28',
-        title:    'Capture the delta.',
-        subtitle: 'A new scan locks in the week-4 receipt and refreshes '
-                  'your IMHIM score.',
-        doneCopy: 'Mid-protocol scan locked in.',
-        cta:      'Take the scan',
-      );
-    }
-    if (day >= 56 && day <= 60) {
-      return const _ScanMilestone(
-        kind:     _ScanMilestoneKind.finalScan,
-        from:     56,
-        to:       60,
-        eyebrow:  'FINAL SCAN · DAY 60',
-        title:    'Your before / after lands now.',
-        subtitle: 'Capture your Day-60 photo — mark how far you\'ve come '
-                  'across the 60 days.',
-        doneCopy: 'Final scan logged.',
-        cta:      'Take the final scan',
-      );
-    }
-    return null;
-  }
-
-  /// Returns true if any scan in the user's history landed inside
-  /// the given protocol-day window (inclusive). Used to flip the
-  /// milestone card from prompt → captured pill.
-  bool _scanLoggedInWindow(int from, int to) {
-    final p = widget.protocol;
-    if (p == null) return false;
-    for (final s in widget.allScans) {
-      final dayAt = (s.takenAt.difference(p.startedAt).inDays + 1)
-          .clamp(1, 999);
-      if (dayAt >= from && dayAt <= to) return true;
-    }
-    return false;
   }
 
   /// Share a flex card of THE FIVE + overall + rank. Reuses the proven
@@ -943,181 +842,6 @@ class _ImHimComponentRow extends StatelessWidget {
             )),
         ),
       ],
-    );
-  }
-}
-
-/// v290 — Scan milestone window descriptor. Two windows in the
-/// protocol — mid (Day 22-35) and final (Day 56-60) — each prompts
-/// the user to capture a new scan so the certificate at Day 60 has
-/// three honest reference points: start, mid, final. Outside the
-/// windows the card collapses entirely so the surface stays clean.
-enum _ScanMilestoneKind { mid, finalScan }
-
-class _ScanMilestone {
-  final _ScanMilestoneKind kind;
-  final int from;
-  final int to;
-  final String eyebrow;
-  final String title;
-  final String subtitle;
-  final String doneCopy;
-  final String cta;
-  const _ScanMilestone({
-    required this.kind,
-    required this.from,
-    required this.to,
-    required this.eyebrow,
-    required this.title,
-    required this.subtitle,
-    required this.doneCopy,
-    required this.cta,
-  });
-}
-
-/// v290 — Scan milestone card. Two visual states: PROMPT when the
-/// user is in window but hasn't scanned yet (big red CTA), and
-/// CAPTURED when the window already has a scan (low-weight pill).
-/// Tied to /scan via the onTap callback the State subclass injects.
-class _ScanMilestoneCard extends StatelessWidget {
-  final _ScanMilestone milestone;
-  final bool done;
-  final VoidCallback onTap;
-  const _ScanMilestoneCard({
-    required this.milestone,
-    required this.done,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (done) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          decoration: BoxDecoration(
-            color: AppColors.signalGreen.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(Rd.lg),
-            border: Border.all(
-              color: AppColors.signalGreen.withValues(alpha: 0.40),
-              width: 0.8,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 22, height: 22,
-                decoration: BoxDecoration(
-                  color: AppColors.signalGreen,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: const Icon(Icons.check_rounded,
-                  color: Colors.black, size: 14),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(milestone.doneCopy,
-                  style: GoogleFonts.inter(
-                    color: AppColors.textPrimary,
-                    fontSize: 13.5, height: 1.3,
-                    fontWeight: FontWeight.w700,
-                  )),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () { HapticFeedback.mediumImpact(); onTap(); },
-          borderRadius: BorderRadius.circular(Rd.lg),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end:   Alignment.bottomRight,
-                colors: [
-                  AppColors.red.withValues(alpha: 0.16),
-                  AppColors.surface1,
-                ],
-              ),
-              borderRadius: BorderRadius.circular(Rd.lg),
-              border: Border.all(
-                color: AppColors.red.withValues(alpha: 0.45), width: 0.8),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.red.withValues(alpha: 0.15),
-                  blurRadius: 24, spreadRadius: 0),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.center_focus_strong_rounded,
-                      color: AppColors.red, size: 16),
-                    const SizedBox(width: 8),
-                    Text(milestone.eyebrow,
-                      style: GoogleFonts.inter(
-                        color: AppColors.red,
-                        fontSize: 10, letterSpacing: 2.8,
-                        fontWeight: FontWeight.w900,
-                      )),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(milestone.title,
-                  style: GoogleFonts.playfairDisplay(
-                    color: AppColors.textPrimary,
-                    fontSize: 24, height: 1.15,
-                    letterSpacing: -0.8,
-                    fontStyle: FontStyle.italic,
-                    fontWeight: FontWeight.w800,
-                  )),
-                const SizedBox(height: 8),
-                Text(milestone.subtitle,
-                  style: GoogleFonts.inter(
-                    color: AppColors.textSecondary,
-                    fontSize: 13, height: 1.5,
-                    fontWeight: FontWeight.w500,
-                  )),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: AppColors.red,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(milestone.cta.toUpperCase(),
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 11.5, letterSpacing: 2.0,
-                          fontWeight: FontWeight.w900,
-                        )),
-                      const SizedBox(width: 6),
-                      const Icon(Icons.arrow_forward_rounded,
-                        color: Colors.white, size: 15),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

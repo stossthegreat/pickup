@@ -120,17 +120,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // ── Usage tile — voice minutes this week ────────────────────
               const _VoiceCapTile(),
 
-              // ── Glow-up style (gender pick) ────────────────────────────
-              _SettingTile(
-                icon: Icons.style_outlined,
-                title: 'Glow-up style',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  context.push('/onboarding/gender',
-                      extra: const {'fromSettings': true});
-                },
-              ),
-
               // ── Privacy / AI consent ────────────────────────────────────
               _SettingTile(
                 icon: Icons.cloud_off_outlined,
@@ -328,36 +317,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ));
   }
 
-  void _showPrivacySummary(BuildContext ctx) => _showInfoSheet(ctx,
-    'How we handle your photo',
-    'Your photo is processed on your device by MediaPipe to extract 16 '
-    'facial measurements.\n\n'
-    'When you tap SCAN, GENERATE IMAGE, or the Mirror chat, we send that '
-    'single photo to our AI providers (OpenAI for analysis, Replicate for '
-    'image rendering) for the duration of one request.\n\n'
-    'We do not save your photo on our servers. We do not sell your data. '
-    'We do not train AI models on your face. We do not require an account.\n\n'
-    'For the full text, open Privacy Policy above.',
-  );
-
-  void _showHow(BuildContext ctx) => _showInfoSheet(ctx,
-    'How ImHim works',
-    'The two-score moat, end to end:\n\n'
-    '1. MediaPipe maps 468 landmarks on your face at 30fps, on-device. '
-    'From those landmarks we compute 16 geometric measurements — canthal '
-    'tilt, jaw angle, FWHR, facial thirds, symmetry, and more. That\'s '
-    'your BONE STRUCTURE score.\n\n'
-    '2. GPT-4o Vision looks at your actual photo (never the geometry '
-    'numbers) and rates what the human eye sees — skin, eye area, '
-    'proportions, harmony. That\'s your HONEST LOOKS score.\n\n'
-    '3. Google Nano Banana renders your face with the recommended change '
-    'applied. A face-swap post-pass anchors the output to your real '
-    'bones so the render is still recognizably you.\n\n'
-    '4. The Mirror advisor reads your measurements and recommends '
-    'haircuts, beards, skin protocols, glasses — tailored to your '
-    'anatomy, not a template.',
-  );
-
   Widget _sheetHandle() => Container(
     width: 36, height: 4,
     margin: const EdgeInsets.only(bottom: Sp.lg),
@@ -401,7 +360,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       backgroundColor: AppColors.toastBg,
       content: Text(
         'AI permission revoked. We will ask again the next time '
-        'you scan.',
+        'you start an AI roleplay.',
         style: AppTypography.bodySmall.copyWith(
           color: AppColors.textPrimary)),
     ));
@@ -415,8 +374,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: Text('Delete all data?',
           style: AppTypography.h3.copyWith(color: AppColors.signalRed)),
         content: Text(
-          'This removes all your scans, renders, and progress from this '
-          'device. Your subscription is not affected. This cannot be '
+          'This removes all your progress, streaks, and conversations from '
+          'this device. Your subscription is not affected. This cannot be '
           'undone.',
           style: AppTypography.bodySmall),
         actions: [
