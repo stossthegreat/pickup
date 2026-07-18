@@ -34,19 +34,19 @@ class DefaultFirebaseOptions {
   }
 
   static const _ios = FirebaseOptions(
-    apiKey:            'AIzaSyCS4IezUsdIuTjO80L8fk7AnHyNwREIcf4',
-    appId:             '1:18046958403:ios:a5110f75386d960acdcdf6',
-    messagingSenderId: '18046958403',
-    projectId:         'mirrorly-f5a1b',
-    storageBucket:     'mirrorly-f5a1b.firebasestorage.app',
-    iosBundleId:       'com.mirrorly.app',
+    apiKey:            'AIzaSyBhh92Jk2g8zuuQDvZxGLImcM497e8jNtM',
+    appId:             '1:826053971859:ios:1737c2df07e4c84d85a266',
+    messagingSenderId: '826053971859',
+    projectId:         'imhim-75991',
+    storageBucket:     'imhim-75991.firebasestorage.app',
+    iosBundleId:       'com.imhim.app',
   );
 
   static const _android = FirebaseOptions(
-    apiKey:            'AIzaSyBNbzoG8rMZeA0wT4Mb8aBy0Bl-m_H3Yj0',
-    appId:             '1:18046958403:android:a30b7c849c91d683cdcdf6',
-    messagingSenderId: '18046958403',
-    projectId:         'mirrorly-f5a1b',
-    storageBucket:     'mirrorly-f5a1b.firebasestorage.app',
+    apiKey:            'AIzaSyBJDHSki94CSv_vkOb9yGkBldRBfLtlFDU',
+    appId:             '1:826053971859:android:c0ff8bb707e3f4c485a266',
+    messagingSenderId: '826053971859',
+    projectId:         'imhim-75991',
+    storageBucket:     'imhim-75991.firebasestorage.app',
   );
 }

@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/analytics_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 
@@ -27,6 +28,15 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
   late final List<_Beat> _beats = _buildBeats();
   int get _count => _beats.length;
 
+  @override
+  void initState() {
+    super.initState();
+    // ignore: discarded_futures
+    AnalyticsService.onbStarted();
+    // ignore: discarded_futures
+    AnalyticsService.onbStoryBeat(0);
+  }
+
   void _next() {
     HapticFeedback.lightImpact();
     if (_page < _count - 1) {
@@ -34,6 +44,8 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
           duration: const Duration(milliseconds: 460),
           curve: Curves.easeOutCubic);
     } else {
+      // ignore: discarded_futures
+      AnalyticsService.onbFinished();
       context.go('/onboarding/profile');
     }
   }
@@ -78,7 +90,11 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
                   child: PageView.builder(
                     controller: _pc,
                     physics: const BouncingScrollPhysics(),
-                    onPageChanged: (i) => setState(() => _page = i),
+                    onPageChanged: (i) {
+                      setState(() => _page = i);
+                      // ignore: discarded_futures
+                      AnalyticsService.onbStoryBeat(i);
+                    },
                     itemCount: _count,
                     itemBuilder: (_, i) => _BeatView(
                       key: ValueKey(i),

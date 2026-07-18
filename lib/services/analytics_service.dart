@@ -200,6 +200,17 @@ class AnalyticsService {
       _log('onb_intro_step', {'step': step});
   static Future<void> onbFinished() => _log('onb_finished');
 
+  /// New emotional funnel (OnboardingStoryScreen). One per beat reached,
+  /// so we can see exactly which screen users drop on.
+  static Future<void> onbStoryBeat(int index) =>
+      _log('onb_story_beat', {'index': index});
+  /// Name + age captured (feeds the AI). Fires at the profile step.
+  static Future<void> onbProfileSet({
+    required bool hasName,
+    required String ageGroup,
+  }) =>
+      _log('onb_profile_set', {'has_name': hasName, 'age_group': ageGroup});
+
   // ── Scan funnel ────────────────────────────────────────────────────
 
   static Future<void> scanStarted()           => _log('scan_started');
@@ -296,6 +307,36 @@ class AnalyticsService {
       _log('rizz_replies_generated', {'count': count, 'is_free': isFree});
   static Future<void> rizzBlockedFreeCap(String card) =>
       _log('rizz_blocked_free_cap', {'card': card});
+
+  // ── Roleplay (TEXT chat — Practice + Missions girls) ───────────────
+
+  /// Opened a girl's texting roleplay. `mode` = practice | post (comment
+  /// on her post) | mission. `character` = backend id (amara, ice_queen…).
+  static Future<void> roleplayOpened({
+    required String character,
+    required String mode,
+  }) =>
+      _log('roleplay_opened', {'character': character, 'mode': mode});
+  static Future<void> roleplayMessageSent({
+    required String character,
+    required int turn,
+  }) =>
+      _log('roleplay_message_sent', {'character': character, 'turn': turn});
+  /// Tapped "Get help from Lucien" inside a text roleplay.
+  static Future<void> roleplayHelpTapped(String character) =>
+      _log('roleplay_help_tapped', {'character': character});
+  /// Tapped 📞 to take the text roleplay live on voice.
+  static Future<void> roleplayVoiceHandoff(String character) =>
+      _log('roleplay_voice_handoff', {'character': character});
+
+  // ── Missions ───────────────────────────────────────────────────────
+
+  /// Opened a mission card. `kind` = aiVoice | aiText | realText | ...
+  static Future<void> missionOpened({
+    required String kind,
+    required String title,
+  }) =>
+      _log('mission_opened', {'kind': kind, 'title': title});
 
   // ── Tab navigation ─────────────────────────────────────────────────
 

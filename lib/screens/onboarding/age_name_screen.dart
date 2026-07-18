@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/analytics_service.dart';
 import '../../services/local_store_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/imhim_wordmark.dart';
@@ -59,6 +60,11 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
     HapticFeedback.mediumImpact();
     await LocalStoreService.setUserName(_nameCtrl.text);
     await LocalStoreService.setUserAgeGroup(_ageGroup);
+    // ignore: discarded_futures
+    AnalyticsService.onbProfileSet(
+      hasName: _nameCtrl.text.trim().isNotEmpty,
+      ageGroup: _ageGroup ?? 'unknown',
+    );
     if (widget.fromSettings) {
       if (!mounted) return;
       context.pop();

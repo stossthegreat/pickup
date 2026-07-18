@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
+import '../../services/analytics_service.dart';
 import '../../services/streak_service.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/streak_badge.dart';
@@ -61,6 +62,8 @@ class MissionsTabScreen extends StatelessWidget {
   }
 
   void _launch(BuildContext context, _Mission m) {
+    // ignore: discarded_futures
+    AnalyticsService.missionOpened(kind: m.kind.name, title: m.title);
     switch (m.kind) {
       case _Kind.voice:
         // AI · VOICE → straight onto the realtime voice orb for her.

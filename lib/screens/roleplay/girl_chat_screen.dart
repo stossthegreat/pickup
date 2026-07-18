@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 
 import '../../config/auralay_dev_flags.dart';
+import '../../services/analytics_service.dart';
 import '../../services/creator_mode_store.dart';
 import '../../services/local_store_service.dart';
 import '../../theme/app_colors.dart';
@@ -154,6 +155,11 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   void initState() {
     super.initState();
     _heat = _startHeat;
+    // ignore: discarded_futures
+    AnalyticsService.roleplayOpened(
+      character: widget.config.characterId,
+      mode: widget.config.post != null ? 'post' : 'practice',
+    );
     // Practice mode: she opens. Post mode: the post IS the opener and she
     // waits for his comment, so no first bubble from her.
     if (widget.config.post == null) {
@@ -208,6 +214,8 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
 
   void _openVoice() {
     HapticFeedback.mediumImpact();
+    // ignore: discarded_futures
+    AnalyticsService.roleplayVoiceHandoff(widget.config.characterId);
     Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
       builder: (_) => FreeFlowScreen(initialVibeKey: widget.config.vibeKey),
     ));
@@ -224,6 +232,9 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       _sending = true;
       _turnIndex++;
     });
+    // ignore: discarded_futures
+    AnalyticsService.roleplayMessageSent(
+        character: widget.config.characterId, turn: _turnIndex);
     _ctrl.clear();
     _scrollToBottom();
 
@@ -320,6 +331,8 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     if (!await AiConsentDialog.ensure(context)) return;
     if (!mounted) return;
     HapticFeedback.selectionClick();
+    // ignore: discarded_futures
+    AnalyticsService.roleplayHelpTapped(widget.config.characterId);
     setState(() => _helping = true);
     _scrollToBottom();
 

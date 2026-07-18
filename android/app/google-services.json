@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "826053971859",
+    "project_id": "imhim-75991",
+    "storage_bucket": "imhim-75991.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:826053971859:android:c0ff8bb707e3f4c485a266",
+        "android_client_info": {
+          "package_name": "com.imhim.imhim"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJDHSki94CSv_vkOb9yGkBldRBfLtlFDU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
