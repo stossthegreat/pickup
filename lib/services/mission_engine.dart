@@ -39,21 +39,30 @@ class MissionEngine {
   }
 
   static Future<List<String>> _generate(int today) async {
-    final eff = await effectiveTier();
+    final level = await LocalStoreService.userLevel();
+    final snap = await StreakService.progress();
+    final day = snap.ascensionDay;
+    final eff = (1 + level + (day ~/ 12)).clamp(1, 5);
     final ids = <String>[];
+
+    // Only ever hand out missions for girls he's actually UNLOCKED on the
+    // 60-day journey — a mission can never target a locked girl. At least the
+    // three Day-1 starters are always available.
+    final roster = kRoster.where((g) => g.unlockDay <= day).toList();
+    final pool = roster.isNotEmpty ? roster : kRoster.take(3).toList();
 
     // ── 3 AI missions ──
     // 1) accessible entry: comment on an easy girl's post (never scary).
-    final easy = kRoster.where((g) => g.tier <= (eff - 1).clamp(1, 5)).toList();
-    final entryPool = easy.isNotEmpty ? easy : kRoster.take(3).toList();
+    final easy = pool.where((g) => g.tier <= (eff - 1).clamp(1, 5)).toList();
+    final entryPool = easy.isNotEmpty ? easy : pool;
     final entry = entryPool[today % entryPool.length];
     ids.add(aiPostMission(entry).id);
 
     // 2) + 3) voice and text with girls around the effective tier (escalating).
-    final band = kRoster
+    final band = pool
         .where((g) => g.tier >= (eff - 1).clamp(1, 5) && g.tier <= (eff + 1).clamp(1, 5))
         .toList();
-    final bandPool = band.isNotEmpty ? band : kRoster;
+    final bandPool = band.isNotEmpty ? band : pool;
     final voiceGirl = bandPool[(today + 1) % bandPool.length];
     ids.add(aiVoiceMission(voiceGirl).id);
     final textGirl = bandPool[(today + 3) % bandPool.length];
