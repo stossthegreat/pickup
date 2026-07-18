@@ -352,7 +352,10 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
 
   // Session length.
   /// Default session length for Pro users — 3 minutes per session.
-  static const int _sessionSeconds = 180;
+  // 2-minute voice sessions. At 14 voice minutes/week (see
+  // LocalStoreService.kVoiceMinutesPerWeek) that's 7 sessions a week — the
+  // model bro locked: short, repeatable calls that keep them coming back.
+  static const int _sessionSeconds = 120;
   /// Bro v6: "we want the free roleplay to be one minute then after
   /// one response add a brutal pop up tap Lucien for your legendary
   /// teacher." Free users get a single 60-second session, then the

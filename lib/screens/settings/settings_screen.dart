@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:in_app_review/in_app_review.dart';
 
+import '../../config/app_store_config.dart';
 import '../../config/dev_flags.dart';
 import '../../services/analytics_service.dart';
 import '../../services/creator_mode_store.dart';
@@ -37,17 +38,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // v240 — settings rebuilt to bro's spec: clean single-list of
-    // ONLY the settings that actually do something. Dead tiles
-    // ("Rescan history → COMING SOON", "Export report → COMING SOON",
-    // "Rizz from anywhere" duplicated by the Rizz tab, the marketing
-    // blurbs "How we handle photos" + "How ImHim works") are gone.
-    // "Rate us" sits at the top and deep-links to the App Store
-    // listing via in_app_review's openStoreListing (uses the App
-    // Store ID 6762532788 from
-    // apps.apple.com/gb/app/mirrorly-looksmax-and-rizz/id6762532788).
-    // Privacy + Terms drop to a single horizontal row at the bottom
-    // matching the screenshot bro sent.
+    // Clean single-list of only the settings that actually do something.
+    // "Rate us" sits at the top; it deep-links to the ImHim App Store listing
+    // once kAppStoreId is set (lib/config/app_store_config.dart), and until
+    // then falls back to the native review prompt for the current app.
+    // Privacy + Terms drop to a single horizontal row at the bottom.
     return Scaffold(
       backgroundColor: AppColors.base,
       body: SafeArea(
@@ -119,17 +114,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               // ── Usage tile — voice minutes this week ────────────────────
               const _VoiceCapTile(),
-
-              // ── Glow-up style (gender pick) ────────────────────────────
-              _SettingTile(
-                icon: Icons.style_outlined,
-                title: 'Glow-up style',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  context.push('/onboarding/gender',
-                      extra: const {'fromSettings': true});
-                },
-              ),
 
               // ── Privacy / AI consent ────────────────────────────────────
               _SettingTile(
@@ -211,12 +195,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// v240 — opens the live App Store listing using the App Store ID
-  /// from the URL bro provided
-  /// (apps.apple.com/gb/app/mirrorly-looksmax-and-rizz/id6762532788).
-  /// On Android it falls back to the in-app review request which
-  /// resolves the bundle id automatically. Either way the user lands
-  /// where they can leave a star rating.
+  /// Opens the review flow. On iOS, if [kAppStoreId] is set we deep-link to
+  /// the real ImHim listing's review tab; until then we fall back to the
+  /// native in-app prompt, which targets the CURRENT app (never the old one).
+  /// Android uses the native Play in-app review, else the store listing.
   Future<void> _rateUs(BuildContext ctx) async {
     HapticFeedback.selectionClick();
     // ignore: discarded_futures
@@ -224,7 +206,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final reviewer = InAppReview.instance;
       if (Platform.isIOS) {
-        await reviewer.openStoreListing(appStoreId: '6762532788');
+        if (kAppStoreId.isNotEmpty) {
+          await reviewer.openStoreListing(appStoreId: kAppStoreId);
+        } else {
+          await reviewer.requestReview();
+        }
       } else {
         if (await reviewer.isAvailable()) {
           await reviewer.requestReview();
@@ -328,36 +314,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ));
   }
 
-  void _showPrivacySummary(BuildContext ctx) => _showInfoSheet(ctx,
-    'How we handle your photo',
-    'Your photo is processed on your device by MediaPipe to extract 16 '
-    'facial measurements.\n\n'
-    'When you tap SCAN, GENERATE IMAGE, or the Mirror chat, we send that '
-    'single photo to our AI providers (OpenAI for analysis, Replicate for '
-    'image rendering) for the duration of one request.\n\n'
-    'We do not save your photo on our servers. We do not sell your data. '
-    'We do not train AI models on your face. We do not require an account.\n\n'
-    'For the full text, open Privacy Policy above.',
-  );
-
-  void _showHow(BuildContext ctx) => _showInfoSheet(ctx,
-    'How ImHim works',
-    'The two-score moat, end to end:\n\n'
-    '1. MediaPipe maps 468 landmarks on your face at 30fps, on-device. '
-    'From those landmarks we compute 16 geometric measurements — canthal '
-    'tilt, jaw angle, FWHR, facial thirds, symmetry, and more. That\'s '
-    'your BONE STRUCTURE score.\n\n'
-    '2. GPT-4o Vision looks at your actual photo (never the geometry '
-    'numbers) and rates what the human eye sees — skin, eye area, '
-    'proportions, harmony. That\'s your HONEST LOOKS score.\n\n'
-    '3. Google Nano Banana renders your face with the recommended change '
-    'applied. A face-swap post-pass anchors the output to your real '
-    'bones so the render is still recognizably you.\n\n'
-    '4. The Mirror advisor reads your measurements and recommends '
-    'haircuts, beards, skin protocols, glasses — tailored to your '
-    'anatomy, not a template.',
-  );
-
   Widget _sheetHandle() => Container(
     width: 36, height: 4,
     margin: const EdgeInsets.only(bottom: Sp.lg),
@@ -401,7 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       backgroundColor: AppColors.toastBg,
       content: Text(
         'AI permission revoked. We will ask again the next time '
-        'you scan.',
+        'you start an AI roleplay.',
         style: AppTypography.bodySmall.copyWith(
           color: AppColors.textPrimary)),
     ));
@@ -415,8 +371,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: Text('Delete all data?',
           style: AppTypography.h3.copyWith(color: AppColors.signalRed)),
         content: Text(
-          'This removes all your scans, renders, and progress from this '
-          'device. Your subscription is not affected. This cannot be '
+          'This removes all your progress, streaks, and conversations from '
+          'this device. Your subscription is not affected. This cannot be '
           'undone.',
           style: AppTypography.bodySmall),
         actions: [

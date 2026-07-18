@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:in_app_review/in_app_review.dart';
 
+import '../config/app_store_config.dart';
 import '../services/analytics_service.dart';
 
 /// v249 — smooth two-stage iOS-style review prompt.
@@ -64,8 +65,14 @@ class _ReviewPromptDialogState extends State<ReviewPromptDialog> {
       // sheet and shows NOTHING in TestFlight / after it has fired once,
       // which is why the button just closed the dialog.
       if (Platform.isIOS) {
-        // iOS — deep-link straight to the App Store listing (review tab).
-        await reviewer.openStoreListing(appStoreId: '6762532788');
+        // iOS — deep-link to the ImHim listing's review tab once we know the
+        // App Store ID; until then the native prompt targets the CURRENT app
+        // (never the old Mirrorly listing). See lib/config/app_store_config.
+        if (kAppStoreId.isNotEmpty) {
+          await reviewer.openStoreListing(appStoreId: kAppStoreId);
+        } else {
+          await reviewer.requestReview();
+        }
       } else {
         // Android — native Play in-app review when available, else the
         // Play Store listing (bundle id resolved automatically).

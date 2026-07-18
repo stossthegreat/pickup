@@ -25,6 +25,24 @@
 /// ever ship to the store.
 /// ──────────────────────────────────────────────────────────────────────
 class PurchaseConfig {
+  /// ── MASTER SWITCH — RevenueCat is DISABLED for this launch ──────────────
+  /// We're shipping on the existing kBypassPaywall allowance: everyone gets
+  /// Pro access plus the 15-minute weekly voice cap — exactly as it worked
+  /// before. RevenueCat (keys + purchase_service.dart + the paywall) all stay
+  /// in the codebase, untouched, for a future paid version.
+  ///
+  /// RE-ENABLED for the paid launch. RevenueCat is live and the paywall is
+  /// the hard lock (kBypassPaywall = false in dev_flags.dart).
+  ///
+  /// ⚠️ REQUIRES a working product in App Store Connect: the store screenshot
+  /// showed RevenueCat error 23 (CONFIGURATION_ERROR — "None of the products
+  /// could be fetched from App Store Connect"). Until `imhim_pro_weekly` is
+  /// fetchable, the paywall shows but CANNOT complete a purchase, so the app
+  /// is locked with no way in. Verify via the paywall's "Store status"
+  /// diagnostic BEFORE shipping. To test the app without paying, flip
+  /// kBypassPaywall back to true in dev_flags.dart.
+  static const bool enabled = true;
+
   /// RevenueCat public SDK key for iOS. Starts with `appl_`.
   static const iosApiKey     = 'appl_LZCBJirwBRyekXFKrBGdcdnyRLJ';
 
@@ -65,10 +83,12 @@ class PurchaseConfig {
     rescuePackage:  'rescue',
   );
 
-  /// Convenience — true once keys are filled in. Lets the app avoid
-  /// configuring RevenueCat at all during development when the fields
-  /// are blank, instead of hitting the SDK with an empty key and
-  /// crashing.
+  /// Convenience — true only when RevenueCat is [enabled] AND keys are
+  /// present. Every billing path (init, offerings, purchase, restore,
+  /// entitlement checks) is already guarded on this, so flipping [enabled]
+  /// to false makes the entire RevenueCat SDK go dormant: `init()` returns
+  /// early, nothing is ever configured, and no store calls are made. The
+  /// app then runs purely on the kBypassPaywall allowance.
   static bool get isConfigured =>
-      iosApiKey.isNotEmpty || androidApiKey.isNotEmpty;
+      enabled && (iosApiKey.isNotEmpty || androidApiKey.isNotEmpty);
 }

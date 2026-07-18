@@ -88,7 +88,7 @@ class LocalStoreService {
   static const int  kScansPerWeek        = 999999; // legacy looks — effectively off
   static const int  kRendersPerWeek      = 999999; // legacy looks — effectively off
   static const int  kScreenshotsPerWeek  = 999999; // rizz screenshots — unlimited
-  static const int  kVoiceMinutesPerWeek = 15;     // the ONLY real cap
+  static const int  kVoiceMinutesPerWeek = 14;     // the ONLY real cap — 7×2-min sessions/week (text is unlimited)
 
   static const _kScanWeekBucket        = 'caps.scan.week_bucket.v1';
   static const _kScanWeekCount         = 'caps.scan.week_count.v1';

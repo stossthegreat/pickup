@@ -30,10 +30,13 @@ void main() async {
   await AnalyticsService.init();
   AnalyticsService.appOpen();
 
-  // Initialise RevenueCat. Safe to call even when keys aren't
-  // configured yet — the service no-ops in that case and the rest of
-  // the app runs as a dev stub (paywall shows "—" for prices, CTA is
-  // disabled). See lib/config/purchase_config.dart for setup.
+  // RevenueCat is DISABLED for this launch (PurchaseConfig.enabled = false).
+  // This call stays but no-ops while disabled — the SDK is never configured
+  // and no store calls are made. The whole app runs on the kBypassPaywall
+  // allowance (everyone gets Pro access + the 15-minute weekly voice cap),
+  // exactly as before. To bring billing back for a paid version, flip
+  // PurchaseConfig.enabled → true (and kBypassPaywall → false). See
+  // lib/config/purchase_config.dart.
   await PurchaseService.init();
 
   // Initialise local notifications. Permission is NOT requested here —

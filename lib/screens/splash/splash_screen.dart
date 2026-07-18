@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/dev_flags.dart';
 import '../../services/local_store_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
@@ -32,9 +33,16 @@ class _SplashScreenState extends State<SplashScreen> {
     // scan anywhere.
     if (!onboarded) {
       context.go('/onboarding/story');
-    } else {
-      context.go('/home');
+      return;
     }
+    // HARD LOCK — a returning user must be subscribed to get in. Not
+    // subscribed → the paywall, which re-shows on every launch until they
+    // pay. kBypassPaywall skips this (dev testing without a purchase).
+    if (!kBypassPaywall && !(await LocalStoreService.isSubscribed())) {
+      context.go('/paywall', extra: {'afterPurchase': '/home'});
+      return;
+    }
+    context.go('/home');
   }
 
   @override
