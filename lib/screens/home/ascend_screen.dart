@@ -9,7 +9,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/protocol.dart';
 import '../../models/scan_record.dart' show GameScoreEntry, ScanRecord;
 import '../../services/ascension_service.dart';
-import '../../services/daily_mission_service.dart';
+import '../../services/mission_catalog.dart';
+import '../../services/mission_engine.dart';
 import '../../services/local_store_service.dart';
 import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
@@ -138,6 +139,8 @@ class _AscendScreenState extends State<AscendScreen> {
   int _weeklyDelta = 0;
   bool _deltaLoaded = false;
   int _xp = 0;
+  List<MissionSpec> _newMissions = const [];
+  Map<String, bool> _newDone = const {};
 
   @override
   void initState() {
@@ -168,11 +171,18 @@ class _AscendScreenState extends State<AscendScreen> {
     final delta = await AscensionService.weeklyDeltaFor(score);
     await AscensionService.snapshotTodayScore(score);
     final xp = await LocalStoreService.xpTotal();
+    final missions = await MissionEngine.loadToday();
+    final done = <String, bool>{};
+    for (final m in missions) {
+      done[m.id] = await LocalStoreService.isMissionDoneToday(m.id);
+    }
     if (!mounted) return;
     setState(() {
       _weeklyDelta = delta;
       _deltaLoaded = true;
       _xp = xp;
+      _newMissions = missions;
+      _newDone = done;
     });
   }
 
@@ -359,124 +369,16 @@ class _AscendScreenState extends State<AscendScreen> {
   // Copy stays in the leveling-up voice. Every line reads as a
   // rep banked toward becoming Him.
   List<AscendMission> _buildMissions() {
-    final w = widget;
-    final day = w.protocol?.currentDay ?? 1;
-    final scanToday = _scanLoggedToday();
-
-    // DYNAMIC SET — quota-aware, rotates daily, remembers what's been
-    // done (DailyMissionService). Each id maps to its copy + tab jump.
-    if (w.dailyMissions.isNotEmpty) {
-      return [
-        for (final m in w.dailyMissions)
-          switch (m.id) {
-            DailyMissionService.protocol => AscendMission(
-                title: 'PROTOCOL · LOG DAY $day',
-                hint: m.done
-                    ? 'banked. another day deeper.'
-                    : 'today\'s reps. the work that compounds.',
-                done: m.done,
-                onTap: () => w.onJumpToTab(0),
-              ),
-            DailyMissionService.roleplay => AscendMission(
-                title: 'ROLEPLAY · SPAR WITH LUCIEN',
-                hint: m.done
-                    ? 'round in the can. that\'s how reps build.'
-                    : 'one round. the man you\'re becoming talks like him first.',
-                done: m.done,
-                onTap: () => w.onJumpToTab(1),
-              ),
-            DailyMissionService.scan => AscendMission(
-                title: 'SCAN · MARK THE FACE',
-                hint: m.done
-                    ? 'baseline locked in for today.'
-                    : 'no honest mirror, no honest delta. capture it.',
-                done: m.done,
-                onTap: () => w.onJumpToTab(0),
-              ),
-            DailyMissionService.render => AscendMission(
-                title: 'MIRROR · RENDER THE FIX',
-                hint: m.done
-                    ? 'future you, rendered. study it.'
-                    : 'see what could change. run one render.',
-                done: m.done,
-                onTap: () => w.onJumpToTab(0),
-              ),
-            DailyMissionService.rizzSs => AscendMission(
-                title: 'READ · GET THE TAKE',
-                hint: m.done
-                    ? 'chat read. moves locked in.'
-                    : 'paste a chat or a profile. get the read.',
-                done: m.done,
-                onTap: () => w.onJumpToTab(2),
-              ),
-            DailyMissionService.pickup => AscendMission(
-                title: 'PICKUP · DROP A LINE',
-                hint: m.done
-                    ? 'used a banger today.'
-                    : 'one line. screenshot-worthy. copy it.',
-                done: m.done,
-                onTap: () => w.onJumpToTab(2),
-              ),
-            DailyMissionService.rizzChat => AscendMission(
-                title: 'RIZZ CHAT · ASK THE COACH',
-                hint: m.done
-                    ? 'coached. that\'s a rep.'
-                    : 'ask anything. we coach.',
-                done: m.done,
-                onTap: () => w.onJumpToTab(2),
-              ),
-            _ => AscendMission(
-                title: 'MISSION',
-                hint: '',
-                done: m.done,
-                onTap: () => w.onJumpToTab(0),
-              ),
-          },
-      ];
-    }
-
-    // LEGACY fallback — fixed five (first frame before the engine loads).
+    // The NEW daily-missions engine — the exact set the Missions tab shows.
+    // (The old looks / scan / render mission copy is gone.)
     return [
-      AscendMission(
-        title: 'PROTOCOL · LOG DAY $day',
-        hint:  w.looksDoneToday
-            ? 'banked. another day deeper.'
-            : 'today\'s reps. the work that compounds.',
-        done:  w.looksDoneToday,
-        onTap: () => w.onJumpToTab(0),
-      ),
-      AscendMission(
-        title: 'ROLEPLAY · SPAR WITH LUCIEN',
-        hint:  w.gameDoneToday
-            ? 'round in the can. that\'s how reps build.'
-            : 'one round. the man you\'re becoming talks like him first.',
-        done:  w.gameDoneToday,
-        onTap: () => w.onJumpToTab(1),
-      ),
-      AscendMission(
-        title: 'SCAN · MARK THE FACE',
-        hint:  scanToday
-            ? 'baseline locked in for today.'
-            : 'no honest mirror, no honest delta. capture it.',
-        done:  scanToday,
-        onTap: () => w.onJumpToTab(0),
-      ),
-      AscendMission(
-        title: 'PICKUP · DROP A LINE',
-        hint:  w.pickupLineDoneToday
-            ? 'used a banger today.'
-            : 'one line. screenshot-worthy. copy it.',
-        done:  w.pickupLineDoneToday,
-        onTap: () => w.onJumpToTab(2),
-      ),
-      AscendMission(
-        title: 'READ · GET THE TAKE',
-        hint:  w.rizzDoneToday
-            ? 'chat read. moves locked in.'
-            : 'paste a chat or ask the rizz coach.',
-        done:  w.rizzDoneToday,
-        onTap: () => w.onJumpToTab(2),
-      ),
+      for (final m in _newMissions)
+        AscendMission(
+          title: m.title,
+          hint: (_newDone[m.id] == true) ? 'done — banked.' : m.sub,
+          done: _newDone[m.id] == true,
+          onTap: () => widget.onJumpToTab(0),
+        ),
     ];
   }
 
