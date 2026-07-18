@@ -31,11 +31,17 @@ class PurchaseConfig {
   /// before. RevenueCat (keys + purchase_service.dart + the paywall) all stay
   /// in the codebase, untouched, for a future paid version.
   ///
-  /// TO RE-ENABLE for a paid build: flip this to `true`. Everything wires
-  /// itself back up through `isConfigured` — no other change needed here.
-  /// (You'll also want kBypassPaywall = false in dev_flags.dart so the gates
-  /// go live again.)
-  static const bool enabled = false;
+  /// RE-ENABLED for the paid launch. RevenueCat is live and the paywall is
+  /// the hard lock (kBypassPaywall = false in dev_flags.dart).
+  ///
+  /// ⚠️ REQUIRES a working product in App Store Connect: the store screenshot
+  /// showed RevenueCat error 23 (CONFIGURATION_ERROR — "None of the products
+  /// could be fetched from App Store Connect"). Until `imhim_pro_weekly` is
+  /// fetchable, the paywall shows but CANNOT complete a purchase, so the app
+  /// is locked with no way in. Verify via the paywall's "Store status"
+  /// diagnostic BEFORE shipping. To test the app without paying, flip
+  /// kBypassPaywall back to true in dev_flags.dart.
+  static const bool enabled = true;
 
   /// RevenueCat public SDK key for iOS. Starts with `appl_`.
   static const iosApiKey     = 'appl_LZCBJirwBRyekXFKrBGdcdnyRLJ';

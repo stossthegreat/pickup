@@ -49,7 +49,18 @@
 /// fully usable while testing.
 ///
 /// **FLIP THIS BACK TO FALSE BEFORE SHIPPING A PAID BUILD.**
-const kBypassPaywall = true;
+///
+/// v354 (paid launch) — flipped to FALSE. The paywall is now the HARD LOCK:
+/// after onboarding, and on every launch, a non-subscriber is sent to
+/// /paywall and cannot reach /home until they pay (splash + HomeScreen both
+/// gate on it). Paying unlocks the app — unlimited texts + 14 voice minutes
+/// a week (7 × 2-minute sessions).
+///
+/// ⚠️ This ONLY works once `imhim_pro_weekly` is fetchable in App Store
+/// Connect (RevenueCat error 23 must be cleared). While it isn't, users are
+/// locked out with no way to pay. Flip this back to `true` to test the app
+/// without a purchase.
+const kBypassPaywall = false;
 
 /// Human-readable build tag shown tiny on the paywall so we can instantly
 /// tell which build is actually installed on-device (TestFlight lag has
