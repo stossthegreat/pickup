@@ -80,10 +80,15 @@ class LocalStoreService {
   // Annual subscribers get the SAME per-period numbers but on a
   // 30-day rolling window instead of 7 days. Same yearly total,
   // smoother consumption for committed users.
-  static const int  kScansPerWeek        = 2;
-  static const int  kRendersPerWeek      = 3;
-  static const int  kScreenshotsPerWeek  = 30;
-  static const int  kVoiceMinutesPerWeek = 15;
+  // ImHim monetization (locked): ONLY live voice roleplay is capped —
+  // 15 min/week. Everything else (text roleplay, rizz screenshots, rizz
+  // chat) is unlimited on purpose: text is cheap and unlimited text is
+  // what makes them come back. Voice is the scarce, premium, addictive
+  // resource — run out, want more, resubscribe next week.
+  static const int  kScansPerWeek        = 999999; // legacy looks — effectively off
+  static const int  kRendersPerWeek      = 999999; // legacy looks — effectively off
+  static const int  kScreenshotsPerWeek  = 999999; // rizz screenshots — unlimited
+  static const int  kVoiceMinutesPerWeek = 15;     // the ONLY real cap
 
   static const _kScanWeekBucket        = 'caps.scan.week_bucket.v1';
   static const _kScanWeekCount         = 'caps.scan.week_count.v1';
