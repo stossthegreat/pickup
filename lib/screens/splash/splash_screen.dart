@@ -45,105 +45,54 @@ class _SplashScreenState extends State<SplashScreen> {
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: AppColors.base,
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // ── Editorial gradient wash ────────────────────────────────────
+          // ── Black with a faint red glow up top ─────────────────────────
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  center: const Alignment(0, -0.4),
-                  radius: 1.1,
+                  center: const Alignment(0, -0.25),
+                  radius: 1.0,
                   colors: [
-                    AppColors.accentGlow,
-                    AppColors.base,
+                    AppColors.red.withValues(alpha: 0.12),
+                    Colors.black,
                   ],
                 ),
               ),
             ),
           ),
 
-          // ── Subtle grid (like a reference coordinate system) ───────────
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _GridPainter(),
-            ),
-          ),
-
-          // ── Top hairline + META label ─────────────────────────────────
-          Positioned(
-            top: 0, left: 0, right: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.lg, Sp.lg, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      height: 1,
-                      color: AppColors.surface3,
-                    ).animate().fadeIn(delay: 100.ms, duration: 600.ms)
-                      .scaleX(begin: 0, end: 1,
-                          delay: 100.ms, duration: 800.ms, curve: Curves.easeOut),
-                    const SizedBox(height: Sp.sm),
-                    Text('ANALYSIS · MEASUREMENT · RECALIBRATION',
-                      style: AppTypography.label.copyWith(
-                        color: AppColors.textTertiary, fontSize: 9, letterSpacing: 2.8))
-                      .animate().fadeIn(delay: 300.ms, duration: 600.ms),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // ── Center mark ───────────────────────────────────────────────
+          // ── Center mark — app logo + wordmark ──────────────────────────
           Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Gold ring mark
-                SizedBox(
-                  width: 92, height: 92,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Outer ring
-                      Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.red.withValues(alpha: 0.35),
-                            width: 1,
-                          ),
-                        ),
-                      ).animate().fadeIn(delay: 300.ms, duration: 700.ms)
-                        .scale(begin: const Offset(0.9, 0.9),
-                            delay: 300.ms, duration: 700.ms, curve: Curves.easeOut),
-                      // Inner dot
-                      Container(
-                        width: 6, height: 6,
-                        decoration: const BoxDecoration(
-                          color: AppColors.red,
-                          shape: BoxShape.circle,
-                        ),
-                      ).animate().fadeIn(delay: 600.ms, duration: 500.ms),
-                      // Crosshair
-                      Container(
-                        width: 92, height: 1,
-                        color: AppColors.red.withValues(alpha: 0.22),
-                      ).animate().fadeIn(delay: 700.ms, duration: 500.ms)
-                        .scaleX(begin: 0, end: 1,
-                            delay: 700.ms, duration: 600.ms, curve: Curves.easeOut),
-                      Container(
-                        width: 1, height: 92,
-                        color: AppColors.red.withValues(alpha: 0.22),
-                      ).animate().fadeIn(delay: 700.ms, duration: 500.ms)
-                        .scaleY(begin: 0, end: 1,
-                            delay: 700.ms, duration: 600.ms, curve: Curves.easeOut),
+                // App logo (the red crown), with a soft red halo.
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.red.withValues(alpha: 0.35),
+                        blurRadius: 40,
+                        spreadRadius: 2,
+                      ),
                     ],
                   ),
-                ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Image.asset(
+                      'assets/icons/appstore.png',
+                      width: 104, height: 104, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const SizedBox(width: 104, height: 104),
+                    ),
+                  ),
+                ).animate().fadeIn(delay: 200.ms, duration: 700.ms).scale(
+                    begin: const Offset(0.88, 0.88),
+                    delay: 200.ms, duration: 700.ms, curve: Curves.easeOutBack),
 
                 const SizedBox(height: Sp.xl),
 
@@ -189,7 +138,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
                     Row(
                       children: [
-                        Text('BOOTING SYSTEM',
+                        Text('BECOME THE MAN WHO OWNS THE ROOM',
                           style: AppTypography.label.copyWith(
                             color: AppColors.textMuted, fontSize: 9, letterSpacing: 2.8)),
                         const Spacer(),
@@ -207,25 +156,4 @@ class _SplashScreenState extends State<SplashScreen> {
       ),
     );
   }
-}
-
-class _GridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.surface3.withValues(alpha: 0.12)
-      ..strokeWidth = 0.5;
-
-    // Vertical lines
-    for (double x = 0; x < size.width; x += 60) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    // Horizontal lines
-    for (double y = 0; y < size.height; y += 60) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
 }

@@ -45,10 +45,10 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
     await LocalStoreService.setAiConsent(true);
     AnalyticsService.consentGranted();
     if (!mounted) return;
-    // End of onboarding → the paywall. `force:true` makes it SHOW even
-    // while kBypassPaywall is on; the user can X out and still use
-    // everything (no hard gate yet). We'll harden it later.
-    context.go('/paywall', extra: {'source': 'onboarding', 'force': true});
+    // End of onboarding → straight into the app. No entry-wall paywall — the
+    // paywall fires on ACTIONS (opening a girl / mission / call), and it's
+    // dismissible. Landing them in /home lets them see what they're buying.
+    context.go('/home');
   }
 
   @override
