@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/protocol.dart';
-import '../../config/dev_flags.dart';
 import '../../models/scan_record.dart';
 import '../../services/analytics_service.dart';
 import '../../services/local_store_service.dart';
@@ -116,18 +115,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final t = widget.initialTab ?? 0;
     _tab = (t >= 0 && t < 4) ? t : 0;
     _reload();
-    // HARD LOCK backstop — the app is unreachable without a subscription.
-    // If a non-subscriber lands here (e.g. by dismissing the paywall), bounce
-    // them straight back so the paywall keeps showing until they pay.
-    if (!kBypassPaywall) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        final subbed = await LocalStoreService.isSubscribed();
-        if (!subbed && mounted) {
-          context.go('/paywall', extra: {'afterPurchase': '/home'});
-        }
-      });
-    }
+    // No entry wall — users browse the app freely; the paywall fires on
+    // actions (see PaywallGate calls in Practice / Missions / Free Flow).
     // Fire the App Store review prompt if the user has now used
     // all three pillars (scan + Free Flow + eye-contact lesson).
     // No-op on every other launch — the service tracks state.
