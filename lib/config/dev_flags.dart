@@ -50,17 +50,19 @@
 ///
 /// **FLIP THIS BACK TO FALSE BEFORE SHIPPING A PAID BUILD.**
 ///
-/// v354 (paid launch) — flipped to FALSE. The paywall is now the HARD LOCK:
-/// after onboarding, and on every launch, a non-subscriber is sent to
-/// /paywall and cannot reach /home until they pay (splash + HomeScreen both
-/// gate on it). Paying unlocks the app — unlimited texts + 14 voice minutes
-/// a week (7 × 2-minute sessions).
+/// TRUE right now, on purpose: the paywall is fully built (browse the app
+/// free, paywall fires on actions — opening a girl / mission / call — and is
+/// dismissible), BUT the store product can't complete a purchase yet
+/// (RevenueCat error 23 — `imhim_pro_weekly` isn't fetchable from App Store
+/// Connect). A live paywall that can't charge anyone just locks everyone out
+/// for zero benefit. So while error 23 stands, TRUE lets you (and testers)
+/// into the whole app.
 ///
-/// ⚠️ This ONLY works once `imhim_pro_weekly` is fetchable in App Store
-/// Connect (RevenueCat error 23 must be cleared). While it isn't, users are
-/// locked out with no way to pay. Flip this back to `true` to test the app
-/// without a purchase.
-const kBypassPaywall = false;
+/// TO GO LIVE WITH THE PAYWALL: fix error 23 (create/attach imhim_pro_weekly,
+/// sign the Paid Apps agreement), confirm the paywall's "Store status" shows
+/// the product, THEN flip this to `false`. Nothing else changes — the
+/// browse-then-pay model is already wired.
+const kBypassPaywall = true;
 
 /// Human-readable build tag shown tiny on the paywall so we can instantly
 /// tell which build is actually installed on-device (TestFlight lag has
