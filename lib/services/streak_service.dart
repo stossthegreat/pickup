@@ -1,6 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'daily_mission_service.dart';
 import 'local_store_service.dart';
 
 /// THE ASCENSION ENGINE — one source of truth for the three numbers the
@@ -102,17 +101,23 @@ class StreakService {
     await prefs.setStringList(
         _kActiveDays, kept.map((e) => e.toString()).toList());
 
-    // Today's mission count — from the DAILY MISSION ENGINE, which is
-    // quota-aware and rotates the set each day. done/offered are logged
-    // together so consistency judges the user against what was actually
-    // asked of them today, not a fixed five.
+    // Today's mission count — read the MissionEngine's frozen daily set
+    // straight from prefs (key mirrors MissionEngine._kIds) and count how
+    // many are stamped done. We read passively rather than calling
+    // MissionEngine.loadToday() to avoid a cycle: loadToday()→_generate()
+    // →effectiveTier()→StreakService.progress() would re-enter this method.
+    // If the set isn't frozen yet today (screens not opened), fall back to
+    // offered=5/done=0 — the streak flame is handled separately by the
+    // any-activity flags, so consistency simply reads zero until they act.
     int missionsToday = 0;
     int offeredToday = 5;
-    try {
-      final missions = await DailyMissionService.loadToday();
-      missionsToday = missions.where((m) => m.done).length;
-      offeredToday = missions.isEmpty ? 5 : missions.length;
-    } catch (_) {}
+    final todayIds = prefs.getStringList('imhim.today.ids.v1') ?? const [];
+    if (todayIds.isNotEmpty) {
+      offeredToday = todayIds.length;
+      for (final id in todayIds) {
+        if (await LocalStoreService.isMissionDoneToday(id)) missionsToday++;
+      }
+    }
 
     // Upsert today's done/offered into the mission log; trim to 60 days.
     final logCutoff = _ymd(DateTime.now().subtract(const Duration(days: 60)));
