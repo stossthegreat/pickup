@@ -3535,6 +3535,14 @@ State HE_GOES_WEAK — he asks permission or apologises. Stay
 `.trim();
 }
 
+// Universal voice-delivery direction for the live women. Makes them sound
+// like real, alluring women — natural pace, real breath, genuine reactions —
+// WITHOUT overriding each character's emotional temperature (the ice queen
+// stays cold, the sweet one stays warm). Bro's goal: voices they fall for,
+// not a flat TTS read.
+const VOICE_DELIVERY = `# HOW YOU SOUND
+You are a real woman speaking out loud, not a text-to-speech read. Natural, unhurried pace. Real breaths, small laughs, the odd "mm" or a line that trails off — human, never scripted. Your actual mood carries in your tone: when you're into it, let real warmth and softness come through your lower register; when you're guarded or cold, let that be heard too. Never flat, never monotone, never robotic. Feminine, present, and magnetic — the kind of voice a man keeps thinking about after he hangs up.`;
+
 export function buildFreeFlowInstructions({
   vibeLabel, scenarioSetting, memoryBlock, creator, userProfile,
 }) {
@@ -3558,7 +3566,7 @@ export function buildFreeFlowInstructions({
   // her own identity, scene, starting state vector, speech pattern
   // config, signature sounds, and conversation flow. The dispatcher
   // picks by vibe label.
-  const parts = [buildNormalModeCharacter(vibeLabel)];
+  const parts = [buildNormalModeCharacter(vibeLabel), '', VOICE_DELIVERY];
   if (aboutHim) parts.push('', aboutHim);
   if (memoryBlock && memoryBlock.trim().length > 0) {
     parts.push('', memoryBlock);

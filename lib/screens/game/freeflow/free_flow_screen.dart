@@ -21,8 +21,8 @@ import '../../../services/paywall_gate.dart';
 import '../../../services/realtime_session.dart';
 import '../../../services/daily_nudge_service.dart';
 import '../../../services/review_prompt_service.dart';
+import '../../../services/roster.dart';
 import '../../../services/share_service.dart';
-import '../../../services/user_memory.dart';
 import '../../../services/villain/villain_api.dart';
 import '../../../theme/auralay_app_colors.dart';
 import '../../../theme/auralay_app_typography.dart';
@@ -589,6 +589,38 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
 
   // ─── Go live ────────────────────────────────────────────────────────
 
+  /// Build the per-girl relationship memory block for the live call. Maps
+  /// the vibe key to her roster id (the memory store key), then reads her
+  /// stage / interest / remembered notes. Returns '' when there's no real
+  /// history so she stays a fresh pickup — only once he's actually built
+  /// something (over text or a past call) does she pick up from there.
+  Future<String> _girlMemoryBlock(String vibeKey) async {
+    GirlBrief? girl;
+    for (final g in kRoster) {
+      if (g.vibeKey == vibeKey) { girl = g; break; }
+    }
+    if (girl == null) return '';
+    final id = girl.id;
+    final stage    = await LocalStoreService.girlStage(id);
+    final interest = await LocalStoreService.girlInterest(id);
+    final memory   = (await LocalStoreService.girlMemory(id)).trim();
+    final hasHistory = stage > 1 || interest > 20 || memory.isNotEmpty;
+    if (!hasHistory) return '';
+    final stageLabel = (stage >= 1 && stage < kRelationshipStages.length)
+        ? kRelationshipStages[stage]
+        : 'Talking';
+    final b = StringBuffer()
+      ..writeln('# WHAT YOU ALREADY KNOW')
+      ..writeln('This is NOT a first meeting — you and he already know each '
+          'other. Do not act like a stranger; react like someone with '
+          'history, warmer or cooler based on how it has gone.')
+      ..writeln('Where things stand: $stageLabel.')
+      ..writeln('How into him you are so far: $interest out of 100 — let that '
+          'colour how warm or guarded you sound.');
+    if (memory.isNotEmpty) b.writeln('You remember: $memory');
+    return b.toString();
+  }
+
   Future<void> _goLive(_Vibe vibe) async {
     // AI consent gate (App Store 5.1.2(i)) — no voice reaches OpenAI
     // without permission. Silent + instant for anyone who already
@@ -803,13 +835,18 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // Onboarding profile — she uses his name + pitches to his age band.
       final userName = await LocalStoreService.userName();
       final userAge  = await LocalStoreService.userAgeGroup();
-      final memoryBlock = await UserMemory.buildSystemPromptBlock(
-        filterTopic: 'rizz',
-      );
+      // Per-girl relationship memory — if he's been building something
+      // with THIS woman (over text or a past call), she picks up from
+      // where they left off instead of acting like a stranger. Maps the
+      // vibe to her roster id (the memory key). No history → empty block
+      // → she stays a fresh pickup, exactly as before. (Replaces the old
+      // rizz-topic UserMemory block, which made every persona "remember"
+      // Arena/Diabla conversations she was never part of.)
+      final memoryBlock = await _girlMemoryBlock(vibe.key);
       _log('info', 'WS',
-          'memory block built (${memoryBlock.length} chars)');
+          'girl memory block built (${memoryBlock.length} chars)');
       // ignore: avoid_print
-      print('[FREEFLOW] memory block built '
+      print('[FREEFLOW] girl memory block built '
             '(${memoryBlock.length} chars)');
       _eventSub = _session.events.listen(_onEvent);
       _log('info', 'WS', 'event sub bound — calling connect…');
