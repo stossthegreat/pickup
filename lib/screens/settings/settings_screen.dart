@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:in_app_review/in_app_review.dart';
 
+import '../../config/app_store_config.dart';
 import '../../config/dev_flags.dart';
 import '../../services/analytics_service.dart';
 import '../../services/creator_mode_store.dart';
@@ -37,17 +38,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // v240 — settings rebuilt to bro's spec: clean single-list of
-    // ONLY the settings that actually do something. Dead tiles
-    // ("Rescan history → COMING SOON", "Export report → COMING SOON",
-    // "Rizz from anywhere" duplicated by the Rizz tab, the marketing
-    // blurbs "How we handle photos" + "How ImHim works") are gone.
-    // "Rate us" sits at the top and deep-links to the App Store
-    // listing via in_app_review's openStoreListing (uses the App
-    // Store ID 6762532788 from
-    // apps.apple.com/gb/app/mirrorly-looksmax-and-rizz/id6762532788).
-    // Privacy + Terms drop to a single horizontal row at the bottom
-    // matching the screenshot bro sent.
+    // Clean single-list of only the settings that actually do something.
+    // "Rate us" sits at the top; it deep-links to the ImHim App Store listing
+    // once kAppStoreId is set (lib/config/app_store_config.dart), and until
+    // then falls back to the native review prompt for the current app.
+    // Privacy + Terms drop to a single horizontal row at the bottom.
     return Scaffold(
       backgroundColor: AppColors.base,
       body: SafeArea(
@@ -200,12 +195,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// v240 — opens the live App Store listing using the App Store ID
-  /// from the URL bro provided
-  /// (apps.apple.com/gb/app/mirrorly-looksmax-and-rizz/id6762532788).
-  /// On Android it falls back to the in-app review request which
-  /// resolves the bundle id automatically. Either way the user lands
-  /// where they can leave a star rating.
+  /// Opens the review flow. On iOS, if [kAppStoreId] is set we deep-link to
+  /// the real ImHim listing's review tab; until then we fall back to the
+  /// native in-app prompt, which targets the CURRENT app (never the old one).
+  /// Android uses the native Play in-app review, else the store listing.
   Future<void> _rateUs(BuildContext ctx) async {
     HapticFeedback.selectionClick();
     // ignore: discarded_futures
@@ -213,7 +206,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final reviewer = InAppReview.instance;
       if (Platform.isIOS) {
-        await reviewer.openStoreListing(appStoreId: '6762532788');
+        if (kAppStoreId.isNotEmpty) {
+          await reviewer.openStoreListing(appStoreId: kAppStoreId);
+        } else {
+          await reviewer.requestReview();
+        }
       } else {
         if (await reviewer.isAvailable()) {
           await reviewer.requestReview();
