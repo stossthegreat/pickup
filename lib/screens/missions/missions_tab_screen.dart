@@ -89,7 +89,7 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: AppColors.surface3,
+      backgroundColor: AppColors.toastBg,
       behavior: SnackBarBehavior.floating,
       duration: const Duration(milliseconds: 1600),
     ));

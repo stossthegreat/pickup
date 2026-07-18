@@ -44,5 +44,24 @@ ThemeData buildAppTheme() {
     ),
     dividerTheme: const DividerThemeData(
       color: AppColors.divider, thickness: 1, space: 1),
+    // Every transient notice — XP earned, out of voice minutes, saved —
+    // reads as solid black with white text. A hairline white stroke lifts
+    // it off the near-black scaffold. Snackbars that set their own colour
+    // for a semantic reason (e.g. a red error) still override this.
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: AppColors.toastBg,
+      contentTextStyle: GoogleFonts.inter(
+        color: Colors.white,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w600,
+        height: 1.35,
+      ),
+      behavior: SnackBarBehavior.floating,
+      elevation: 10,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+    ),
   );
 }

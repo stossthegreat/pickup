@@ -115,7 +115,7 @@ class _DebugPanelState extends State<DebugPanel> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        backgroundColor: AppColors.surface3,
+        backgroundColor: AppColors.toastBg,
         content: Text('Debug report copied to clipboard.',
             style: TextStyle(color: AppColors.textPrimary)),
         duration: Duration(seconds: 2),

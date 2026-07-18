@@ -123,7 +123,7 @@ class ShareService {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMsg),
-          backgroundColor: AppColors.surface2,
+          backgroundColor: AppColors.toastBg,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -207,7 +207,7 @@ class ShareService {
       Navigator.of(context, rootNavigator: true).pop();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(errorMsg),
-        backgroundColor: AppColors.surface2,
+        backgroundColor: AppColors.toastBg,
         behavior: SnackBarBehavior.floating,
       ));
     }
@@ -281,7 +281,7 @@ class ShareService {
       Navigator.of(context, rootNavigator: true).pop();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(errorMsg),
-        backgroundColor: AppColors.surface2,
+        backgroundColor: AppColors.toastBg,
         behavior: SnackBarBehavior.floating,
       ));
     }
@@ -399,7 +399,7 @@ class ShareService {
       Navigator.of(context, rootNavigator: true).pop();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(errorMsg),
-        backgroundColor: AppColors.surface2,
+        backgroundColor: AppColors.toastBg,
         behavior: SnackBarBehavior.floating,
       ));
     }
@@ -503,7 +503,7 @@ class ShareService {
       Navigator.of(context, rootNavigator: true).pop();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(errorMsg),
-        backgroundColor: AppColors.surface2,
+        backgroundColor: AppColors.toastBg,
         behavior: SnackBarBehavior.floating,
       ));
     }

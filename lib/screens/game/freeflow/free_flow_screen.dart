@@ -106,7 +106,7 @@ const _vibes = <_Vibe>[
         'you opened your mouth. She is not hostile, she is filtered. She '
         'rewards composure with one extra word and punishes effort by going '
         'flatter. She never explains why.',
-    'sage',
+    'alloy', // Seraphina — even, composed, withholding. Cool timbre for ice.
     'Coffee shop. She\'s alone at a window table, laptop open, one '
         'earbud in. She clocked you walk in. Open the conversation.',
     MirrorlyAssets.iceQueen,
@@ -131,7 +131,7 @@ const _vibes = <_Vibe>[
         'in. She tests whether you can ride it without scrambling or trying '
         'to slow her down. Match her tempo and she warms; ask her to repeat '
         'and she leaves you behind.',
-    'shimmer',
+    'marin', // Nyx — young, fast, playful. Rides the chaotic energy.
     'House party, kitchen. She\'s mid-laugh with two friends, three '
         'drinks deep, buzzing. Open the conversation.',
     MirrorlyAssets.chaosGirl,
@@ -144,7 +144,7 @@ const _vibes = <_Vibe>[
         'out anything rehearsed or try-hard. She rewards a man who holds his '
         'frame and teases back, and punishes folding, explaining yourself, '
         'or seeking her approval.',
-    'ballad',
+    'sage', // Elise — dry, knowing edge. Sounds like she's testing you.
     'Bar. She\'s leaning on the counter with a friend, sizing up the '
         'room, unimpressed by all of it. Open the conversation.',
     MirrorlyAssets.intellectual,
@@ -157,7 +157,7 @@ const _vibes = <_Vibe>[
         'his frame, stays unbothered, and doesn\'t chase. If he folds or '
         'gets needy she freezes again. The shift from ice to warmth is the '
         'whole reward.',
-    'verse',
+    'marin', // Camila — cold open, slow-warming. Opposite delivery to Nyx.
     'Rooftop bar. She\'s by the railing, arms crossed, looking at the '
         'view like it bores her. Open the conversation.',
     MirrorlyAssets.socialite,
@@ -171,7 +171,7 @@ const _vibes = <_Vibe>[
         'lines, arrogance, or crude moves make her retreat and go '
         'polite-distant. She rewards a man who is warm back, present, '
         'and real without losing his edge.',
-    'coral',
+    'shimmer', // Mara — soft, sweet, breathy. The one you fall for.
     'Bookshop cafe, Sunday afternoon. She\'s at the counter deciding '
         'between two pastries and catches your eye with a smile. Open '
         'the conversation.',
@@ -216,7 +216,7 @@ const _vibes = <_Vibe>[
         'warms and matches your banter for genuine, unbothered, actually-'
         'funny moves and real opinions, and goes dry and bored for flexing, '
         'name-dropping, canned lines, or fake-deep energy.',
-    'ballad',
+    'sage', // Valentina — grounded, dry, knowing. Unbothered warmth.
     'Low-key house party, kitchen-and-couch energy. She\'s nursing one '
         'drink, half-watching the room. You sit down next to her. Open the '
         'conversation.',
@@ -232,7 +232,7 @@ const _vibes = <_Vibe>[
         'frame, does not chase, brings real substance, and treats her as an '
         'equal, not a prize. Compliments about her looks and pedestals bore '
         'her instantly.',
-    'verse',
+    'alloy', // Simone — poised, composed, high-status cool.
     'Upscale rooftop lounge, low gold light, a martini in front of her. '
         'She has turned away better-looking approaches tonight. You walk up. '
         'Open the conversation.',
@@ -1737,7 +1737,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
               fontSize: 13.5,
               fontWeight: FontWeight.w600,
               height: 1.35)),
-      backgroundColor: const Color(0xFF16161B),
+      backgroundColor: AppColors.toastBg,
       behavior: SnackBarBehavior.floating,
       duration: const Duration(seconds: 5),
     ));
@@ -2497,6 +2497,25 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
     return 'SHE LEFT';
   }
 
+  /// The Five, converted from the 0–100 in-app scale to the share card's
+  /// out-of-10 rows so a posted card carries the full breakdown, not just
+  /// the headline number.
+  static const _shareDimOrder = <(String, String)>[
+    ('confidence', 'CONFIDENCE'),
+    ('presence', 'PRESENCE'),
+    ('game', 'GAME'),
+    ('humor', 'HUMOUR'),
+    ('listening', 'LISTENING'),
+  ];
+
+  List<({String label, int score})> _freeflowShareStats(Map<String, int>? dims) {
+    if (dims == null) return const [];
+    return [
+      for (final (key, label) in _shareDimOrder)
+        (label: label, score: ((dims[key] ?? 0) / 10).round()),
+    ];
+  }
+
   Widget _buildScorecard(FreeFlowScore s) {
     final color = s.score >= 7
         ? AppColors.signalGreen
@@ -2658,6 +2677,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                   score:     s.score,
                   badge:     _freeflowBadge(s.score),
                   verdict:   s.verdict,
+                  stats:     _freeflowShareStats(s.dimensions),
                 ),
               ),
               const SizedBox(height: 10),
