@@ -82,12 +82,6 @@ class AscendScreen extends StatefulWidget {
   /// IMHIM score.
   final int consistency;
 
-  /// Today's mission set from the quota-aware DailyMissionService —
-  /// protocol anchor + rotating slots that only offer what the user's
-  /// weekly allowances can actually complete. Empty → legacy fixed five
-  /// (first frame / fallback).
-  final List<DailyMission> dailyMissions;
-
   /// Did the user complete their protocol check-in today?
   final bool looksDoneToday;
 
@@ -119,7 +113,6 @@ class AscendScreen extends StatefulWidget {
     this.dayStreak = 0,
     this.ascensionDay = 1,
     this.consistency = 0,
-    this.dailyMissions = const [],
     this.looksDoneToday = false,
     this.gameDoneToday = false,
     this.rizzDoneToday = false,
