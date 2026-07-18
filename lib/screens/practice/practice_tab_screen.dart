@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../services/local_store_service.dart';
+import '../../services/paywall_gate.dart';
 import '../../services/roster.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
@@ -52,7 +53,7 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
 
   bool _locked(GirlBrief g) => _day < g.unlockDay;
 
-  void _tap(GirlBrief g) {
+  Future<void> _tap(GirlBrief g) async {
     if (_locked(g)) {
       HapticFeedback.lightImpact();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -63,6 +64,13 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
       ));
       return;
     }
+    // Free to browse the roster — but talking to her is Pro. Paywall on tap.
+    if (!await PaywallGate.isPro()) {
+      if (!mounted) return;
+      await PaywallGate.open(context, source: 'practice');
+      return;
+    }
+    if (!mounted) return;
     _choose(g);
   }
 
@@ -139,7 +147,7 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                     girl: g,
                     stage: _stages[g.id] ?? 1,
                     locked: _locked(g),
-                    onTap: () => _tap(g),
+                    onTap: () { _tap(g); },
                   )
                       .animate()
                       .fadeIn(delay: (55 * i).ms, duration: 320.ms)

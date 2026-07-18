@@ -7,6 +7,7 @@ import '../../services/analytics_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/mission_catalog.dart';
 import '../../services/mission_engine.dart';
+import '../../services/paywall_gate.dart';
 import '../../services/roster.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
@@ -110,6 +111,13 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
   }
 
   Future<void> _openGirlChat(MissionSpec m) async {
+    // AI roleplay is Pro — paywall on the action.
+    if (!await PaywallGate.isPro()) {
+      if (!mounted) return;
+      await PaywallGate.open(context, source: 'mission_chat');
+      return;
+    }
+    if (!mounted) return;
     final g = girlById(m.girlId!);
     await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
       builder: (_) => GirlChatScreen(
@@ -140,7 +148,14 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     await _complete(m);
   }
 
-  void _openCoach(MissionSpec m) {
+  Future<void> _openCoach(MissionSpec m) async {
+    // Lucien's AI game-plan is Pro — paywall on the action.
+    if (!await PaywallGate.isPro()) {
+      if (!mounted) return;
+      await PaywallGate.open(context, source: 'mission_coach');
+      return;
+    }
+    if (!mounted) return;
     Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
       builder: (_) => TaskChatScreen(
         config: MissionChatConfig(
