@@ -199,7 +199,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        backgroundColor: AppColors.surface3,
+        backgroundColor: AppColors.toastBg,
         content: Text('Diagnostic report copied to clipboard.',
             style: TextStyle(color: AppColors.textPrimary)),
         duration: Duration(seconds: 2),

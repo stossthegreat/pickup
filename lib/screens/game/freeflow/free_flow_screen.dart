@@ -21,8 +21,8 @@ import '../../../services/paywall_gate.dart';
 import '../../../services/realtime_session.dart';
 import '../../../services/daily_nudge_service.dart';
 import '../../../services/review_prompt_service.dart';
+import '../../../services/roster.dart';
 import '../../../services/share_service.dart';
-import '../../../services/user_memory.dart';
 import '../../../services/villain/villain_api.dart';
 import '../../../theme/auralay_app_colors.dart';
 import '../../../theme/auralay_app_typography.dart';
@@ -106,7 +106,7 @@ const _vibes = <_Vibe>[
         'you opened your mouth. She is not hostile, she is filtered. She '
         'rewards composure with one extra word and punishes effort by going '
         'flatter. She never explains why.',
-    'sage',
+    'alloy', // Seraphina — even, composed, withholding. Cool timbre for ice.
     'Coffee shop. She\'s alone at a window table, laptop open, one '
         'earbud in. She clocked you walk in. Open the conversation.',
     MirrorlyAssets.iceQueen,
@@ -131,7 +131,7 @@ const _vibes = <_Vibe>[
         'in. She tests whether you can ride it without scrambling or trying '
         'to slow her down. Match her tempo and she warms; ask her to repeat '
         'and she leaves you behind.',
-    'shimmer',
+    'marin', // Nyx — young, fast, playful. Rides the chaotic energy.
     'House party, kitchen. She\'s mid-laugh with two friends, three '
         'drinks deep, buzzing. Open the conversation.',
     MirrorlyAssets.chaosGirl,
@@ -144,7 +144,7 @@ const _vibes = <_Vibe>[
         'out anything rehearsed or try-hard. She rewards a man who holds his '
         'frame and teases back, and punishes folding, explaining yourself, '
         'or seeking her approval.',
-    'ballad',
+    'sage', // Elise — dry, knowing edge. Sounds like she's testing you.
     'Bar. She\'s leaning on the counter with a friend, sizing up the '
         'room, unimpressed by all of it. Open the conversation.',
     MirrorlyAssets.intellectual,
@@ -157,7 +157,7 @@ const _vibes = <_Vibe>[
         'his frame, stays unbothered, and doesn\'t chase. If he folds or '
         'gets needy she freezes again. The shift from ice to warmth is the '
         'whole reward.',
-    'verse',
+    'marin', // Camila — cold open, slow-warming. Opposite delivery to Nyx.
     'Rooftop bar. She\'s by the railing, arms crossed, looking at the '
         'view like it bores her. Open the conversation.',
     MirrorlyAssets.socialite,
@@ -171,7 +171,7 @@ const _vibes = <_Vibe>[
         'lines, arrogance, or crude moves make her retreat and go '
         'polite-distant. She rewards a man who is warm back, present, '
         'and real without losing his edge.',
-    'coral',
+    'shimmer', // Mara — soft, sweet, breathy. The one you fall for.
     'Bookshop cafe, Sunday afternoon. She\'s at the counter deciding '
         'between two pastries and catches your eye with a smile. Open '
         'the conversation.',
@@ -216,7 +216,7 @@ const _vibes = <_Vibe>[
         'warms and matches your banter for genuine, unbothered, actually-'
         'funny moves and real opinions, and goes dry and bored for flexing, '
         'name-dropping, canned lines, or fake-deep energy.',
-    'ballad',
+    'sage', // Valentina — grounded, dry, knowing. Unbothered warmth.
     'Low-key house party, kitchen-and-couch energy. She\'s nursing one '
         'drink, half-watching the room. You sit down next to her. Open the '
         'conversation.',
@@ -232,7 +232,7 @@ const _vibes = <_Vibe>[
         'frame, does not chase, brings real substance, and treats her as an '
         'equal, not a prize. Compliments about her looks and pedestals bore '
         'her instantly.',
-    'verse',
+    'alloy', // Simone — poised, composed, high-status cool.
     'Upscale rooftop lounge, low gold light, a martini in front of her. '
         'She has turned away better-looking approaches tonight. You walk up. '
         'Open the conversation.',
@@ -589,6 +589,38 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
 
   // ─── Go live ────────────────────────────────────────────────────────
 
+  /// Build the per-girl relationship memory block for the live call. Maps
+  /// the vibe key to her roster id (the memory store key), then reads her
+  /// stage / interest / remembered notes. Returns '' when there's no real
+  /// history so she stays a fresh pickup — only once he's actually built
+  /// something (over text or a past call) does she pick up from there.
+  Future<String> _girlMemoryBlock(String vibeKey) async {
+    GirlBrief? girl;
+    for (final g in kRoster) {
+      if (g.vibeKey == vibeKey) { girl = g; break; }
+    }
+    if (girl == null) return '';
+    final id = girl.id;
+    final stage    = await LocalStoreService.girlStage(id);
+    final interest = await LocalStoreService.girlInterest(id);
+    final memory   = (await LocalStoreService.girlMemory(id)).trim();
+    final hasHistory = stage > 1 || interest > 20 || memory.isNotEmpty;
+    if (!hasHistory) return '';
+    final stageLabel = (stage >= 1 && stage < kRelationshipStages.length)
+        ? kRelationshipStages[stage]
+        : 'Talking';
+    final b = StringBuffer()
+      ..writeln('# WHAT YOU ALREADY KNOW')
+      ..writeln('This is NOT a first meeting — you and he already know each '
+          'other. Do not act like a stranger; react like someone with '
+          'history, warmer or cooler based on how it has gone.')
+      ..writeln('Where things stand: $stageLabel.')
+      ..writeln('How into him you are so far: $interest out of 100 — let that '
+          'colour how warm or guarded you sound.');
+    if (memory.isNotEmpty) b.writeln('You remember: $memory');
+    return b.toString();
+  }
+
   Future<void> _goLive(_Vibe vibe) async {
     // AI consent gate (App Store 5.1.2(i)) — no voice reaches OpenAI
     // without permission. Silent + instant for anyone who already
@@ -803,13 +835,18 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // Onboarding profile — she uses his name + pitches to his age band.
       final userName = await LocalStoreService.userName();
       final userAge  = await LocalStoreService.userAgeGroup();
-      final memoryBlock = await UserMemory.buildSystemPromptBlock(
-        filterTopic: 'rizz',
-      );
+      // Per-girl relationship memory — if he's been building something
+      // with THIS woman (over text or a past call), she picks up from
+      // where they left off instead of acting like a stranger. Maps the
+      // vibe to her roster id (the memory key). No history → empty block
+      // → she stays a fresh pickup, exactly as before. (Replaces the old
+      // rizz-topic UserMemory block, which made every persona "remember"
+      // Arena/Diabla conversations she was never part of.)
+      final memoryBlock = await _girlMemoryBlock(vibe.key);
       _log('info', 'WS',
-          'memory block built (${memoryBlock.length} chars)');
+          'girl memory block built (${memoryBlock.length} chars)');
       // ignore: avoid_print
-      print('[FREEFLOW] memory block built '
+      print('[FREEFLOW] girl memory block built '
             '(${memoryBlock.length} chars)');
       _eventSub = _session.events.listen(_onEvent);
       _log('info', 'WS', 'event sub bound — calling connect…');
@@ -1737,7 +1774,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
               fontSize: 13.5,
               fontWeight: FontWeight.w600,
               height: 1.35)),
-      backgroundColor: const Color(0xFF16161B),
+      backgroundColor: AppColors.toastBg,
       behavior: SnackBarBehavior.floating,
       duration: const Duration(seconds: 5),
     ));
@@ -2497,6 +2534,25 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
     return 'SHE LEFT';
   }
 
+  /// The Five, converted from the 0–100 in-app scale to the share card's
+  /// out-of-10 rows so a posted card carries the full breakdown, not just
+  /// the headline number.
+  static const _shareDimOrder = <(String, String)>[
+    ('confidence', 'CONFIDENCE'),
+    ('presence', 'PRESENCE'),
+    ('game', 'GAME'),
+    ('humor', 'HUMOUR'),
+    ('listening', 'LISTENING'),
+  ];
+
+  List<({String label, int score})> _freeflowShareStats(Map<String, int>? dims) {
+    if (dims == null) return const [];
+    return [
+      for (final (key, label) in _shareDimOrder)
+        (label: label, score: ((dims[key] ?? 0) / 10).round()),
+    ];
+  }
+
   Widget _buildScorecard(FreeFlowScore s) {
     final color = s.score >= 7
         ? AppColors.signalGreen
@@ -2658,6 +2714,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                   score:     s.score,
                   badge:     _freeflowBadge(s.score),
                   verdict:   s.verdict,
+                  stats:     _freeflowShareStats(s.dimensions),
                 ),
               ),
               const SizedBox(height: 10),

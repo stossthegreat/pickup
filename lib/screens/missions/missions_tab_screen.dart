@@ -15,13 +15,12 @@ import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/streak_badge.dart';
 import '../game/freeflow/free_flow_screen.dart';
 import '../roleplay/girl_chat_screen.dart';
-import 'mission_card_screen.dart';
 import 'task_chat_screen.dart';
 
 /// MISSIONS — the daily engine, live. 3 AI + 2 real, generated from the
 /// user's level so they escalate and hit the deep end fast. AI missions
 /// complete when you practise; real missions complete on a one-tap "I did
-/// it" and can flip into a film-ready Mission Card. Everything banks real
+/// it", with an optional Lucien game-plan first. Everything banks real
 /// XP and feeds The Five — real missions worth far more.
 class MissionsTabScreen extends StatefulWidget {
   final ValueChanged<int> onGoToTab; // 1 = Practice, 2 = Texts
@@ -89,7 +88,7 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: AppColors.surface3,
+      backgroundColor: AppColors.toastBg,
       behavior: SnackBarBehavior.floating,
       duration: const Duration(milliseconds: 1600),
     ));
@@ -174,14 +173,6 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     switch (action) {
       case 'coach':
         _openCoach(m);
-      case 'film':
-        final didIt = await Navigator.of(context, rootNavigator: true).push<bool>(
-          MaterialPageRoute(
-            builder: (_) => MissionCardScreen(
-                title: m.title, sub: m.sub, tier: m.tier, done: _done[m.id] == true),
-          ),
-        );
-        if (didIt == true) await _complete(m);
       case 'did':
         await _complete(m);
     }
@@ -490,7 +481,7 @@ class _MissionCard extends StatelessWidget {
   }
 }
 
-// ── Real-world mission sheet — coach · film · I did it ───────────────────
+// ── Real-world mission sheet — Lucien game-plan · I did it ───────────────
 class _RealSheet extends StatelessWidget {
   final MissionSpec mission;
   final bool done;
@@ -526,12 +517,12 @@ class _RealSheet extends StatelessWidget {
           Text(mission.sub,
               style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary, height: 1.4)),
           const SizedBox(height: 18),
-          if (isText)
-            _sheetBtn(context, 'GET THE LINE FROM LUCIEN',
-                Icons.auto_awesome_rounded, AppColors.accent, () => Navigator.pop(context, 'coach'))
-          else
-            _sheetBtn(context, 'FILM IT  ·  SHOW IT FIRST',
-                Icons.videocam_rounded, AppColors.accent, () => Navigator.pop(context, 'film')),
+          _sheetBtn(
+              context,
+              isText ? 'GET THE LINE FROM LUCIEN' : 'GET A GAME PLAN FROM LUCIEN',
+              Icons.auto_awesome_rounded,
+              AppColors.accent,
+              () => Navigator.pop(context, 'coach')),
           const SizedBox(height: 10),
           if (done)
             Center(

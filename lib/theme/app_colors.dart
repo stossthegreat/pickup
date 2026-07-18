@@ -43,4 +43,10 @@ abstract final class AppColors {
   // ── Utility ──────────────────────────────────────────────────────────────
   static const divider = Color(0xFF1F1F26);
   static const scrim   = Color(0xCC000000);
+
+  // ── Toast / snackbar — pure black with white text, one voice for every
+  // transient notice (XP earned, out of voice minutes, saved, etc.). A
+  // hairline white stroke lifts it off the near-black scaffold so it reads
+  // clearly instead of the old washed-out grey card.
+  static const toastBg = Color(0xFF000000);
 }

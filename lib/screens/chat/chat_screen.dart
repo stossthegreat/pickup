@@ -199,7 +199,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 fontSize: 13.5,
                 fontWeight: FontWeight.w600,
                 height: 1.35)),
-        backgroundColor: Color(0xFF16161B),
+        backgroundColor: AppColors.toastBg,
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 5),
       ));

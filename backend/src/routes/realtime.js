@@ -143,14 +143,17 @@ export default async function realtimeRoute(app) {
         creator: creator === true || creator === 'true',
       });
     } else if (mode === 'freeflow') {
-      // Free Flow women are STRANGERS — pickup scenarios with no prior
-      // history with the user. We deliberately drop `memoryBlock` here:
-      // it's UserMemory filtered to topic='rizz' (Arena scenes + Diabla
-      // lessons). Pasting that into Sofia / Lola / Chaos Girl made
-      // every persona "remember" past conversations she was never in.
+      // Free Flow women default to STRANGERS — pickup scenarios. But the
+      // client now sends a PER-GIRL relationship block (not the old
+      // rizz-topic UserMemory that made everyone "remember" Arena/Diabla):
+      // if he's actually built something with this woman over text or a
+      // past call, `memoryBlock` tells her to pick up from that stage
+      // instead of acting like a first meeting. Empty → she stays a fresh
+      // pickup, exactly as before.
       instructions = buildFreeFlowInstructions({
         vibeLabel,
         scenarioSetting,
+        memoryBlock,
         creator: creator === true || creator === 'true',
         userProfile,
       });

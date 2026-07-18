@@ -34,14 +34,13 @@ class MissionSpec {
 
   bool get isReal =>
       kind == MissionKind.realApproach || kind == MissionKind.realText;
-  bool get filmable => kind == MissionKind.realApproach;
 }
 
 int _aiXp(int tier) => 40 + tier * 10;   // 50..90
 int _realXp(int tier) => 120 + tier * 45; // 165..345  (~3-4x AI)
 
 // ── The real-world escalation ladder — front-loaded, gets brutal ────────
-// Grouped by tier. `realApproach` = go do it, reflect after (filmable).
+// Grouped by tier. `realApproach` = go do it, confirm after.
 // `realText` = coach helps craft the line first (opens TaskChatScreen).
 const _ladder = <MissionSpec>[
   // Tier 1 — break the freeze

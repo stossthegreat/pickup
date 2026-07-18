@@ -237,7 +237,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
         content: const Text("Couldn't open the App Store — try again."),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.surface2,
+        backgroundColor: AppColors.toastBg,
       ));
     }
   }
@@ -259,7 +259,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
       content: Text(msg),
       behavior: SnackBarBehavior.floating,
-      backgroundColor: AppColors.surface2,
+      backgroundColor: AppColors.toastBg,
     ));
   }
 
@@ -310,7 +310,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(ctx).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.surface2,
+        backgroundColor: AppColors.toastBg,
         content: Text('Coming soon',
           style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary)),
         duration: const Duration(seconds: 2),
@@ -324,7 +324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
       content: const Text('info@m2mb.co.uk — copied. Paste into your mail app.'),
       behavior: SnackBarBehavior.floating,
-      backgroundColor: AppColors.surface2,
+      backgroundColor: AppColors.toastBg,
     ));
   }
 
@@ -398,7 +398,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!ctx.mounted) return;
     ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: AppColors.surface2,
+      backgroundColor: AppColors.toastBg,
       content: Text(
         'AI permission revoked. We will ask again the next time '
         'you scan.',
@@ -438,7 +438,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (!ctx.mounted) return;
               ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
                 behavior: SnackBarBehavior.floating,
-                backgroundColor: AppColors.surface2,
+                backgroundColor: AppColors.toastBg,
                 content: Text('All data deleted.',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textPrimary)),
@@ -779,7 +779,7 @@ class _CreatorTileState extends State<_CreatorTile> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.surface2,
+        backgroundColor: AppColors.toastBg,
         content: Text('Lucien · Unchained · Active',
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.red, fontWeight: FontWeight.w700)),
@@ -787,7 +787,7 @@ class _CreatorTileState extends State<_CreatorTile> {
     } else if (result == false && controller.text.trim().isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.surface2,
+        backgroundColor: AppColors.toastBg,
         content: Text('Wrong password.',
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.textPrimary)),
@@ -802,7 +802,7 @@ class _CreatorTileState extends State<_CreatorTile> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: AppColors.surface2,
+      backgroundColor: AppColors.toastBg,
       content: Text('Re-locked to store-safe persona.',
         style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary)),
     ));
