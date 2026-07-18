@@ -337,6 +337,16 @@ class AnalyticsService {
     required String title,
   }) =>
       _log('mission_opened', {'kind': kind, 'title': title});
+  /// A mission was completed (banked XP). Real missions carry big XP.
+  static Future<void> missionCompleted({
+    required String kind,
+    required String title,
+    required int xp,
+  }) =>
+      _log('mission_completed', {'kind': kind, 'title': title, 'xp': xp});
+  /// The shareable Mission Card was shared (creator loop).
+  static Future<void> missionCardShared({required String title}) =>
+      _log('mission_card_shared', {'title': title});
 
   // ── Tab navigation ─────────────────────────────────────────────────
 

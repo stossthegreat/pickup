@@ -48,7 +48,7 @@ class PurchaseConfig {
   ///                             iOS rescue product is not yet
   ///                             approved on App Store Connect)
   static const productIds = (
-    weekly:  'mirrorly_pro_weekly',
+    weekly:  'imhim_pro_weekly',   // ImHim weekly sub (primary)
     yearly:  'mirrorly_pro_yearly',
     rescue:  'mirrorly_pro_rescue',
   );

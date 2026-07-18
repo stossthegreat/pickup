@@ -48,6 +48,8 @@ export default async function dateRoute(app) {
     const text = String(body.text || '').trim();
     const history = Array.isArray(body.history) ? body.history.slice(-12) : [];
     const userProfile = normaliseProfile(body.userProfile);
+    const memory = typeof body.memory === 'string' ? body.memory.slice(0, 400) : '';
+    const stage = Number(body.stage) || 1;
 
     if (!DATE_WOMEN[characterId]) {
       return reply.code(400).send({
@@ -57,7 +59,7 @@ export default async function dateRoute(app) {
     }
     if (!text) return reply.code(400).send({ error: 'text required' });
 
-    const system = buildDateTurnPrompt({ woman: characterId, focus, creator, userProfile });
+    const system = buildDateTurnPrompt({ woman: characterId, focus, creator, userProfile, memory, stage });
 
     // Rebuild the conversation for the model. history items: {who:'her'|'you', text}
     const msgs = [{ role: 'system', content: system }];
@@ -92,6 +94,7 @@ export default async function dateRoute(app) {
         her: String(parsed.her || '…').slice(0, 400),
         delta,
         strong: parsed.strong === true || delta >= 6,
+        memory: typeof parsed.memory === 'string' ? parsed.memory.slice(0, 240) : '',
       };
     } catch (err) {
       req.log.error({ err }, 'date/turn failed');

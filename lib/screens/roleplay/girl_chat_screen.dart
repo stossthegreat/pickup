@@ -12,6 +12,7 @@ import '../../config/auralay_dev_flags.dart';
 import '../../services/analytics_service.dart';
 import '../../services/creator_mode_store.dart';
 import '../../services/local_store_service.dart';
+import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/ai_consent_dialog.dart';
 import '../game/freeflow/free_flow_screen.dart';
@@ -98,8 +99,14 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   String? _ageGroup;
 
   /// Her interest, 0–100. Starts guarded, moves with each turn's delta.
-  /// Set per-character in initState — cold girls start lower.
+  /// Set per-character in initState — cold girls start lower. Persisted
+  /// per girl so warmth carries between sessions (the memory layer).
   double _heat = 20;
+
+  /// Relationship arc: what she remembers about him + which stage they're
+  /// at (1 Matched → 5 Together). Loaded on open, saved as it moves.
+  String _memory = '';
+  int _stage = 1;
 
   /// How hard SHE is to win over. >1 = every degree of warmth costs more;
   /// <1 = she warms faster. Keyed to the character so each girl feels
@@ -171,6 +178,8 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     });
     // ignore: discarded_futures
     _loadProfile();
+    // ignore: discarded_futures
+    _loadMemory();
   }
 
   Future<void> _loadProfile() async {
@@ -180,6 +189,44 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     setState(() {
       _name = name;
       _ageGroup = age;
+    });
+  }
+
+  /// Persist the arc after a turn — her warmth, stage and remembered note.
+  Future<void> _persistArc() async {
+    final id = widget.config.characterId;
+    await LocalStoreService.setGirlInterest(id, _heat.round());
+    await LocalStoreService.setGirlStage(id, _stage);
+    if (_memory.isNotEmpty) await LocalStoreService.setGirlMemory(id, _memory);
+  }
+
+  void _showStageUp() {
+    if (!mounted) return;
+    final label = (_stage >= 1 && _stage < kRelationshipStages.length)
+        ? kRelationshipStages[_stage]
+        : '';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('${widget.config.name} — $label 💘'),
+      backgroundColor: AppColors.red,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(milliseconds: 2400),
+    ));
+  }
+
+  /// Restore the arc: her remembered warmth, stage and note, so she picks
+  /// up where you left off instead of resetting to a stranger.
+  Future<void> _loadMemory() async {
+    final id = widget.config.characterId;
+    final interest = await LocalStoreService.girlInterest(id);
+    final stage = await LocalStoreService.girlStage(id);
+    final memory = await LocalStoreService.girlMemory(id);
+    if (!mounted) return;
+    setState(() {
+      _stage = stage;
+      _memory = memory;
+      // In practice mode, carry her real warmth in. Post mode always
+      // opens cold (it's a fresh comment on a new post).
+      if (widget.config.post == null && interest > 0) _heat = interest.toDouble();
     });
   }
 
@@ -260,8 +307,22 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     setState(() {
       _sending = false;
       _heat = _applyDelta(_heat, result.delta);
+      if (result.memory.isNotEmpty) _memory = result.memory;
       if (bubbles.isNotEmpty) _msgs.add(_Msg('her', bubbles.first));
     });
+    // Win a stage when she's fully warmed to him (Matched → … → Together).
+    if (_heat >= 92 && _stage < 5) {
+      setState(() => _stage += 1);
+      HapticFeedback.mediumImpact();
+      _showStageUp();
+    }
+    // ignore: discarded_futures
+    _persistArc();
+    // A genuinely sharp line nudges The Five — practice moves your score.
+    if (result.strong) {
+      // ignore: discarded_futures
+      LocalStoreService.bumpDimensions(const {'game': 1, 'humor': 1, 'listening': 1});
+    }
     _scrollToBottom();
     if (result.strong) HapticFeedback.lightImpact();
     for (var i = 1; i < bubbles.length; i++) {
@@ -296,6 +357,8 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
               'history': history,
               'text': text,
               'turnIndex': _turnIndex,
+              'stage': _stage,
+              if (_memory.isNotEmpty) 'memory': _memory,
               if (_profilePayload != null) 'userProfile': _profilePayload,
             }),
           )
@@ -305,8 +368,9 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
         final her = (b['her'] as String?)?.trim() ?? '';
         final delta = (b['delta'] as num?)?.toDouble() ?? 0.0;
         final strong = b['strong'] == true;
+        final memory = (b['memory'] as String?)?.trim() ?? '';
         if (her.isNotEmpty && her != '…') {
-          return _TurnResult(her: her, delta: delta, strong: strong);
+          return _TurnResult(her: her, delta: delta, strong: strong, memory: memory);
         }
         // 200 but she gave nothing — the backend degraded its own reply,
         // almost always because OPENAI_API_KEY isn't set on the server.
@@ -451,11 +515,13 @@ class _TurnResult {
   final String her;
   final double delta;
   final bool strong;
+  final String memory; // her updated note about him (the arc/memory layer)
   final String? error; // set when the turn failed — shown on-device
   const _TurnResult({
     required this.her,
     required this.delta,
     required this.strong,
+    this.memory = '',
     this.error,
   });
 
@@ -463,6 +529,7 @@ class _TurnResult {
       : her = '',
         delta = 0,
         strong = false,
+        memory = '',
         error = message;
 }
 

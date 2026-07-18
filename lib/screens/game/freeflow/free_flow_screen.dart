@@ -1666,10 +1666,10 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // a fast back-tap was beating the SharedPreferences write and
       // the Ascend GAME pillar stayed at zero.
       await _persistGame(score.score);
-      // Persist the five dimension scores so the Progress tab's YOUR
-      // SCORES panel reflects the latest performance.
+      // Blend the five dimension scores into the running total so The Five
+      // CLIMBS over the 60 days instead of snapping to the last session.
       if (score.dimensions != null) {
-        await LocalStoreService.saveDimensionScores(score.dimensions!);
+        await LocalStoreService.blendDimensionScores(score.dimensions!);
       }
       if (_disposed || !mounted) return;
       setState(() {
