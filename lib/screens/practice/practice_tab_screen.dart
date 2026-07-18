@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../services/local_store_service.dart';
 import '../../services/roster.dart';
+import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/common/mirrorly_components.dart';
@@ -23,20 +24,46 @@ class PracticeTabScreen extends StatefulWidget {
 
 class _PracticeTabScreenState extends State<PracticeTabScreen> {
   Map<String, int> _stages = const {};
+  int _day = 1; // earned ascension day — gates who's unlocked
 
   @override
   void initState() {
     super.initState();
     // ignore: discarded_futures
-    _loadStages();
+    _load();
   }
 
-  Future<void> _loadStages() async {
+  Future<void> _load() async {
     final s = <String, int>{};
     for (final g in kRoster) {
       s[g.id] = await LocalStoreService.girlStage(g.id);
     }
-    if (mounted) setState(() => _stages = s);
+    int day = 1;
+    try {
+      day = (await StreakService.progress()).ascensionDay;
+    } catch (_) {/* default day 1 → only the starters unlocked */}
+    if (mounted) {
+      setState(() {
+        _stages = s;
+        _day = day;
+      });
+    }
+  }
+
+  bool _locked(GirlBrief g) => _day < g.unlockDay;
+
+  void _tap(GirlBrief g) {
+    if (_locked(g)) {
+      HapticFeedback.lightImpact();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${g.name} unlocks on Day ${g.unlockDay}. '
+            'Keep climbing — you\'re on Day $_day.'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(milliseconds: 2200),
+      ));
+      return;
+    }
+    _choose(g);
   }
 
   GirlChatConfig _configFor(GirlBrief g) => GirlChatConfig(
@@ -53,7 +80,7 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
     await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(builder: (_) => GirlChatScreen(config: _configFor(g))),
     );
-    _loadStages(); // her stage may have moved
+    _load(); // her stage may have moved
   }
 
   void _openVoice(GirlBrief g) {
@@ -92,8 +119,8 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
             child: MirrorlyMasthead(
               eyebrow: 'PRACTICE · TEXT + VOICE',
               title: 'Who\'s it tonight?',
-              subtitle: 'Ten women, each their own game. Text her or take '
-                  'it live — she remembers you either way.',
+              subtitle: 'Text her or take it live — she remembers you either '
+                  'way. Unlock more women as you climb the 60 days.',
             ),
           ),
           SliverPadding(
@@ -111,7 +138,8 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                   return _GirlCard(
                     girl: g,
                     stage: _stages[g.id] ?? 1,
-                    onTap: () => _choose(g),
+                    locked: _locked(g),
+                    onTap: () => _tap(g),
                   )
                       .animate()
                       .fadeIn(delay: (55 * i).ms, duration: 320.ms)
@@ -130,8 +158,14 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
 class _GirlCard extends StatelessWidget {
   final GirlBrief girl;
   final int stage;
+  final bool locked;
   final VoidCallback onTap;
-  const _GirlCard({required this.girl, required this.stage, required this.onTap});
+  const _GirlCard({
+    required this.girl,
+    required this.stage,
+    required this.locked,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -148,22 +182,37 @@ class _GirlCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.asset(girl.asset, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                      color: AppColors.surface2,
-                      child: Icon(Icons.person_outline_rounded, color: accent, size: 40),
-                    )),
-            const DecoratedBox(
+            // Locked portraits are darkened + desaturated so she reads as a
+            // silhouette you have to earn — the chase.
+            ColorFiltered(
+              colorFilter: locked
+                  ? const ColorFilter.matrix(<double>[
+                      0.25, 0.25, 0.25, 0, 0,
+                      0.25, 0.25, 0.25, 0, 0,
+                      0.25, 0.25, 0.25, 0, 0,
+                      0, 0, 0, 1, 0,
+                    ])
+                  : const ColorFilter.mode(Colors.transparent, BlendMode.dst),
+              child: Image.asset(girl.asset, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                        color: AppColors.surface2,
+                        child: Icon(Icons.person_outline_rounded, color: accent, size: 40),
+                      )),
+            ),
+            DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.black38, Colors.transparent, Colors.black],
-                  stops: [0.0, 0.4, 1.0],
+                  colors: locked
+                      ? [Colors.black54, Colors.black45, Colors.black]
+                      : [Colors.black38, Colors.transparent, Colors.black],
+                  stops: const [0.0, 0.4, 1.0],
                 ),
               ),
             ),
-            // Relationship stage — top-left, the progress you're making.
+            // Top-left badge — relationship stage when unlocked, the unlock
+            // day when locked.
             Positioned(
               top: Sp.sm + 2,
               left: Sp.sm + 2,
@@ -172,17 +221,28 @@ class _GirlCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(99),
-                  border: Border.all(color: stageColor.withOpacity(0.5), width: 0.8),
+                  border: Border.all(
+                      color: (locked ? AppColors.red : stageColor).withOpacity(0.5),
+                      width: 0.8),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.favorite_rounded, size: 9, color: stageColor),
+                  Icon(locked ? Icons.lock_rounded : Icons.favorite_rounded,
+                      size: 9, color: locked ? AppColors.red : stageColor),
                   const SizedBox(width: 4),
-                  Text(stageLabel.toUpperCase(),
-                      style: AppTypography.label
-                          .copyWith(color: stageColor, fontSize: 8, letterSpacing: 1.2)),
+                  Text(locked ? 'DAY ${girl.unlockDay}' : stageLabel.toUpperCase(),
+                      style: AppTypography.label.copyWith(
+                          color: locked ? AppColors.red : stageColor,
+                          fontSize: 8,
+                          letterSpacing: 1.2)),
                 ]),
               ),
             ),
+            // Centered lock glyph for locked girls.
+            if (locked)
+              Center(
+                child: Icon(Icons.lock_rounded,
+                    size: 34, color: Colors.white.withOpacity(0.85)),
+              ),
             // Name + character chip + hook — bottom.
             Positioned(
               left: Sp.md,
@@ -195,27 +255,33 @@ class _GirlCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
-                      color: accent.withOpacity(0.18),
+                      color: accent.withOpacity(locked ? 0.10 : 0.18),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: accent.withOpacity(0.55), width: 0.8),
+                      border: Border.all(
+                          color: accent.withOpacity(locked ? 0.30 : 0.55), width: 0.8),
                     ),
                     child: Text(girl.type,
-                        style: AppTypography.label
-                            .copyWith(color: accent, fontSize: 8, letterSpacing: 1.4)),
+                        style: AppTypography.label.copyWith(
+                            color: accent.withOpacity(locked ? 0.7 : 1),
+                            fontSize: 8,
+                            letterSpacing: 1.4)),
                   ),
                   const SizedBox(height: 8),
                   Text(girl.name,
                       style: AppTypography.h3.copyWith(
-                          color: Colors.white,
+                          color: locked ? Colors.white70 : Colors.white,
                           fontSize: 21,
                           height: 1.0,
                           fontWeight: FontWeight.w800)),
                   const SizedBox(height: 3),
-                  Text(girl.archetype,
+                  Text(locked ? 'Unlocks on Day ${girl.unlockDay}' : girl.archetype,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.bodySmall.copyWith(
-                          color: Colors.white70, height: 1.3, fontSize: 11.5)),
+                          color: locked ? AppColors.red : Colors.white70,
+                          height: 1.3,
+                          fontSize: 11.5,
+                          fontWeight: locked ? FontWeight.w700 : FontWeight.w400)),
                 ],
               ),
             ),

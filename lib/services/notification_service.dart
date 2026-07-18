@@ -62,7 +62,12 @@ class NotificationService {
       tz_data.initializeTimeZones();
 
       const init = InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        // White crown silhouette (res/drawable-*/ic_notification.png). Android
+        // tints the status-bar small icon to monochrome, so the full-colour
+        // launcher icon rendered as a flat white square — this is the real
+        // ImHim mark. (iOS notifications always use the app icon, which is
+        // already the red crown.)
+        android: AndroidInitializationSettings('@drawable/ic_notification'),
         iOS: DarwinInitializationSettings(
           requestAlertPermission: false,
           requestBadgePermission: false,
