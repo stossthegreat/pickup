@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/analytics_service.dart';
+import '../../services/local_store_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 
@@ -103,6 +104,12 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
                       onPick: (opt) {
                         HapticFeedback.selectionClick();
                         setState(() => _answers[i] = opt);
+                        // The "Your Level" answer sets where missions start.
+                        final b = _beats[i];
+                        if (b is _QuestionBeat && b.kicker.contains('YOUR LEVEL')) {
+                          // ignore: discarded_futures
+                          LocalStoreService.setUserLevel(opt);
+                        }
                       },
                     ),
                   ),

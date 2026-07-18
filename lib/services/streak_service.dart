@@ -48,15 +48,16 @@ class StreakService {
   /// Total length of the ascension ladder, in earned days.
   static const int ascensionTotalDays = 60;
 
-  /// Mission flags stamped with today's YMD by each mission screen.
-  /// Any ONE of these landing today keeps the flame alive.
+  /// Activity flags stamped with today's YMD. Any ONE landing today keeps
+  /// the flame alive — the forgiving safety net: do ANYTHING and your
+  /// streak survives (only your SCORE cares whether it was a real rep).
+  /// Trimmed to the new app's surfaces (the old looks/scan/render signals
+  /// are gone).
   static const _doneFlags = <String>[
-    'looks_done_ymd',
-    'game_done_ymd',
-    'rizz_done_ymd',
-    'pickup_line_done_ymd',
-    'render_done_ymd',
-    'rizz_chat_done_ymd',
+    'imhim.mission.any.ymd', // any daily mission completed today
+    'game_done_ymd',         // a voice roleplay
+    'rizz_chat_done_ymd',    // the texts coach / a real-text mission
+    'rizz_done_ymd',         // a rizz screenshot
   ];
 
   static int _ymd(DateTime d) => d.year * 10000 + d.month * 100 + d.day;

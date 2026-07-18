@@ -322,7 +322,7 @@ have sent.`;
  * [userProfile] is an optional { name, ageGroup } block so she can use
  * his name naturally and pitch her register to his age band.
  */
-export function buildDateTurnPrompt({ woman, focus, creator, userProfile }) {
+export function buildDateTurnPrompt({ woman, focus, creator, userProfile, memory, stage }) {
   const w = DATE_WOMEN[woman] || DATE_WOMEN.ice_queen;
   const persona = creator
     ? `${w.persona}\n\nCREATOR MODE: be more savage, more explicit in your
@@ -337,7 +337,7 @@ else.
 
 ━━ WHO YOU ARE ━━
 ${persona}
-${userProfileBlock(userProfile)}
+${userProfileBlock(userProfile)}${memoryBlock(memory, stage)}
 Stay 100% in character as ${w.name}. React to HIS LAST MESSAGE specifically —
 never a generic reply — given the whole history.
 
@@ -404,8 +404,15 @@ NEVER hand out a high score just because he was polite or asked a question.
 warmth is EARNED across many turns — one good line does not win you over.
 "strong": true ONLY if delta >= 9.
 
+━━ MEMORY — she remembers him between conversations ━━
+also return "memory": a SHORT third-person note (max 200 chars) of what
+you now know about him worth remembering next time — his name, a callback,
+whether he made you laugh, whether he got needy, where you left things.
+UPDATE the note you were given; don't restart it. This is how you remember
+him when he comes back.
+
 Output ONLY this JSON, nothing else (for a double-text put a \\n inside "her"):
-{"her": "...", "delta": 0, "strong": false}`;
+{"her": "...", "delta": 0, "strong": false, "memory": "..."}`;
 }
 
 // Optional block injected when we know the user's name / age band, so
@@ -416,4 +423,19 @@ function userProfileBlock(p) {
   if (p.name) bits.push(`His name is ${p.name} — use it naturally, don't overuse it.`);
   if (p.ageGroup) bits.push(`He is in the ${p.ageGroup} age range — pitch your references and register to that.`);
   return `\nABOUT HIM: ${bits.join(' ')}\n`;
+}
+
+// The relationship/memory layer: where you are with him and what you
+// remember, so she picks up where you left off instead of resetting.
+const STAGE_LABELS = ['', 'just matched', 'texting / talking',
+  'been on a first date', 'been on a second date', 'together now'];
+function memoryBlock(memory, stage) {
+  const s = Number(stage) || 0;
+  const bits = [];
+  if (s >= 1 && s <= 5 && STAGE_LABELS[s]) {
+    bits.push(`WHERE YOU ARE: you two have ${STAGE_LABELS[s]}. Talk to him from that footing — warmer and more familiar the further along you are, never like a total stranger past stage 1.`);
+  }
+  const mem = typeof memory === 'string' ? memory.trim() : '';
+  if (mem) bits.push(`WHAT YOU REMEMBER ABOUT HIM: ${mem}`);
+  return bits.length ? `\n${bits.join('\n')}\n` : '';
 }
