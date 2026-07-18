@@ -57,15 +57,14 @@ enum _Tier { weekly, annual, rescue }
 
 // Per-panel header copy — (headline, subhead). 1:1 with the mock.
 const List<(String, String)> _copy = [
-  ("Meet the man you're capable of becoming.", 'Same genetics. Better decisions.'),
-  ('Fix what can actually be fixed.', 'Your highest-impact improvements. Ranked.'),
+  ('Become the man who never misses the moment.', 'Calm under pressure. Confident by default.'),
   ('Looks get attention. Game keeps it.', 'Train until confidence is automatic.'),
   ('Never wonder what to say again.', 'Coach. Practice. Improve.'),
   ('60 days. One decision.', 'Become the man you met on day one.'),
 ];
 
 // Classified progress-tracker section labels, one per panel.
-const List<String> _sections = ['LOOKS', 'GAME', 'RIZZ', 'ASCENSION', 'HIM'];
+const List<String> _sections = ['PRACTICE', 'GAME', 'RIZZ', 'HIM'];
 
 // Neon green used for the projected score + the final HIM pulse. The
 // mock uses a brighter green than the app's signalGreen, so it's local.
@@ -77,7 +76,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
   bool _purchasing = false;
 
   final PageController _pager = PageController();
-  static const int _panelCount = 5;
+  static const int _panelCount = 4;
   int _page = 0;
   final Set<int> _visited = {0};
 
@@ -200,7 +199,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
     setState(() {
       _page = i;
       _visited.add(i);
-      if (i == 4) _ladderRun++;
+      if (i == 3) _ladderRun++; // ladder panel is now the 4th (last)
     });
     // Only buzz on manual swipes — the auto-tour should stay silent.
     if (_interacted) HapticFeedback.selectionClick();
@@ -459,11 +458,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   onPageChanged: _onPageChanged,
                   physics: const BouncingScrollPhysics(),
                   children: [
-                    const _PhotoPanel(),
-                    const _ProtoPanel(),
+                    const _GirlsPanel(),
                     const _OrbPanel(),
                     const _RizzPanel(),
-                    _LadderPanel(runToken: _page == 4 ? _ladderRun : -1),
+                    _LadderPanel(runToken: _page == 3 ? _ladderRun : -1),
                   ],
                 ),
               ),
@@ -632,9 +630,40 @@ class _Header extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  PANEL 1 — PHOTO + SCORE
+//  PANEL 1 — THE AI GIRLS (roleplay showcase)
 // ══════════════════════════════════════════════════════════════════════
 
+class _GirlsPanel extends StatelessWidget {
+  const _GirlsPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      child: Center(
+        child: AspectRatio(
+          // The 2×3 roleplay-cast grid is portrait — its own ratio so the
+          // whole grid shows, framed like the other panels' hero image.
+          aspectRatio: 1125 / 1496,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Image.asset(
+              'assets/marketing/girls_grid.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const ColoredBox(color: _tile),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  PANEL (legacy) — PHOTO + SCORE  ·  no longer in the carousel
+// ══════════════════════════════════════════════════════════════════════
+
+// ignore: unused_element
 class _PhotoPanel extends StatelessWidget {
   const _PhotoPanel();
 
@@ -764,9 +793,10 @@ class _ScoreLabel extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  PANEL 2 — PROTOCOL LIST
+//  PANEL (legacy) — PROTOCOL LIST  ·  no longer in the carousel
 // ══════════════════════════════════════════════════════════════════════
 
+// ignore: unused_element
 class _ProtoPanel extends StatelessWidget {
   const _ProtoPanel();
 

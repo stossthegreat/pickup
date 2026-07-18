@@ -6,13 +6,13 @@
 
     <!-- Digital Asset Links statement embedded inside the AAB.
          Declares the registered upload-key SHA-256 as the cert allowed
-         to act on behalf of com.imhim.app. -->
+         to act on behalf of com.imhim.imhim. -->
     <string name="asset_statements" translatable="false">
         [{
           \"relation\": [\"delegate_permission/common.handle_all_urls\"],
           \"target\": {
             \"namespace\": \"android_app\",
-            \"package_name\": \"com.imhim.app\",
+            \"package_name\": \"com.imhim.imhim\",
             \"sha256_cert_fingerprints\": [
               \"76:E1:49:7A:35:36:DD:9A:02:8C:DB:46:5F:F8:D2:38:18:C0:FC:40:A2:55:53:C5:C7:AB:CF:2B:A7:5C:BD:ED\"
             ]
