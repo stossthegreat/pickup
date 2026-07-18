@@ -48,4 +48,9 @@ abstract final class AppColors {
   // ── UI chrome ─────────────────────────────────────────────────────────────
   static const divider = Color(0xFF14141B);
   static const scrim   = Color(0xCC000000);
+
+  // Toast / snackbar background — pure black with white text, one voice for
+  // every transient notice. Mirrors app_colors.dart so both palettes resolve
+  // AppColors.toastBg (snackbars live in files on either theme).
+  static const toastBg = Color(0xFF000000);
 }
