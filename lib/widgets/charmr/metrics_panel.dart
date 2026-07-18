@@ -9,8 +9,10 @@ import '../../theme/app_typography.dart';
 /// back to [values] as a placeholder until the user has been scored.
 class MetricsPanel extends StatefulWidget {
   /// 0..100 each, in order: Confidence, Presence, Humor, Listening, Game.
+  /// Starts at ZERO for a fresh user — earned up through missions + scored
+  /// roleplay, never a fake placeholder.
   final List<double> values;
-  const MetricsPanel({super.key, this.values = const [62, 48, 71, 55, 60]});
+  const MetricsPanel({super.key, this.values = const [0, 0, 0, 0, 0]});
 
   @override
   State<MetricsPanel> createState() => _MetricsPanelState();

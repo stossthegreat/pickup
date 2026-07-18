@@ -137,11 +137,22 @@ class _AscendScreenState extends State<AscendScreen> {
   /// build so the score hero can render the arrow synchronously.
   int _weeklyDelta = 0;
   bool _deltaLoaded = false;
+  int _xp = 0;
 
   @override
   void initState() {
     super.initState();
     _loadDeltaAndSnapshot();
+  }
+
+  String _fmtXp(int xp) {
+    final s = xp.toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+      b.write(s[i]);
+    }
+    return '$b XP';
   }
 
   /// Read whatever prior snapshot the prefs have, compute the
@@ -156,10 +167,12 @@ class _AscendScreenState extends State<AscendScreen> {
     );
     final delta = await AscensionService.weeklyDeltaFor(score);
     await AscensionService.snapshotTodayScore(score);
+    final xp = await LocalStoreService.xpTotal();
     if (!mounted) return;
     setState(() {
       _weeklyDelta = delta;
       _deltaLoaded = true;
+      _xp = xp;
     });
   }
 
@@ -211,7 +224,7 @@ class _AscendScreenState extends State<AscendScreen> {
                   // XP counter, matching the Missions tab. Wordmark lives
                   // only on Missions now; the old progress-chart icon is
                   // gone (this IS the progress tab).
-                  const XpBadge(label: '2,140 XP'),
+                  XpBadge(label: _fmtXp(_xp)),
                   const Spacer(),
                   if (widget.dayStreak > 0) ...[
                     StreakBadge(days: widget.dayStreak),

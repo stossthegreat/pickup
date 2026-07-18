@@ -1,28 +1,191 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../services/analytics_service.dart';
+import '../../services/local_store_service.dart';
+import '../../services/mission_catalog.dart';
+import '../../services/mission_engine.dart';
+import '../../services/roster.dart';
+import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
-import '../../services/analytics_service.dart';
-import '../../services/streak_service.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/streak_badge.dart';
 import '../game/freeflow/free_flow_screen.dart';
 import '../roleplay/girl_chat_screen.dart';
+import 'mission_card_screen.dart';
 import 'task_chat_screen.dart';
 
-/// MISSIONS — the front door. Beautiful, clean cards. Four kinds:
-///   • Voice   — "Talk to her" → opens her realtime VOICE orb.
-///   • AI text — "Comment on her post" → opens the girl roleplay chat
-///               (rizz the AI girl on her post; 📞 to go live).
-///   • Texts   — real-world messaging (comment on a real girl's story,
-///               DM your crush) → opens the coach with the scenario as
-///               the opening message, to use BEFORE the real task.
-///   • Approach — real-world in-person → routes to the Practice tab.
-class MissionsTabScreen extends StatelessWidget {
+/// MISSIONS — the daily engine, live. 3 AI + 2 real, generated from the
+/// user's level so they escalate and hit the deep end fast. AI missions
+/// complete when you practise; real missions complete on a one-tap "I did
+/// it" and can flip into a film-ready Mission Card. Everything banks real
+/// XP and feeds The Five — real missions worth far more.
+class MissionsTabScreen extends StatefulWidget {
   final ValueChanged<int> onGoToTab; // 1 = Practice, 2 = Texts
   const MissionsTabScreen({super.key, required this.onGoToTab});
+
+  @override
+  State<MissionsTabScreen> createState() => _MissionsTabScreenState();
+}
+
+class _MissionsTabScreenState extends State<MissionsTabScreen> {
+  List<MissionSpec> _missions = const [];
+  Map<String, bool> _done = const {};
+  int _xp = 0;
+  int _streak = 0;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // ignore: discarded_futures
+    _load();
+  }
+
+  Future<void> _load() async {
+    final missions = await MissionEngine.loadToday();
+    final done = <String, bool>{};
+    for (final m in missions) {
+      done[m.id] = await LocalStoreService.isMissionDoneToday(m.id);
+    }
+    final xp = await LocalStoreService.xpTotal();
+    final streak = await StreakService.current();
+    if (!mounted) return;
+    setState(() {
+      _missions = missions;
+      _done = done;
+      _xp = xp;
+      _streak = streak;
+      _loading = false;
+    });
+  }
+
+  int get _doneCount => _missions.where((m) => _done[m.id] == true).length;
+
+  Map<String, int> _dimBump(MissionSpec m) => switch (m.kind) {
+        MissionKind.realApproach => const {'confidence': 4, 'presence': 3, 'game': 2},
+        MissionKind.realText => const {'confidence': 2, 'game': 3, 'listening': 2},
+        MissionKind.aiVoice => const {'presence': 2, 'game': 2, 'humor': 1},
+        MissionKind.aiText => const {'game': 2, 'humor': 2, 'listening': 1},
+        MissionKind.aiPost => const {'game': 2, 'humor': 1},
+      };
+
+  Future<void> _complete(MissionSpec m) async {
+    if (_done[m.id] == true) return;
+    await LocalStoreService.markMissionDone(m.id);
+    await LocalStoreService.addXp(m.xp);
+    await LocalStoreService.bumpDimensions(_dimBump(m));
+    if (m.isReal) await LocalStoreService.markRealMissionDoneToday();
+    // ignore: discarded_futures
+    AnalyticsService.missionCompleted(kind: m.kind.name, title: m.title, xp: m.xp);
+    HapticFeedback.mediumImpact();
+    await _load();
+    if (mounted) _toast('+${m.xp} XP  ·  ${m.title}');
+  }
+
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: AppColors.surface3,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(milliseconds: 1600),
+    ));
+  }
+
+  void _tap(MissionSpec m) {
+    // ignore: discarded_futures
+    AnalyticsService.missionOpened(kind: m.kind.name, title: m.title);
+    switch (m.kind) {
+      case MissionKind.aiVoice:
+        _openVoice(m);
+      case MissionKind.aiPost:
+      case MissionKind.aiText:
+        _openGirlChat(m);
+      case MissionKind.realApproach:
+      case MissionKind.realText:
+        _showRealSheet(m);
+    }
+  }
+
+  Future<void> _openGirlChat(MissionSpec m) async {
+    final g = girlById(m.girlId!);
+    await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
+      builder: (_) => GirlChatScreen(
+        config: GirlChatConfig(
+          characterId: g.id,
+          vibeKey: g.vibeKey,
+          name: g.name,
+          archetype: g.archetype,
+          portraitAsset: g.asset,
+          accent: g.accent,
+          opener: g.opener,
+          post: m.kind == MissionKind.aiPost
+              ? GirlPost(
+                  context: m.postContext ?? 'She just posted.',
+                  caption: m.postCaption ?? 'out tonight ✨')
+              : null,
+        ),
+      ),
+    ));
+    await _complete(m);
+  }
+
+  Future<void> _openVoice(MissionSpec m) async {
+    final g = girlById(m.girlId!);
+    await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
+      builder: (_) => FreeFlowScreen(initialVibeKey: g.vibeKey),
+    ));
+    await _complete(m);
+  }
+
+  void _openCoach(MissionSpec m) {
+    Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
+      builder: (_) => TaskChatScreen(
+        config: MissionChatConfig(
+          taskTitle: m.title,
+          tier: 'REAL · TEXTS',
+          xp: '${m.xp}',
+          girlAsset: 'assets/characters/women/arena.png',
+          accent: AppColors.red,
+          situation: m.sub,
+          opening:
+              'Real-world mission: ${m.title}.\n\nTell me the situation and '
+              'I\'ll hand you the exact line to send — short, confident, '
+              'reply-baiting. No "hey", no try-hard.',
+          starters: const ['She went quiet', 'We just matched', 'From my past', 'Never really talked'],
+          backendContext: m.coachContext ??
+              'You are my dating text coach. Help me craft the exact line for: ${m.title}.',
+        ),
+      ),
+    ));
+  }
+
+  Future<void> _showRealSheet(MissionSpec m) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _RealSheet(mission: m, done: _done[m.id] == true),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'coach':
+        _openCoach(m);
+      case 'film':
+        final didIt = await Navigator.of(context, rootNavigator: true).push<bool>(
+          MaterialPageRoute(
+            builder: (_) => MissionCardScreen(
+                title: m.title, sub: m.sub, tier: m.tier, done: _done[m.id] == true),
+          ),
+        );
+        if (didIt == true) await _complete(m);
+      case 'did':
+        await _complete(m);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,261 +193,63 @@ class MissionsTabScreen extends StatelessWidget {
       bottom: false,
       child: CustomScrollView(
         slivers: [
-          SliverToBoxAdapter(child: _TopBar()),
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(child: _TopBar(xp: _xp, streak: _streak)),
+          SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(Sp.lg, Sp.lg, Sp.lg, Sp.sm),
-              child: _Heading(),
+              padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.lg, Sp.lg, Sp.sm),
+              child: _Heading(done: _doneCount, total: _missions.length),
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(Sp.lg, 0, Sp.lg, 120),
-            sliver: SliverList.builder(
-              itemCount: _seed.length,
-              itemBuilder: (context, i) {
-                final m = _seed[i];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: Sp.sm + 4),
-                  child: _MissionCard(
-                    mission: m,
-                    onTap: () => _launch(context, m),
-                  )
-                      .animate()
-                      .fadeIn(delay: (70 * i).ms, duration: 340.ms)
-                      .slideY(begin: 0.07, curve: Curves.easeOut),
-                );
-              },
+          if (_loading)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.only(top: 60),
+                child: Center(
+                  child: CircularProgressIndicator(color: AppColors.red, strokeWidth: 2),
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(Sp.lg, 0, Sp.lg, 120),
+              sliver: SliverList.builder(
+                itemCount: _missions.length,
+                itemBuilder: (context, i) {
+                  final m = _missions[i];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: Sp.sm + 4),
+                    child: _MissionCard(
+                      mission: m,
+                      done: _done[m.id] == true,
+                      onTap: () => _tap(m),
+                    )
+                        .animate()
+                        .fadeIn(delay: (70 * i).ms, duration: 340.ms)
+                        .slideY(begin: 0.07, curve: Curves.easeOut),
+                  );
+                },
+              ),
             ),
-          ),
         ],
       ),
     );
   }
+}
 
-  void _launch(BuildContext context, _Mission m) {
-    // ignore: discarded_futures
-    AnalyticsService.missionOpened(kind: m.kind.name, title: m.title);
-    switch (m.kind) {
-      case _Kind.voice:
-        // AI · VOICE → straight onto the realtime voice orb for her.
-        Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
-          builder: (_) => FreeFlowScreen(initialVibeKey: m.vibeKey),
-        ));
-      case _Kind.aiText:
-        // AI · TEXT → the girl roleplay chat, scenario (her post) ready.
-        Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
-          builder: (_) => GirlChatScreen(config: m.girl!),
-        ));
-      case _Kind.texts:
-        // REAL · TEXTS → the coach, with the scenario as the opening
-        // message, so the user warms up here BEFORE doing it for real.
-        // Missions without a chat config fall back to the Texts tab.
-        if (m.chat != null) {
-          Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
-            builder: (_) => TaskChatScreen(config: m.chat!),
-          ));
-        } else {
-          onGoToTab(2);
-        }
-      case _Kind.approach:
-        onGoToTab(1);
+// ── Top bar: wordmark · streak · settings · real XP ──────────────────────
+class _TopBar extends StatelessWidget {
+  final int xp;
+  final int streak;
+  const _TopBar({required this.xp, required this.streak});
+
+  String get _xpLabel {
+    final s = xp.toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+      b.write(s[i]);
     }
-  }
-}
-
-// ── Data ────────────────────────────────────────────────────────────────
-enum _Kind { voice, aiText, texts, approach }
-
-class _Mission {
-  final _Kind kind;
-  final String title, sub, tier, xp;
-  final String? asset; // AI missions show her render
-  /// VOICE missions → realtime persona key for [FreeFlowScreen].
-  final String? vibeKey;
-  /// REAL · TEXTS missions carry a coached-chat config; tapping opens
-  /// [TaskChatScreen] with the scenario as the opening message.
-  final MissionChatConfig? chat;
-  /// AI · TEXT missions carry a girl roleplay config (scenario = her post).
-  final GirlChatConfig? girl;
-  const _Mission(this.kind, this.title, this.sub, this.tier, this.xp,
-      {this.asset, this.vibeKey, this.chat, this.girl});
-}
-
-const _seed = <_Mission>[
-  _Mission(_Kind.voice, 'Talk to the Ice Queen',
-      'She gives nothing for free. Warm her up on voice.', 'AI · VOICE', '80',
-      asset: 'assets/characters/women/ice_queen.png', vibeKey: 'cold'),
-  _Mission(_Kind.aiText, 'Comment on Nyx\'s story',
-      'She just posted. Rizz your way into her DMs.', 'AI · TEXT', '90',
-      asset: 'assets/characters/women/chaos_girl.png', girl: _postNyx),
-  _Mission(_Kind.texts, 'Comment on her story',
-      'Someone you like posted. One line that makes her reply.', 'REAL · TEXTS', '150',
-      chat: _commentOnStoryChat),
-  _Mission(_Kind.approach, 'Approach one girl today',
-      'When you\'re out. Twenty seconds. Practice on voice first.', 'REAL · APPROACH', '350'),
-  _Mission(_Kind.aiText, 'Slide onto Camila\'s post',
-      'The hot girl who knows it. Say something she hasn\'t heard.', 'AI · TEXT', '110',
-      asset: 'assets/characters/women/socialite.png', girl: _postCamila),
-  _Mission(_Kind.texts, 'Message your crush',
-      'Open the chat you keep re-reading. Send something real.', 'REAL · TEXTS', '200',
-      chat: _messageCrushChat),
-  _Mission(_Kind.voice, 'Make the Chaos Girl laugh',
-      'Match her tempo. Four lines to a real laugh.', 'AI · VOICE', '120',
-      asset: 'assets/characters/women/chaos_girl.png', vibeKey: 'chaos'),
-  _Mission(_Kind.texts, 'Reopen a dead conversation',
-      'One that went cold. Revive it without "hey".', 'REAL · TEXTS', '180',
-      chat: _reopenDeadChat),
-];
-
-// ── AI-girl POST roleplay configs (comment-on-her-post missions) ──────────
-// The scenario (her post) is ready at the top; the user rizzes her and she
-// replies in character via /v1/date. 📞 in the header takes it live on voice.
-
-const _postNyx = GirlChatConfig(
-  characterId: 'chaos',
-  vibeKey: 'chaos',
-  name: 'Nyx',
-  archetype: 'The Chaos Girl — wild, fast, unpredictable',
-  portraitAsset: 'assets/characters/women/chaos_girl.png',
-  accent: Color(0xFFE8222A),
-  opener: 'you look like a bad decision. i love bad decisions.',
-  post: GirlPost(
-    context: 'Posted a story · 2 min ago',
-    caption: '3am energy and nowhere to be. who\'s still up 👀',
-  ),
-);
-
-const _postCamila = GirlChatConfig(
-  characterId: 'socialite',
-  vibeKey: 'ice_then_fire',
-  name: 'Camila',
-  archetype: 'The Hot Girl — knows exactly what she is',
-  portraitAsset: 'assets/characters/women/socialite.png',
-  accent: Color(0xFFFBBF24),
-  opener: 'everyone here wants something from me. what do you want?',
-  post: GirlPost(
-    context: 'Posted a photo · just now',
-    caption: 'don\'t ask for my number.',
-  ),
-);
-
-// ── Coached-chat configs for the REAL · TEXTS missions ────────────────────
-// Each pairs an AI-girl portrait + task banner with a seeded opener and a
-// hidden backend context so the coach is on-mission from the first turn.
-// All run on the same /rizz/chat endpoint the Texts tab uses.
-
-const _commentOnStoryChat = MissionChatConfig(
-  taskTitle: 'Comment on her story',
-  tier: 'REAL · TEXTS',
-  xp: '150',
-  girlAsset: 'assets/characters/women/socialite.png',
-  accent: AppColors.red,
-  situation: 'She just posted. One comment that pulls a reply — not a 🔥.',
-  opening:
-      'She posted a story — that\'s an open door, not a dead end.\n\n'
-      'Tell me what it showed — a gym mirror pic, a sunset, her dog, a '
-      'night out — or paste a screenshot, and I\'ll hand you ONE comment '
-      'that actually gets a reply. No "nice pic." No fire emoji. Something '
-      'she has to answer.',
-  starters: [
-    'She posted a gym pic',
-    'A night out with friends',
-    'Her on holiday',
-    'Just a selfie',
-  ],
-  backendContext:
-      'You are my dating text coach. Real-world mission: COMMENT ON HER '
-      'STORY. A girl I\'m into just posted a story or photo on Instagram '
-      'or Snapchat. I want a comment/reply that stands out and makes her '
-      'actually respond — never a generic "nice pic" or a fire emoji. '
-      'Keep every suggested line short, specific, and reply-baiting, the '
-      'way a confident 22-year-old texts. Put the exact line(s) to send '
-      'in double quotes with one short sentence on why it lands. Be real '
-      'and brief — not a self-help lecture.',
-);
-
-const _messageCrushChat = MissionChatConfig(
-  taskTitle: 'Message your crush',
-  tier: 'REAL · TEXTS',
-  xp: '200',
-  girlAsset: 'assets/characters/women/arena.png',
-  accent: Color(0xFFF472B6),
-  situation: 'The chat you keep re-reading. Time to send something real.',
-  opening:
-      'The one you keep opening and closing without typing. Let\'s end '
-      'that tonight.\n\n'
-      'Who is she to you — a match that went quiet, a friend you want to '
-      'shift things with, someone from your past? Tell me where it\'s at '
-      'and I\'ll build you an opener that doesn\'t read as try-hard.',
-  starters: [
-    'A match that went quiet',
-    'A friend I want more with',
-    'Someone from my past',
-    'We\'ve never really talked',
-  ],
-  backendContext:
-      'You are my dating text coach. Real-world mission: MESSAGE YOUR '
-      'CRUSH. There\'s a girl I\'ve been hesitating to text. I want to '
-      'open (or re-open) the conversation with something real and '
-      'confident that does NOT come off needy or try-hard. Give me a '
-      'specific opener tailored to what I tell you about her, in double '
-      'quotes, plus one short line on why it works. Keep it tight, warm, '
-      'and high-agency.',
-);
-
-const _reopenDeadChat = MissionChatConfig(
-  taskTitle: 'Reopen a dead conversation',
-  tier: 'REAL · TEXTS',
-  xp: '180',
-  girlAsset: 'assets/characters/women/ice_queen.png',
-  accent: Color(0xFF38BDF8),
-  situation: 'It went cold. Revive it without "hey".',
-  opening:
-      'A chat that flatlined isn\'t dead — it\'s waiting for a reason to '
-      'move.\n\n'
-      'Tell me how it went cold — left on read, it just fizzled, you '
-      'dropped the ball — and roughly how long it\'s been. I\'ll give you '
-      'a reopen that skips "hey" and "you up?" and actually earns a reply.',
-  starters: [
-    'Left on read',
-    'It just fizzled out',
-    'I went quiet on her',
-    'It\'s been weeks',
-  ],
-  backendContext:
-      'You are my dating text coach. Real-world mission: REOPEN A DEAD '
-      'CONVERSATION. A text conversation with a girl went cold and I want '
-      'to revive it. I need a reopener that does NOT start with "hey", '
-      '"you up", or an apology — something high-agency and a little '
-      'intriguing, ideally a callback to something from earlier in the '
-      'chat or a fresh hook. Give me the exact line in double quotes plus '
-      'one short sentence on the move. Keep it brief.',
-);
-
-// ── Top bar: ImHim wordmark · streak · XP · settings ─────────────────────
-// The ImHim wordmark anchors the first tab (the brand belongs here). The
-// old progress chart icon is gone — the Progress tab in the bottom nav
-// already covers it, so the shortcut is redundant.
-class _TopBar extends StatefulWidget {
-  @override
-  State<_TopBar> createState() => _TopBarState();
-}
-
-class _TopBarState extends State<_TopBar> {
-  // Live streak from the shared StreakService — the SAME source the
-  // Progress tab reads, so the two flames can never disagree.
-  int _streak = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    // ignore: discarded_futures
-    _loadStreak();
-  }
-
-  Future<void> _loadStreak() async {
-    final s = await StreakService.current();
-    if (mounted) setState(() => _streak = s);
+    return '$b XP';
   }
 
   @override
@@ -296,23 +261,20 @@ class _TopBarState extends State<_TopBar> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Bigger wordmark, matching the Progress masthead.
               const ImHimWordmark(fontSize: 34, letterSpacing: -0.6),
               const Spacer(),
-              // The same clean streak flame the Progress tab uses, wired to
-              // the real streak (hidden until it's actually running).
-              if (_streak > 0) ...[
-                StreakBadge(days: _streak),
+              if (streak > 0) ...[
+                StreakBadge(days: streak),
                 const SizedBox(width: 8),
               ],
               _IconBtn(icon: Icons.settings_outlined, onTap: () => context.push('/settings')),
             ],
           ),
           const SizedBox(height: Sp.md),
-          const Row(
+          Row(
             children: [
-              XpBadge(label: '2,140 XP'),
-              Spacer(),
+              XpBadge(label: _xpLabel),
+              const Spacer(),
             ],
           ),
         ],
@@ -334,101 +296,135 @@ class _IconBtn extends StatelessWidget {
 }
 
 class _Heading extends StatelessWidget {
-  const _Heading();
+  final int done;
+  final int total;
+  const _Heading({required this.done, required this.total});
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('TODAY', style: AppTypography.label),
+        Row(
+          children: [
+            Text('TODAY', style: AppTypography.label),
+            const Spacer(),
+            if (total > 0)
+              Text('$done / $total DONE',
+                  style: AppTypography.label.copyWith(
+                      color: done == total && total > 0
+                          ? AppColors.signalGreen
+                          : AppColors.textTertiary)),
+          ],
+        ),
         const SizedBox(height: 6),
         Text('Make your move.', style: AppTypography.h1Italic),
         const SizedBox(height: 6),
-        Text('Your missions for today. Practice on AI, then do it for real.',
+        Text('Practice on AI. Then do it for real — that\'s where the score lives.',
             style: AppTypography.bodySmall),
       ],
     );
   }
 }
 
-// ── The elite mission card ───────────────────────────────────────────────
+// ── The mission card ─────────────────────────────────────────────────────
 class _MissionCard extends StatelessWidget {
-  final _Mission mission;
+  final MissionSpec mission;
+  final bool done;
   final VoidCallback onTap;
-  const _MissionCard({required this.mission, required this.onTap});
+  const _MissionCard({required this.mission, required this.done, required this.onTap});
 
-  Color get _accent =>
-      mission.kind == _Kind.voice || mission.kind == _Kind.aiText
-          ? AppColors.accent
-          : AppColors.red;
-  String get _action => switch (mission.kind) {
-        _Kind.voice => 'START',
-        _Kind.aiText => 'RIZZ HER',
-        _Kind.texts => 'PRACTICE',
-        _Kind.approach => 'TRAIN',
+  bool get _isAi =>
+      mission.kind == MissionKind.aiPost ||
+      mission.kind == MissionKind.aiText ||
+      mission.kind == MissionKind.aiVoice;
+  Color get _accent => _isAi ? AppColors.accent : AppColors.red;
+  String get _tierLabel => switch (mission.kind) {
+        MissionKind.aiVoice => 'AI · VOICE',
+        MissionKind.aiPost => 'AI · POST',
+        MissionKind.aiText => 'AI · TEXT',
+        MissionKind.realApproach => 'REAL · APPROACH',
+        MissionKind.realText => 'REAL · TEXTS',
       };
+  String get _action => done
+      ? 'DONE'
+      : switch (mission.kind) {
+          MissionKind.aiVoice => 'START',
+          MissionKind.aiPost => 'RIZZ HER',
+          MissionKind.aiText => 'TEXT HER',
+          MissionKind.realApproach => 'DO IT',
+          MissionKind.realText => 'GET THE LINE',
+        };
   IconData get _icon => switch (mission.kind) {
-        _Kind.voice => Icons.graphic_eq_rounded,
-        _Kind.aiText => Icons.favorite_rounded,
-        _Kind.texts => Icons.chat_bubble_outline_rounded,
-        _Kind.approach => Icons.directions_walk_rounded,
+        MissionKind.aiVoice => Icons.graphic_eq_rounded,
+        MissionKind.aiPost => Icons.favorite_rounded,
+        MissionKind.aiText => Icons.chat_bubble_rounded,
+        MissionKind.realApproach => Icons.directions_walk_rounded,
+        MissionKind.realText => Icons.send_rounded,
       };
+  String? get _asset {
+    if (!_isAi || mission.girlId == null) return null;
+    return girlById(mission.girlId!).asset;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final accent = _accent;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(Rd.xl),
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.surface2, AppColors.surface1],
-            ),
-            borderRadius: BorderRadius.circular(Rd.xl),
-            border: Border.all(color: accent.withOpacity(0.22)),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.35),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8)),
-            ],
-          ),
-          padding: const EdgeInsets.all(Sp.md),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _leading(accent),
-              const SizedBox(width: Sp.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _pillRow(accent),
-                    const SizedBox(height: 8),
-                    Text(mission.title,
-                        style: AppTypography.h3.copyWith(
-                            color: AppColors.textPrimary, height: 1.15)),
-                    const SizedBox(height: 4),
-                    Text(mission.sub,
-                        style: AppTypography.bodySmall
-                            .copyWith(color: AppColors.textTertiary, height: 1.35)),
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      Text(_action,
-                          style: AppTypography.label
-                              .copyWith(color: accent, letterSpacing: 2)),
-                      const SizedBox(width: 4),
-                      Icon(Icons.arrow_forward_rounded, size: 13, color: accent),
-                    ]),
-                  ],
-                ),
+    final accent = done ? AppColors.signalGreen : _accent;
+    return Opacity(
+      opacity: done ? 0.72 : 1,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(Rd.xl),
+          child: Ink(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.surface2, AppColors.surface1],
               ),
-            ],
+              borderRadius: BorderRadius.circular(Rd.xl),
+              border: Border.all(color: accent.withOpacity(0.22)),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.35),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8)),
+              ],
+            ),
+            padding: const EdgeInsets.all(Sp.md),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _leading(accent),
+                const SizedBox(width: Sp.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _pillRow(accent),
+                      const SizedBox(height: 8),
+                      Text(mission.title,
+                          style: AppTypography.h3.copyWith(
+                              color: AppColors.textPrimary, height: 1.15)),
+                      const SizedBox(height: 4),
+                      Text(mission.sub,
+                          style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textTertiary, height: 1.35)),
+                      const SizedBox(height: 10),
+                      Row(children: [
+                        Icon(done ? Icons.check_circle_rounded : Icons.arrow_forward_rounded,
+                            size: 13, color: accent),
+                        const SizedBox(width: 4),
+                        Text(_action,
+                            style: AppTypography.label
+                                .copyWith(color: accent, letterSpacing: 2)),
+                      ]),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -436,8 +432,8 @@ class _MissionCard extends StatelessWidget {
   }
 
   Widget _leading(Color accent) {
-    if (mission.asset != null) {
-      // AI mission — her render in a rounded tile with an accent ring.
+    final asset = _asset;
+    if (asset != null) {
       return Container(
         width: 62,
         height: 62,
@@ -448,13 +444,12 @@ class _MissionCard extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(Rd.lg - 2),
-          child: Image.asset(mission.asset!, fit: BoxFit.cover,
+          child: Image.asset(asset, fit: BoxFit.cover,
               errorBuilder: (_, __, ___) =>
                   Container(color: AppColors.surface3, child: Icon(_icon, color: accent))),
         ),
       );
     }
-    // Real-world mission — accent-tinted icon tile.
     return Container(
       width: 62,
       height: 62,
@@ -479,7 +474,7 @@ class _MissionCard extends StatelessWidget {
           color: accent.withOpacity(0.14),
           borderRadius: BorderRadius.circular(Rd.sm),
         ),
-        child: Text(mission.tier,
+        child: Text(_tierLabel,
             style: AppTypography.label
                 .copyWith(color: accent, fontSize: 8.5, letterSpacing: 1.4)),
       ),
@@ -492,5 +487,106 @@ class _MissionCard extends StatelessWidget {
                 .copyWith(color: AppColors.textTertiary, fontSize: 9)),
       ]),
     ]);
+  }
+}
+
+// ── Real-world mission sheet — coach · film · I did it ───────────────────
+class _RealSheet extends StatelessWidget {
+  final MissionSpec mission;
+  final bool done;
+  const _RealSheet({required this.mission, required this.done});
+
+  @override
+  Widget build(BuildContext context) {
+    final isText = mission.kind == MissionKind.realText;
+    return Container(
+      padding: EdgeInsets.fromLTRB(22, 18, 22, 22 + MediaQuery.of(context).padding.bottom),
+      decoration: const BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border(top: BorderSide(color: AppColors.surface3)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                  color: AppColors.surface3, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text('REAL WORLD · +${mission.xp} XP',
+              style: AppTypography.label.copyWith(color: AppColors.red, letterSpacing: 2)),
+          const SizedBox(height: 8),
+          Text(mission.title, style: AppTypography.h2),
+          const SizedBox(height: 8),
+          Text(mission.sub,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary, height: 1.4)),
+          const SizedBox(height: 18),
+          if (isText)
+            _sheetBtn(context, 'GET THE LINE FROM LUCIEN',
+                Icons.auto_awesome_rounded, AppColors.accent, () => Navigator.pop(context, 'coach'))
+          else
+            _sheetBtn(context, 'FILM IT  ·  SHOW IT FIRST',
+                Icons.videocam_rounded, AppColors.accent, () => Navigator.pop(context, 'film')),
+          const SizedBox(height: 10),
+          if (done)
+            Center(
+              child: Text('✓ Done today',
+                  style: AppTypography.label.copyWith(color: AppColors.signalGreen)),
+            )
+          else
+            _sheetBtn(context, 'I DID IT  →  +${mission.xp} XP',
+                Icons.check_circle_rounded, AppColors.red, () => Navigator.pop(context, 'did'),
+                filled: true),
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Not yet',
+                  style: AppTypography.bodySmall.copyWith(color: AppColors.textTertiary)),
+            ),
+          ),
+          if (!done) ...[
+            const SizedBox(height: 4),
+            Center(
+              child: Text('Your streak is safe either way — but only real reps move your score.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.label.copyWith(
+                      color: AppColors.textTertiary, letterSpacing: 0.2, height: 1.4)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _sheetBtn(BuildContext context, String label, IconData icon, Color color,
+      VoidCallback onTap, {bool filled = false}) {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: Material(
+        color: filled ? color : color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(15),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(15),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: filled ? Colors.white : color),
+              const SizedBox(width: 8),
+              Text(label,
+                  style: AppTypography.label.copyWith(
+                      color: filled ? Colors.white : color, letterSpacing: 1.4)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

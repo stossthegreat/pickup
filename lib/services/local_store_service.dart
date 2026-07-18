@@ -723,6 +723,134 @@ class LocalStoreService {
     return out;
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  //  ImHim CORE — XP · score · missions · level · relationship memory
+  //  Everything below starts at ZERO for a fresh user and is earned.
+  // ══════════════════════════════════════════════════════════════════════
+
+  static int _ymd(DateTime d) => d.year * 10000 + d.month * 100 + d.day;
+  static int _todayYmd() => _ymd(DateTime.now());
+
+  // ── XP (real, earned) ──────────────────────────────────────────────────
+  static const _kXp = 'imhim.xp.total.v1';
+  static Future<int> xpTotal() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_kXp) ?? 0;
+  }
+  static Future<int> addXp(int amount) async {
+    if (amount <= 0) return xpTotal();
+    final prefs = await SharedPreferences.getInstance();
+    final next = (prefs.getInt(_kXp) ?? 0) + amount;
+    await prefs.setInt(_kXp, next);
+    return next;
+  }
+
+  // ── Self-rated starting level (onboarding "Your Level") 0..3 ────────────
+  //   0 = never approach · 1 = once or twice · 2 = sometimes · 3 = comfortable
+  static const _kLevel = 'imhim.level.v1';
+  static Future<int> userLevel() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getInt(_kLevel) ?? 0).clamp(0, 3);
+  }
+  static Future<void> setUserLevel(int level) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kLevel, level.clamp(0, 3));
+  }
+
+  // ── Mission completion (per-id + the "did a REAL one today" signal) ─────
+  static Future<bool> isMissionDoneToday(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('imhim.mission.$id.ymd') == _todayYmd();
+  }
+  static Future<void> markMissionDone(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('imhim.mission.$id.ymd', _todayYmd());
+    await prefs.setInt('imhim.mission.any.ymd', _todayYmd()); // holds the flame
+  }
+  /// True if the user did ANY tracked thing today (keeps the streak alive —
+  /// the forgiving safety net).
+  static Future<bool> didSomethingToday() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('imhim.mission.any.ymd') == _todayYmd();
+  }
+  /// The score-bearing signal: did they do a REAL-WORLD mission today.
+  static Future<bool> realMissionDoneToday() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('imhim.mission.real.ymd') == _todayYmd();
+  }
+  static Future<void> markRealMissionDoneToday() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('imhim.mission.real.ymd', _todayYmd());
+    await prefs.setInt('imhim.mission.any.ymd', _todayYmd());
+  }
+
+  // ── The Five — additive + blended, so scores CLIMB over 60 days ────────
+  //   Missions bump dims a few points; scored AI sessions blend (EMA) so a
+  //   single bad session can't tank a built-up score.
+  static Future<void> bumpDimensions(Map<String, int> deltas) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final k in kScoreDimensions) {
+      final d = deltas[k];
+      if (d == null || d == 0) continue;
+      final cur = prefs.getInt('scores.dim.$k.v1') ?? 0;
+      await prefs.setInt('scores.dim.$k.v1', (cur + d).clamp(0, 100).toInt());
+    }
+  }
+  /// Blend a fresh scored session into the running dims (EMA, weight 0..1).
+  static Future<void> blendDimensionScores(
+      Map<String, int> session, {double weight = 0.35}) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final k in kScoreDimensions) {
+      final s = session[k];
+      if (s == null) continue;
+      final cur = prefs.getInt('scores.dim.$k.v1');
+      final next = cur == null ? s : (cur * (1 - weight) + s * weight);
+      await prefs.setInt('scores.dim.$k.v1', next.round().clamp(0, 100).toInt());
+    }
+  }
+  /// Weighted overall score from the stored dims (0 when unscored).
+  static Future<int> overallScore() async {
+    final dims = await dimensionScores();
+    if (dims.isEmpty) return 0;
+    const w = {'confidence': 1.15, 'presence': 1.0, 'game': 1.15,
+               'humor': 0.95, 'listening': 0.95};
+    double s = 0, ws = 0;
+    for (final k in kScoreDimensions) {
+      final v = dims[k]; if (v == null) continue;
+      final wt = w[k] ?? 1.0; s += v * wt; ws += wt;
+    }
+    return ws == 0 ? 0 : (s / ws).round();
+  }
+
+  // ── Relationship memory (per girl) — the arc/memory layer ──────────────
+  //   stage 1..5: Matched · Talking · First Date · Second Date · Together
+  //   interest 0..100 persists her warmth between sessions
+  //   memory: a short summary the AI is fed so she "remembers" him
+  static Future<int> girlStage(String character) async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getInt('rel.$character.stage.v1') ?? 1).clamp(1, 5);
+  }
+  static Future<void> setGirlStage(String character, int stage) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('rel.$character.stage.v1', stage.clamp(1, 5));
+  }
+  static Future<int> girlInterest(String character) async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getInt('rel.$character.interest.v1') ?? 0).clamp(0, 100);
+  }
+  static Future<void> setGirlInterest(String character, int interest) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('rel.$character.interest.v1', interest.clamp(0, 100));
+  }
+  static Future<String> girlMemory(String character) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('rel.$character.memory.v1') ?? '';
+  }
+  static Future<void> setGirlMemory(String character, String summary) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('rel.$character.memory.v1', summary.trim());
+  }
+
   // ── Nuke ────────────────────────────────────────────────────────────────
   /// Wipe every on-device user-generated key (scans, generations,
   /// protocol). Subscription and onboarding flags are preserved —
