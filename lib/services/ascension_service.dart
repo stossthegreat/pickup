@@ -29,36 +29,54 @@ class AscensionService {
   //
   // Six tiers, gated by day. Each is a STATUS label first, copy second.
   // Bro: "People care about status. Not percentages."
+  // Seven nodes on the Ascension Map — the visible journey from Day 1 to
+  // Day 60. Each carries an `unlock` line: what opens when you reach it.
+  // That's the "what's next" hook the map is built around — the anticipation
+  // that keeps a user climbing ("3 days from the High-Value storyline").
+  // The unlocks are the promise; the roster/feature gating that makes them
+  // real is layered on top in the unlock slice.
   static const List<AscendRank> _ranks = [
     AscendRank(
       minDay: 1,
       label: 'OBSERVER',
       tagline: 'You\'re watching. That\'s the first move.',
+      unlock: 'Daily missions + your first girls to text.',
     ),
     AscendRank(
       minDay: 10,
       label: 'INITIATE',
-      tagline: 'The work has started. The mirror reflects it.',
+      tagline: 'The work has started. You feel it already.',
+      unlock: 'Voice calls + your first real-world approach.',
     ),
     AscendRank(
       minDay: 20,
       label: 'CONTENDER',
       tagline: 'People who knew you before don\'t recognize this version.',
+      unlock: 'New girls — the ones who test you.',
     ),
     AscendRank(
       minDay: 30,
       label: 'DANGEROUS',
       tagline: 'You walk into rooms differently now.',
+      unlock: 'Boss: the Ice Queen. Creator Mode in reach.',
     ),
     AscendRank(
-      minDay: 45,
-      label: 'MAGNETIC',
+      minDay: 40,
+      label: 'HIM',
+      tagline: 'The room re-orients when you walk in.',
+      unlock: 'High-value girls. Approach out of your league.',
+    ),
+    AscendRank(
+      minDay: 50,
+      label: 'ELITE',
       tagline: 'You stopped chasing. The room finds you.',
+      unlock: 'Every girl unlocked. The hardest missions.',
     ),
     AscendRank(
       minDay: 60,
-      label: 'IMHIM',
-      tagline: 'Identity locked. The man who walks in owning every room.',
+      label: 'BECOME HIM',
+      tagline: 'Identity locked. You own every room you walk into.',
+      unlock: 'Final form. Your certificate. You are Him.',
     ),
   ];
 
@@ -218,8 +236,8 @@ class AscensionService {
     'Day 42. Six weeks. You\'re different.',
     // 43
     'Forty-three days. Don\'t fumble it.',
-    'Day 44. Two days from Magnetic.',
-    'Day 45. Magnetic. The room finds you.',
+    'Day 44. You\'re Him now. The room re-orients.',
+    'Day 45. Five days from Elite.',
     'Forty-six days. Walk like the man you are.',
     'Day 47. Approach. The fear is small now.',
     'Forty-eight days. The streak protects you.',
@@ -370,10 +388,14 @@ class AscendRank {
   final int minDay;
   final String label;
   final String tagline;
+  /// What reaching this node opens — the anticipation line the Ascension
+  /// Map shows under each rank ("Voice calls + your first approach").
+  final String unlock;
   const AscendRank({
     required this.minDay,
     required this.label,
     required this.tagline,
+    this.unlock = '',
   });
 }
 

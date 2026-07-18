@@ -15,6 +15,7 @@ import '../../services/local_store_service.dart';
 import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
+import '../../widgets/ascend/ascension_map.dart';
 import '../../widgets/charmr/metrics_panel.dart';
 import '../../widgets/common/streak_badge.dart';
 
@@ -183,13 +184,6 @@ class _AscendScreenState extends State<AscendScreen> {
   Widget build(BuildContext context) {
     final day            = widget.ascensionDay;
     final daysLeft       = AscensionService.daysRemainingFor(day);
-    final rank           = AscensionService.rankFor(day);
-    final consistency    = widget.consistency;
-    final imhimScore     = AscensionService.imhimScoreFromComponents(
-      looks:       widget.looksScore100,
-      game:        widget.gameScore100,
-      consistency: consistency,
-    );
     final missions       = _buildMissions();
     final missionsDone   = missions.where((m) => m.done).length;
     final todayMsg       = AscensionService.todayMessageFor(
@@ -241,15 +235,17 @@ class _AscendScreenState extends State<AscendScreen> {
 
             const SizedBox(height: Sp.lg),
 
-            // ── 1 — HERO. Big flame ring, day count, rank inside.
-            _FlameHero(
-              day:       day,
-              total:     AscensionService.totalDays,
-              rank:      rank,
-              daysLeft:  daysLeft,
+            // ── 1 — HERO. THE ASCENSION MAP. The visible path from where
+            // the user is today to "Become Him". Every other system feeds
+            // it: finishing missions moves you forward, bosses sit at the
+            // 10-day nodes, unlocks appear on the node that grants them.
+            // The map is the front door — CLIMB jumps straight to today's
+            // missions.
+            AscensionMap(
+              day:        day,
+              onContinue: () => widget.onJumpToTab(0),
             ).animate().fadeIn(duration: 480.ms)
-              .scale(begin: const Offset(0.92, 0.92),
-                end: const Offset(1, 1), curve: Curves.easeOutBack),
+              .slideY(begin: 0.04, curve: Curves.easeOut),
 
             const SizedBox(height: Sp.lg),
 
@@ -297,13 +293,8 @@ class _AscendScreenState extends State<AscendScreen> {
 
             const SizedBox(height: Sp.lg),
 
-            // ── 5 — RANK PROGRESSION. The identity ladder.
-            _RankProgression(currentDay: day)
-              .animate().fadeIn(delay: 440.ms, duration: 400.ms),
-
-            const SizedBox(height: Sp.lg),
-
-            // ── 6 — STREAK. Hero treatment per the consultant.
+            // ── 5 — STREAK. Hero treatment per the consultant. (The rank
+            // ladder that used to sit here is now the Ascension Map hero.)
             _StreakPanel(
               current: widget.dayStreak,
               longest: longestStreak,
