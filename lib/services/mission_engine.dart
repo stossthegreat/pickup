@@ -51,6 +51,23 @@ class MissionEngine {
     final roster = kRoster.where((g) => g.unlockDay <= day).toList();
     final pool = roster.isNotEmpty ? roster : kRoster.take(3).toList();
 
+    // ── DAY 1 — deliberately gentle + crystal clear ─────────────────────────
+    // No matter how confident he rated himself, day one is an easy win, not a
+    // street approach. Two in-app "comment on her post" tasks, one light text,
+    // and the two softest real-world steps (reply to a story, hold eye contact
+    // + smile). Rose-light so the first impression — and the App Review
+    // recording — is welcoming, then it escalates hard from day two.
+    if (day <= 1) {
+      final gs = pool.length >= 3 ? pool : kRoster;
+      return [
+        aiPostMission(gs[0]).id,   // comment on one girl's post
+        aiPostMission(gs[1]).id,   // comment on a second girl's post
+        aiTextMission(gs[2]).id,   // light in-app text
+        'real:story',              // reply to a story (coach helps craft it)
+        'real:eye',                // hold eye contact + smile
+      ];
+    }
+
     // ── 3 AI missions ──
     // 1) accessible entry: comment on an easy girl's post (never scary).
     final easy = pool.where((g) => g.tier <= (eff - 1).clamp(1, 5)).toList();

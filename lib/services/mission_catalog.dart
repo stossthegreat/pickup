@@ -45,7 +45,7 @@ int _realXp(int tier) => 120 + tier * 45; // 165..345  (~3-4x AI)
 const _ladder = <MissionSpec>[
   // Tier 1 — break the freeze
   MissionSpec(id: 'real:eye', kind: MissionKind.realApproach, tier: 1, xp: 165,
-    title: 'Hold eye contact + smile', sub: 'One girl. Look, smile, hold it a beat. That\'s the whole mission.',
+    title: 'Hold eye contact + smile', sub: 'One woman, across the room. Meet her eyes, smile, hold it a beat. That\'s the whole mission.',
     reflectPrompt: 'Did she catch it — and how did holding it feel?'),
   MissionSpec(id: 'real:story', kind: MissionKind.realText, tier: 1, xp: 165,
     title: 'Comment on her story', sub: 'Someone you like posted. One line that pulls a reply — not a 🔥.',
@@ -53,18 +53,18 @@ const _ladder = <MissionSpec>[
     coachContext: 'I want to reply to a girl\'s story/post I like and actually start a conversation. Help me craft one line that stands out.'),
   // Tier 2 — the open
   MissionSpec(id: 'real:open1', kind: MissionKind.realApproach, tier: 2, xp: 210,
-    title: 'Open one girl', sub: 'Walk up. One real sentence. Doesn\'t matter what she says back.',
-    reflectPrompt: 'What did you open with, and what happened?'),
+    title: 'Start one conversation', sub: 'Walk up to one woman and say one real sentence. It doesn\'t matter what she says back — you did it.',
+    reflectPrompt: 'What did you say first, and what happened?'),
   MissionSpec(id: 'real:crush', kind: MissionKind.realText, tier: 2, xp: 210,
     title: 'Message your crush', sub: 'The one you keep not texting. Send something today.',
     reflectPrompt: 'Did you send it?',
     coachContext: 'I have a crush I keep not texting. Help me craft a confident, low-pressure opener to send her today.'),
   // Tier 3 — volume
   MissionSpec(id: 'real:open3', kind: MissionKind.realApproach, tier: 3, xp: 255,
-    title: 'Open three girls today', sub: 'Reps kill the fear faster than perfect lines. Three, any three.',
-    reflectPrompt: 'How many did you actually open — and which felt easiest?'),
+    title: 'Start three conversations today', sub: 'Reps kill the fear faster than perfect lines. Three women, anywhere — one real line each is enough.',
+    reflectPrompt: 'How many did you actually start — and which felt easiest?'),
   MissionSpec(id: 'real:compliment', kind: MissionKind.realApproach, tier: 3, xp: 255,
-    title: 'Genuine compliment to a stranger', sub: 'Not her looks. Something you actually noticed. Then hold the moment.',
+    title: 'Give a stranger a real compliment', sub: 'Not about her looks — something you actually noticed. Say it, then let the moment breathe.',
     reflectPrompt: 'What did you notice, and how did she react?'),
   MissionSpec(id: 'real:reopen', kind: MissionKind.realText, tier: 3, xp: 255,
     title: 'Reopen a dead conversation', sub: 'A chat that died. Revive it without \'hey\' or an apology.',
@@ -72,10 +72,10 @@ const _ladder = <MissionSpec>[
     coachContext: 'I have a conversation with a girl that went dead. Help me craft a message that reopens it naturally — no \'hey\', no apology.'),
   // Tier 4 — the stretch
   MissionSpec(id: 'real:league', kind: MissionKind.realApproach, tier: 4, xp: 300,
-    title: 'Approach one out of your league', sub: 'The one you\'d normally talk yourself out of. Do it anyway.',
+    title: 'Approach someone out of your league', sub: 'The woman you\'d normally talk yourself out of. Walk over anyway.',
     reflectPrompt: 'You did it. What happened — and was she actually out of your league?'),
   MissionSpec(id: 'real:number', kind: MissionKind.realApproach, tier: 4, xp: 300,
-    title: 'Get one number', sub: 'Have a real conversation and ask for the number before you leave.',
+    title: 'Get one number', sub: 'Have a real conversation with a woman and ask for her number before you leave.',
     reflectPrompt: 'Did you get it? How did you ask?'),
   // Tier 5 — the close
   MissionSpec(id: 'real:date', kind: MissionKind.realApproach, tier: 5, xp: 345,
@@ -95,7 +95,7 @@ List<MissionSpec> realLadderForTier(int tier) {
 // ── AI mission builders (from a roster girl) ────────────────────────────
 MissionSpec aiPostMission(GirlBrief g) => MissionSpec(
       id: 'aiPost:${g.id}', kind: MissionKind.aiPost, tier: g.tier, xp: _aiXp(g.tier),
-      title: 'Comment on ${g.name}\'s post', sub: 'She just posted. Rizz your way into her DMs.',
+      title: 'Comment on ${g.name}\'s post', sub: 'She just posted — leave a comment smooth enough to earn a reply.',
       girlId: g.id,
       postContext: '${g.name} just posted a story from her night out.',
       postCaption: _postCaptionFor(g));
