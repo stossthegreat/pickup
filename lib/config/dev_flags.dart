@@ -50,37 +50,32 @@
 ///
 /// **FLIP THIS BACK TO FALSE BEFORE SHIPPING A PAID BUILD.**
 ///
-/// v356 — FALSE, paired with kPaywallDemoUnlock = true for the App Review
-/// recording. The paywall SHOWS on every gated tap (so the recording proves the
-/// subscription flow exists — Apple explicitly asks to see it), and pressing the
-/// X unlocks the app so the paid features can be demoed right after. See
-/// kPaywallDemoUnlock below.
+/// v357 — SUBMISSION BUILD. FALSE. This is the real App Store paywall.
 ///
-/// ⚠️ BEFORE THE SUBMISSION BINARY: keep this false AND set kPaywallDemoUnlock =
-/// false. Then the paywall is real — X just dismisses, nothing unlocks, and
-/// RevenueCat sells imhim_pro_weekly.
+/// The model, exactly as intended:
+///   1. The user lands straight in the app after onboarding (never walled at
+///      the door) — no paywall blocks entry, so nobody can get "stuck".
+///   2. Every paid ACTION they press — opening a girl, a mission, a voice call,
+///      a rizz screenshot — opens the paywall.
+///   3. The paywall is DISMISSIBLE: the X (and the system back gesture) closes
+///      it and drops them back where they were to keep browsing. They just
+///      can't use the paid feature until they subscribe.
+///   4. On a real purchase, RevenueCat activates the `pro` entitlement and the
+///      whole app unlocks; the gate the user tapped opens immediately.
 ///
-/// When false + demo off: PAID launch build. RevenueCat enabled
-/// (PurchaseConfig.enabled = true), paywall live — browse free, any paid action
-/// opens the dismissible paywall. For the purchase to COMPLETE the product must
-/// be fetchable from App Store Connect (Paid Apps agreement signed, sub "Ready
-/// to Submit"), else RevenueCat returns error 23 — an App Store Connect fix, not
-/// a code fix.
+/// For the purchase to COMPLETE the product must be fetchable from App Store
+/// Connect (Paid Apps agreement signed, imhim_pro_weekly "Ready to Submit"),
+/// else RevenueCat returns error 23 — an App Store Connect fix, not a code fix.
 const kBypassPaywall = false;
 
-/// DEMO / RECORDING ONLY. When true, pressing the paywall's X unlocks the whole
-/// app (sets the local subscribed flag), so the App Review screen recording can
-/// show the paywall first and then walk through the paid features without a real
-/// purchase. The paid-action gates also re-check after the paywall closes, so X
-/// takes you straight into the feature you tapped.
-///
-/// ⚠️ MUST be false in the submitted build — otherwise anyone bypasses the
-/// paywall by pressing X. Ship the real paywall with this false and
-/// kBypassPaywall false.
-const kPaywallDemoUnlock = true;
+/// DEMO / RECORDING ONLY — MUST be false in the submitted build. When true,
+/// pressing the paywall's X unlocked the whole app so the App Review recording
+/// could show the paid features without a real purchase. FALSE here = the
+/// paywall is real: X just dismisses, nothing unlocks, RevenueCat charges.
+const kPaywallDemoUnlock = false;
 
 /// Human-readable build tag shown tiny on the paywall so we can instantly
 /// tell which build is actually installed on-device (TestFlight lag has
 /// repeatedly made us debug a stale build). Bump this with every pubspec
 /// build-number bump.
-const kBuildTag = 'b356-demo';
+const kBuildTag = 'b357-store';
