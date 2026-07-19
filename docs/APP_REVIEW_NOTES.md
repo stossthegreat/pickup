@@ -12,7 +12,7 @@ recording, and fill in the real devices in item 2.
 Thank you for reviewing ImHim. Responses below correspond to items 1–7.
 
 1. SCREEN RECORDING
-Attached. Captured on a physical iPhone running the latest iOS. It begins by
+Attached. Captured on a physical iPhone 12 running the latest iOS. It begins by
 launching the app, goes through onboarding, then walks the core flow: the
 Practice tab (opening an AI character and texting her), a live voice roleplay
 (which shows the microphone permission prompt), the Texts tab (picking a
@@ -21,9 +21,7 @@ suggestions), and the Missions/Progress tabs. It also shows the subscription
 paywall appearing when a paid feature is tapped.
 
 2. DEVICES / OS TESTED
-- iPhone 15 Pro — iOS 18.5
-- iPhone 13 — iOS 18.4
-[Replace with the real devices and iOS versions you tested on.]
+- iPhone 12 (physical device), running the latest iOS.
 
 3. PURPOSE & TARGET AUDIENCE
 ImHim is a social-confidence practice app for adults (17+). It helps people who
