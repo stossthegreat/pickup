@@ -365,10 +365,16 @@ class _PaywallScreenState extends State<PaywallScreen> {
     ReviewPromptService.maybePromptAfterPurchase(context);
   }
 
-  void _close() {
+  void _close() async {
     HapticFeedback.selectionClick();
     AnalyticsService.paywallDismissed(
         (widget.context?['afterPurchase'] as String?) ?? 'standalone');
+    if (kPaywallDemoUnlock) {
+      // DEMO / RECORDING ONLY — pressing X unlocks the app so the paid features
+      // can be shown after the paywall. Never true in the submitted build.
+      await LocalStoreService.setSubscribed(true);
+    }
+    if (!mounted) return;
     if (context.canPop()) {
       context.pop();
     } else {

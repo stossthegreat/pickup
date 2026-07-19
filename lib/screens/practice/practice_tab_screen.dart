@@ -68,7 +68,9 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
     if (!await PaywallGate.isPro()) {
       if (!mounted) return;
       await PaywallGate.open(context, source: 'practice');
-      return;
+      // Demo build: X unlocked the app, so fall through into the chat. Real
+      // build: still not pro, so stop here.
+      if (!mounted || !await PaywallGate.isPro()) return;
     }
     if (!mounted) return;
     _choose(g);
