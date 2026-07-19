@@ -25,22 +25,17 @@
 /// ever ship to the store.
 /// ──────────────────────────────────────────────────────────────────────
 class PurchaseConfig {
-  /// ── MASTER SWITCH — RevenueCat is DISABLED for this launch ──────────────
-  /// We're shipping on the existing kBypassPaywall allowance: everyone gets
-  /// Pro access plus the 15-minute weekly voice cap — exactly as it worked
-  /// before. RevenueCat (keys + purchase_service.dart + the paywall) all stay
-  /// in the codebase, untouched, for a future paid version.
+  /// ── MASTER SWITCH — RevenueCat billing ──────────────────────────────────
+  /// TRUE = RevenueCat configures at launch and sells the weekly subscription.
+  /// This is a PAID app: the paywall is live (kBypassPaywall = false in
+  /// dev_flags.dart), users browse freely, and any paid action opens the
+  /// paywall to purchase `imhim_pro_weekly`.
   ///
-  /// RE-ENABLED for the paid launch. RevenueCat is live and the paywall is
-  /// the hard lock (kBypassPaywall = false in dev_flags.dart).
-  ///
-  /// ⚠️ REQUIRES a working product in App Store Connect: the store screenshot
-  /// showed RevenueCat error 23 (CONFIGURATION_ERROR — "None of the products
-  /// could be fetched from App Store Connect"). Until `imhim_pro_weekly` is
-  /// fetchable, the paywall shows but CANNOT complete a purchase, so the app
-  /// is locked with no way in. Verify via the paywall's "Store status"
-  /// diagnostic BEFORE shipping. To test the app without paying, flip
-  /// kBypassPaywall back to true in dev_flags.dart.
+  /// IMPORTANT — for the purchase to complete, the product must be fetchable
+  /// from App Store Connect. If you saw "CONFIGURATION_ERROR (23)" it means the
+  /// product isn't live on Apple's side yet (Paid Apps agreement unsigned, or
+  /// the subscription not "Ready to Submit"). That is an App Store Connect
+  /// setup issue, NOT a code issue — fix it there and error 23 disappears.
   static const bool enabled = true;
 
   /// RevenueCat public SDK key for iOS. Starts with `appl_`.
