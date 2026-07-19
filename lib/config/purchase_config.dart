@@ -39,7 +39,7 @@ class PurchaseConfig {
   static const bool enabled = true;
 
   /// RevenueCat public SDK key for iOS. Starts with `appl_`.
-  static const iosApiKey     = 'appl_LZCBJirwBRyekXFKrBGdcdnyRLJ';
+  static const iosApiKey     = 'appl_qLSVUdcrgjVeLZqNkuoOgaBCtOv';
 
   /// RevenueCat public SDK key for Android. Starts with `goog_`.
   static const androidApiKey = 'goog_cdoFAjjiwMkzsxNjPBwoKalEwkF';
