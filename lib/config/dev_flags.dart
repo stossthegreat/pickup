@@ -50,25 +50,26 @@
 ///
 /// **FLIP THIS BACK TO FALSE BEFORE SHIPPING A PAID BUILD.**
 ///
-/// v354 — FALSE. This is the PAID launch build. RevenueCat is enabled
-/// (PurchaseConfig.enabled = true) and the paywall is live: users browse the
-/// whole app free, and any paid action (opening a girl / mission / voice call)
-/// opens the dismissible paywall to buy `imhim_pro_weekly`. The browse-then-pay
-/// model is fully wired.
+/// v355 — TRUE, TEMPORARILY, to shoot the App Review screen recording.
+/// With this true the paywall never shows and every feature is unlocked, so
+/// the recording can demo Practice / voice roleplay / Texts / Missions end to
+/// end without a paywall interrupting each tap.
 ///
-/// For the purchase to COMPLETE, the product must be fetchable from App Store
-/// Connect (Paid Apps agreement signed, subscription "Ready to Submit"). If it
-/// isn't, RevenueCat returns error 23 and the paywall can't charge — that's an
-/// App Store Connect fix, not a code fix.
+/// ⚠️ FLIP BACK TO FALSE BEFORE BUILDING THE SUBMISSION BINARY. The build you
+/// upload to App Store Connect must have this false so the paywall is live and
+/// RevenueCat sells `imhim_pro_weekly`. This TRUE build is for capturing the
+/// demo video only — do NOT submit it.
 ///
-/// TO TEST paid features on-device without buying: either sign into a Sandbox
-/// Apple ID (Settings → App Store → Sandbox Account — sandbox purchases are
-/// free), or temporarily flip this to `true` for a local dev build ONLY. Never
-/// ship a store build with this true — it makes every feature free.
-const kBypassPaywall = false;
+/// When false: PAID launch build. RevenueCat enabled (PurchaseConfig.enabled =
+/// true), paywall live — browse free, any paid action opens the dismissible
+/// paywall to buy the weekly sub. For the purchase to COMPLETE the product must
+/// be fetchable from App Store Connect (Paid Apps agreement signed, sub "Ready
+/// to Submit"), else RevenueCat returns error 23 — an App Store Connect fix,
+/// not a code fix.
+const kBypassPaywall = true;
 
 /// Human-readable build tag shown tiny on the paywall so we can instantly
 /// tell which build is actually installed on-device (TestFlight lag has
 /// repeatedly made us debug a stale build). Bump this with every pubspec
 /// build-number bump.
-const kBuildTag = 'b353';
+const kBuildTag = 'b354-rec';
