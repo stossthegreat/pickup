@@ -68,14 +68,17 @@
 /// else RevenueCat returns error 23 — an App Store Connect fix, not a code fix.
 const kBypassPaywall = false;
 
-/// DEMO / RECORDING ONLY — MUST be false in the submitted build. When true,
-/// pressing the paywall's X unlocked the whole app so the App Review recording
-/// could show the paid features without a real purchase. FALSE here = the
-/// paywall is real: X just dismisses, nothing unlocks, RevenueCat charges.
-const kPaywallDemoUnlock = false;
+/// TRUE for launch while the subscription is still IN REVIEW at Apple. The
+/// product can't be purchased until Apple approves it, so a hard paywall would
+/// wall everyone (and the reviewer) out with no way through — an automatic
+/// rejection. With this true the paywall still SHOWS on every paid tap (proving
+/// the subscription flow), but pressing X lets the user into the app so nobody
+/// is ever stuck. Once `imhim_pro_weekly` is approved, flip this back to false
+/// in an update to make the paywall charge for real.
+const kPaywallDemoUnlock = true;
 
 /// Human-readable build tag shown tiny on the paywall so we can instantly
 /// tell which build is actually installed on-device (TestFlight lag has
 /// repeatedly made us debug a stale build). Bump this with every pubspec
 /// build-number bump.
-const kBuildTag = 'b357-store';
+const kBuildTag = 'b358-store';
