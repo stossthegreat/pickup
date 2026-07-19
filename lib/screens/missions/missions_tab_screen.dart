@@ -115,7 +115,8 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     if (!await PaywallGate.isPro()) {
       if (!mounted) return;
       await PaywallGate.open(context, source: 'mission_chat');
-      return;
+      // Demo build: X unlocked → open the chat. Real build: not pro → stop.
+      if (!mounted || !await PaywallGate.isPro()) return;
     }
     if (!mounted) return;
     final g = girlById(m.girlId!);
@@ -153,7 +154,8 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     if (!await PaywallGate.isPro()) {
       if (!mounted) return;
       await PaywallGate.open(context, source: 'mission_coach');
-      return;
+      // Demo build: X unlocked → open the coach. Real build: not pro → stop.
+      if (!mounted || !await PaywallGate.isPro()) return;
     }
     if (!mounted) return;
     Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
