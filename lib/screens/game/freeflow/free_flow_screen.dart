@@ -2409,7 +2409,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                       ),
                       child: Text(
                         lucienReady
-                            ? 'LUCIEN — STEP IN'
+                            ? 'COACH — STEP IN'
                             : 'HOLD TO TALK FIRST',
                         style: AppTypography.label.copyWith(
                           color: lucienReady
@@ -2645,7 +2645,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                       fontStyle: FontStyle.italic,
                     )),
               const SizedBox(height: 8),
-              Text('— LUCIEN',
+              Text('— YOUR COACH',
                   textAlign: TextAlign.center,
                   style: AppTypography.label.copyWith(
                     color: AppColors.accent,
@@ -3323,7 +3323,7 @@ class _LucienUpsellSheet extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.end,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('LUCIEN',
+                  Text('YOUR COACH',
                     textAlign: TextAlign.center,
                     style: AppTypography.label.copyWith(
                       color: AppColors.red,
@@ -3331,7 +3331,7 @@ class _LucienUpsellSheet extends StatelessWidget {
                       fontWeight: FontWeight.w900,
                     )),
                   const SizedBox(height: 8),
-                  Text('Tap Lucien for your\nlegendary teacher.',
+                  Text('Tap in your coach.\nMaster every reply.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.playfairDisplay(
                       color: Colors.white,
@@ -3717,7 +3717,7 @@ class _LucienNudgeBubble extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text('LUCIEN WILL TAKE THE FLOOR',
+                Text('YOUR COACH WILL TAKE THE FLOOR',
                   textAlign: TextAlign.center,
                   style: AppTypography.label.copyWith(
                     color: Colors.white,

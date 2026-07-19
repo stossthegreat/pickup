@@ -426,13 +426,13 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
         if (h.isNotEmpty) {
           help = h;
         } else {
-          err = 'Lucien got no reply — set OPENAI_API_KEY on the backend.';
+          err = 'Coach got no reply — set OPENAI_API_KEY on the backend.';
         }
       } else {
-        err = 'Lucien unavailable (${res.statusCode}).';
+        err = 'Coach unavailable (${res.statusCode}).';
       }
     } catch (e) {
-      err = 'Couldn\'t reach Lucien — $e';
+      err = 'Couldn\'t reach the coach — $e';
     }
     if (!mounted) return;
     setState(() {
@@ -440,7 +440,7 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       if (help != null) {
         _msgs.add(_Msg('lucien', help));
       } else {
-        _msgs.add(_Msg('error', err ?? 'Lucien unavailable.'));
+        _msgs.add(_Msg('error', err ?? 'Coach unavailable.'));
       }
     });
     _scrollToBottom();
@@ -899,7 +899,7 @@ class _LucienCard extends StatelessWidget {
             children: [
               Icon(Icons.auto_awesome_rounded, size: 14, color: AppColors.accent),
               const SizedBox(width: 6),
-              Text('LUCIEN',
+              Text('YOUR COACH',
                   style: GoogleFonts.inter(
                     color: AppColors.accent,
                     fontSize: 10,
@@ -1043,7 +1043,7 @@ class _HelpBar extends StatelessWidget {
                       size: 14,
                       color: busy ? AppColors.textTertiary : AppColors.accent),
                   const SizedBox(width: 6),
-                  Text('Get help from Lucien',
+                  Text('Get help from your coach',
                       style: GoogleFonts.inter(
                         color: busy ? AppColors.textTertiary : AppColors.accent,
                         fontSize: 12.5,
@@ -1069,7 +1069,7 @@ class _LucienThinking extends StatelessWidget {
         children: [
           Icon(Icons.auto_awesome_rounded, size: 14, color: AppColors.accent),
           const SizedBox(width: 8),
-          Text('Lucien\'s thinking…',
+          Text('Your coach is thinking…',
               style: GoogleFonts.inter(
                 color: AppColors.accent,
                 fontSize: 12.5,
