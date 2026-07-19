@@ -50,22 +50,25 @@
 ///
 /// **FLIP THIS BACK TO FALSE BEFORE SHIPPING A PAID BUILD.**
 ///
-/// TRUE right now, on purpose: the paywall is fully built (browse the app
-/// free, paywall fires on actions — opening a girl / mission / call — and is
-/// dismissible), BUT the store product can't complete a purchase yet
-/// (RevenueCat error 23 — `imhim_pro_weekly` isn't fetchable from App Store
-/// Connect). A live paywall that can't charge anyone just locks everyone out
-/// for zero benefit. So while error 23 stands, TRUE lets you (and testers)
-/// into the whole app.
+/// v354 — FALSE. This is the PAID launch build. RevenueCat is enabled
+/// (PurchaseConfig.enabled = true) and the paywall is live: users browse the
+/// whole app free, and any paid action (opening a girl / mission / voice call)
+/// opens the dismissible paywall to buy `imhim_pro_weekly`. The browse-then-pay
+/// model is fully wired.
 ///
-/// TO GO LIVE WITH THE PAYWALL: fix error 23 (create/attach imhim_pro_weekly,
-/// sign the Paid Apps agreement), confirm the paywall's "Store status" shows
-/// the product, THEN flip this to `false`. Nothing else changes — the
-/// browse-then-pay model is already wired.
-const kBypassPaywall = true;
+/// For the purchase to COMPLETE, the product must be fetchable from App Store
+/// Connect (Paid Apps agreement signed, subscription "Ready to Submit"). If it
+/// isn't, RevenueCat returns error 23 and the paywall can't charge — that's an
+/// App Store Connect fix, not a code fix.
+///
+/// TO TEST paid features on-device without buying: either sign into a Sandbox
+/// Apple ID (Settings → App Store → Sandbox Account — sandbox purchases are
+/// free), or temporarily flip this to `true` for a local dev build ONLY. Never
+/// ship a store build with this true — it makes every feature free.
+const kBypassPaywall = false;
 
 /// Human-readable build tag shown tiny on the paywall so we can instantly
 /// tell which build is actually installed on-device (TestFlight lag has
 /// repeatedly made us debug a stale build). Bump this with every pubspec
 /// build-number bump.
-const kBuildTag = 'b349';
+const kBuildTag = 'b351';

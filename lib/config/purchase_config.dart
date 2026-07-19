@@ -25,17 +25,18 @@
 /// ever ship to the store.
 /// ──────────────────────────────────────────────────────────────────────
 class PurchaseConfig {
-  /// ── MASTER SWITCH — RevenueCat is OUT for this launch ───────────────────
-  /// FALSE = RevenueCat never configures, makes zero store calls, and there is
-  /// no error 23. Combined with kBypassPaywall = true (dev_flags.dart), the app
-  /// ships FREE: every feature is unlocked for everyone and no paywall ever
-  /// shows. This is the launch build — no subscription, nothing for App Review
-  /// to purchase.
+  /// ── MASTER SWITCH — RevenueCat billing ──────────────────────────────────
+  /// TRUE = RevenueCat configures at launch and sells the weekly subscription.
+  /// This is a PAID app: the paywall is live (kBypassPaywall = false in
+  /// dev_flags.dart), users browse freely, and any paid action opens the
+  /// paywall to purchase `imhim_pro_weekly`.
   ///
-  /// All the billing code (keys below, purchase_service.dart, the paywall UI)
-  /// stays in the repo, dormant, for the future paid version. To bring it back:
-  /// set this to `true` AND kBypassPaywall = false — nothing else changes.
-  static const bool enabled = false;
+  /// IMPORTANT — for the purchase to complete, the product must be fetchable
+  /// from App Store Connect. If you saw "CONFIGURATION_ERROR (23)" it means the
+  /// product isn't live on Apple's side yet (Paid Apps agreement unsigned, or
+  /// the subscription not "Ready to Submit"). That is an App Store Connect
+  /// setup issue, NOT a code issue — fix it there and error 23 disappears.
+  static const bool enabled = true;
 
   /// RevenueCat public SDK key for iOS. Starts with `appl_`.
   static const iosApiKey     = 'appl_LZCBJirwBRyekXFKrBGdcdnyRLJ';

@@ -4,26 +4,20 @@ This answers the Guideline 2.1 "Information Needed" request. Paste sections
 3–7 into **App Store Connect → App Review Information → Notes**. Attach the
 screen recording (item 1) and fill item 2 from your own device.
 
-**Key point for the reviewer: this build is completely FREE.** There is no
-account, no login, no subscription, and no in-app purchase of any kind. Every
-feature is unlocked for everyone. There is nothing to buy and nothing to
-restore — so there is no purchase for the reviewer to test.
-
 ---
 
 ## 1. Screen recording (record on a real iPhone, latest iOS)
 Record a single take that shows:
 1. Launching the app (splash → onboarding → main tabs).
-2. Browsing and using the core features, all free:
-   - **Practice** tab — open one of the AI characters and send a text message.
-   - Start a short **live voice roleplay** with a character (this triggers the
-     microphone permission prompt — show it being granted).
-   - **Texts** tab — pick a conversation screenshot from the library and show
-     the three suggested replies being generated (this triggers the photo
-     permission prompt).
-   - **Missions** tab and the **Progress** tab (the 60-day map + scores).
-
-Because everything is free, there is no paywall step to record.
+2. Browsing the core features (all browsable for free): the Missions tab, the
+   Practice tab (the AI characters), the Texts tab (screenshot → reply
+   suggestions), and the Progress tab (the 60-day map + scores).
+3. Tapping a character or a mission so the **paywall appears**, then completing
+   the **subscription purchase with a Sandbox account** (see item 4), and
+   showing a feature working after unlock (send a text message to a character,
+   and start a short voice roleplay).
+4. The microphone permission prompt when the first voice roleplay starts, and
+   the photo permission prompt in the Texts tab.
 
 ## 2. Devices / OS tested on
 (Fill in what you actually used, e.g.)
@@ -40,14 +34,15 @@ private, low-stakes place to rehearse, get honest feedback across five
 conversation skills, and track progress over a 60-day plan. All characters are
 fictional and AI-generated; the app does not connect users to real people.
 
-## 4. How to access the main features (no login, no purchase)
-There is **no account, no login, and no in-app purchase** — the app opens
-straight into the main tabs and every feature is free:
-- **Practice** tab → tap any character to text with them, or start a live voice
-  roleplay.
-- **Texts** tab → pick a conversation screenshot to get three suggested replies.
-- **Missions** / **Progress** tabs → daily confidence prompts and the 60-day
-  progress map.
+## 4. How to access the main features (no login needed)
+There is **no account and no login** — the app opens straight into the four
+main tabs, which are all free to browse. To review the paid features, sign in
+to a **Sandbox Apple ID** on the device (Settings → App Store → Sandbox
+Account), then:
+- Tap any character in the **Practice** tab, or any AI mission in the
+  **Missions** tab → the subscription paywall appears.
+- Purchase the weekly subscription (free in the Sandbox environment) → the app
+  unlocks. You can then text a character or start a live voice roleplay.
 
 The daily "missions" (e.g. "hold eye contact and smile," "say one sentence")
 are optional confidence prompts the user marks done themselves — they involve
@@ -57,13 +52,13 @@ anything unsafe or illegal.
 ## 5. External services used for core functionality
 - **OpenAI** — generates the AI text and live voice roleplay replies and the
   coaching suggestions.
+- **Apple StoreKit + RevenueCat** — the auto-renewable subscription and receipt
+  validation.
 - **Google Firebase Analytics** — anonymous usage analytics only (no PII, no
   advertising identifiers).
 - **Google ML Kit (on-device)** — text recognition for the "screenshot → reply
-  suggestions" feature; the image never leaves the device, only the extracted
-  text is sent to generate suggestions.
-There are no user accounts, no payments, and no third-party advertising
-networks.
+  suggestions" feature; the image never leaves the device.
+There are no user accounts and no third-party advertising networks.
 
 ## 6. Regional differences
 None. The app functions consistently across all regions. All content is in
@@ -77,10 +72,30 @@ via the OpenAI API.
 
 ---
 
-## Privacy & Terms
+## Subscription disclosure (Guideline 3.1.2 — already in the app)
+- Product: **ImHim Pro**, auto-renewable subscription, billed **weekly**
+  (product id `imhim_pro_weekly`).
+- The paywall shows the title, weekly price, an "auto-renews · cancel anytime"
+  line, and working **Terms of Use**, **Privacy Policy**, and **Restore**
+  links.
 - Terms: https://stossthegreat.github.io/pickup/terms.html
 - Privacy: https://stossthegreat.github.io/pickup/privacy.html
-- Data deletion: https://stossthegreat.github.io/pickup/delete.html
 
-There are no subscriptions in this build, so no subscription disclosure
-(Guideline 3.1.2) applies.
+---
+
+## ⚠️ Developer checklist — the one thing that will actually block approval
+The reviewer WILL try to buy the subscription. If RevenueCat returns
+**CONFIGURATION_ERROR (code 23)** — the `imhim_pro_weekly` product can't be
+fetched from App Store Connect — the purchase fails and Apple rejects again.
+This is an **App Store Connect setup** issue, not a code issue. To fix:
+1. App Store Connect → Business → **sign the Paid Applications agreement** +
+   complete banking & tax.
+2. Create the subscription product with the exact ID **`imhim_pro_weekly`**,
+   with a price, a localization, and a review screenshot — status at least
+   "Ready to Submit."
+3. In RevenueCat: add the product, attach it to the `pro` entitlement and to
+   the Current Offering as `$rc_weekly`.
+4. Confirm the paywall loads a real price (not "—") on a device signed into a
+   Sandbox account — that proves the product is fetchable with **no error 23**.
+5. Ship with `kBypassPaywall = false` (already set) so the paywall is live for
+   the reviewer.
