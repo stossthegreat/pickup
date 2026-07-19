@@ -680,9 +680,8 @@ class _CreatorTileState extends State<_CreatorTile> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Switches Lucien, the Arena women, and the Council into the '
-              'savage roasting persona. Free Flow runs unchained. Diablo '
-              'content unlocks.\n\n'
+              'Switches your coach and the whole AI cast into the '
+              'unfiltered persona. Roleplay runs unchained.\n\n'
               'Still policy-bounded server-side. Lock it again any time.',
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textSecondary, height: 1.5)),
@@ -736,7 +735,7 @@ class _CreatorTileState extends State<_CreatorTile> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppColors.toastBg,
-        content: Text('Lucien · Unchained · Active',
+        content: Text('Unchained · Active',
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.red, fontWeight: FontWeight.w700)),
       ));
