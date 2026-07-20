@@ -225,15 +225,15 @@ class _PaywallScreenState extends State<PaywallScreen> {
     if (_purchasing) return;
     final pkg = _packageFor(_Tier.weekly);
     if (pkg == null) {
-      // No live weekly Package — almost always Android where RC hasn't
-      // returned an Offering. Surface the diagnostic instead of a dead
-      // button so we can see exactly what the SDK saw on-device.
+      // No live weekly Package yet — RevenueCat returned no Offering, so the
+      // subscription isn't fetchable (product not submitted/approved, or the
+      // Paid Apps Agreement isn't active). Give IMMEDIATE, clean feedback so
+      // the button never feels dead — "no response after tapping BECOME HIM"
+      // was an App Review finding. (The real fix is server-side: submit the
+      // IAP + sign the Paid Apps Agreement so a real package loads here.)
       HapticFeedback.mediumImpact();
-      setState(() => _purchasing = true);
-      final diag = await PurchaseService.diagnose();
-      if (!mounted) return;
-      setState(() => _purchasing = false);
-      _showDiagnostic(diag);
+      _snack('Subscription isn\'t available right now — please check your '
+          'connection and try again in a moment.');
       return;
     }
 
