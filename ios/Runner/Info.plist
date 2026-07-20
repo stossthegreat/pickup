@@ -11,7 +11,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>ImHim reads a conversation screenshot you choose so it can extract the messages on your device and suggest three replies. The screenshot never leaves your device — only the extracted text is sent to generate suggestions. Manage in Settings.</string>
 	<key>CFBundleDisplayName</key>
-	<string>ImHim</string>
+	<string>ImHim Game</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

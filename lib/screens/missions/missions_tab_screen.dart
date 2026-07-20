@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/analytics_service.dart';
 import '../../services/local_store_service.dart';
@@ -270,6 +271,23 @@ class _TopBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const ImHimWordmark(fontSize: 34, letterSpacing: -0.6),
+              const SizedBox(width: 7),
+              // Small "Game" set toward the wordmark's baseline — italic
+              // Playfair to match the mark, muted so ImHim stays the hero.
+              Padding(
+                padding: const EdgeInsets.only(top: 9),
+                child: Text(
+                  'Game',
+                  style: GoogleFonts.playfairDisplay(
+                    fontSize: 17,
+                    height: 1.0,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.2,
+                    color: Colors.white.withValues(alpha: 0.5),
+                  ),
+                ),
+              ),
               const Spacer(),
               if (streak > 0) ...[
                 StreakBadge(days: streak),
