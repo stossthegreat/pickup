@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
@@ -96,8 +97,30 @@ class _SplashScreenState extends State<SplashScreen> {
 
                 const SizedBox(height: Sp.xl),
 
-                // Brand — editorial serif "Im" white + "Him" red.
-                const ImHimWordmark(fontSize: 56, letterSpacing: -2)
+                // Brand — editorial serif "Im" white + "Him" red, with a
+                // smaller muted "Rizz" set toward the baseline.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const ImHimWordmark(fontSize: 56, letterSpacing: -2),
+                    const SizedBox(width: 10),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Text(
+                        'Rizz',
+                        style: GoogleFonts.playfairDisplay(
+                          fontSize: 26,
+                          height: 1.0,
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.4,
+                          color: Colors.white.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
                   .animate().fadeIn(delay: 900.ms, duration: 800.ms)
                   .slideY(begin: 0.15, end: 0,
                       delay: 900.ms, duration: 800.ms, curve: Curves.easeOut),
