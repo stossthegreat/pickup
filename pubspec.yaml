@@ -1,7 +1,7 @@
 name: charmr
 description: "Charmr — roleplay your way to real confidence."
 publish_to: 'none'
-version: 1.0.0+44
+version: 1.0.0+45
 
 environment:
   sdk: ^3.8.0
@@ -116,11 +116,6 @@ flutter:
   assets:
     - assets/icons/appstore.png
     - assets/icons/playstore.png
-    # Auralay-imported assets — MediaPipe FaceLandmarker model directory
-    # (download .task file at runtime via assets/models/README.txt) +
-    # voice coach clips for charisma drills (assets/voice/README.txt).
-    - assets/models/
-    - assets/voice/
     # Mirror-tab pre-scan before/after pair. Declared as a directory
     # so the build doesn't fail when the JPEGs haven't been dropped
     # yet — Flutter bundles whatever exists in the folder, and the
@@ -144,10 +139,7 @@ flutter:
     # each folder for the exact filenames and art-direction brief.
     - assets/characters/lucien/
     - assets/characters/women/
-    - assets/eyes/
-    - assets/eyes/partners/
     - assets/game/
-    - assets/scan/
 
 # Generates every iOS + Android launcher icon from two master PNGs.
 # Run after dropping new masters:  dart run flutter_launcher_icons
