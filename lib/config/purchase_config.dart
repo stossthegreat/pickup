@@ -36,7 +36,7 @@ class PurchaseConfig {
   /// product isn't live on Apple's side yet (Paid Apps agreement unsigned, or
   /// the subscription not "Ready to Submit"). That is an App Store Connect
   /// setup issue, NOT a code issue — fix it there and error 23 disappears.
-  static const bool enabled = true;
+  static const bool enabled = false;
 
   /// RevenueCat public SDK key for iOS. Starts with `appl_`.
   static const iosApiKey     = 'appl_qLSVUdcrgjVeLZqNkuoOgaBCtOv';
