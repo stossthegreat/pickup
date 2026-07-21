@@ -272,12 +272,12 @@ class _TopBar extends StatelessWidget {
             children: [
               const ImHimWordmark(fontSize: 34, letterSpacing: -0.6),
               const SizedBox(width: 7),
-              // Small "Game" set toward the wordmark's baseline — italic
+              // Small "Rizz" set toward the wordmark's baseline — italic
               // Playfair to match the mark, muted so ImHim stays the hero.
               Padding(
                 padding: const EdgeInsets.only(top: 9),
                 child: Text(
-                  'Game',
+                  'Rizz',
                   style: GoogleFonts.playfairDisplay(
                     fontSize: 17,
                     height: 1.0,
