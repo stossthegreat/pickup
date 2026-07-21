@@ -52,6 +52,12 @@ class GirlChatConfig {
   /// at the top and she waits for the user's opener.
   final GirlPost? post;
 
+  /// When true this is a MISSION task chat (not free Practice): a COMPLETE
+  /// bar tracks progress, the user must actually trade [taskGoal] lines, and
+  /// a score card slides up at the end. Free Practice chats leave this false.
+  final bool taskMode;
+  final int taskGoal;
+
   const GirlChatConfig({
     required this.characterId,
     required this.vibeKey,
@@ -62,6 +68,8 @@ class GirlChatConfig {
     required this.opener,
     this.focus = 'game',
     this.post,
+    this.taskMode = false,
+    this.taskGoal = 15,
   });
 }
 
@@ -93,6 +101,7 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   bool _helping = false; // Lucien "Get Help" request in flight
   bool _creator = false;
   int _turnIndex = 0;
+  bool _taskDone = false; // mission task: score card already shown
 
   // Fed to the AI so she uses his name + pitches to his age band.
   String? _name;
@@ -268,6 +277,35 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     ));
   }
 
+  /// Mission task finished — slide up the score card, then pop back to
+  /// Missions (which auto-completes the mission on return).
+  Future<void> _finishTask() async {
+    HapticFeedback.mediumImpact();
+    final interest = _heat.round().clamp(0, 100);
+    // Overall: mostly how into you she got, plus credit for staying in it.
+    final overall = ((interest * 0.8) + 20).clamp(0, 100).round();
+    final verdict = interest >= 90
+        ? 'You had her. Textbook.'
+        : interest >= 70
+            ? 'She\'s into it — you ran that clean.'
+            : interest >= 45
+                ? 'Solid. You held her attention.'
+                : 'She wasn\'t feeling it. Reset and run it back.';
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _TaskScoreCard(
+        config: widget.config,
+        overall: overall,
+        interest: interest,
+        verdict: verdict,
+      ),
+    );
+    if (mounted) Navigator.of(context).maybePop(); // → Missions auto-completes
+  }
+
   Future<void> _send(String raw) async {
     final text = raw.trim();
     if (text.isEmpty || _sending) return;
@@ -318,6 +356,15 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     }
     // ignore: discarded_futures
     _persistArc();
+    // MISSION TASK: once he's traded enough real lines, the task completes
+    // and the score card slides up. Free Practice chats never trigger this.
+    if (widget.config.taskMode &&
+        !_taskDone &&
+        _turnIndex >= widget.config.taskGoal) {
+      _taskDone = true;
+      // ignore: discarded_futures
+      _finishTask();
+    }
     // A genuinely sharp line nudges The Five — practice moves your score.
     if (result.strong) {
       // ignore: discarded_futures
@@ -461,6 +508,10 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
                 config: widget.config,
                 heat: _heat,
                 onVoice: _openVoice,
+                taskMode: widget.config.taskMode,
+                taskProgress: (_turnIndex / widget.config.taskGoal)
+                    .clamp(0.0, 1.0)
+                    .toDouble(),
               ),
               const Divider(height: 1, color: AppColors.divider),
               Expanded(
@@ -540,7 +591,15 @@ class _Header extends StatelessWidget {
   final GirlChatConfig config;
   final double heat;
   final VoidCallback onVoice;
-  const _Header({required this.config, required this.heat, required this.onVoice});
+  final bool taskMode;
+  final double taskProgress; // 0..1, mission task completion
+  const _Header({
+    required this.config,
+    required this.heat,
+    required this.onVoice,
+    this.taskMode = false,
+    this.taskProgress = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -661,6 +720,44 @@ class _Header extends StatelessWidget {
               ),
             ],
           ),
+          // Mission task progress — fills as he trades real lines.
+          if (taskMode) ...[
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Row(
+                children: [
+                  Text('COMPLETE',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 8.5,
+                        letterSpacing: 1.8,
+                        fontWeight: FontWeight.w800,
+                      )),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(99),
+                      child: LinearProgressIndicator(
+                        value: taskProgress.clamp(0.0, 1.0),
+                        minHeight: 5,
+                        backgroundColor: AppColors.surface2,
+                        valueColor: const AlwaysStoppedAnimation(
+                            AppColors.signalGreen),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('${(taskProgress.clamp(0.0, 1.0) * 100).round()}%',
+                      style: GoogleFonts.inter(
+                        color: AppColors.signalGreen,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           // Interest meter.
           Padding(
@@ -1226,6 +1323,152 @@ class _InputBar extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  TASK SCORE CARD — slides up when a mission chat hits its message goal
+// ══════════════════════════════════════════════════════════════════════
+class _TaskScoreCard extends StatelessWidget {
+  final GirlChatConfig config;
+  final int overall;
+  final int interest;
+  final String verdict;
+  const _TaskScoreCard({
+    required this.config,
+    required this.overall,
+    required this.interest,
+    required this.verdict,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.base,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          24, 16, 24, 24 + MediaQuery.of(context).padding.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+                color: AppColors.surface3,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 20),
+          Text('TASK COMPLETE',
+              style: GoogleFonts.inter(
+                color: config.accent,
+                fontSize: 12,
+                letterSpacing: 3,
+                fontWeight: FontWeight.w900,
+              )),
+          const SizedBox(height: 16),
+          Container(
+            width: 74,
+            height: 74,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: config.accent, width: 2),
+              boxShadow: [
+                BoxShadow(color: config.accent.withOpacity(0.4), blurRadius: 18),
+              ],
+            ),
+            child: ClipOval(
+              child: Image.asset(config.portraitAsset, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                        color: AppColors.surface2,
+                        child: Icon(Icons.person_rounded, color: config.accent),
+                      )),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('$overall',
+              style: GoogleFonts.playfairDisplay(
+                color: Colors.white,
+                fontSize: 66,
+                height: 1,
+                fontWeight: FontWeight.w800,
+              )),
+          Text('OUT OF 100',
+              style: GoogleFonts.inter(
+                color: AppColors.textTertiary,
+                fontSize: 10,
+                letterSpacing: 2,
+                fontWeight: FontWeight.w800,
+              )),
+          const SizedBox(height: 16),
+          Text(verdict,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 15,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+              )),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Text('HER INTEREST',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 8.5,
+                    letterSpacing: 1.8,
+                    fontWeight: FontWeight.w800,
+                  )),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                    value: (interest / 100).clamp(0.0, 1.0).toDouble(),
+                    minHeight: 6,
+                    backgroundColor: AppColors.surface2,
+                    valueColor: AlwaysStoppedAnimation(config.accent),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('$interest',
+                  style: GoogleFonts.inter(
+                    color: config.accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: Material(
+              color: config.accent,
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => Navigator.of(context).maybePop(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  child: Center(
+                    child: Text('DONE',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 14,
+                          letterSpacing: 2,
+                          fontWeight: FontWeight.w900,
+                        )),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
