@@ -68,7 +68,7 @@ const kRoster = <GirlBrief>[
     opener: 'oh, it\'s you. i was kind of hoping you\'d text.',
     asset: 'assets/characters/women/arena.png', accent: Color(0xFFF472B6), tier: 1, unlockDay: 1),
   GirlBrief(
-    id: 'chaos', vibeKey: 'chaos', name: 'Nyx', type: 'CHAOS',
+    id: 'chaos', vibeKey: 'chaos', name: 'Lexi', type: 'CHAOS',
     archetype: 'Fast, loud, jumps topics. Keep up.',
     opener: 'you look like a bad decision. i love bad decisions.',
     asset: 'assets/characters/women/chaos_girl.png', accent: Color(0xFFE8222A), tier: 2, unlockDay: 10),

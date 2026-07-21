@@ -121,6 +121,12 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Unlocked women first, then the locked ones grouped by the day they
+    // open (Day 10 group, then Day 20, then 30, then 40) — a clear climb.
+    final unlocked = [for (final g in kRoster) if (!_locked(g)) g];
+    final locked = [for (final g in kRoster) if (_locked(g)) g]
+      ..sort((a, b) => a.unlockDay.compareTo(b.unlockDay));
+    final roster = [...unlocked, ...locked];
     return SafeArea(
       bottom: false,
       child: CustomScrollView(
@@ -144,7 +150,7 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, i) {
-                  final g = kRoster[i];
+                  final g = roster[i];
                   return _GirlCard(
                     girl: g,
                     stage: _stages[g.id] ?? 1,
@@ -155,7 +161,7 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                       .fadeIn(delay: (55 * i).ms, duration: 320.ms)
                       .slideY(begin: 0.06, curve: Curves.easeOut);
                 },
-                childCount: kRoster.length,
+                childCount: roster.length,
               ),
             ),
           ),
