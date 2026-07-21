@@ -131,6 +131,7 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
           portraitAsset: g.asset,
           accent: g.accent,
           opener: g.opener,
+          taskMode: true, // mission task → COMPLETE bar + score card at the end
           post: m.kind == MissionKind.aiPost
               ? GirlPost(
                   context: m.postContext ?? 'She just posted.',
