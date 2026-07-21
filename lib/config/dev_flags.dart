@@ -50,23 +50,17 @@
 ///
 /// **FLIP THIS BACK TO FALSE BEFORE SHIPPING A PAID BUILD.**
 ///
-/// v357 — SUBMISSION BUILD. FALSE. This is the real App Store paywall.
+/// v358 — TRUE. PAYWALL OFF for this build (ships FREE), per bro: "take the
+/// paywall off for this next build and I'll get you to add it afterwards."
+/// Paired with PurchaseConfig.enabled = false so RevenueCat never configures
+/// and there is no subscription for App Review to test — a clean free app that
+/// sidesteps the 2.1(b) "IAP not submitted" flag while we get approved past the
+/// 4.3 strip.
 ///
-/// The model, exactly as intended:
-///   1. The user lands straight in the app after onboarding (never walled at
-///      the door) — no paywall blocks entry, so nobody can get "stuck".
-///   2. Every paid ACTION they press — opening a girl, a mission, a voice call,
-///      a rizz screenshot — opens the paywall.
-///   3. The paywall is DISMISSIBLE: the X (and the system back gesture) closes
-///      it and drops them back where they were to keep browsing. They just
-///      can't use the paid feature until they subscribe.
-///   4. On a real purchase, RevenueCat activates the `pro` entitlement and the
-///      whole app unlocks; the gate the user tapped opens immediately.
-///
-/// For the purchase to COMPLETE the product must be fetchable from App Store
-/// Connect (Paid Apps agreement signed, imhim_pro_weekly "Ready to Submit"),
-/// else RevenueCat returns error 23 — an App Store Connect fix, not a code fix.
-const kBypassPaywall = false;
+/// TO PUT THE PAYWALL BACK (money build): set this to false AND
+/// PurchaseConfig.enabled = true. The whole browse-then-pay model is still
+/// wired — nothing else changes.
+const kBypassPaywall = true;
 
 /// FALSE — real, charging paywall for launch. X only dismisses (back to
 /// browsing); the ONLY way past a paid feature is a real subscription. Apple's
@@ -79,4 +73,4 @@ const kPaywallDemoUnlock = false;
 /// tell which build is actually installed on-device (TestFlight lag has
 /// repeatedly made us debug a stale build). Bump this with every pubspec
 /// build-number bump.
-const kBuildTag = 'b363-strip';
+const kBuildTag = 'b364-free';
