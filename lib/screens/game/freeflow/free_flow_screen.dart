@@ -624,6 +624,19 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
     return b.toString();
   }
 
+  /// The voice-screen header label — the girl's CHARACTER type (e.g.
+  /// "THE DITSY ONE", "ICE QUEEN"), from the roster by vibe key.
+  /// DISPLAY ONLY — it does NOT touch the persona, memory or roleplay.
+  String get _headerCharacter {
+    final key = _vibe?.key;
+    if (key != null) {
+      for (final g in kRoster) {
+        if (g.vibeKey == key) return g.type;
+      }
+    }
+    return _vibe?.label ?? '';
+  }
+
   Future<void> _goLive(_Vibe vibe) async {
     // AI consent gate (App Store 5.1.2(i)) — no voice reaches OpenAI
     // without permission. Silent + instant for anyone who already
@@ -2052,7 +2065,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
               if (widget.tabMode)
                 const ImHimWordmark(fontSize: 34)
               else
-                Text(_vibe?.label ?? '',
+                Text(_headerCharacter,
                     style: AppTypography.label.copyWith(
                       color: AppColors.accent,
                       fontSize: 11,
