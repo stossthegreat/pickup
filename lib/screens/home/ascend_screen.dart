@@ -242,7 +242,8 @@ class _AscendScreenState extends State<AscendScreen> {
                   Text('Your Ascension', style: AppTypography.h1Italic),
                   const SizedBox(height: 4),
                   Text('Every real rep moves you closer to becoming him.',
-                      style: AppTypography.bodySmall),
+                      style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.red, fontStyle: FontStyle.italic)),
                 ],
               ),
             ),
@@ -1604,7 +1605,7 @@ class _MastheadSettingsCog extends StatelessWidget {
               color: AppColors.divider, width: 0.8),
           ),
           alignment: Alignment.center,
-          child: const Icon(Icons.tune,
+          child: const Icon(Icons.settings_outlined,
             size: 18, color: AppColors.textSecondary),
         ),
       ),

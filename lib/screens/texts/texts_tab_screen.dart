@@ -7,46 +7,37 @@ import '../rizz/rizz_chat_screen.dart';
 import '../rizz/rizz_tab_screen.dart' show RizzCardAction;
 
 /// TEXTS — the AI text coach. The page IS the rizz chat (im-him header
-/// stripped via embedded:true). Two small red action cards sit on top:
-/// Analyse Screenshot and Pickup Lines, deep-linking to the existing flows.
+/// stripped via embedded:true). The "Your AI Wingman" header scrolls WITH the
+/// conversation (passed in as the chat's first list item), and the screenshot +
+/// pickup-line buttons sit on the composer's tone row.
 class TextsTabScreen extends StatelessWidget {
   const TextsTabScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Sp.md, Sp.sm, Sp.md, Sp.sm),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Your AI Wingman', style: AppTypography.h1Italic),
-                const SizedBox(height: 4),
-                Text(
-                  'Analyse screenshots, write replies, fix dead chats and '
-                  'help before you press send.',
-                  style: AppTypography.bodySmall,
-                ),
-              ],
+    return RizzChatScreen(
+      embedded: true,
+      onScreenshot: () =>
+          context.push('/rizz', extra: const RizzCardAction.upload()),
+      onLines: () => context.push('/lines'),
+      header: Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Your AI Wingman', style: AppTypography.h1Italic),
+            const SizedBox(height: 6),
+            Text(
+              'Analyse screenshots, write replies, fix dead chats and '
+              'help before you press send.',
+              style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.red, fontStyle: FontStyle.italic),
             ),
-          ),
-          const Divider(height: 1, color: AppColors.divider),
-          // The chat, embedded — im-him header dropped. The screenshot +
-          // pickup-line buttons now sit on the composer's tone row.
-          Expanded(
-            child: RizzChatScreen(
-              embedded: true,
-              onScreenshot: () =>
-                  context.push('/rizz', extra: const RizzCardAction.upload()),
-              onLines: () => context.push('/lines'),
-            ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: AppColors.divider),
+          ],
+        ),
       ),
     );
   }
 }
-

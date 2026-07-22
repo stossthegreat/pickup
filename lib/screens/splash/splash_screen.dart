@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/dev_flags.dart';
 import '../../services/local_store_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
@@ -34,7 +35,7 @@ class _SplashScreenState extends State<SplashScreen> {
     // Let everyone into the app — the paywall fires on ACTIONS (opening a
     // girl, starting a mission or a call), not as an entry wall. They see
     // what they're buying first.
-    if (!onboarded) {
+    if (!onboarded || kForceOnboarding) {
       context.go('/onboarding/story');
     } else {
       context.go('/home');

@@ -29,11 +29,16 @@ class RizzChatScreen extends StatefulWidget {
   /// on the composer's tone row (screenshot analyser + pickup lines).
   final VoidCallback? onScreenshot;
   final VoidCallback? onLines;
+  /// Optional header rendered as the FIRST scrolling item of the message list
+  /// (Texts tab) so it scrolls away with the conversation instead of eating
+  /// fixed space at the top.
+  final Widget? header;
   const RizzChatScreen({
     super.key,
     this.embedded = false,
     this.onScreenshot,
     this.onLines,
+    this.header,
   });
 
   @override
@@ -658,9 +663,17 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
                 child: ListView.separated(
                   controller: _scrollCtrl,
                   padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-                  itemCount: _msgs.length + (_sending ? 1 : 0),
+                  itemCount: _msgs.length +
+                      (_sending ? 1 : 0) +
+                      (widget.header != null ? 1 : 0),
                   separatorBuilder: (_, __) => const SizedBox(height: 14),
-                  itemBuilder: (_, i) {
+                  itemBuilder: (_, index) {
+                    var i = index;
+                    // First item = the scrolling header (Texts tab).
+                    if (widget.header != null) {
+                      if (i == 0) return widget.header!;
+                      i -= 1;
+                    }
                     if (i == _msgs.length) return const _TypingBubble();
                     return _ChatBubble(msg: _msgs[i]);
                   },
