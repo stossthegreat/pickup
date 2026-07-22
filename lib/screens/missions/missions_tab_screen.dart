@@ -221,7 +221,7 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(Sp.lg, 0, Sp.lg, 120),
+              padding: const EdgeInsets.fromLTRB(Sp.lg, 0, Sp.lg, Sp.md),
               sliver: SliverList.builder(
                 itemCount: _missions.length,
                 itemBuilder: (context, i) {
@@ -238,6 +238,19 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
                         .slideY(begin: 0.07, curve: Curves.easeOut),
                   );
                 },
+              ),
+            ),
+          if (!_loading)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.lg, 120),
+                child: Center(
+                  child: Text('Real reps build real game.',
+                      style: AppTypography.bodySmall.copyWith(
+                        fontStyle: FontStyle.italic,
+                        color: AppColors.textTertiary,
+                      )),
+                ),
               ),
             ),
         ],
@@ -344,9 +357,9 @@ class _Heading extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        Text('Make your move.', style: AppTypography.h1Italic),
+        Text('Today\'s Mission', style: AppTypography.h1Italic),
         const SizedBox(height: 6),
-        Text('Practice on AI. Then do it for real — that\'s where the score lives.',
+        Text('Practice on AI. Then prove it in real life.',
             style: AppTypography.bodySmall),
       ],
     );

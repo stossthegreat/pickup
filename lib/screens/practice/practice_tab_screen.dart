@@ -134,9 +134,9 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
           const SliverToBoxAdapter(
             child: MirrorlyMasthead(
               eyebrow: 'PRACTICE · TEXT + VOICE',
-              title: 'Who\'s it tonight?',
-              subtitle: 'Text her or take it live — she remembers you either '
-                  'way. Unlock more women as you climb the 60 days.',
+              title: 'Practice until it feels natural.',
+              subtitle: 'Voice calls, texts and scenarios that prepare you '
+                  'for real conversations.',
             ),
           ),
           SliverPadding(

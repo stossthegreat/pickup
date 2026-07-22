@@ -125,40 +125,53 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
 
   // ── The 10 beats ──────────────────────────────────────────────────────
   List<_Beat> _buildBeats() => const [
-        // 00 — HERO. What the app IS, up front: the fun (rizz + roleplay
-        // with AI girls) AND the mission (real confidence, humour, game).
+        // 01 — HERO. The promise, up front.
         _HeroBeat(
-          headline: 'Rizz her.\nFor real this time.',
-          body: 'Practice on AI girls, then prove it with real-world '
-              'missions. 60 days to the confidence, humour and game that '
-              'actually get the girl.',
+          headline: 'Never be the man\nwho says nothing.',
+          body: 'You saw the opportunity. You knew what you wanted. '
+              'But you hesitated.\n\nImHim trains you to make your move.',
           cta: 'SHOW ME HOW',
         ),
+        // 02 — THE MOMENT
         _ImageBeat(
-          kicker: '01 — THE PATTERN',
+          kicker: '01 — THE MOMENT',
           asset: 'assets/onboarding/hesitation.png',
-          headline: 'You already know\nhow this ends.',
-          body: 'You see the moment. You hesitate.\nSomeone else takes it.',
+          headline: 'You see her.',
+          body: 'You think about walking over. You search for the perfect '
+              'thing to say. Then the moment is gone.\n\n'
+              'That hesitation is costing you opportunities.',
         ),
+        // 03 — BE HONEST (the one pick-to-continue question)
         _QuestionBeat(
           kicker: '02 — BE HONEST',
-          question: 'Which one hurts\nbecause it\'s true?',
-          note: 'This is the pattern we\'re here to break.',
+          question: 'What usually\nstops you?',
+          note: 'We\'re going to train that out of you.',
           options: [
-            'I knew exactly what to say… afterwards.',
-            'I\'ll do it next time.',
-            'I watched someone else do what I couldn\'t.',
-            'I keep waiting until I feel confident.',
+            'I don\'t know what to say.',
+            'I overthink the approach.',
+            'I\'m afraid of rejection.',
+            'I wait until it\'s too late.',
           ],
         ),
+        // 04 — THE REGRET
         _ImageBeat(
           kicker: '03 — THE REGRET',
           asset: 'assets/onboarding/1am.png',
-          headline: 'The worst part\nisn\'t rejection.',
-          body: 'It\'s wondering what would\'ve happened\nif you\'d just moved.',
+          headline: 'Rejection lasts\na moment.',
+          body: 'Regret stays with you. Not knowing what would\'ve happened. '
+              'Replaying the moment.\n\nWishing you\'d just made your move.',
         ),
+        // 05 — ASK YOURSELF
+        _StatementBeat(
+          kicker: '04 — ASK YOURSELF',
+          headline: 'How important is\nbeing good with\nwomen to you?',
+          body: 'What other skill this important would you never practise?\n\n'
+              'You train your body. You train your career. You train almost '
+              'everything that matters.\n\nWhy should this be any different?',
+        ),
+        // 06 — YOUR LEVEL (sets where Day 1 begins)
         _QuestionBeat(
-          kicker: '04 — YOUR LEVEL',
+          kicker: '05 — YOUR LEVEL',
           question: 'Let\'s start where\nyou actually are.',
           sub: 'How confident are you approaching someone you\'re attracted to?',
           note: 'This sets where your Day 1 begins.',
@@ -169,39 +182,48 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
             'I\'m already comfortable.',
           ],
         ),
-        _StatementBeat(
-          kicker: '05 — THE TRUTH',
-          headline: 'This isn\'t personality.\nIt\'s a skill.',
-          body: 'Nobody becomes socially confident by hoping.\n'
-              'They become socially confident by practicing.',
-        ),
+        // 07 — HOW YOU TRAIN (three features)
         _HowBeat(
-          kicker: '06 — HOW IMHIM WORKS',
-          headline: 'Every day,\nthree things.',
-          footer: 'That\'s it. Repeat for 60 days.',
+          kicker: '06 — THE METHOD',
+          headline: 'This is where\nyou train.',
+          footer: 'Practise here. Prove it out there.',
         ),
-        _DashboardBeat(
-          kicker: '07 — YOUR TRANSFORMATION',
-          headline: 'You\'ll measure\nwhat actually changes.',
-          body: 'Confidence · Presence · Game · Humour · Listening.\n'
-              'You won\'t guess if you\'re improving — you\'ll see it.',
-        ),
+        // 07 — PRACTISE
         _StatementBeat(
-          kicker: '08 — THE RULE',
-          headline: 'Rejection is not failure.\nAvoidance is.',
-          body: 'For the next 60 days, every conversation is progress.\n'
-              'Every excuse keeps you exactly where you are.',
+          kicker: '07 — PRACTISE',
+          headline: 'Practise before\nthe moment comes.',
+          body: 'Handle awkward silences. Recover from bad conversations. '
+              'Learn what works. Repeat until it feels natural.\n\n'
+              'Make your mistakes here. Build your game out there.',
         ),
+        // 08 — REAL LIFE
+        _StatementBeat(
+          kicker: '08 — REAL LIFE',
+          headline: 'Then take it\ninto real life.',
+          body: 'Your missions turn practice into action. Before the '
+              'approach. During the conversation. After the text.\n\n'
+              'Your coach becomes your wingman.',
+        ),
+        // 09 — THE SHIFT
         _BarsBeat(
           kicker: '09 — THE SHIFT',
-          headline: 'One day, something\nfeels different.',
-          body: 'You stop rehearsing. You stop overthinking.\n'
-              'You stop watching. You move.\nAnd every week, your scores prove it.',
+          headline: 'Every rep\nchanges you.',
+          body: 'Less hesitation. Better conversations. More confidence. '
+              'Stronger humour. More opportunities.\n\n'
+              'You won\'t wonder if you\'re improving. You\'ll see it.',
         ),
+        // 10 — THE CHOICE
+        _StatementBeat(
+          kicker: '10 — THE CHOICE',
+          headline: 'Stop hoping you\'ll\nknow what to say.',
+          body: 'Practise until you do.\n\nTrain with AI. Complete real-world '
+              'missions. Get help whenever it matters. Build real-life game.',
+        ),
+        // 11 — FINALE
         _FinaleBeat(
           headline: 'The next 60 days\nwill pass anyway.',
-          body: 'At the end of them you\'ll either still be on the sidelines —\n'
-              'or you\'ll be him.',
+          body: 'At the end of them you\'ll either still be on the sidelines…'
+              '\n\nor you\'ll be him.',
           cta: 'SEE MY 60-DAY PLAN',
         ),
       ];
@@ -496,21 +518,29 @@ class _BeatView extends StatelessWidget {
     );
   }
 
-  // ── Image beat: headline + body anchored to the bottom, over the black ──
+  // ── Image beat: headline + body anchored to the bottom, over the black.
+  //    Scroll-safe — bottom-anchors when it fits, scrolls on small screens
+  //    so the copy never overflows.
   Widget _imageBeat(_ImageBeat b) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(26, 0, 26, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          _kicker(b.kicker),
-          const SizedBox(height: 16),
-          _headline(b.headline),
-          const SizedBox(height: 16),
-          _body(b.body),
-          const SizedBox(height: 10),
-        ],
+    return LayoutBuilder(
+      builder: (context, c) => SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(26, 20, 26, 8),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: c.maxHeight - 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _kicker(b.kicker),
+              const SizedBox(height: 16),
+              _headline(b.headline),
+              const SizedBox(height: 16),
+              _body(b.body),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -610,12 +640,13 @@ class _BeatView extends StatelessWidget {
   // ── How it works: three clean steps ───────────────────────────────────
   Widget _howBeat(_HowBeat b) {
     const steps = <(IconData, String, String)>[
-      (Icons.smart_toy_rounded, 'Practice with AI',
-          'Roleplay real conversations with AI girls — voice or text.'),
-      (Icons.public_rounded, 'One real-world mission',
-          'Take what you practised out into real life.'),
-      (Icons.trending_up_rounded, 'Watch your scores climb',
-          'See your confidence, humour and game improve.'),
+      (Icons.smart_toy_rounded, 'Practise with AI',
+          'Roleplay realistic voice and text conversations until knowing '
+              'what to say becomes natural.'),
+      (Icons.public_rounded, 'Complete real missions',
+          'Take what you\'ve practised into real life.'),
+      (Icons.support_agent_rounded, 'Use your AI wingman',
+          'Get help before, during and after every conversation.'),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
