@@ -1605,7 +1605,7 @@ class _MastheadSettingsCog extends StatelessWidget {
               color: AppColors.divider, width: 0.8),
           ),
           alignment: Alignment.center,
-          child: const Icon(Icons.tune,
+          child: const Icon(Icons.settings_outlined,
             size: 18, color: AppColors.textSecondary),
         ),
       ),

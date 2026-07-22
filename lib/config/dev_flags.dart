@@ -60,7 +60,7 @@
 /// TO PUT THE PAYWALL BACK (money build): set this to false AND
 /// PurchaseConfig.enabled = true. The whole browse-then-pay model is still
 /// wired — nothing else changes.
-const kBypassPaywall = false;
+const kBypassPaywall = true;
 
 /// FALSE — real, charging paywall for launch. X only dismisses (back to
 /// browsing); the ONLY way past a paid feature is a real subscription. Apple's
@@ -79,4 +79,4 @@ const kForceOnboarding = false;
 /// tell which build is actually installed on-device (TestFlight lag has
 /// repeatedly made us debug a stale build). Bump this with every pubspec
 /// build-number bump.
-const kBuildTag = 'b373-name';
+const kBuildTag = 'b374-test';
