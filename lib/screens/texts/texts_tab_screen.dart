@@ -20,82 +20,33 @@ class TextsTabScreen extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(Sp.md, Sp.sm, Sp.md, Sp.sm),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _ActionCard(
-                    label: 'Analyse Screenshot',
-                    icon: Icons.image_outlined,
-                    onTap: () =>
-                        context.push('/rizz', extra: const RizzCardAction.upload()),
-                  ),
-                ),
-                const SizedBox(width: Sp.sm),
-                Expanded(
-                  child: _ActionCard(
-                    label: 'Pickup Lines',
-                    icon: Icons.bolt_rounded,
-                    onTap: () => context.push('/lines'),
-                  ),
+                Text('Your AI Wingman', style: AppTypography.h1Italic),
+                const SizedBox(height: 4),
+                Text(
+                  'Analyse screenshots, write replies, fix dead chats and '
+                  'help before you press send.',
+                  style: AppTypography.bodySmall,
                 ),
               ],
             ),
           ),
           const Divider(height: 1, color: AppColors.divider),
-          // The chat, embedded — im-him header dropped.
-          const Expanded(child: RizzChatScreen(embedded: true)),
+          // The chat, embedded — im-him header dropped. The screenshot +
+          // pickup-line buttons now sit on the composer's tone row.
+          Expanded(
+            child: RizzChatScreen(
+              embedded: true,
+              onScreenshot: () =>
+                  context.push('/rizz', extra: const RizzCardAction.upload()),
+              onLines: () => context.push('/lines'),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _ActionCard extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  const _ActionCard({required this.label, required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(Rd.md),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: Sp.md, vertical: 12),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.red, AppColors.redDim],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(Rd.md),
-            boxShadow: [BoxShadow(color: AppColors.redGlow, blurRadius: 12, offset: const Offset(0, 4))],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: Colors.white),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  label.toUpperCase(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.label.copyWith(
-                    color: Colors.white,
-                    fontSize: 10,
-                    letterSpacing: 1.2,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

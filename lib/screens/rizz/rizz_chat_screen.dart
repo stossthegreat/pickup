@@ -25,7 +25,16 @@ class RizzChatScreen extends StatefulWidget {
   /// When embedded in the Texts tab we drop the im-him header — the tab
   /// supplies its own chrome (the two red action cards).
   final bool embedded;
-  const RizzChatScreen({super.key, this.embedded = false});
+  /// When embedded in the Texts tab, these render as two small pill buttons
+  /// on the composer's tone row (screenshot analyser + pickup lines).
+  final VoidCallback? onScreenshot;
+  final VoidCallback? onLines;
+  const RizzChatScreen({
+    super.key,
+    this.embedded = false,
+    this.onScreenshot,
+    this.onLines,
+  });
 
   @override
   State<RizzChatScreen> createState() => _RizzChatScreenState();
@@ -704,6 +713,8 @@ class _RizzChatScreenState extends State<RizzChatScreen> {
                 onTone:     _sending ? null : _openTonePicker,
                 onSend:     () => _send(_ctrl.text),
                 onAttach:   _showAttachSheet,
+                onScreenshot: widget.onScreenshot,
+                onLines:      widget.onLines,
               ),
               const SizedBox(height: 6),
             ],
@@ -1198,6 +1209,9 @@ class _InputBar extends StatelessWidget {
   final VoidCallback? onTone;
   final VoidCallback onSend;
   final VoidCallback onAttach;
+  /// Optional tone-row buttons (Texts tab): screenshot analyser + pickup lines.
+  final VoidCallback? onScreenshot;
+  final VoidCallback? onLines;
   const _InputBar({
     required this.controller,
     required this.sending,
@@ -1205,6 +1219,8 @@ class _InputBar extends StatelessWidget {
     required this.onTone,
     required this.onSend,
     required this.onAttach,
+    this.onScreenshot,
+    this.onLines,
   });
 
   @override
@@ -1338,6 +1354,15 @@ class _InputBar extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onScreenshot != null) ...[
+                  const SizedBox(width: 8),
+                  _MiniPill(
+                      icon: Icons.image_outlined, onTap: onScreenshot!),
+                ],
+                if (onLines != null) ...[
+                  const SizedBox(width: 8),
+                  _MiniPill(icon: Icons.bolt_rounded, onTap: onLines!),
+                ],
                 const Spacer(),
               ],
             ),
@@ -1591,6 +1616,35 @@ class _ChatTransformStrip extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// Small tone-row action pill (Texts tab): icon-only, matches the tone
+// pill's rounded shape + height so the composer row reads as one clean unit.
+class _MiniPill extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _MiniPill({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(99),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(99),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(color: AppColors.surface3, width: 0.9),
+          ),
+          child: Icon(icon, color: Colors.white, size: 16),
+        ),
       ),
     );
   }

@@ -233,6 +233,20 @@ class _AscendScreenState extends State<AscendScreen> {
               ),
             ),
 
+            const SizedBox(height: Sp.md),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Your Ascension', style: AppTypography.h1Italic),
+                  const SizedBox(height: 4),
+                  Text('Every real rep moves you closer to becoming him.',
+                      style: AppTypography.bodySmall),
+                ],
+              ),
+            ),
+
             const SizedBox(height: Sp.lg),
 
             // ── 1 — HERO. THE ASCENSION MAP. The visible path from where
