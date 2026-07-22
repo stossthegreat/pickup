@@ -603,42 +603,35 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       if (g.vibeKey == vibeKey) { girl = g; break; }
     }
     if (girl == null) return '';
-    // ALWAYS tell her who she is, so the voice AI uses the SAME name as her
-    // card (Daisy, Seraphina, Lexi, …) instead of a generic vibe persona.
-    final b = StringBuffer()
-      ..writeln('# WHO YOU ARE')
-      ..writeln('Your name is ${girl.name}. If he asks your name, it is '
-          '${girl.name} — never any other name.')
-      ..writeln();
     final id = girl.id;
     final stage    = await LocalStoreService.girlStage(id);
     final interest = await LocalStoreService.girlInterest(id);
     final memory   = (await LocalStoreService.girlMemory(id)).trim();
     final hasHistory = stage > 1 || interest > 20 || memory.isNotEmpty;
-    if (hasHistory) {
-      final stageLabel = (stage >= 1 && stage < kRelationshipStages.length)
-          ? kRelationshipStages[stage]
-          : 'Talking';
-      b
-        ..writeln('# WHAT YOU ALREADY KNOW')
-        ..writeln('This is NOT a first meeting — you and he already know each '
-            'other. Do not act like a stranger; react like someone with '
-            'history, warmer or cooler based on how it has gone.')
-        ..writeln('Where things stand: $stageLabel.')
-        ..writeln('How into him you are so far: $interest out of 100 — let '
-            'that colour how warm or guarded you sound.');
-      if (memory.isNotEmpty) b.writeln('You remember: $memory');
-    }
+    if (!hasHistory) return '';
+    final stageLabel = (stage >= 1 && stage < kRelationshipStages.length)
+        ? kRelationshipStages[stage]
+        : 'Talking';
+    final b = StringBuffer()
+      ..writeln('# WHAT YOU ALREADY KNOW')
+      ..writeln('This is NOT a first meeting — you and he already know each '
+          'other. Do not act like a stranger; react like someone with '
+          'history, warmer or cooler based on how it has gone.')
+      ..writeln('Where things stand: $stageLabel.')
+      ..writeln('How into him you are so far: $interest out of 100 — let that '
+          'colour how warm or guarded you sound.');
+    if (memory.isNotEmpty) b.writeln('You remember: $memory');
     return b.toString();
   }
 
-  /// The voice-screen header title — the girl's NAME when this vibe maps to a
-  /// roster girl (so the screen says "DAISY", not the vibe label "BUBBLY").
-  String get _headerTitle {
+  /// The voice-screen header label — the girl's CHARACTER type (e.g.
+  /// "THE DITSY ONE", "ICE QUEEN"), from the roster by vibe key.
+  /// DISPLAY ONLY — it does NOT touch the persona, memory or roleplay.
+  String get _headerCharacter {
     final key = _vibe?.key;
     if (key != null) {
       for (final g in kRoster) {
-        if (g.vibeKey == key) return g.name.toUpperCase();
+        if (g.vibeKey == key) return g.type;
       }
     }
     return _vibe?.label ?? '';
@@ -2072,7 +2065,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
               if (widget.tabMode)
                 const ImHimWordmark(fontSize: 34)
               else
-                Text(_headerTitle,
+                Text(_headerCharacter,
                     style: AppTypography.label.copyWith(
                       color: AppColors.accent,
                       fontSize: 11,
