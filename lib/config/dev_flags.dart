@@ -69,8 +69,14 @@ const kBypassPaywall = true;
 /// it's live. This is the money paywall.
 const kPaywallDemoUnlock = false;
 
+/// TEMPORARY TESTING FLAG. When true, the splash ALWAYS routes to the
+/// onboarding story on launch — even if the user has already onboarded — so we
+/// can review the onboarding without deleting/reinstalling. Set back to FALSE
+/// before shipping, otherwise real users see onboarding on every launch.
+const kForceOnboarding = true;
+
 /// Human-readable build tag shown tiny on the paywall so we can instantly
 /// tell which build is actually installed on-device (TestFlight lag has
 /// repeatedly made us debug a stale build). Bump this with every pubspec
 /// build-number bump.
-const kBuildTag = 'b370-onb';
+const kBuildTag = 'b371-onb';
