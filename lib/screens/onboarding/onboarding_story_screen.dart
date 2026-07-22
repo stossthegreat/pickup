@@ -169,15 +169,28 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
               'You train your body. You train your career. You train almost '
               'everything that matters.\n\nWhy should this be any different?',
         ),
-        // 06 — HOW YOU TRAIN (three features)
+        // 06 — YOUR LEVEL (sets where Day 1 begins)
+        _QuestionBeat(
+          kicker: '05 — YOUR LEVEL',
+          question: 'Let\'s start where\nyou actually are.',
+          sub: 'How confident are you approaching someone you\'re attracted to?',
+          note: 'This sets where your Day 1 begins.',
+          options: [
+            'I never do it.',
+            'I\'ve done it once or twice.',
+            'Sometimes.',
+            'I\'m already comfortable.',
+          ],
+        ),
+        // 07 — HOW YOU TRAIN (three features)
         _HowBeat(
-          kicker: '05 — THE METHOD',
+          kicker: '06 — THE METHOD',
           headline: 'This is where\nyou train.',
           footer: 'Practise here. Prove it out there.',
         ),
         // 07 — PRACTISE
         _StatementBeat(
-          kicker: '06 — PRACTISE',
+          kicker: '07 — PRACTISE',
           headline: 'Practise before\nthe moment comes.',
           body: 'Handle awkward silences. Recover from bad conversations. '
               'Learn what works. Repeat until it feels natural.\n\n'
@@ -185,7 +198,7 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
         ),
         // 08 — REAL LIFE
         _StatementBeat(
-          kicker: '07 — REAL LIFE',
+          kicker: '08 — REAL LIFE',
           headline: 'Then take it\ninto real life.',
           body: 'Your missions turn practice into action. Before the '
               'approach. During the conversation. After the text.\n\n'
@@ -193,7 +206,7 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
         ),
         // 09 — THE SHIFT
         _BarsBeat(
-          kicker: '08 — THE SHIFT',
+          kicker: '09 — THE SHIFT',
           headline: 'Every rep\nchanges you.',
           body: 'Less hesitation. Better conversations. More confidence. '
               'Stronger humour. More opportunities.\n\n'
@@ -201,7 +214,7 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
         ),
         // 10 — THE CHOICE
         _StatementBeat(
-          kicker: '09 — THE CHOICE',
+          kicker: '10 — THE CHOICE',
           headline: 'Stop hoping you\'ll\nknow what to say.',
           body: 'Practise until you do.\n\nTrain with AI. Complete real-world '
               'missions. Get help whenever it matters. Build real-life game.',
