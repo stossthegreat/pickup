@@ -131,12 +131,23 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
       bottom: false,
       child: CustomScrollView(
         slivers: [
-          const SliverToBoxAdapter(
-            child: MirrorlyMasthead(
-              eyebrow: 'PRACTICE · TEXT + VOICE',
-              title: 'Practice until it feels natural.',
-              subtitle: 'Voice calls, texts and scenarios that prepare you '
-                  'for real conversations.',
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.md, Sp.lg, Sp.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Practice until it feels natural.',
+                      style: AppTypography.h1Italic),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Voice calls, texts and scenarios that prepare you '
+                    'for real conversations.',
+                    style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.red, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
             ),
           ),
           SliverPadding(

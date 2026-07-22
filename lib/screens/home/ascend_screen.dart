@@ -242,7 +242,8 @@ class _AscendScreenState extends State<AscendScreen> {
                   Text('Your Ascension', style: AppTypography.h1Italic),
                   const SizedBox(height: 4),
                   Text('Every real rep moves you closer to becoming him.',
-                      style: AppTypography.bodySmall),
+                      style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.red, fontStyle: FontStyle.italic)),
                 ],
               ),
             ),

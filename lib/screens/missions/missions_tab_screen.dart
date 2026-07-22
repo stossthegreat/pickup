@@ -360,7 +360,8 @@ class _Heading extends StatelessWidget {
         Text('Today\'s Mission', style: AppTypography.h1Italic),
         const SizedBox(height: 6),
         Text('Practice on AI. Then prove it in real life.',
-            style: AppTypography.bodySmall),
+            style: AppTypography.bodySmall.copyWith(
+                color: AppColors.red, fontStyle: FontStyle.italic)),
       ],
     );
   }
