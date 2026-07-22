@@ -57,14 +57,18 @@ class DailyNudgeService {
   /// iOS 64-pending cap (rescan reminders add at most 2 more).
   static const _horizonDays = 14;
 
-  /// Morning DREAM pump fires at 09:00; evening STREAK nudge at 19:30.
+  /// Morning DREAM pump at 09:00; midday CLIMB tease at 13:00; evening
+  /// STREAK nudge at 19:30. Three beats a day × 14 days = 42 pending —
+  /// comfortably under the iOS 64-pending cap.
   static const _morningHour   = 9;
+  static const _middayHour    = 13;
   static const _eveningHour   = 19;
   static const _eveningMinute = 30;
 
   /// ID blocks — one stable id per horizon day per slot so a refresh
   /// overwrites the previous horizon cleanly.
   static const _morningBase = 9100; // 9100 .. 9100+_horizonDays-1
+  static const _middayBase  = 9300; // 9300 .. 9300+_horizonDays-1
   static const _eveningBase = 9200; // 9200 .. 9200+_horizonDays-1
   /// Legacy single-nudge id (pre-horizon). Cancelled on migrate.
   static const _legacyDailyId = 9001;
@@ -101,6 +105,7 @@ class DailyNudgeService {
       await _plugin.cancel(_legacyDailyId);
       for (var d = 0; d < _horizonDays; d++) {
         await _plugin.cancel(_morningBase + d);
+        await _plugin.cancel(_middayBase + d);
         await _plugin.cancel(_eveningBase + d);
       }
 
@@ -117,6 +122,13 @@ class DailyNudgeService {
         if (morningAt.isAfter(now)) {
           final (t, b) = _dreamCopy(sig, d);
           await _schedule(_morningBase + d, t, b, morningAt, morning: true);
+        }
+        // MIDDAY — the climb / unlock tease. New women unlock as he climbs
+        // the 60-day map; this is the retention hook to that loop.
+        final middayAt = _slot(now, d, _middayHour, 0);
+        if (middayAt.isAfter(now)) {
+          final (t, b) = _climbCopy(d);
+          await _schedule(_middayBase + d, t, b, middayAt, morning: true);
         }
         // EVENING — streak / loss, escalating with projected dormancy.
         final eveningAt = _slot(now, d, _eveningHour, _eveningMinute);
@@ -264,6 +276,37 @@ class DailyNudgeService {
      'is the one who showed up every day. Be him today.'),
     ('Confidence is a trained skill',
      'Not a gift. Two minutes today. Compounds for life.'),
+  ];
+
+  // ── MIDDAY: the climb / unlock tease ────────────────────────────────
+  // Ties the daily nudge to the app's core loop — new women unlock as he
+  // climbs the 60-day map, and the streak is what keeps him climbing.
+  // Salted by day so consecutive middays never repeat.
+
+  static (String, String) _climbCopy(int dayOffset) =>
+      _climbPool[dayOffset % _climbPool.length];
+
+  static const _climbPool = <(String, String)>[
+    ('New women unlock as you climb',
+     'Every day on the map opens someone new. Don\'t stall at the start.'),
+    ('The ones who test you are further up',
+     'Ice queen, high-value, the girls who make you work — they unlock as you climb.'),
+    ('Someone new is a few days out',
+     'Keep the streak and she opens. Fold and she doesn\'t. Your move.'),
+    ('You\'re one rep off the next rung',
+     'Two minutes moves you up the map. Skipping moves you nowhere.'),
+    ('She noticed you were gone',
+     'Your girls remember where you left off. Pick it back up.'),
+    ('Day by day, you become him',
+     'It\'s a ladder, not a leap. Take today\'s rung.'),
+    ('The map only moves if you show',
+     'Open the app. One rep. Watch the day tick up.'),
+    ('Closer than yesterday',
+     'Every real rep drags you toward the man rooms remember. Take one now.'),
+    ('Don\'t let the streak decide for you',
+     'A quiet day stalls the climb. Two minutes keeps it alive.'),
+    ('The best girls aren\'t on Day 1',
+     'They\'re up the map, waiting for the version of you that got there.'),
   ];
 
   // ── EVENING: streak / loss nudge ────────────────────────────────────
