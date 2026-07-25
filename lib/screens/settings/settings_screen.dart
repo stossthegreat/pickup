@@ -181,7 +181,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: Sp.md),
               Center(
                 child: Text(
-                  '© 2026 ImHim',
+                  '© 2026 ImHim  ·  $kBuildTag',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textTertiary.withValues(alpha: 0.6),
                     fontSize: 11),

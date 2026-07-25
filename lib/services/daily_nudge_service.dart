@@ -276,6 +276,12 @@ class DailyNudgeService {
      'is the one who showed up every day. Be him today.'),
     ('Confidence is a trained skill',
      'Not a gift. Two minutes today. Compounds for life.'),
+    ('Never freeze again',
+     'The guy who always knows what to say practised until he did. Your turn.'),
+    ('Always know your next line',
+     'It isn\'t luck. It\'s reps. Take today\'s.'),
+    ('Game is a skill you can train',
+     'Not a personality you\'re born with. Start today.'),
   ];
 
   // ── MIDDAY: the climb / unlock tease ────────────────────────────────
