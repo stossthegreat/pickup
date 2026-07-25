@@ -10,6 +10,7 @@ import '../../models/protocol.dart';
 import '../../models/scan_record.dart';
 import '../../services/analytics_service.dart';
 import '../../services/local_store_service.dart';
+import '../../services/daily_nudge_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/paywall_gate.dart';
 import '../../services/protocol_service.dart';
@@ -121,7 +122,17 @@ class _HomeScreenState extends State<HomeScreen> {
     // all three pillars (scan + Free Flow + eye-contact lesson).
     // No-op on every other launch — the service tracks state.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ReviewPromptService.maybePrompt(context);
+      if (!mounted) return;
+      // Notification permission is requested HERE — the moment the user
+      // reaches the app after onboarding (bought-in = high opt-in). The old
+      // trigger lived in the now-dead protocol flow, so without this the
+      // system prompt never showed and NO retention notifications could
+      // fire. After the grant we rebuild the horizon so streak / level /
+      // climb nudges are laid down against live permission.
+      // ignore: discarded_futures
+      NotificationService.requestPermissionIfNeeded()
+          .then((_) => DailyNudgeService.reschedule());
+      ReviewPromptService.maybePrompt(context);
     });
   }
 
