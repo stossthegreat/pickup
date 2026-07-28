@@ -144,6 +144,16 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
   }
 
   Future<void> _openVoice(MissionSpec m) async {
+    // Live voice roleplay is the MOST expensive action in the app (OpenAI
+    // Realtime audio). Paywall BEFORE the screen opens so a non-Pro user
+    // can never open — let alone connect — a voice session. Pro / creator
+    // pass; everyone else is stopped here.
+    if (!await PaywallGate.isPro()) {
+      if (!mounted) return;
+      await PaywallGate.open(context, source: 'mission_voice');
+      if (!mounted || !await PaywallGate.isPro()) return;
+    }
+    if (!mounted) return;
     final g = girlById(m.girlId!);
     await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
       builder: (_) => FreeFlowScreen(initialVibeKey: g.vibeKey),
