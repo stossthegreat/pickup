@@ -1401,40 +1401,45 @@ class _NavBar extends StatelessWidget {
     // added as a 4th tab. Kept at index 3 (last position) so the
     // pre-existing index map (Looks=0, Game=1, Rizz=2) stays
     // valid for every legacy caller of initialTab + onJumpToTab.
-    final items = const <({String label, IconData icon, bool italic})>[
-      (label: 'Missions', icon: Icons.bolt_rounded,                     italic: true),
-      (label: 'Practice', icon: Icons.graphic_eq_rounded,              italic: true),
-      (label: 'Progress', icon: Icons.local_fire_department_rounded,    italic: true),
+    final items = const <({String label, IconData icon})>[
+      (label: 'Missions', icon: Icons.bolt_rounded),
+      (label: 'Practice', icon: Icons.graphic_eq_rounded),
+      (label: 'Progress', icon: Icons.local_fire_department_rounded),
     ];
-    // v303 — bottom nav rebuilt in the Skeletal-PT pattern bro
-    // pointed at: each tab is its own block, the ACTIVE block fills
-    // with the brand red and stays filled, inactive tabs render
-    // flat. Bigger icons + bigger labels, and the whole block is
-    // the tap target (no more tiny icon-only hit area).
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        border: Border(
-          top: BorderSide(color: AppColors.divider, width: 0.6)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+    // Modern floating segmented pill (the reference bro sent). A dark
+    // rounded bar that sits OFF the screen edges, with the ACTIVE tab
+    // wearing a lighter rounded chip behind its icon+label. Active goes
+    // white; inactive stay muted grey. The chip animates to whichever tab
+    // is pressed. Not edge-to-edge, not a flat top border — a floating
+    // control that reads current.
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            borderRadius: BorderRadius.circular(34),
+            border: Border.all(color: AppColors.divider, width: 0.8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 24, spreadRadius: 0,
+                offset: const Offset(0, 8)),
+            ],
+          ),
           child: Row(
             children: [
               for (var i = 0; i < items.length; i++)
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: _NavBlock(
-                      label: items[i].label,
-                      icon: items[i].icon,
-                      active: i == index,
-                      showPendingDot:
-                          i == 2 && ascendPending && i != index,
-                      onTap: () => onTap(i),
-                    ),
+                  child: _NavBlock(
+                    label: items[i].label,
+                    icon: items[i].icon,
+                    active: i == index,
+                    showPendingDot:
+                        i == 2 && ascendPending && i != index,
+                    onTap: () => onTap(i),
                   ),
                 ),
             ],
@@ -1471,32 +1476,37 @@ class _NavBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // v306 — red fill on the active pill dropped per bro's note;
-    // active state is now just the icon + label going red, no
-    // block highlight. New size + new block tap-target retained
-    // so anywhere on the rectangle still routes.
-    final fg = active ? AppColors.red : AppColors.textSecondary;
+    // Active tab wears a lighter rounded chip and its icon + label go
+    // white; inactive tabs are transparent with muted grey. The chip
+    // fades in/out (AnimatedContainer) as the selection moves — exactly
+    // the highlight-on-press behaviour in the reference.
+    final fg = active ? Colors.white : AppColors.textSecondary;
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(24),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: const BoxDecoration(),
+        borderRadius: BorderRadius.circular(24),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          decoration: BoxDecoration(
+            color: active ? AppColors.surface3 : Colors.transparent,
+            borderRadius: BorderRadius.circular(24),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Icon(icon, size: 24, color: fg),
+                  Icon(icon, size: 22, color: fg),
                   if (showPendingDot)
                     Positioned(
                       right: -5, top: -3,
                       child: Container(
-                        width: 9, height: 9,
+                        width: 8, height: 8,
                         decoration: BoxDecoration(
                           color: AppColors.red,
                           shape: BoxShape.circle,
@@ -1507,14 +1517,13 @@ class _NavBlock extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 5),
               Text(label,
-                style: AppTypography.h1.copyWith(
+                style: GoogleFonts.inter(
                   color: fg,
-                  fontSize: 13, height: 1,
-                  letterSpacing: -0.2,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 12, height: 1,
+                  letterSpacing: 0.1,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                 )),
             ],
           ),

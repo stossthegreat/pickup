@@ -680,6 +680,25 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       }
     }
 
+    // ── PAYWALL BACKSTOP (cost-safety) ──────────────────────────────────
+    // Live voice is the single most expensive action in the app (OpenAI
+    // Realtime audio). This is the ONE chokepoint every voice session
+    // passes through — the picker, the mission launch, the "take it to
+    // voice" hand-off from a text chat, the mid-session character switch.
+    // A non-Pro user must NEVER reach a connected session, so we gate HERE
+    // before any socket opens. PaywallGate.isPro() is true for real
+    // subscribers AND creator mode; a lapsed subscriber re-reads as false
+    // and gets stopped exactly like a free user. No purchase → no connect.
+    if (!await PaywallGate.isPro()) {
+      if (!mounted) return;
+      await PaywallGate.open(context, source: 'freeflow_open');
+      if (!mounted) return;
+      if (!await PaywallGate.isPro()) {
+        _resetToPicker();
+        return;
+      }
+    }
+
     // v225 leak fix — REAL root cause of "had to hard close the app".
     //
     // _pcmWatchdog is a Timer.periodic created on EVERY _goLive call
