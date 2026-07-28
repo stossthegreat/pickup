@@ -126,12 +126,16 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Unlocked women first, then the locked ones grouped by the day they
-    // open (Day 10 group, then Day 20, then 30, then 40) — a clear climb.
-    final unlocked = [for (final g in kRoster) if (!_locked(g)) g];
-    final locked = [for (final g in kRoster) if (_locked(g)) g]
+    // Order by EARNED ascension day only — never by the creator flag — so
+    // toggling creator mode (which unlocks every girl) can NOT reshuffle the
+    // grid. Girls whose day has arrived lead (in roster order); the rest
+    // follow grouped by the day they open (10 → 20 → 30 → 40) as a clear
+    // climb. Creator mode only strips the lock overlay + allows the tap; a
+    // girl's position on the grid stays exactly where it was.
+    final earned = [for (final g in kRoster) if (_day >= g.unlockDay) g];
+    final notYet = [for (final g in kRoster) if (_day < g.unlockDay) g]
       ..sort((a, b) => a.unlockDay.compareTo(b.unlockDay));
-    final roster = [...unlocked, ...locked];
+    final roster = [...earned, ...notYet];
     return SafeArea(
       bottom: false,
       child: CustomScrollView(
