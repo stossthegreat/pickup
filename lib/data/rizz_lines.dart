@@ -620,14 +620,22 @@ abstract final class RizzArsenal {
       headline: 'The volleys.',
       hint:     'When she claps back. Don\'t fold. Smile and stay.',
       lines: [
-        RizzLine('call me weird all you want — you\'re still texting me',
-                 'UNBOTHERED'),
-        RizzLine('you\'ve got a boyfriend, i\'ve got a dog. we\'re both taken — talk anyway',
-                 'REFRAME'),
-        RizzLine('i\'m genuinely working on being like this. you\'re not helping',
-                 'SELF-AWARE'),
-        RizzLine('you didn\'t even have to say anything. see — you get it',
-                 'INTIMATE PRESUMPTION'),
+        RizzLine.seq(const [
+          'her: "you\'re weird"',
+          'you: "yeah. still here though"',
+        ], 'UNBOTHERED'),
+        RizzLine.seq(const [
+          'her: "i have a boyfriend"',
+          'you: "cool. i have a dog. we\'re both taken. wanna talk anyway?"',
+        ], 'REFRAME'),
+        RizzLine.seq(const [
+          'her: "why are you like this"',
+          'you: "genuinely working on it. you\'re not helping"',
+        ], 'SELF-AWARE'),
+        RizzLine.seq(const [
+          'her: laughs and says nothing',
+          'you: "see. you get it"',
+        ], 'INTIMATE PRESUMPTION'),
         RizzLine('you\'re lucky you\'re cute — that was the worst comeback i\'ve heard',
                  'PLAYFUL DISS'),
         RizzLine('you\'re a handful aren\'t you. i can tell already',
