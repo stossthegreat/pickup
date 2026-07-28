@@ -25,7 +25,7 @@ import 'task_chat_screen.dart';
 /// it", with an optional Lucien game-plan first. Everything banks real
 /// XP and feeds The Five — real missions worth far more.
 class MissionsTabScreen extends StatefulWidget {
-  final ValueChanged<int> onGoToTab; // 1 = Practice, 2 = Texts
+  final ValueChanged<int> onGoToTab; // 0 = Missions, 1 = Practice, 2 = Progress
   const MissionsTabScreen({super.key, required this.onGoToTab});
 
   @override

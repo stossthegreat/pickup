@@ -23,7 +23,6 @@ import '../../widgets/common/mirrorly_components.dart';
 import '../../widgets/report/aspect_protocol_cards.dart';
 import '../missions/missions_tab_screen.dart';
 import '../practice/practice_tab_screen.dart';
-import '../texts/texts_tab_screen.dart';
 import 'ascend_screen.dart';
 
 /// The hub. Four surfaces, one promise per tab:
@@ -114,7 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // keep working. Legacy deep links with index > 3 fall back to
     // LOOKS so older shortcuts don't crash.
     final t = widget.initialTab ?? 0;
-    _tab = (t >= 0 && t < 4) ? t : 0;
+    _tab = (t >= 0 && t < 3) ? t : 0;
     _reload();
     // No entry wall — users browse the app freely; the paywall fires on
     // actions (see PaywallGate calls in Practice / Missions / Free Flow).
@@ -225,24 +224,24 @@ class _HomeScreenState extends State<HomeScreen> {
     // screen_view event so we can rebuild the LOOKS / GAME / RIZZ
     // / ASCEND funnel without having to dedupe screen_views by
     // source.
-    const tabNames = ['looks', 'game', 'rizz', 'ascend'];
+    const tabNames = ['missions', 'practice', 'progress'];
     if (i >= 0 && i < tabNames.length) {
       // ignore: discarded_futures
       AnalyticsService.tabOpened(tabNames[i]);
     }
     // Re-read scan + pillar prefs + advance the streak whenever the user
-    // returns to the Looks OR Ascend tab — keeps the masthead flame and
-    // the Ascend streak panel live the moment they finish a mission
+    // returns to the Missions OR Progress tab — keeps the masthead flame
+    // and the Progress streak panel live the moment they finish a mission
     // elsewhere in the app.
-    if (i == 0 || i == 3) {
+    if (i == 0 || i == 2) {
       // ignore: discarded_futures
       _reload();
     }
-    // v298 — opening Ascend is the canonical "I saw the
+    // v298 — opening Progress is the canonical "I saw the
     // notification" moment. Clear the iOS app-icon badge in
     // addition to the lifecycle-resume clear so users who tap
-    // Ascend mid-session don't keep staring at the red dot.
-    if (i == 3) {
+    // Progress mid-session don't keep staring at the red dot.
+    if (i == 2) {
       // ignore: discarded_futures
       NotificationService.clearIconBadge();
     }
@@ -257,16 +256,16 @@ class _HomeScreenState extends State<HomeScreen> {
           : IndexedStack(
               index: _tab,
               children: [
-                // Charmr nav: Missions · Practice · Texts · Progress.
+                // Nav: Missions · Practice · Progress. The Texts tab
+                // (pickup lines + screenshot analyser) was removed — it
+                // muddied the app. The coached text screen still lives
+                // inside the mission flow (TaskChatScreen).
                 MissionsTabScreen(                          // 0 · MISSIONS
                   onGoToTab: _switchTab,
                 ),
                 const PracticeTabScreen(),                  // 1 · PRACTICE
-                const TextsTabScreen(),                     // 2 · TEXTS
-                // v281 — ASCEND restored as tab index 3. Pulls
-                // the protocol + scan history + per-pillar
-                // completion booleans from this screen's state so
-                // it never has to spin up its own service layer.
+                // Progress (Ascend) — the daily flame + missions + rank
+                // surface. Now index 2 after the Texts tab was pulled.
                 AscendScreen(
                   onJumpToTab:          _switchTab,
                   onRefresh:            _reload,
@@ -1390,7 +1389,6 @@ class _NavBar extends StatelessWidget {
     final items = const <({String label, IconData icon, bool italic})>[
       (label: 'Missions', icon: Icons.bolt_rounded,                     italic: true),
       (label: 'Practice', icon: Icons.graphic_eq_rounded,              italic: true),
-      (label: 'Texts',    icon: Icons.chat_bubble_outline_rounded,      italic: true),
       (label: 'Progress', icon: Icons.local_fire_department_rounded,    italic: true),
     ];
     // v303 — bottom nav rebuilt in the Skeletal-PT pattern bro
@@ -1419,7 +1417,7 @@ class _NavBar extends StatelessWidget {
                       icon: items[i].icon,
                       active: i == index,
                       showPendingDot:
-                          i == 3 && ascendPending && i != index,
+                          i == 2 && ascendPending && i != index,
                       onTap: () => onTap(i),
                     ),
                   ),
