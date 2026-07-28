@@ -45,6 +45,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late int _tab;
+  /// Bumped every time the user opens the Practice tab so the grid is
+  /// rebuilt from scratch and re-reads the live ascension day + creator
+  /// flag. Without this the Practice tab caches the day it first loaded,
+  /// so a girl who crossed her unlock threshold mid-session (e.g. the
+  /// user hit Day 10 by finishing a mission on another tab) would stay
+  /// locked until an app restart. Recreating on open makes the unlock
+  /// iron-clad — it can never show a stale lock.
+  int _practiceEpoch = 0;
   ScanRecord? _latest;
   /// v281 — full scan history surfaced to the Ascend tab's
   /// timeline. Loaded alongside latestScan() so the home tab only
@@ -219,7 +227,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _switchTab(int i) {
     HapticFeedback.selectionClick();
-    setState(() => _tab = i);
+    setState(() {
+      _tab = i;
+      // Opening Practice → force a fresh rebuild so the unlock grid
+      // re-reads the live ascension day + creator flag (see field doc).
+      if (i == 1) _practiceEpoch++;
+    });
     // Tab-switch analytics — paired with the router observer's
     // screen_view event so we can rebuild the LOOKS / GAME / RIZZ
     // / ASCEND funnel without having to dedupe screen_views by
@@ -263,7 +276,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 MissionsTabScreen(                          // 0 · MISSIONS
                   onGoToTab: _switchTab,
                 ),
-                const PracticeTabScreen(),                  // 1 · PRACTICE
+                PracticeTabScreen(                          // 1 · PRACTICE
+                  key: ValueKey('practice-$_practiceEpoch'),
+                ),
                 // Progress (Ascend) — the daily flame + missions + rank
                 // surface. Now index 2 after the Texts tab was pulled.
                 AscendScreen(

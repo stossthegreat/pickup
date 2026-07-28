@@ -46,6 +46,10 @@ class PaywallGate {
   /// the same wall.
   static Future<bool> isPro() async {
     if (kBypassPaywall) return true;
+    // Creator mode (owner-only, password-gated in Settings) counts as Pro
+    // everywhere — unlocks all paid actions + all AI characters. A normal
+    // user can't set this without the creator password, so it never leaks.
+    if (await LocalStoreService.isCreatorActive()) return true;
     // CACHE FIRST. A completed purchase writes LocalStoreService
     // .setSubscribed(true) the instant the StoreKit transaction returns,
     // so trust that immediately — otherwise RevenueCat entitlement

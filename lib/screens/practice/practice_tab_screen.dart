@@ -26,6 +26,7 @@ class PracticeTabScreen extends StatefulWidget {
 class _PracticeTabScreenState extends State<PracticeTabScreen> {
   Map<String, int> _stages = const {};
   int _day = 1; // earned ascension day — gates who's unlocked
+  bool _creator = false; // owner creator mode → every girl unlocked
 
   @override
   void initState() {
@@ -43,15 +44,19 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
     try {
       day = (await StreakService.progress()).ascensionDay;
     } catch (_) {/* default day 1 → only the starters unlocked */}
+    final creator = await LocalStoreService.isCreatorActive();
     if (mounted) {
       setState(() {
         _stages = s;
         _day = day;
+        _creator = creator;
       });
     }
   }
 
-  bool _locked(GirlBrief g) => _day < g.unlockDay;
+  // A girl is locked until her ascension day arrives. Creator mode
+  // (owner-only, password-gated) unlocks the whole roster immediately.
+  bool _locked(GirlBrief g) => !_creator && _day < g.unlockDay;
 
   Future<void> _tap(GirlBrief g) async {
     if (_locked(g)) {
