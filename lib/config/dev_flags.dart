@@ -60,7 +60,13 @@
 /// TO PUT THE PAYWALL BACK (money build): set this to false AND
 /// PurchaseConfig.enabled = true. The whole browse-then-pay model is still
 /// wired — nothing else changes.
-const kBypassPaywall = true;
+///
+/// LAUNCH — FALSE. The money paywall is LIVE. Users browse freely after
+/// onboarding; any paid action (opening a girl, a mission, a voice call) opens
+/// the dismissible paywall and only a real `imhim_pro_weekly` subscription
+/// unlocks it. PurchaseConfig.enabled is already true. Creator mode (password-
+/// gated in Settings) still bypasses everything for the owner.
+const kBypassPaywall = false;
 
 /// FALSE — real, charging paywall for launch. X only dismisses (back to
 /// browsing); the ONLY way past a paid feature is a real subscription. Apple's
@@ -79,4 +85,4 @@ const kForceOnboarding = false;
 /// tell which build is actually installed on-device (TestFlight lag has
 /// repeatedly made us debug a stale build). Bump this with every pubspec
 /// build-number bump.
-const kBuildTag = 'b62-unlocked';
+const kBuildTag = 'b64-paywall';

@@ -23,6 +23,7 @@ import '../../../services/daily_nudge_service.dart';
 import '../../../services/review_prompt_service.dart';
 import '../../../services/roster.dart';
 import '../../../services/share_service.dart';
+import '../../../services/streak_service.dart';
 import '../../../services/villain/villain_api.dart';
 import '../../../theme/auralay_app_colors.dart';
 import '../../../theme/auralay_app_typography.dart';
@@ -649,6 +650,35 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       return;
     }
     if (_disposed || !mounted) return;
+
+    // ── UNLOCK GATE (iron-clad) ─────────────────────────────────────────
+    // A girl who hasn't been earned yet — her ascension day hasn't arrived —
+    // can NOT be taken live on voice, no matter how the user got here (the
+    // picker, or the mid-session CHANGE CHARACTER sheet, which both list the
+    // full roster). This mirrors the Practice grid's day-lock so the two
+    // surfaces can never disagree. Creator mode (owner-only, password-gated)
+    // bypasses it. This is an access pre-check ONLY — it runs before any
+    // session / socket / persona / memory work and does not touch the
+    // roleplay mechanics below.
+    final needDay = unlockDayForVibe(vibe.key);
+    if (needDay > 1 && !await CreatorModeStore.isActive()) {
+      int day = 1;
+      try {
+        day = (await StreakService.progress()).ascensionDay;
+      } catch (_) {/* default day 1 → only the starters are reachable */}
+      if (day < needDay) {
+        if (!mounted) return;
+        HapticFeedback.mediumImpact();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${vibe.label} unlocks on Day $needDay — '
+              'you\'re on Day $day. Keep climbing.'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 2400),
+        ));
+        _resetToPicker();
+        return;
+      }
+    }
 
     // v225 leak fix — REAL root cause of "had to hard close the app".
     //

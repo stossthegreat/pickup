@@ -596,8 +596,20 @@ class LocalStoreService {
     await prefs.setInt(_kVoiceWeekMs,     base + deltaMs);
   }
 
+  /// Creator mode (password-gated in Settings → CREATOR). Mirrors the
+  /// pref key CreatorModeStore writes, read here directly so the paywall
+  /// + voice-cap gates can honour it WITHOUT a circular import. When true
+  /// (owner only — it takes the creator password to set) the account gets
+  /// unlimited voice minutes + all AI unlocked + every paywall bypassed.
+  static Future<bool> isCreatorActive() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('creator_unchained_active') ?? false;
+  }
+
   /// True when the Pro user has used up their weekly voice allowance.
+  /// Creator mode lifts the cap entirely (owner-only, password-gated).
   static Future<bool> voiceCapReached() async {
+    if (await isCreatorActive()) return false; // creator → unlimited minutes
     final ms = await voiceMsThisWeek();
     return ms >= kVoiceMinutesPerWeek * 60 * 1000;
   }
