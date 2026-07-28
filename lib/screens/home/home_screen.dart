@@ -1415,12 +1415,12 @@ class _NavBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
         child: Container(
-          padding: const EdgeInsets.all(6),
+          padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(
             color: AppColors.surface1,
-            borderRadius: BorderRadius.circular(34),
+            borderRadius: BorderRadius.circular(28),
             border: Border.all(color: AppColors.divider, width: 0.8),
             boxShadow: [
               BoxShadow(
@@ -1490,10 +1490,10 @@ class _NavBlock extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(vertical: 11),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
             color: active ? AppColors.surface3 : Colors.transparent,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(22),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1501,7 +1501,7 @@ class _NavBlock extends StatelessWidget {
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Icon(icon, size: 22, color: fg),
+                  Icon(icon, size: 20, color: fg),
                   if (showPendingDot)
                     Positioned(
                       right: -5, top: -3,
@@ -1517,11 +1517,11 @@ class _NavBlock extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 5),
+              const SizedBox(height: 3),
               Text(label,
                 style: GoogleFonts.inter(
                   color: fg,
-                  fontSize: 12, height: 1,
+                  fontSize: 11, height: 1,
                   letterSpacing: 0.1,
                   fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                 )),

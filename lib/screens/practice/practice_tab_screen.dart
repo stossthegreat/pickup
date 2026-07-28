@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../services/local_store_service.dart';
 import '../../services/paywall_gate.dart';
@@ -146,8 +147,22 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Practice until it feels natural.',
-                      style: AppTypography.h1Italic),
+                  // Title + settings cog, matching Missions / Progress.
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text('Practice until it feels natural.',
+                            style: AppTypography.h1Italic),
+                      ),
+                      const SizedBox(width: 10),
+                      _SettingsCog(
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            context.push('/settings');
+                          }),
+                    ],
+                  ),
                   const SizedBox(height: 6),
                   Text(
                     'Voice calls, texts and scenarios that prepare you '
@@ -446,6 +461,37 @@ class _ChoiceSheet extends StatelessWidget {
               Icon(Icons.arrow_forward_rounded, size: 16, color: color),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Settings cog — identical treatment to the Missions + Progress tabs so
+/// the three tabs carry the same top-right control. 38px circle, hairline
+/// border, muted outline-settings glyph. Routes to /settings.
+class _SettingsCog extends StatelessWidget {
+  final VoidCallback onTap;
+  const _SettingsCog({required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.divider, width: 0.8),
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.settings_outlined,
+              size: 18, color: AppColors.textSecondary),
         ),
       ),
     );
