@@ -196,7 +196,19 @@ class _AscendScreenState extends State<AscendScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.base,
-      body: SafeArea(
+      body: DecoratedBox(
+        // Ascension glow — a deep crimson bloom bleeding down from the top
+        // into pure black. Kills the flat-black list look; the screen now
+        // reads as a lit stage, not a settings page.
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0, -0.92),
+            radius: 1.3,
+            colors: [Color(0x2BE8222A), AppColors.base],
+            stops: [0.0, 0.55],
+          ),
+        ),
+        child: SafeArea(
         child: RefreshIndicator(
           color: AppColors.red,
           backgroundColor: AppColors.surface1,
@@ -354,6 +366,7 @@ class _AscendScreenState extends State<AscendScreen> {
           ],
         ),
         ),
+      ),
       ),
     );
   }
@@ -918,6 +931,8 @@ class _MissionsPanel extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surface1,
           borderRadius: BorderRadius.circular(Rd.lg),
+          border: Border.all(
+            color: AppColors.red.withValues(alpha: 0.14), width: 0.8),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1044,6 +1059,8 @@ class _RankProgression extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surface1,
           borderRadius: BorderRadius.circular(Rd.lg),
+          border: Border.all(
+            color: AppColors.red.withValues(alpha: 0.14), width: 0.8),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1162,6 +1179,8 @@ class _RecordTimeline extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surface1,
           borderRadius: BorderRadius.circular(Rd.lg),
+          border: Border.all(
+            color: AppColors.red.withValues(alpha: 0.14), width: 0.8),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1561,25 +1580,42 @@ class _SectionHead extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(index,
-          style: GoogleFonts.playfairDisplay(
-            color: AppColors.red,
-            fontSize: 15, height: 1,
-            fontStyle: FontStyle.italic,
-            fontWeight: FontWeight.w900,
-          )),
-        const SizedBox(width: 10),
+        // Solid red number chip — blocky, glowing, unmistakable. The
+        // section index reads like a level marker, not a footnote.
         Container(
-          width: 18, height: 1,
-          color: AppColors.red.withValues(alpha: 0.55)),
-        const SizedBox(width: 10),
-        Text(label,
-          style: GoogleFonts.inter(
-            color: AppColors.textSecondary,
-            fontSize: 10.5, letterSpacing: 2.6,
-            fontWeight: FontWeight.w800,
-          )),
-        if (trailing != null) ...[const Spacer(), trailing!],
+          width: 28, height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.red,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.red.withValues(alpha: 0.5),
+                blurRadius: 14, spreadRadius: -2),
+            ],
+          ),
+          child: Text(index,
+            style: GoogleFonts.spaceGrotesk(
+              color: Colors.white,
+              fontSize: 12.5, height: 1,
+              letterSpacing: -0.5,
+              fontWeight: FontWeight.w800,
+            )),
+        ),
+        const SizedBox(width: 12),
+        // Expanded so a long label ellipsises instead of colliding with
+        // the trailing count (the old "ASCENSION2 / 5" overlap).
+        Expanded(
+          child: Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 12.5, letterSpacing: 2.2,
+              fontWeight: FontWeight.w800,
+            )),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 8), trailing!],
       ],
     );
   }
