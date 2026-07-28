@@ -1504,14 +1504,18 @@ class _FinalFormCard extends StatelessWidget {
                       : AppColors.red.withValues(alpha: 0.45),
                     size: 14),
                   const SizedBox(width: 8),
-                  Text(line,
-                    style: GoogleFonts.inter(
-                      color: unlocked
-                        ? AppColors.textPrimary
-                        : AppColors.textTertiary,
-                      fontSize: 13, height: 1.4,
-                      fontWeight: FontWeight.w600,
-                    )),
+                  // Expanded so long lines (e.g. "Warming Up → Unbreakable")
+                  // wrap instead of running off the right edge of the card.
+                  Expanded(
+                    child: Text(line,
+                      style: GoogleFonts.inter(
+                        color: unlocked
+                          ? AppColors.textPrimary
+                          : AppColors.textTertiary,
+                        fontSize: 13, height: 1.4,
+                        fontWeight: FontWeight.w600,
+                      )),
+                  ),
                 ],
               ),
             ),
