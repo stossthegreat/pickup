@@ -12,6 +12,7 @@ import '../../config/auralay_dev_flags.dart';
 import '../../services/analytics_service.dart';
 import '../../services/creator_mode_store.dart';
 import '../../services/local_store_service.dart';
+import '../../services/paywall_gate.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/ai_consent_dialog.dart';
@@ -309,6 +310,21 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   Future<void> _send(String raw) async {
     final text = raw.trim();
     if (text.isEmpty || _sending) return;
+    // ── THE FUNNEL — 10 free text messages, then the paywall ──────────────
+    // A non-pro user gets kFreeTextMessages free sends with the AI women
+    // (cheap-first: no RevenueCat call until the allowance is actually
+    // spent). Once spent, the very next send opens the paywall instead of
+    // texting her — they got in, they saw everything, they felt it, now
+    // they pay. Pro + creator text unlimited. Voice is paid separately at
+    // every _goLive. The user's typed line stays in the box so they don't
+    // lose it if they come back as Pro.
+    if (await PaywallGate.textCapReached()) {
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      await PaywallGate.open(context, source: 'text_cap');
+      // Came back still not pro → stop here (don't burn the send).
+      if (!mounted || await PaywallGate.textCapReached()) return;
+    }
     if (!await AiConsentDialog.ensure(context)) return;
     if (!mounted) return;
     HapticFeedback.selectionClick();
@@ -335,6 +351,11 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       _scrollToBottom();
       return;
     }
+    // Count this successful send toward the free text allowance (the funnel).
+    // No-op weight for Pro/creator — textCapReached() ignores the counter
+    // for them, so an over-count never matters; we just always tally.
+    // ignore: discarded_futures
+    LocalStoreService.markFreeTextUsed();
     // Real girls double-text. The model marks separate bubbles with '\n';
     // reveal them one at a time so it reads like she's firing off texts.
     final bubbles = result.her

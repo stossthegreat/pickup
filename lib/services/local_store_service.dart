@@ -49,6 +49,14 @@ class LocalStoreService {
   /// LINES + CHAT cards are LOCKED for free users entirely; only the
   /// screenshot generator gets a single free preview.
   static const _kRizzScreenshotFreeUsed = 'rizz.screenshot.free.used.v1';
+  /// Free-tier TEXT-ROLEPLAY allowance — the funnel. A non-pro user gets
+  /// [kFreeTextMessages] free text messages with the AI women (across the
+  /// whole app, lifetime) so they can get in, see everything, and actually
+  /// FEEL the roleplay. Once those are spent, the very next send routes to
+  /// the paywall. VOICE is never free — that's gated separately at every
+  /// _goLive. Text is the cheap hook; voice is the paid product. Bro:
+  /// "they get in, they see everything, they try text and boom paywall."
+  static const _kFreeTextsUsed = 'roleplay.text.free.used.v1';
   /// Free-tier SCAN allowance — ONE scan, period. The onboarding
   /// face-scan is the only free scan a non-pro user will ever do;
   /// every subsequent scan attempt routes straight to the paywall
@@ -85,6 +93,10 @@ class LocalStoreService {
   // chat) is unlimited on purpose: text is cheap and unlimited text is
   // what makes them come back. Voice is the scarce, premium, addictive
   // resource — run out, want more, resubscribe next week.
+  /// Free text-roleplay allowance before the funnel converts. 10 free
+  /// messages with the AI women, then every send opens the paywall. Voice
+  /// stays fully paid (no free allowance) at every _goLive.
+  static const int  kFreeTextMessages    = 10;
   static const int  kScansPerWeek        = 999999; // legacy looks — effectively off
   static const int  kRendersPerWeek      = 999999; // legacy looks — effectively off
   static const int  kScreenshotsPerWeek  = 999999; // rizz screenshots — unlimited
@@ -392,6 +404,30 @@ class LocalStoreService {
   static Future<void> markRizzScreenshotFreeUsed() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kRizzScreenshotFreeUsed, true);
+  }
+
+  // ── Free text-roleplay allowance (the funnel) ──────────────────────────
+  /// How many free AI text messages the non-pro user has sent so far.
+  static Future<int> freeTextsUsed() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_kFreeTextsUsed) ?? 0;
+  }
+
+  /// True once the free text allowance is spent. This is a PURELY LOCAL
+  /// read (no RevenueCat round-trip) so it's cheap to call on every send;
+  /// PaywallGate.textCapReached layers the Pro/creator bypass on top.
+  static Future<bool> freeTextCapReached() async {
+    return (await freeTextsUsed()) >= kFreeTextMessages;
+  }
+
+  /// Count one free text message toward the allowance. Called on every
+  /// successful AI reply for a non-pro user. Clamped so the stored value
+  /// can't run away.
+  static Future<void> markFreeTextUsed() async {
+    final prefs = await SharedPreferences.getInstance();
+    final next = ((prefs.getInt(_kFreeTextsUsed) ?? 0) + 1)
+        .clamp(0, kFreeTextMessages);
+    await prefs.setInt(_kFreeTextsUsed, next);
   }
 
   // ── Cached subscription tier ───────────────────────────────────────────
