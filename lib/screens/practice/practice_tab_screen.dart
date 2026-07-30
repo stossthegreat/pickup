@@ -4,7 +4,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/local_store_service.dart';
-import '../../services/paywall_gate.dart';
 import '../../services/roster.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
@@ -70,15 +69,11 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
       ));
       return;
     }
-    // Free to browse the roster — but talking to her is Pro. Paywall on tap.
-    if (!await PaywallGate.isPro()) {
-      if (!mounted) return;
-      await PaywallGate.open(context, source: 'practice');
-      // Demo build: X unlocked the app, so fall through into the chat. Real
-      // build: still not pro, so stop here.
-      if (!mounted || !await PaywallGate.isPro()) return;
-    }
-    if (!mounted) return;
+    // THE FUNNEL — browsing AND opening the choice sheet are free. She's
+    // right there. Choosing TEXT drops them into the chat with 10 free
+    // messages (girl_chat_screen enforces the cap, then paywalls). Choosing
+    // VOICE routes through FreeFlow, which paywalls at _goLive — voice is
+    // never free. So no paywall here: let them in to see everything.
     _choose(g);
   }
 
