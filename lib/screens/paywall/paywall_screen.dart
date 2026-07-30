@@ -648,9 +648,11 @@ class _GirlsPanel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
       child: Center(
         child: AspectRatio(
-          // The 2×3 roleplay-cast grid is portrait — its own ratio so the
+          // The roleplay-cast grid is portrait — its own ratio so the
           // whole grid shows, framed like the other panels' hero image.
-          aspectRatio: 1125 / 1496,
+          // 1125×1572 = the clean neck-up 2×2 (regenerated from the cropped
+          // portraits; no cleavage, App-Store safe for Guideline 1.1.4).
+          aspectRatio: 1125 / 1572,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: Image.asset(
