@@ -16,15 +16,16 @@ import '../../theme/app_colors.dart';
 
 /// ImHim paywall — "paywall-final" carousel.
 ///
-/// A swipeable five-panel story (Looks → Game → Rizz → Ascension → Him)
-/// rebuilt 1:1 from the HTML mock. The header copy + classified
-/// progress tracker change per panel, the CTA / price / legal row stay
-/// pinned at the bottom.
+/// A swipeable three-panel story (Practice → Game → Him). The header
+/// copy + classified progress tracker change per panel, the CTA / price
+/// / legal row stay pinned at the bottom. (The RIZZ panel was pulled
+/// from the carousel — its widget is kept below, marked unused, so it
+/// can be dropped back in.)
 ///
-/// Auto-tour behaviour (matches the mock): on open the carousel
-/// advances one panel every 6 s, plays through all five, returns to
-/// panel 1 (the photo) and then STOPS — from there the user swipes
-/// manually. Any manual touch also stops the tour immediately.
+/// Auto-tour behaviour: on open the carousel advances one panel every
+/// 6 s, plays through all panels, returns to panel 1 and then STOPS —
+/// from there the user swipes manually. Any manual touch also stops the
+/// tour immediately.
 ///
 /// Weekly-only. The annual tier is commented out (see `_Tier` /
 /// `_priceLine`); only the weekly package is ever purchased.
@@ -59,12 +60,11 @@ enum _Tier { weekly, annual, rescue }
 const List<(String, String)> _copy = [
   ('Practice Before It Matters.', 'Train with AI until confidence feels natural.'),
   ('Practice Every Conversation.', 'Handle rejection, flirting and pressure before it\'s real.'),
-  ('Know What To Say. Before You Say It.', 'Upload chats, practise replies and build real game.'),
   ('Practice With AI. Prove It In Real Life.', 'Complete daily missions and become him in 60 days.'),
 ];
 
 // Classified progress-tracker section labels, one per panel.
-const List<String> _sections = ['PRACTICE', 'GAME', 'RIZZ', 'HIM'];
+const List<String> _sections = ['PRACTICE', 'GAME', 'HIM'];
 
 // Neon green used for the projected score + the final HIM pulse. The
 // mock uses a brighter green than the app's signalGreen, so it's local.
@@ -76,7 +76,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
   bool _purchasing = false;
 
   final PageController _pager = PageController();
-  static const int _panelCount = 4;
+  static const int _panelCount = 3;
   int _page = 0;
   final Set<int> _visited = {0};
 
@@ -165,9 +165,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   // ── Auto-tour ─────────────────────────────────────────────────────
   //
-  // Advance one panel every 3 s. Play through all five, wrap back to
-  // panel 0 (the photo), then stop — from there it's swipe-only. Any
-  // manual touch cancels the tour early (see the Listener in build()).
+  // Advance one panel every 6 s. Play through all panels, wrap back to
+  // panel 0, then stop — from there it's swipe-only. Any manual touch
+  // cancels the tour early (see the Listener in build()).
   void _startTour() {
     _tourTimer = Timer.periodic(const Duration(seconds: 6), (t) {
       if (_interacted || !mounted) {
@@ -199,7 +199,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
     setState(() {
       _page = i;
       _visited.add(i);
-      if (i == 3) _ladderRun++; // ladder panel is now the 4th (last)
+      if (i == 2) _ladderRun++; // ladder panel is now the 3rd (last)
     });
     // Only buzz on manual swipes — the auto-tour should stay silent.
     if (_interacted) HapticFeedback.selectionClick();
@@ -466,8 +466,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   children: [
                     const _GirlsPanel(),
                     const _OrbPanel(),
-                    const _RizzPanel(),
-                    _LadderPanel(runToken: _page == 3 ? _ladderRun : -1),
+                    _LadderPanel(runToken: _page == 2 ? _ladderRun : -1),
                   ],
                 ),
               ),
@@ -990,9 +989,10 @@ class _OrbPanelState extends State<_OrbPanel> {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  PANEL 4 — RIZZ ACTIONS
+//  PANEL (legacy) — RIZZ ACTIONS  ·  no longer in the carousel
 // ══════════════════════════════════════════════════════════════════════
 
+// ignore: unused_element
 class _RizzPanel extends StatelessWidget {
   const _RizzPanel();
 
@@ -1027,6 +1027,7 @@ class _RizzPanel extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _RizzBtn extends StatelessWidget {
   final String title, sub;
   final bool ghost;
