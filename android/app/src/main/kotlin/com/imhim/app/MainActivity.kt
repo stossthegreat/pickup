@@ -1,4 +1,4 @@
-package com.imhim.imhim
+package com.imhim.app
 
 import io.flutter.embedding.android.FlutterActivity
 
