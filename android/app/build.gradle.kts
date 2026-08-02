@@ -23,7 +23,7 @@ val playUploadKeySha1   = playFingerprints.getProperty("play.upload.key.sha1",  
 val playUploadKeySha256 = playFingerprints.getProperty("play.upload.key.sha256", "")
 
 android {
-    namespace = "com.imhim.app"
+    namespace = "com.imhim.imhim"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -48,8 +48,8 @@ android {
     defaultConfig {
         // Play Store + Firebase Android app is registered as com.imhim.imhim
         // (com.imhim.app was unavailable). iOS stays com.imhim.app — the two
-        // platforms don't need to match. The Android namespace stays
-        // com.imhim.app (internal R/BuildConfig only; not the install id).
+        // platforms don't need to match. Android is now com.imhim.imhim
+        // everywhere: applicationId, namespace, and the MainActivity package.
         applicationId = "com.imhim.imhim"
 
         // Bake the registered Play Console fingerprints into BuildConfig
