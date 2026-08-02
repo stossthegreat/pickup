@@ -10,6 +10,7 @@ import '../../models/protocol.dart';
 import '../../models/scan_record.dart';
 import '../../services/analytics_service.dart';
 import '../../services/local_store_service.dart';
+import '../../services/daily_nudge_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/paywall_gate.dart';
 import '../../services/protocol_service.dart';
@@ -22,7 +23,6 @@ import '../../widgets/common/mirrorly_components.dart';
 import '../../widgets/report/aspect_protocol_cards.dart';
 import '../missions/missions_tab_screen.dart';
 import '../practice/practice_tab_screen.dart';
-import '../texts/texts_tab_screen.dart';
 import 'ascend_screen.dart';
 
 /// The hub. Four surfaces, one promise per tab:
@@ -45,6 +45,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late int _tab;
+  /// Bumped every time the user opens the Practice tab so the grid is
+  /// rebuilt from scratch and re-reads the live ascension day + creator
+  /// flag. Without this the Practice tab caches the day it first loaded,
+  /// so a girl who crossed her unlock threshold mid-session (e.g. the
+  /// user hit Day 10 by finishing a mission on another tab) would stay
+  /// locked until an app restart. Recreating on open makes the unlock
+  /// iron-clad — it can never show a stale lock.
+  int _practiceEpoch = 0;
   ScanRecord? _latest;
   /// v281 — full scan history surfaced to the Ascend tab's
   /// timeline. Loaded alongside latestScan() so the home tab only
@@ -113,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // keep working. Legacy deep links with index > 3 fall back to
     // LOOKS so older shortcuts don't crash.
     final t = widget.initialTab ?? 0;
-    _tab = (t >= 0 && t < 4) ? t : 0;
+    _tab = (t >= 0 && t < 3) ? t : 0;
     _reload();
     // No entry wall — users browse the app freely; the paywall fires on
     // actions (see PaywallGate calls in Practice / Missions / Free Flow).
@@ -121,7 +129,17 @@ class _HomeScreenState extends State<HomeScreen> {
     // all three pillars (scan + Free Flow + eye-contact lesson).
     // No-op on every other launch — the service tracks state.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ReviewPromptService.maybePrompt(context);
+      if (!mounted) return;
+      // Notification permission is requested HERE — the moment the user
+      // reaches the app after onboarding (bought-in = high opt-in). The old
+      // trigger lived in the now-dead protocol flow, so without this the
+      // system prompt never showed and NO retention notifications could
+      // fire. After the grant we rebuild the horizon so streak / level /
+      // climb nudges are laid down against live permission.
+      // ignore: discarded_futures
+      NotificationService.requestPermissionIfNeeded()
+          .then((_) => DailyNudgeService.reschedule());
+      ReviewPromptService.maybePrompt(context);
     });
   }
 
@@ -209,29 +227,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _switchTab(int i) {
     HapticFeedback.selectionClick();
-    setState(() => _tab = i);
+    setState(() {
+      _tab = i;
+      // Opening Practice → force a fresh rebuild so the unlock grid
+      // re-reads the live ascension day + creator flag (see field doc).
+      if (i == 1) _practiceEpoch++;
+    });
     // Tab-switch analytics — paired with the router observer's
     // screen_view event so we can rebuild the LOOKS / GAME / RIZZ
     // / ASCEND funnel without having to dedupe screen_views by
     // source.
-    const tabNames = ['looks', 'game', 'rizz', 'ascend'];
+    const tabNames = ['missions', 'practice', 'progress'];
     if (i >= 0 && i < tabNames.length) {
       // ignore: discarded_futures
       AnalyticsService.tabOpened(tabNames[i]);
     }
     // Re-read scan + pillar prefs + advance the streak whenever the user
-    // returns to the Looks OR Ascend tab — keeps the masthead flame and
-    // the Ascend streak panel live the moment they finish a mission
+    // returns to the Missions OR Progress tab — keeps the masthead flame
+    // and the Progress streak panel live the moment they finish a mission
     // elsewhere in the app.
-    if (i == 0 || i == 3) {
+    if (i == 0 || i == 2) {
       // ignore: discarded_futures
       _reload();
     }
-    // v298 — opening Ascend is the canonical "I saw the
+    // v298 — opening Progress is the canonical "I saw the
     // notification" moment. Clear the iOS app-icon badge in
     // addition to the lifecycle-resume clear so users who tap
-    // Ascend mid-session don't keep staring at the red dot.
-    if (i == 3) {
+    // Progress mid-session don't keep staring at the red dot.
+    if (i == 2) {
       // ignore: discarded_futures
       NotificationService.clearIconBadge();
     }
@@ -246,16 +269,18 @@ class _HomeScreenState extends State<HomeScreen> {
           : IndexedStack(
               index: _tab,
               children: [
-                // Charmr nav: Missions · Practice · Texts · Progress.
+                // Nav: Missions · Practice · Progress. The Texts tab
+                // (pickup lines + screenshot analyser) was removed — it
+                // muddied the app. The coached text screen still lives
+                // inside the mission flow (TaskChatScreen).
                 MissionsTabScreen(                          // 0 · MISSIONS
                   onGoToTab: _switchTab,
                 ),
-                const PracticeTabScreen(),                  // 1 · PRACTICE
-                const TextsTabScreen(),                     // 2 · TEXTS
-                // v281 — ASCEND restored as tab index 3. Pulls
-                // the protocol + scan history + per-pillar
-                // completion booleans from this screen's state so
-                // it never has to spin up its own service layer.
+                PracticeTabScreen(                          // 1 · PRACTICE
+                  key: ValueKey('practice-$_practiceEpoch'),
+                ),
+                // Progress (Ascend) — the daily flame + missions + rank
+                // surface. Now index 2 after the Texts tab was pulled.
                 AscendScreen(
                   onJumpToTab:          _switchTab,
                   onRefresh:            _reload,
@@ -1376,41 +1401,45 @@ class _NavBar extends StatelessWidget {
     // added as a 4th tab. Kept at index 3 (last position) so the
     // pre-existing index map (Looks=0, Game=1, Rizz=2) stays
     // valid for every legacy caller of initialTab + onJumpToTab.
-    final items = const <({String label, IconData icon, bool italic})>[
-      (label: 'Missions', icon: Icons.bolt_rounded,                     italic: true),
-      (label: 'Practice', icon: Icons.graphic_eq_rounded,              italic: true),
-      (label: 'Texts',    icon: Icons.chat_bubble_outline_rounded,      italic: true),
-      (label: 'Progress', icon: Icons.local_fire_department_rounded,    italic: true),
+    final items = const <({String label, IconData icon})>[
+      (label: 'Missions', icon: Icons.bolt_rounded),
+      (label: 'Practice', icon: Icons.graphic_eq_rounded),
+      (label: 'Progress', icon: Icons.local_fire_department_rounded),
     ];
-    // v303 — bottom nav rebuilt in the Skeletal-PT pattern bro
-    // pointed at: each tab is its own block, the ACTIVE block fills
-    // with the brand red and stays filled, inactive tabs render
-    // flat. Bigger icons + bigger labels, and the whole block is
-    // the tap target (no more tiny icon-only hit area).
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        border: Border(
-          top: BorderSide(color: AppColors.divider, width: 0.6)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+    // Modern floating segmented pill (the reference bro sent). A dark
+    // rounded bar that sits OFF the screen edges, with the ACTIVE tab
+    // wearing a lighter rounded chip behind its icon+label. Active goes
+    // white; inactive stay muted grey. The chip animates to whichever tab
+    // is pressed. Not edge-to-edge, not a flat top border — a floating
+    // control that reads current.
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: AppColors.divider, width: 0.8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 24, spreadRadius: 0,
+                offset: const Offset(0, 8)),
+            ],
+          ),
           child: Row(
             children: [
               for (var i = 0; i < items.length; i++)
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: _NavBlock(
-                      label: items[i].label,
-                      icon: items[i].icon,
-                      active: i == index,
-                      showPendingDot:
-                          i == 3 && ascendPending && i != index,
-                      onTap: () => onTap(i),
-                    ),
+                  child: _NavBlock(
+                    label: items[i].label,
+                    icon: items[i].icon,
+                    active: i == index,
+                    showPendingDot:
+                        i == 2 && ascendPending && i != index,
+                    onTap: () => onTap(i),
                   ),
                 ),
             ],
@@ -1447,32 +1476,37 @@ class _NavBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // v306 — red fill on the active pill dropped per bro's note;
-    // active state is now just the icon + label going red, no
-    // block highlight. New size + new block tap-target retained
-    // so anywhere on the rectangle still routes.
-    final fg = active ? AppColors.red : AppColors.textSecondary;
+    // Active tab wears a lighter rounded chip and its icon + label go
+    // white; inactive tabs are transparent with muted grey. The chip
+    // fades in/out (AnimatedContainer) as the selection moves — exactly
+    // the highlight-on-press behaviour in the reference.
+    final fg = active ? Colors.white : AppColors.textSecondary;
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(24),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: const BoxDecoration(),
+        borderRadius: BorderRadius.circular(24),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? AppColors.surface3 : Colors.transparent,
+            borderRadius: BorderRadius.circular(22),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Icon(icon, size: 24, color: fg),
+                  Icon(icon, size: 20, color: fg),
                   if (showPendingDot)
                     Positioned(
                       right: -5, top: -3,
                       child: Container(
-                        width: 9, height: 9,
+                        width: 8, height: 8,
                         decoration: BoxDecoration(
                           color: AppColors.red,
                           shape: BoxShape.circle,
@@ -1483,14 +1517,13 @@ class _NavBlock extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(label,
-                style: AppTypography.h1.copyWith(
+                style: GoogleFonts.inter(
                   color: fg,
-                  fontSize: 13, height: 1,
-                  letterSpacing: -0.2,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 11, height: 1,
+                  letterSpacing: 0.1,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                 )),
             ],
           ),

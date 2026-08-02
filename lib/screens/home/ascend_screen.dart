@@ -196,7 +196,19 @@ class _AscendScreenState extends State<AscendScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.base,
-      body: SafeArea(
+      body: DecoratedBox(
+        // Ascension glow — a deep crimson bloom bleeding down from the top
+        // into pure black. Kills the flat-black list look; the screen now
+        // reads as a lit stage, not a settings page.
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0, -0.92),
+            radius: 1.3,
+            colors: [Color(0x2BE8222A), AppColors.base],
+            stops: [0.0, 0.55],
+          ),
+        ),
+        child: SafeArea(
         child: RefreshIndicator(
           color: AppColors.red,
           backgroundColor: AppColors.surface1,
@@ -354,6 +366,7 @@ class _AscendScreenState extends State<AscendScreen> {
           ],
         ),
         ),
+      ),
       ),
     );
   }
@@ -884,13 +897,8 @@ class _TodayMessageCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('TODAY',
-              style: GoogleFonts.inter(
-                color: AppColors.red,
-                fontSize: 10, letterSpacing: 2.8,
-                fontWeight: FontWeight.w900,
-              )),
-            const SizedBox(height: 8),
+            const _SectionHead(index: '01', label: 'TODAY'),
+            const SizedBox(height: 10),
             Text(line,
               style: GoogleFonts.playfairDisplay(
                 color: AppColors.textPrimary,
@@ -923,26 +931,21 @@ class _MissionsPanel extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surface1,
           borderRadius: BorderRadius.circular(Rd.lg),
+          border: Border.all(
+            color: AppColors.red.withValues(alpha: 0.14), width: 0.8),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text('TODAY\'S ASCENSION',
-                  style: GoogleFonts.inter(
-                    color: AppColors.red,
-                    fontSize: 11, letterSpacing: 2.8,
-                    fontWeight: FontWeight.w900,
-                  )),
-                const Spacer(),
-                Text('$done / ${missions.length} COMPLETE',
-                  style: GoogleFonts.inter(
-                    color: AppColors.textSecondary,
-                    fontSize: 11, letterSpacing: 1.8,
-                    fontWeight: FontWeight.w800,
-                  )),
-              ],
+            _SectionHead(
+              index: '02',
+              label: 'TODAY\'S ASCENSION',
+              trailing: Text('$done / ${missions.length} COMPLETE',
+                style: GoogleFonts.inter(
+                  color: AppColors.textSecondary,
+                  fontSize: 11, letterSpacing: 1.8,
+                  fontWeight: FontWeight.w800,
+                )),
             ),
             const SizedBox(height: 14),
             for (var i = 0; i < missions.length; i++) ...[
@@ -1056,6 +1059,8 @@ class _RankProgression extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surface1,
           borderRadius: BorderRadius.circular(Rd.lg),
+          border: Border.all(
+            color: AppColors.red.withValues(alpha: 0.14), width: 0.8),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1174,16 +1179,13 @@ class _RecordTimeline extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surface1,
           borderRadius: BorderRadius.circular(Rd.lg),
+          border: Border.all(
+            color: AppColors.red.withValues(alpha: 0.14), width: 0.8),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('ASCENSION RECORD',
-              style: GoogleFonts.inter(
-                color: AppColors.red,
-                fontSize: 10, letterSpacing: 2.8,
-                fontWeight: FontWeight.w900,
-              )),
+            const _SectionHead(index: '04', label: 'ASCENSION RECORD'),
             const SizedBox(height: 14),
             if (milestones.isEmpty)
               Text('Your record writes itself the moment you log day one.',
@@ -1281,45 +1283,27 @@ class _StreakPanel extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
         decoration: BoxDecoration(
-          // Warm red radial behind the lockup so the flame reads
-          // as actually glowing on the surface, not a flat icon.
-          gradient: RadialGradient(
-            center: const Alignment(-0.5, -0.2),
-            radius: 1.2,
-            colors: [
-              AppColors.red.withValues(alpha: 0.20),
-              AppColors.surface1,
-            ],
-          ),
+          // Minimal-luxe: flat surface + hairline border. The old warm
+          // radial + glow bloom read as a generic gamified streak card;
+          // clean reads bespoke.
+          color: AppColors.surface1,
           borderRadius: BorderRadius.circular(Rd.lg),
           border: Border.all(
-            color: AppColors.red.withValues(alpha: 0.42), width: 0.8),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.red.withValues(alpha: 0.28),
-              blurRadius: 32, spreadRadius: 0),
-          ],
+            color: AppColors.red.withValues(alpha: 0.22), width: 0.8),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Eyebrow row: label left, LONGEST right.
-            Row(
-              children: [
-                Text('STREAK',
-                  style: GoogleFonts.inter(
-                    color: AppColors.red,
-                    fontSize: 11, letterSpacing: 3.2,
-                    fontWeight: FontWeight.w900,
-                  )),
-                const Spacer(),
-                Text('LONGEST $longest',
-                  style: GoogleFonts.inter(
-                    color: AppColors.textTertiary,
-                    fontSize: 10, letterSpacing: 1.8,
-                    fontWeight: FontWeight.w800,
-                  )),
-              ],
+            // ── Editorial header: index + rule + label, LONGEST trailing.
+            _SectionHead(
+              index: '03',
+              label: 'STREAK',
+              trailing: Text('LONGEST $longest',
+                style: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 10, letterSpacing: 1.8,
+                  fontWeight: FontWeight.w800,
+                )),
             ),
             const SizedBox(height: 10),
 
@@ -1340,7 +1324,7 @@ class _StreakPanel extends StatelessWidget {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: RadialGradient(colors: [
-                          AppColors.red.withValues(alpha: 0.42),
+                          AppColors.red.withValues(alpha: 0.14),
                           Colors.transparent,
                         ]),
                       ),
@@ -1362,11 +1346,6 @@ class _StreakPanel extends StatelessWidget {
                           letterSpacing: -3.4,
                           fontStyle: FontStyle.italic,
                           fontWeight: FontWeight.w900,
-                          shadows: [
-                            Shadow(
-                              color: AppColors.red.withValues(alpha: 0.45),
-                              blurRadius: 18),
-                          ],
                         )),
                       const SizedBox(width: 10),
                       Padding(
@@ -1444,28 +1423,21 @@ class _FinalFormCard extends StatelessWidget {
           ),
           boxShadow: unlocked
             ? [BoxShadow(
-                color: AppColors.red.withValues(alpha: 0.30),
-                blurRadius: 42, spreadRadius: 0)]
+                color: AppColors.red.withValues(alpha: 0.18),
+                blurRadius: 26, spreadRadius: 0)]
             : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(
-                  unlocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
-                  color: AppColors.red, size: 16),
-                const SizedBox(width: 8),
-                Text(unlocked ? 'UNLOCKED · DAY 60' : 'LOCKED · DAY 60',
-                  style: GoogleFonts.inter(
-                    color: AppColors.red,
-                    fontSize: 10, letterSpacing: 2.8,
-                    fontWeight: FontWeight.w900,
-                  )),
-              ],
+            _SectionHead(
+              index: '05',
+              label: unlocked ? 'UNLOCKED · DAY 60' : 'LOCKED · DAY 60',
+              trailing: Icon(
+                unlocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
+                color: AppColors.red.withValues(alpha: 0.7), size: 15),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Text('BECOME HIM',
               style: GoogleFonts.playfairDisplay(
                 color: AppColors.textPrimary,
@@ -1504,14 +1476,18 @@ class _FinalFormCard extends StatelessWidget {
                       : AppColors.red.withValues(alpha: 0.45),
                     size: 14),
                   const SizedBox(width: 8),
-                  Text(line,
-                    style: GoogleFonts.inter(
-                      color: unlocked
-                        ? AppColors.textPrimary
-                        : AppColors.textTertiary,
-                      fontSize: 13, height: 1.4,
-                      fontWeight: FontWeight.w600,
-                    )),
+                  // Expanded so long lines (e.g. "Warming Up → Unbreakable")
+                  // wrap instead of running off the right edge of the card.
+                  Expanded(
+                    child: Text(line,
+                      style: GoogleFonts.inter(
+                        color: unlocked
+                          ? AppColors.textPrimary
+                          : AppColors.textTertiary,
+                        fontSize: 13, height: 1.4,
+                        fontWeight: FontWeight.w600,
+                      )),
+                  ),
                 ],
               ),
             ),
@@ -1584,6 +1560,66 @@ class _FinalFormCard extends StatelessWidget {
 /// chip reads as one of the strongest visual elements on the
 /// chrome row instead of disappearing into the background. Same
 /// lockup the Looks + Rizz mastheads now use for consistency.
+
+/// Editorial numbered section header — the signature motif of the
+/// restyle. A red italic Playfair index ("01"), a hairline rule, then a
+/// muted tracked label, with an optional trailing widget (a count, a
+/// "LONGEST n"). Replaces the old all-red bold eyebrows so the Progress
+/// tab reads like a considered dossier, not a generic neon dashboard —
+/// distinct enough to stop reading as a clone of the genre. Pure visual.
+class _SectionHead extends StatelessWidget {
+  final String index;
+  final String label;
+  final Widget? trailing;
+  const _SectionHead({
+    required this.index,
+    required this.label,
+    this.trailing,
+  });
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        // Solid red number chip — blocky, glowing, unmistakable. The
+        // section index reads like a level marker, not a footnote.
+        Container(
+          width: 28, height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.red,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.red.withValues(alpha: 0.5),
+                blurRadius: 14, spreadRadius: -2),
+            ],
+          ),
+          child: Text(index,
+            style: GoogleFonts.spaceGrotesk(
+              color: Colors.white,
+              fontSize: 12.5, height: 1,
+              letterSpacing: -0.5,
+              fontWeight: FontWeight.w800,
+            )),
+        ),
+        const SizedBox(width: 12),
+        // Expanded so a long label ellipsises instead of colliding with
+        // the trailing count (the old "ASCENSION2 / 5" overlap).
+        Expanded(
+          child: Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 12.5, letterSpacing: 2.2,
+              fontWeight: FontWeight.w800,
+            )),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+      ],
+    );
+  }
+}
 
 class _MastheadSettingsCog extends StatelessWidget {
   final VoidCallback onTap;

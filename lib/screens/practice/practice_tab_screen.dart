@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../services/local_store_service.dart';
-import '../../services/paywall_gate.dart';
 import '../../services/roster.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
@@ -26,6 +26,7 @@ class PracticeTabScreen extends StatefulWidget {
 class _PracticeTabScreenState extends State<PracticeTabScreen> {
   Map<String, int> _stages = const {};
   int _day = 1; // earned ascension day — gates who's unlocked
+  bool _creator = false; // owner creator mode → every girl unlocked
 
   @override
   void initState() {
@@ -43,15 +44,19 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
     try {
       day = (await StreakService.progress()).ascensionDay;
     } catch (_) {/* default day 1 → only the starters unlocked */}
+    final creator = await LocalStoreService.isCreatorActive();
     if (mounted) {
       setState(() {
         _stages = s;
         _day = day;
+        _creator = creator;
       });
     }
   }
 
-  bool _locked(GirlBrief g) => _day < g.unlockDay;
+  // A girl is locked until her ascension day arrives. Creator mode
+  // (owner-only, password-gated) unlocks the whole roster immediately.
+  bool _locked(GirlBrief g) => !_creator && _day < g.unlockDay;
 
   Future<void> _tap(GirlBrief g) async {
     if (_locked(g)) {
@@ -64,15 +69,11 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
       ));
       return;
     }
-    // Free to browse the roster — but talking to her is Pro. Paywall on tap.
-    if (!await PaywallGate.isPro()) {
-      if (!mounted) return;
-      await PaywallGate.open(context, source: 'practice');
-      // Demo build: X unlocked the app, so fall through into the chat. Real
-      // build: still not pro, so stop here.
-      if (!mounted || !await PaywallGate.isPro()) return;
-    }
-    if (!mounted) return;
+    // THE FUNNEL — browsing AND opening the choice sheet are free. She's
+    // right there. Choosing TEXT drops them into the chat with 10 free
+    // messages (girl_chat_screen enforces the cap, then paywalls). Choosing
+    // VOICE routes through FreeFlow, which paywalls at _goLive — voice is
+    // never free. So no paywall here: let them in to see everything.
     _choose(g);
   }
 
@@ -121,12 +122,16 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Unlocked women first, then the locked ones grouped by the day they
-    // open (Day 10 group, then Day 20, then 30, then 40) — a clear climb.
-    final unlocked = [for (final g in kRoster) if (!_locked(g)) g];
-    final locked = [for (final g in kRoster) if (_locked(g)) g]
+    // Order by EARNED ascension day only — never by the creator flag — so
+    // toggling creator mode (which unlocks every girl) can NOT reshuffle the
+    // grid. Girls whose day has arrived lead (in roster order); the rest
+    // follow grouped by the day they open (10 → 20 → 30 → 40) as a clear
+    // climb. Creator mode only strips the lock overlay + allows the tap; a
+    // girl's position on the grid stays exactly where it was.
+    final earned = [for (final g in kRoster) if (_day >= g.unlockDay) g];
+    final notYet = [for (final g in kRoster) if (_day < g.unlockDay) g]
       ..sort((a, b) => a.unlockDay.compareTo(b.unlockDay));
-    final roster = [...unlocked, ...locked];
+    final roster = [...earned, ...notYet];
     return SafeArea(
       bottom: false,
       child: CustomScrollView(
@@ -137,8 +142,22 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Practice until it feels natural.',
-                      style: AppTypography.h1Italic),
+                  // Title + settings cog, matching Missions / Progress.
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text('Practice until it feels natural.',
+                            style: AppTypography.h1Italic),
+                      ),
+                      const SizedBox(width: 10),
+                      _SettingsCog(
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            context.push('/settings');
+                          }),
+                    ],
+                  ),
                   const SizedBox(height: 6),
                   Text(
                     'Voice calls, texts and scenarios that prepare you '
@@ -437,6 +456,37 @@ class _ChoiceSheet extends StatelessWidget {
               Icon(Icons.arrow_forward_rounded, size: 16, color: color),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Settings cog — identical treatment to the Missions + Progress tabs so
+/// the three tabs carry the same top-right control. 38px circle, hairline
+/// border, muted outline-settings glyph. Routes to /settings.
+class _SettingsCog extends StatelessWidget {
+  final VoidCallback onTap;
+  const _SettingsCog({required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.divider, width: 0.8),
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.settings_outlined,
+              size: 18, color: AppColors.textSecondary),
         ),
       ),
     );

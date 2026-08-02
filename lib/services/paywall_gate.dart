@@ -46,6 +46,10 @@ class PaywallGate {
   /// the same wall.
   static Future<bool> isPro() async {
     if (kBypassPaywall) return true;
+    // Creator mode (owner-only, password-gated in Settings) counts as Pro
+    // everywhere — unlocks all paid actions + all AI characters. A normal
+    // user can't set this without the creator password, so it never leaks.
+    if (await LocalStoreService.isCreatorActive()) return true;
     // CACHE FIRST. A completed purchase writes LocalStoreService
     // .setSubscribed(true) the instant the StoreKit transaction returns,
     // so trust that immediately — otherwise RevenueCat entitlement
@@ -106,6 +110,23 @@ class PaywallGate {
       return LocalStoreService.rizzScreenshotFreeUsed();
     }
     return LocalStoreService.screenshotRizzCapReached();
+  }
+
+  // ── Text roleplay gate (the funnel) ───────────────────────────────────
+  /// The funnel. A non-pro user gets [kFreeTextMessages] free text messages
+  /// with the AI women — enough to get in, see everything, and feel it —
+  /// then every send routes to the paywall. Pro + creator text unlimited.
+  ///
+  /// Cheap-first: the local free-count is checked WITHOUT any RevenueCat
+  /// round-trip, so the first 10 sends never pay the isPro() network cost.
+  /// Only once the free allowance is spent do we verify Pro/creator. VOICE
+  /// is NOT covered here — it's fully paid at every _goLive, no free
+  /// allowance, per bro: "all voice costs money, no exception."
+  static Future<bool> textCapReached() async {
+    // Under the free allowance → free, no network check.
+    if (!await LocalStoreService.freeTextCapReached()) return false;
+    // Allowance spent → only a real subscription (or creator) continues.
+    return !(await isPro());
   }
 
   // ── Rizz LINES + CHAT (paywalled outright for free users) ─────────────

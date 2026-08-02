@@ -25,7 +25,7 @@ import 'task_chat_screen.dart';
 /// it", with an optional Lucien game-plan first. Everything banks real
 /// XP and feeds The Five — real missions worth far more.
 class MissionsTabScreen extends StatefulWidget {
-  final ValueChanged<int> onGoToTab; // 1 = Practice, 2 = Texts
+  final ValueChanged<int> onGoToTab; // 0 = Missions, 1 = Practice, 2 = Progress
   const MissionsTabScreen({super.key, required this.onGoToTab});
 
   @override
@@ -144,6 +144,16 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
   }
 
   Future<void> _openVoice(MissionSpec m) async {
+    // Live voice roleplay is the MOST expensive action in the app (OpenAI
+    // Realtime audio). Paywall BEFORE the screen opens so a non-Pro user
+    // can never open — let alone connect — a voice session. Pro / creator
+    // pass; everyone else is stopped here.
+    if (!await PaywallGate.isPro()) {
+      if (!mounted) return;
+      await PaywallGate.open(context, source: 'mission_voice');
+      if (!mounted || !await PaywallGate.isPro()) return;
+    }
+    if (!mounted) return;
     final g = girlById(m.girlId!);
     await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
       builder: (_) => FreeFlowScreen(initialVibeKey: g.vibeKey),
