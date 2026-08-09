@@ -25,7 +25,12 @@ class AiConsentScreen extends StatefulWidget {
 }
 
 class _AiConsentScreenState extends State<AiConsentScreen> {
-  bool _agreed = false;
+  // Two separate, explicit consents — the pattern professional apps use.
+  // Both must be ticked before the user can enter the app.
+  bool _agreedTerms = false;   // 18+ and Terms of Use
+  bool _agreedPrivacy = false; // Privacy Policy + AI data processing
+
+  bool get _canContinue => _agreedTerms && _agreedPrivacy;
 
   @override
   void initState() {
@@ -40,7 +45,7 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
   }
 
   Future<void> _continue() async {
-    if (!_agreed) return;
+    if (!_canContinue) return;
     HapticFeedback.mediumImpact();
     await LocalStoreService.setAiConsent(true);
     AnalyticsService.consentGranted();
@@ -169,59 +174,31 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  InkWell(
+                  _ConsentCheck(
+                    value: _agreedTerms,
+                    label: 'I confirm I am 18 or older and agree to the '
+                        'Terms of Use.',
                     onTap: () {
                       HapticFeedback.selectionClick();
-                      setState(() => _agreed = !_agreed);
+                      setState(() => _agreedTerms = !_agreedTerms);
                     },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 140),
-                            width: 24, height: 24,
-                            margin: const EdgeInsets.only(top: 1),
-                            decoration: BoxDecoration(
-                              color: _agreed
-                                  ? AppColors.red
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(7),
-                              border: Border.all(
-                                color: _agreed
-                                    ? AppColors.red
-                                    : Colors.white.withValues(alpha: 0.35),
-                                width: 1.4),
-                            ),
-                            child: _agreed
-                                ? const Icon(Icons.check_rounded,
-                                    size: 16, color: Colors.white)
-                                : null,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'I agree to the Privacy Policy and Terms of '
-                              'Use, and I consent to ImHim sharing the data '
-                              'described above with its AI provider '
-                              '(OpenAI).',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 12.5, height: 1.4,
-                                fontWeight: FontWeight.w500),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 4),
+                  _ConsentCheck(
+                    value: _agreedPrivacy,
+                    label: 'I agree to the Privacy Policy and consent to '
+                        'ImHim sharing the data described above with its AI '
+                        'provider (OpenAI).',
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _agreedPrivacy = !_agreedPrivacy);
+                    },
+                  ),
+                  const SizedBox(height: 14),
                   SizedBox(
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: _agreed ? _continue : null,
+                      onPressed: _canContinue ? _continue : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.red,
                         disabledBackgroundColor:
@@ -240,6 +217,61 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One required-consent row: a tick box + label, the whole row tappable.
+/// Used twice on the gate (Terms/age, and Privacy/AI) — both must be
+/// ticked before the user can enter the app.
+class _ConsentCheck extends StatelessWidget {
+  final bool value;
+  final String label;
+  final VoidCallback onTap;
+  const _ConsentCheck(
+      {required this.value, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              width: 24, height: 24,
+              margin: const EdgeInsets.only(top: 1),
+              decoration: BoxDecoration(
+                color: value ? AppColors.red : Colors.transparent,
+                borderRadius: BorderRadius.circular(7),
+                border: Border.all(
+                  color: value
+                      ? AppColors.red
+                      : Colors.white.withValues(alpha: 0.35),
+                  width: 1.4),
+              ),
+              child: value
+                  ? const Icon(Icons.check_rounded,
+                      size: 16, color: Colors.white)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 12.5, height: 1.4,
+                  fontWeight: FontWeight.w500),
               ),
             ),
           ],
