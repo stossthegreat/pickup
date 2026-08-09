@@ -7,6 +7,8 @@ import 'config/dev_flags.dart';
 import 'navigation/app_router.dart';
 import 'providers/auralay_app_provider.dart';
 import 'services/analytics_service.dart';
+import 'services/backend/auth_service.dart';
+import 'services/backend/backend_service.dart';
 import 'services/daily_nudge_service.dart';
 import 'services/local_store_service.dart';
 import 'services/notification_service.dart';
@@ -29,6 +31,15 @@ void main() async {
   // leaves every event call a silent no-op until config arrives.
   await AnalyticsService.init();
   AnalyticsService.appOpen();
+
+  // Supabase backend (identity, squads, ELO, leaderboards). Fail-soft:
+  // offline launch keeps the whole solo experience working. The silent
+  // anonymous sign-in is fire-and-forget so it never delays first frame
+  // — every user gets a server identity with zero friction, and claims
+  // it with Apple later once they have a rank worth keeping.
+  await BackendService.init();
+  // ignore: discarded_futures
+  AuthService.ensureSignedIn();
 
   // RevenueCat is DISABLED for this launch (PurchaseConfig.enabled = false).
   // This call stays but no-ops while disabled — the SDK is never configured
