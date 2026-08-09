@@ -3,9 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../services/backend/tiers.dart';
+import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
 
 /// Everything the reveal needs, handed over via route extra. The scoring
@@ -46,10 +46,16 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen> {
 
   void _share() {
     HapticFeedback.selectionClick();
-    // v1: text share. The rendered 1080×1350 share-card engine replaces
-    // this — same call site, richer payload.
-    Share.share('I scored ${p.score} on ImHim Rizz — "${p.scenario}". '
-        'Think you\'d survive it?');
+    // The rendered Academy card — 0–9999 number, tier stamp, rubric
+    // bars and the gauntlet line. Every share is a challenge.
+    // ignore: discarded_futures
+    ShareService.shareRizzScore(
+      context: context,
+      scenario: p.scenario,
+      score: p.score,
+      rating: p.newRating,
+      rubric: p.rubric,
+    );
   }
 
   @override

@@ -333,6 +333,36 @@ class _TopBar extends StatelessWidget {
             children: [
               XpBadge(label: _xpLabel),
               const Spacer(),
+              // THE FEAR BUTTON — always in reach. For the exact second
+              // he's frozen and needs the app to push him through.
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.heavyImpact();
+                  context.push('/fear');
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 13, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.red.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                        color: AppColors.red.withValues(alpha: 0.6)),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.bolt_rounded,
+                        size: 15, color: AppColors.red),
+                    const SizedBox(width: 5),
+                    Text('BOTTLING IT?',
+                        style: GoogleFonts.inter(
+                          color: AppColors.red,
+                          fontSize: 10.5,
+                          letterSpacing: 1.6,
+                          fontWeight: FontWeight.w900,
+                        )),
+                  ]),
+                ),
+              ),
             ],
           ),
         ],

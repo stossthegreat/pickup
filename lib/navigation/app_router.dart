@@ -1,4 +1,6 @@
 import 'package:go_router/go_router.dart';
+import '../screens/academy/battles_screen.dart';
+import '../screens/academy/fear_button_screen.dart';
 import '../screens/academy/leaderboard_screen.dart';
 import '../screens/academy/score_reveal_screen.dart';
 import '../screens/academy/squad_room_screen.dart';
@@ -103,6 +105,10 @@ final appRouter = GoRouter(
 
     // ── The Academy layer — squads, the board, the reveal ────────────
     GoRoute(path: '/squad', builder: (_, __) => const SquadRoomScreen()),
+    // The Fear Button — the moment training becomes behaviour.
+    GoRoute(path: '/fear', builder: (_, __) => const FearButtonScreen()),
+    // Rizz Battles — same scenario, both blind, higher score takes ELO.
+    GoRoute(path: '/battles', builder: (_, __) => const BattlesScreen()),
     GoRoute(
         path: '/leaderboard',
         builder: (_, __) => const LeaderboardScreen()),
