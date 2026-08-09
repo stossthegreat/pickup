@@ -96,6 +96,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     fontWeight: FontWeight.w900,
                   )),
               const Spacer(),
+              // Battles lives off the Board — rankings are where you
+              // find someone worth fighting.
+              IconButton(
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  context.push('/battles');
+                },
+                icon: const Icon(Icons.sports_mma_rounded,
+                    size: 20, color: AppColors.red),
+              ),
             ]),
           ),
 
