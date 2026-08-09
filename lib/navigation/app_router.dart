@@ -112,6 +112,11 @@ final appRouter = GoRouter(
     GoRoute(path: '/battles', builder: (_, __) => const BattlesScreen()),
     // Identity — handle + Apple/Google account claim.
     GoRoute(path: '/account', builder: (_, __) => const AccountScreen()),
+    // Same screen as the FINAL onboarding step: no back arrow, SKIP FOR
+    // NOW exit — claiming is pitched, never forced.
+    GoRoute(
+        path: '/onboarding/identity',
+        builder: (_, __) => const AccountScreen(onboarding: true)),
     GoRoute(
         path: '/leaderboard',
         builder: (_, __) => const LeaderboardScreen()),

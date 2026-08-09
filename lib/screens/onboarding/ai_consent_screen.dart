@@ -50,10 +50,11 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
     await LocalStoreService.setAiConsent(true);
     AnalyticsService.consentGranted();
     if (!mounted) return;
-    // End of onboarding → straight into the app. No entry-wall paywall — the
-    // paywall fires on ACTIONS (opening a girl / mission / call), and it's
-    // dismissible. Landing them in /home lets them see what they're buying.
-    context.go('/home');
+    // Consent granted → the identity step (Apple / Google / SKIP FOR
+    // NOW — claiming is optional, always). No entry-wall paywall — the
+    // paywall fires on ACTIONS (opening a girl / mission / call), and
+    // it's dismissible.
+    context.go('/onboarding/identity');
   }
 
   @override

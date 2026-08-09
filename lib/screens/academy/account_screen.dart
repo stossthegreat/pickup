@@ -14,7 +14,12 @@ import '../../widgets/academy/academy_modal.dart';
 ///      squad survive a lost phone. Anonymous play stays first-class;
 ///      claiming is pitched as protecting what you've earned.
 class AccountScreen extends StatefulWidget {
-  const AccountScreen({super.key});
+  /// True when shown as the final onboarding step: no back arrow, a
+  /// SKIP FOR NOW exit, and both skip + successful claim land on /home.
+  /// Nobody is ever forced to sign in — anonymous play is first-class.
+  final bool onboarding;
+
+  const AccountScreen({super.key, this.onboarding = false});
 
   @override
   State<AccountScreen> createState() => _AccountScreenState();
@@ -91,7 +96,10 @@ class _AccountScreenState extends State<AccountScreen> {
             const SizedBox(height: 16),
             AcademyButton(
                 label: 'DONE',
-                onTap: () => Navigator.of(context).pop()),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  if (widget.onboarding) context.go('/home');
+                }),
           ],
         ),
       );
@@ -128,12 +136,13 @@ class _AccountScreenState extends State<AccountScreen> {
           padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
           children: [
             Row(children: [
-              IconButton(
-                padding: EdgeInsets.zero,
-                onPressed: () => context.pop(),
-                icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                    size: 18, color: Colors.white),
-              ),
+              if (!widget.onboarding)
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                      size: 18, color: Colors.white),
+                ),
               Text('YOUR IDENTITY',
                   style: GoogleFonts.inter(
                     color: AppColors.textPrimary,
@@ -317,7 +326,7 @@ class _AccountScreenState extends State<AccountScreen> {
               ),
             ],
 
-            if (claimed) ...[
+            if (claimed && !widget.onboarding) ...[
               const SizedBox(height: 26),
               Center(
                 child: TextButton(
@@ -335,6 +344,30 @@ class _AccountScreenState extends State<AccountScreen> {
                       )),
                 ),
               ),
+            ],
+
+            // Onboarding exit — claiming is optional, always.
+            if (widget.onboarding) ...[
+              const SizedBox(height: 30),
+              AcademyButton(
+                label: claimed ? 'ENTER THE APP' : 'SKIP FOR NOW',
+                ghost: !claimed,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  context.go('/home');
+                },
+              ),
+              if (!claimed) ...[
+                const SizedBox(height: 8),
+                Center(
+                  child: Text('You can claim any time in Settings.',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textMuted,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                      )),
+                ),
+              ],
             ],
           ],
         ),
