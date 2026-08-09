@@ -267,6 +267,63 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
               fontWeight: FontWeight.w700,
             ),
           ),
+          const SizedBox(height: 14),
+
+          // ── Weekly points — the number squads fight over. 100 per
+          //    completed mission, computed straight off the Week Grid
+          //    marks so it can never disagree with what's on screen.
+          Builder(builder: (context) {
+            final done = _marks.where((m) => m.completed).length;
+            final points = done * 100;
+            final possible = _roster.length * 7 * 100;
+            return Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 13),
+              decoration: BoxDecoration(
+                color: AppColors.surface1,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.06)),
+              ),
+              child: Row(children: [
+                Text('$points',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textPrimary,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                    )),
+                const SizedBox(width: 8),
+                Text('SQUAD PTS',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textTertiary,
+                      fontSize: 10,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w800,
+                    )),
+                const Spacer(),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: possible == 0 ? 0 : points / possible,
+                      minHeight: 6,
+                      backgroundColor: AppColors.surface2,
+                      valueColor: const AlwaysStoppedAnimation(
+                          AppColors.red),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text('$done DONE',
+                    style: GoogleFonts.inter(
+                      color: AppColors.red,
+                      fontSize: 10.5,
+                      letterSpacing: 1.6,
+                      fontWeight: FontWeight.w800,
+                    )),
+              ]),
+            );
+          }),
           const SizedBox(height: 18),
 
           // ── THE WEEK GRID ─────────────────────────────────────────
