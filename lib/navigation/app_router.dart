@@ -1,4 +1,7 @@
 import 'package:go_router/go_router.dart';
+import '../screens/academy/leaderboard_screen.dart';
+import '../screens/academy/score_reveal_screen.dart';
+import '../screens/academy/squad_room_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/legal/legal_screen.dart';
 import '../screens/onboarding/age_name_screen.dart';
@@ -97,6 +100,31 @@ final appRouter = GoRouter(
       builder: (_, __) => const RizzChatScreen(),
     ),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
+
+    // ── The Academy layer — squads, the board, the reveal ────────────
+    GoRoute(path: '/squad', builder: (_, __) => const SquadRoomScreen()),
+    GoRoute(
+        path: '/leaderboard',
+        builder: (_, __) => const LeaderboardScreen()),
+    // Pushed after a scored voice session with a ScoreRevealPayload.
+    // Pops with 'rematch' when the user taps RUN IT BACK.
+    GoRoute(
+      path: '/score-reveal',
+      builder: (_, state) {
+        final p = state.extra;
+        return ScoreRevealScreen(
+          payload: p is ScoreRevealPayload
+              ? p
+              // Defensive demo payload so a stray navigation never crashes.
+              : const ScoreRevealPayload(
+                  score: 0,
+                  rubric: {},
+                  eloDelta: 0,
+                  newRating: 1000,
+                  scenario: ''),
+        );
+      },
+    ),
     GoRoute(path: '/terms',    builder: (_, __) => LegalScreen(doc: termsDoc)),
     GoRoute(path: '/privacy',  builder: (_, __) => LegalScreen(doc: privacyDoc)),
   ],

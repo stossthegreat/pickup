@@ -85,6 +85,17 @@ dependencies:
   wakelock_plus: ^1.2.1
   # Secure storage for the creator/diablo unlock flags (mirrors Auralay).
   flutter_secure_storage: ^9.2.4
+  # ── BACKEND (Supabase) — identity, squads, ELO, leaderboards ─────────
+  # supabase_flutter carries auth (anonymous + Sign in with Apple via
+  # id-token), Postgres REST reads guarded by RLS, and Realtime streams
+  # (squad notifications). The publishable key it uses is safe to ship —
+  # every table is locked down by row-level security server-side.
+  supabase_flutter: ^2.8.0
+  # Native Apple credential for the Supabase id-token sign-in flow.
+  sign_in_with_apple: ^6.1.3
+  # sha256 of the raw nonce passed to Apple (replay protection).
+  crypto: ^3.0.3
+
   # In-app review prompt. Tracks 3 milestones (first scan, first Free
   # Flow, first eye-contact lesson) — when all three are done, the
   # review dialog fires once asking for stars + comments. On 4-5 stars
