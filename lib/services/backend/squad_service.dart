@@ -6,6 +6,32 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_service.dart';
 import 'backend_service.dart';
 
+/// One Pulse entry — a squad-visible event (join/commit/complete/score).
+class SquadEvent {
+  final String actorId;
+  final String kind;
+  final Map<String, dynamic> payload;
+  final DateTime createdAt;
+  const SquadEvent(
+      {required this.actorId,
+      required this.kind,
+      required this.payload,
+      required this.createdAt});
+}
+
+/// One Week Grid cell source — a member's mission activity this week.
+class WeekMark {
+  final String userId;
+  final DateTime day;
+  final bool completed; // false = committed but not completed yet
+  final String? missionTitle;
+  const WeekMark(
+      {required this.userId,
+      required this.day,
+      required this.completed,
+      this.missionTitle});
+}
+
 /// A squad roster row, shaped for the UI.
 class SquadMember {
   final String userId;
@@ -139,6 +165,110 @@ class SquadService {
     } catch (e) {
       debugPrint('SquadService.leave: $e');
     }
+  }
+
+  /// Monday 00:00 of the current week (device-local).
+  static DateTime weekStart() {
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    return DateTime(monday.year, monday.month, monday.day);
+  }
+
+  /// THE WEEK GRID — every member's commits + completions this week.
+  /// Readable because migration 0003 opens user_missions to active
+  /// squadmates (and nobody else).
+  static Future<List<WeekMark>> weekMarks(List<String> memberIds) async {
+    if (memberIds.isEmpty) return const [];
+    try {
+      final rows = await _sb
+          .from('user_missions')
+          .select(
+              'user_id, state, committed_at, completed_at, missions(title)')
+          .inFilter('user_id', memberIds)
+          .gte('created_at', weekStart().toIso8601String());
+      return [
+        for (final r in rows)
+          if (r['committed_at'] != null || r['completed_at'] != null)
+            WeekMark(
+              userId: r['user_id'] as String,
+              completed: r['state'] == 'completed',
+              day: DateTime.parse((r['completed_at'] ?? r['committed_at'])
+                      as String)
+                  .toLocal(),
+              missionTitle: (r['missions'] as Map?)?['title'] as String?,
+            )
+      ];
+    } catch (e) {
+      debugPrint('SquadService.weekMarks: $e');
+      return const [];
+    }
+  }
+
+  /// Latest Pulse events, newest first.
+  static Future<List<SquadEvent>> pulse(String squadId,
+      {int limit = 30}) async {
+    try {
+      final rows = await _sb
+          .from('squad_events')
+          .select('actor, kind, payload, created_at')
+          .eq('squad_id', squadId)
+          .order('created_at', ascending: false)
+          .limit(limit);
+      return [
+        for (final r in rows)
+          SquadEvent(
+            actorId: r['actor'] as String,
+            kind: r['kind'] as String,
+            payload:
+                (r['payload'] as Map?)?.cast<String, dynamic>() ?? const {},
+            createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+          )
+      ];
+    } catch (e) {
+      debugPrint('SquadService.pulse: $e');
+      return const [];
+    }
+  }
+
+  /// Post a Pulse event as the signed-in user (RLS enforces membership).
+  static Future<void> postEvent(String squadId, String kind,
+      [Map<String, dynamic> payload = const {}]) async {
+    final uid = AuthService.userId;
+    if (uid == null) return;
+    try {
+      await _sb.from('squad_events').insert({
+        'squad_id': squadId,
+        'actor': uid,
+        'kind': kind,
+        'payload': payload,
+      });
+    } catch (e) {
+      debugPrint('SquadService.postEvent: $e');
+    }
+  }
+
+  /// Live Pulse — fires on every new squad event while the room is open.
+  static RealtimeChannel watchPulse(
+      String squadId, void Function() onChange) {
+    return _sb
+        .channel('pulse-$squadId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'squad_events',
+          filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'squad_id',
+              value: squadId),
+          callback: (_) => onChange(),
+        )
+        .subscribe();
+  }
+
+  static void unwatch(RealtimeChannel channel) {
+    try {
+      _sb.removeChannel(channel);
+    } catch (_) {}
   }
 
   /// Live roster feed — fires on every join/leave in the squad. This is

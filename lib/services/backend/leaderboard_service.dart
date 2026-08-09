@@ -46,6 +46,31 @@ class LeaderboardService {
     }
   }
 
+  /// Ratings for a specific set of users (the SQUAD scope), ranked.
+  static Future<List<LeaderboardEntry>> forUsers(List<String> ids) async {
+    if (!BackendService.enabled || ids.isEmpty) return const [];
+    try {
+      final rows = await _sb
+          .from('rizz_elo')
+          .select('user_id, rating, tier, profiles(handle, avatar_url)')
+          .inFilter('user_id', ids)
+          .order('rating', ascending: false);
+      return [
+        for (final r in rows)
+          LeaderboardEntry(
+            userId: r['user_id'] as String,
+            handle: (r['profiles'] as Map?)?['handle'] as String?,
+            avatarUrl: (r['profiles'] as Map?)?['avatar_url'] as String?,
+            rating: (r['rating'] as num).toInt(),
+            tier: r['tier'] as String? ?? 'OBSERVER',
+          )
+      ];
+    } catch (e) {
+      debugPrint('LeaderboardService.forUsers: $e');
+      return const [];
+    }
+  }
+
   /// The signed-in user's own rating row (rank ladder chip, profile).
   static Future<LeaderboardEntry?> me() async {
     final uid = AuthService.userId;
