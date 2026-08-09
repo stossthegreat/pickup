@@ -15,6 +15,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../config/dev_flags.dart';
 import '../../../services/analytics_service.dart';
 import '../../../services/audio_session.dart';
+import '../../../services/backend/rizz_score_service.dart';
 import '../../../services/creator_mode_store.dart';
 import '../../../services/local_store_service.dart';
 import '../../../services/paywall_gate.dart';
@@ -1768,6 +1769,18 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // a fast back-tap was beating the SharedPreferences write and
       // the Ascend GAME pillar stayed at zero.
       await _persistGame(score.score);
+      // Academy: hand the SAME transcript to the server-side rubric
+      // grader so this real session moves the user's ELO, the Board and
+      // the squad Pulse. Fire-and-forget — Lucien's scorecard stays the
+      // on-screen result; the rating updates land on the Board.
+      // ignore: discarded_futures
+      RizzScoreService.scoreSession(
+        scenario: _vibe?.label ?? 'Free Flow',
+        transcript: [
+          for (final t in _transcript)
+            "${t['role'] == 'user' ? 'YOU' : 'HER'}: ${t['text']}",
+        ].join('\n'),
+      );
       // Blend the five dimension scores into the running total so The Five
       // CLIMBS over the 60 days instead of snapping to the last session.
       if (score.dimensions != null) {
