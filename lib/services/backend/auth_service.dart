@@ -2,9 +2,11 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../config/backend_config.dart';
 import 'backend_service.dart';
 
 /// Identity. Two lanes, deliberately:
@@ -78,6 +80,77 @@ class AuthService {
     } catch (e) {
       debugPrint('AuthService.signInWithApple: $e');
       return false;
+    }
+  }
+
+  /// Claim the account with Google (native sheet → Supabase id-token).
+  /// Returns false when cancelled, offline, or not yet configured
+  /// (BackendConfig.googleWebClientId empty).
+  static Future<bool> signInWithGoogle() async {
+    if (!BackendService.enabled) return false;
+    if (BackendConfig.googleWebClientId.isEmpty) {
+      debugPrint('AuthService.signInWithGoogle: no client IDs configured');
+      return false;
+    }
+    try {
+      final google = GoogleSignIn(
+        clientId: BackendConfig.googleIosClientId.isEmpty
+            ? null
+            : BackendConfig.googleIosClientId,
+        serverClientId: BackendConfig.googleWebClientId,
+      );
+      final account = await google.signIn();
+      if (account == null) return false; // user cancelled the sheet
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null) return false;
+      await _sb.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: auth.accessToken,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('AuthService.signInWithGoogle: $e');
+      return false;
+    }
+  }
+
+  /// Sign out, then immediately mint a fresh anonymous identity so the
+  /// app never sits in a signed-out limbo state.
+  static Future<void> signOut() async {
+    if (!BackendService.enabled) return;
+    try {
+      await _sb.auth.signOut();
+    } catch (e) {
+      debugPrint('AuthService.signOut: $e');
+    }
+    await ensureSignedIn();
+  }
+
+  /// Which provider claimed this account ('apple' / 'google'), or null
+  /// while anonymous.
+  static String? get claimedProvider {
+    if (!isClaimed) return null;
+    final ids = _sb.auth.currentUser?.identities;
+    if (ids == null || ids.isEmpty) return null;
+    return ids.first.provider;
+  }
+
+  /// Current public handle, or null when unset / offline.
+  static Future<String?> getHandle() async {
+    final uid = userId;
+    if (uid == null) return null;
+    try {
+      final r = await _sb
+          .from('profiles')
+          .select('handle')
+          .eq('id', uid)
+          .single();
+      return r['handle'] as String?;
+    } catch (e) {
+      debugPrint('AuthService.getHandle: $e');
+      return null;
     }
   }
 

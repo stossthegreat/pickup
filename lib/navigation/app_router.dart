@@ -1,4 +1,5 @@
 import 'package:go_router/go_router.dart';
+import '../screens/academy/account_screen.dart';
 import '../screens/academy/battles_screen.dart';
 import '../screens/academy/fear_button_screen.dart';
 import '../screens/academy/leaderboard_screen.dart';
@@ -109,6 +110,8 @@ final appRouter = GoRouter(
     GoRoute(path: '/fear', builder: (_, __) => const FearButtonScreen()),
     // Rizz Battles — same scenario, both blind, higher score takes ELO.
     GoRoute(path: '/battles', builder: (_, __) => const BattlesScreen()),
+    // Identity — handle + Apple/Google account claim.
+    GoRoute(path: '/account', builder: (_, __) => const AccountScreen()),
     GoRoute(
         path: '/leaderboard',
         builder: (_, __) => const LeaderboardScreen()),

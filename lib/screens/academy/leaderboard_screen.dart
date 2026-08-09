@@ -157,9 +157,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       ),
           ),
 
-          // ── Your row — pinned. The gap is always visible. ─────────
+          // ── Your row — pinned. The gap is always visible. Tapping
+          //    it opens identity (set your name, claim the account).
           if (_me != null)
-            Container(
+            GestureDetector(
+              onTap: () async {
+                HapticFeedback.selectionClick();
+                await context.push('/account');
+                _load(); // handle may have changed
+              },
+              child: Container(
               margin: const EdgeInsets.fromLTRB(14, 4, 14, 10),
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -198,6 +205,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       fontWeight: FontWeight.w900,
                     )),
               ]),
+              ),
             ),
         ]),
       ),

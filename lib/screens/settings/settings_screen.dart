@@ -80,6 +80,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // toast the tile fires on tap, so the list reads as
               // tall clean rectangles like the reference image.
 
+              // ── Your identity — handle + Apple/Google claim ───────────
+              _SettingTile(
+                icon: Icons.person_rounded,
+                iconColor: AppColors.red,
+                title: 'Your identity',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  context.push('/account');
+                },
+              ),
+
               // ── Get ImHim Pro — top of the list (red crown) ───────────
               if (!kBypassPaywall)
                 _SettingTile(

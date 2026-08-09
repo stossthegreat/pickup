@@ -93,6 +93,9 @@ dependencies:
   supabase_flutter: ^2.8.0
   # Native Apple credential for the Supabase id-token sign-in flow.
   sign_in_with_apple: ^6.1.3
+  # Native Google credential for the same id-token flow (v6 API —
+  # v7 reworked the surface; pin until we migrate deliberately).
+  google_sign_in: ^6.2.1
   # sha256 of the raw nonce passed to Apple (replay protection).
   crypto: ^3.0.3
 
