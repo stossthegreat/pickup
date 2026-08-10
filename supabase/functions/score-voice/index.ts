@@ -86,3 +86,5 @@ Deno.serve(async (req) => {
 
   return Response.json({ score, rubric, eloDelta, newRating, tier });
 });
+
+// Deploy trigger: 2026-08-10T21:32Z
