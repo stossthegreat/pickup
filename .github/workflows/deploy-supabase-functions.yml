@@ -1,0 +1,58 @@
+name: Deploy Supabase Functions
+
+# No Mac needed. This runs on GitHub's machines and pushes the Edge
+# Functions to Supabase for you.
+#
+# ── ONE-TIME SETUP (all on your phone, ~3 minutes) ────────────────────
+#  1. Supabase → click your avatar (top right) → Account Settings →
+#     Access Tokens → "Generate new token" → copy it.
+#  2. GitHub → this repo → Settings → Secrets and variables → Actions
+#     → "New repository secret", add these two:
+#         SUPABASE_ACCESS_TOKEN   = the token from step 1
+#         SUPABASE_PROJECT_REF    = xfmnvmuhabrkiemtvdzg
+#     (Optional, only if you want scoring live:)
+#         OPENAI_API_KEY          = your sk-... key
+#  3. Done. It deploys on every push that touches supabase/functions,
+#     and you can also run it by hand: Actions tab → this workflow →
+#     "Run workflow".
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/deploy-supabase-functions.yml'
+  workflow_dispatch: # the "Run workflow" button
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Push the OpenAI key (only if the secret is set)
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase secrets set OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+            --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+
+      # Each function is deployed with --no-verify-jwt=false (the
+      # default): the functions verify the caller's token themselves.
+      - name: Deploy functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -e
+          for fn in score-voice battle-action daily-game; do
+            echo "── deploying $fn ─────────────────────────────"
+            supabase functions deploy "$fn" \
+              --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+          done
+          echo "All functions deployed."
