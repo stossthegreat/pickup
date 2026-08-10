@@ -9,13 +9,15 @@ import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/mission_service.dart';
 import '../../services/backend/squad_service.dart';
+import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/academy_modal.dart';
 import '../../widgets/academy/game_button.dart';
 
-/// THE SQUAD ROOM. Not a settings page — a room you walk into.
-/// Week Grid (who did what, what day) · Call Your Shot · The Pulse ·
-/// War Room (Discord) · invite card. Comms live in Discord; the truth
+/// THE SQUAD ROOM. Not a settings page — a room you walk into. The
+/// banner tells you who you are, the WEEK BOARD tells you who showed
+/// up, the mission card asks you to call your shot in front of them,
+/// and the pulse is the room talking. Comms live in Discord; the truth
 /// lives here.
 class SquadRoomScreen extends StatefulWidget {
   const SquadRoomScreen({super.key});
@@ -75,7 +77,6 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
         mission == null ? null : await MissionService.todayState(mission.id);
     if (!mounted) return;
 
-    // Live wires — pulse + roster changes repaint the room instantly.
     _pulseChannel ??= SquadService.watchPulse(squad.id, _refreshSoft);
     _rosterChannel ??= SquadService.watchRoster(squad.id, _refreshSoft);
 
@@ -113,13 +114,7 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     final squad = await SquadService.joinByCode(code);
     if (!mounted) return;
     if (squad == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Invalid code — check it with your squad.',
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w600)),
-        backgroundColor: AppColors.toastBg,
-        behavior: SnackBarBehavior.floating,
-      ));
+      _snack('Invalid code — check it with your squad.');
       return;
     }
     await SquadService.postEvent(squad.id, 'joined');
@@ -145,33 +140,86 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     if (await MissionService.complete(m.id)) {
       await SquadService.postEvent(s.id, 'completed', {'mission': m.title});
       if (!mounted) return;
-      AcademyModal.show(
-        context,
-        kicker: 'MISSION COMPLETE',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(m.title,
-                style: GoogleFonts.inter(
-                    color: AppColors.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900)),
-            const SizedBox(height: 6),
-            Text('Your square is filled. The squad saw it.',
-                style: GoogleFonts.inter(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500)),
-            const SizedBox(height: 16),
-            AcademyButton(
-                label: 'BACK TO THE ROOM',
-                onTap: () => Navigator.of(context).pop()),
-          ],
-        ),
-      );
+      _celebrate(m.title);
       _load();
     }
+  }
+
+  /// Full-screen moment with confetti — a filled square is a real win.
+  void _celebrate(String title) {
+    showGeneralDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.93),
+      barrierDismissible: true,
+      barrierLabel: 'done',
+      transitionDuration: const Duration(milliseconds: 380),
+      pageBuilder: (ctx, _, __) => Material(
+        color: Colors.transparent,
+        child: Stack(children: [
+          const Positioned.fill(child: Burst(color: kNeon)),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 34),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: kNeon.withValues(alpha: 0.14),
+                    border: Border.all(color: kNeon, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                          color: kNeon.withValues(alpha: 0.45),
+                          blurRadius: 44)
+                    ],
+                  ),
+                  child: const Icon(Icons.check_rounded,
+                      size: 52, color: kNeon),
+                ).animate().scale(
+                    begin: const Offset(0.4, 0.4),
+                    end: const Offset(1, 1),
+                    duration: 520.ms,
+                    curve: Curves.elasticOut),
+                const SizedBox(height: 24),
+                Text('SQUARE FILLED',
+                    style: GoogleFonts.inter(
+                      color: kNeon,
+                      fontSize: 30,
+                      letterSpacing: 2.6,
+                      fontWeight: FontWeight.w900,
+                    )).animate().fadeIn(delay: 250.ms),
+                const SizedBox(height: 10),
+                Text(title,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    )).animate().fadeIn(delay: 350.ms),
+                const SizedBox(height: 4),
+                Text('The squad saw it.',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    )).animate().fadeIn(delay: 430.ms),
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: 230,
+                  child: GameButton(
+                    label: 'BACK TO THE ROOM',
+                    color: kNeon,
+                    textColor: Colors.black,
+                    onTap: () => Navigator.of(context).pop(),
+                  ),
+                ).animate().fadeIn(delay: 540.ms),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 
   void _shareInvite() {
@@ -180,6 +228,16 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     HapticFeedback.selectionClick();
     Share.share('Join my squad "${s.name}" on ImHim Rizz. '
         'Code: ${s.inviteCode}');
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg,
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w600)),
+      backgroundColor: AppColors.toastBg,
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
   // ── Build ───────────────────────────────────────────────────────────
@@ -211,14 +269,15 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
 
   Widget _room() {
     final squad = _squad!;
+    final done = _marks.where((m) => m.completed).length;
+    final possible = _roster.length * 7;
     return RefreshIndicator(
       color: AppColors.red,
       backgroundColor: AppColors.surface1,
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
+        padding: const EdgeInsets.fromLTRB(18, 2, 18, 26),
         children: [
-          // ── Header ────────────────────────────────────────────────
           Row(children: [
             IconButton(
               padding: EdgeInsets.zero,
@@ -226,118 +285,27 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   size: 18, color: Colors.white),
             ),
-            Expanded(
-              child: Text(squad.name.toUpperCase(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    color: AppColors.textPrimary,
-                    fontSize: 19,
-                    letterSpacing: 1.5,
-                    fontWeight: FontWeight.w900,
-                  )),
-            ),
-            GestureDetector(
-              onTap: _shareInvite,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: AppColors.surface1,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                      color: AppColors.red.withValues(alpha: 0.5)),
-                ),
-                child: Text(squad.inviteCode,
-                    style: GoogleFonts.inter(
-                      color: AppColors.red,
-                      fontSize: 12,
-                      letterSpacing: 2.4,
-                      fontWeight: FontWeight.w800,
-                    )),
-              ),
+            const Spacer(),
+            IconButton(
+              onPressed: _shareInvite,
+              icon: const Icon(Icons.person_add_alt_1_rounded,
+                  size: 20, color: AppColors.red),
             ),
           ]),
-          const SizedBox(height: 4),
-          Text(
-            '${_roster.length} OPERATIVES · TAP CODE TO RECRUIT',
-            style: GoogleFonts.inter(
-              color: AppColors.textTertiary,
-              fontSize: 10,
-              letterSpacing: 2,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 14),
 
-          // ── Weekly points — the number squads fight over. 100 per
-          //    completed mission, computed straight off the Week Grid
-          //    marks so it can never disagree with what's on screen.
-          Builder(builder: (context) {
-            final done = _marks.where((m) => m.completed).length;
-            final points = done * 100;
-            final possible = _roster.length * 7 * 100;
-            return Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 13),
-              decoration: BoxDecoration(
-                color: AppColors.surface1,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.06)),
-              ),
-              child: Row(children: [
-                Text('$points',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textPrimary,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w900,
-                    )),
-                const SizedBox(width: 8),
-                Text('SQUAD PTS',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textTertiary,
-                      fontSize: 10,
-                      letterSpacing: 2,
-                      fontWeight: FontWeight.w800,
-                    )),
-                const Spacer(),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: LinearProgressIndicator(
-                      value: possible == 0 ? 0 : points / possible,
-                      minHeight: 6,
-                      backgroundColor: AppColors.surface2,
-                      valueColor: const AlwaysStoppedAnimation(
-                          AppColors.red),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text('$done DONE',
-                    style: GoogleFonts.inter(
-                      color: AppColors.red,
-                      fontSize: 10.5,
-                      letterSpacing: 1.6,
-                      fontWeight: FontWeight.w800,
-                    )),
-              ]),
-            );
-          }),
-          const SizedBox(height: 18),
+          // ── BANNER — who you are ──────────────────────────────────
+          _banner(squad, done, possible),
+          const SizedBox(height: 20),
 
-          // ── THE WEEK GRID ─────────────────────────────────────────
-          _SectionLabel('THIS WEEK — WHO SHOWED UP'),
-          const SizedBox(height: 10),
-          _WeekGrid(roster: _roster, marks: _marks)
-              .animate()
-              .fadeIn(duration: 350.ms),
+          // ── THE WEEK BOARD ────────────────────────────────────────
+          _label('THE WEEK BOARD', 'Who showed up.'),
+          const SizedBox(height: 12),
+          _WeekBoard(roster: _roster, marks: _marks),
           const SizedBox(height: 22),
 
           // ── CALL YOUR SHOT ────────────────────────────────────────
-          _SectionLabel("TODAY'S MISSION"),
-          const SizedBox(height: 10),
+          _label("TODAY'S MISSION", 'Call it in front of them.'),
+          const SizedBox(height: 12),
           _MissionCard(
             mission: _mission,
             state: _missionState,
@@ -347,8 +315,8 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
           const SizedBox(height: 22),
 
           // ── THE PULSE ─────────────────────────────────────────────
-          _SectionLabel('THE PULSE'),
-          const SizedBox(height: 10),
+          _label('THE PULSE', 'The room, live.'),
+          const SizedBox(height: 12),
           if (_pulse.isEmpty)
             Text('Silence. Someone make a move.',
                 style: GoogleFonts.inter(
@@ -357,17 +325,196 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
                   fontWeight: FontWeight.w500,
                 ))
           else
-            for (final e in _pulse.take(12))
-              _PulseRow(event: e, roster: _roster),
+            for (final (i, e) in _pulse.take(14).indexed)
+              _PulseRow(
+                event: e,
+                roster: _roster,
+                first: i == 0,
+                last: i == _pulse.take(14).length - 1,
+              ),
         ],
       ),
     );
   }
+
+  /// Squad banner — emblem, name, member faces, the code chip and the
+  /// week's progress bar. The identity object of the whole feature.
+  Widget _banner(Squad squad, int done, int possible) {
+    final pct = possible == 0 ? 0.0 : done / possible;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.red.withValues(alpha: 0.24),
+            AppColors.surface1,
+            AppColors.surface1,
+          ],
+        ),
+        border: Border.all(color: AppColors.red.withValues(alpha: 0.4)),
+        boxShadow: const [BoxShadow(color: AppColors.redGlow, blurRadius: 30)],
+      ),
+      child: Column(children: [
+        Row(children: [
+          // Emblem — the squad initial struck into a disc.
+          Container(
+            width: 62,
+            height: 62,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFFF6B70), AppColors.red, Color(0xFF7E0E12)],
+              ),
+              border:
+                  Border.all(color: Colors.white.withValues(alpha: 0.28), width: 2),
+              boxShadow: [
+                BoxShadow(
+                    color: AppColors.red.withValues(alpha: 0.5),
+                    blurRadius: 26)
+              ],
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              squad.name.characters.first.toUpperCase(),
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                shadows: [
+                  Shadow(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      blurRadius: 8)
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(squad.name.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 22,
+                      height: 1.05,
+                      letterSpacing: -0.4,
+                      fontWeight: FontWeight.w900,
+                    )),
+                const SizedBox(height: 4),
+                Text('${_roster.length} OPERATIVES',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textTertiary,
+                      fontSize: 10,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w800,
+                    )),
+              ],
+            ),
+          ),
+        ]),
+        const SizedBox(height: 16),
+        // Week progress — the squad's shared number.
+        Row(children: [
+          Text('$done',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 26,
+                height: 1,
+                fontWeight: FontWeight.w900,
+              )),
+          Text(' / $possible SQUARES',
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 11,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w800,
+              )),
+          const Spacer(),
+          Text('${done * 100} PTS',
+              style: GoogleFonts.inter(
+                color: AppColors.red,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              )),
+        ]),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: pct),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (_, v, __) => LinearProgressIndicator(
+              value: v,
+              minHeight: 7,
+              backgroundColor: AppColors.surface2,
+              valueColor: const AlwaysStoppedAnimation(AppColors.red),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        // Invite code — big, tappable, the growth loop.
+        GestureDetector(
+          onTap: _shareInvite,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: AppColors.red.withValues(alpha: 0.45)),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.ios_share_rounded,
+                  size: 15, color: AppColors.red),
+              const SizedBox(width: 10),
+              Text(squad.inviteCode,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 19,
+                    letterSpacing: 7,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ]),
+          ),
+        ),
+      ]),
+    ).animate().fadeIn(duration: 340.ms);
+  }
+
+  Widget _label(String title, String sub) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+      Text(title,
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 13,
+            letterSpacing: 2.2,
+            fontWeight: FontWeight.w900,
+          )),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(sub,
+            style: GoogleFonts.inter(
+              color: AppColors.textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            )),
+      ),
+    ]);
+  }
 }
 
-// ════════════════════════════════════════════════════════════════════
-//  NO-SQUAD HERO — create or join
-// ════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+//  NO SQUAD — the recruiting hero
+// ══════════════════════════════════════════════════════════════════════
 
 class _NoSquad extends StatelessWidget {
   final TextEditingController nameCtrl;
@@ -385,7 +532,7 @@ class _NoSquad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 2, 24, 24),
       children: [
         Align(
           alignment: Alignment.centerLeft,
@@ -396,30 +543,52 @@ class _NoSquad extends StatelessWidget {
                 size: 18, color: Colors.white),
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
+        Center(
+          child: Container(
+            width: 88,
+            height: 88,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.red.withValues(alpha: 0.12),
+              border: Border.all(
+                  color: AppColors.red.withValues(alpha: 0.6), width: 2),
+              boxShadow: const [
+                BoxShadow(color: AppColors.redGlow, blurRadius: 34)
+              ],
+            ),
+            child: const Icon(Icons.shield_rounded,
+                size: 42, color: AppColors.red),
+          )
+              .animate(onPlay: (c) => c.repeat(reverse: true))
+              .scaleXY(begin: 1.0, end: 1.05, duration: 1600.ms),
+        ),
+        const SizedBox(height: 24),
         Text('NOBODY\nCHANGES ALONE.',
+            textAlign: TextAlign.center,
             style: GoogleFonts.inter(
-              color: AppColors.textPrimary,
-              fontSize: 34,
-              height: 1.05,
-              letterSpacing: -1,
+              color: Colors.white,
+              fontSize: 33,
+              height: 1.04,
+              letterSpacing: -1.2,
               fontWeight: FontWeight.w900,
             )).animate().fadeIn(duration: 400.ms),
         const SizedBox(height: 10),
         Text(
             'A squad sees your missions. Your streak. Your silence. '
             'That\'s the point.',
+            textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               color: AppColors.textSecondary,
-              fontSize: 14.5,
+              fontSize: 14,
               height: 1.45,
               fontWeight: FontWeight.w500,
             )).animate().fadeIn(delay: 120.ms, duration: 400.ms),
-        const SizedBox(height: 32),
+        const SizedBox(height: 30),
         _Field(controller: nameCtrl, hint: 'SQUAD NAME'),
-        const SizedBox(height: 10),
-        GameButton(label: 'FOUND A SQUAD', onTap: onCreate),
-        const SizedBox(height: 28),
+        const SizedBox(height: 12),
+        GameButton(label: 'FOUND A SQUAD', onTap: onCreate, pulse: true),
+        const SizedBox(height: 26),
         Row(children: [
           Expanded(child: Container(height: 1, color: AppColors.divider)),
           Padding(
@@ -434,13 +603,13 @@ class _NoSquad extends StatelessWidget {
           ),
           Expanded(child: Container(height: 1, color: AppColors.divider)),
         ]),
-        const SizedBox(height: 28),
+        const SizedBox(height: 26),
         _Field(
             controller: codeCtrl,
             hint: 'INVITE CODE',
             caps: true,
             letterSpacing: 6),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         GameButton(
             label: 'ENTER WITH CODE',
             color: AppColors.surface2,
@@ -467,11 +636,12 @@ class _Field extends StatelessWidget {
       controller: controller,
       textCapitalization:
           caps ? TextCapitalization.characters : TextCapitalization.words,
+      textAlign: caps ? TextAlign.center : TextAlign.start,
       style: GoogleFonts.inter(
         color: AppColors.textPrimary,
-        fontSize: 15,
+        fontSize: 16,
         letterSpacing: letterSpacing,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w800,
       ),
       decoration: InputDecoration(
         hintText: hint,
@@ -484,178 +654,231 @@ class _Field extends StatelessWidget {
         filled: true,
         fillColor: AppColors.surface1,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(15),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide:
-              BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          borderRadius: BorderRadius.circular(15),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.red),
+          borderRadius: BorderRadius.circular(15),
+          borderSide: const BorderSide(color: AppColors.red, width: 1.6),
         ),
       ),
     );
   }
 }
 
-// ════════════════════════════════════════════════════════════════════
-//  WEEK GRID — rows = members · cols = Mon..Sun
-// ════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+//  THE WEEK BOARD — faces down the side, seven tiles across
+// ══════════════════════════════════════════════════════════════════════
 
-class _WeekGrid extends StatelessWidget {
+class _WeekBoard extends StatelessWidget {
   final List<SquadMember> roster;
   final List<WeekMark> marks;
-  const _WeekGrid({required this.roster, required this.marks});
+  const _WeekBoard({required this.roster, required this.marks});
 
   static const _days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   @override
   Widget build(BuildContext context) {
-    final today = DateTime.now().weekday - 1; // 0..6
+    final today = DateTime.now().weekday - 1;
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
       decoration: BoxDecoration(
         color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(children: [
-        // Day header
         Row(children: [
-          const SizedBox(width: 86),
+          const SizedBox(width: 104),
           for (var d = 0; d < 7; d++)
             Expanded(
               child: Center(
-                child: Text(_days[d],
-                    style: GoogleFonts.inter(
-                      color: d == today
-                          ? AppColors.red
-                          : AppColors.textMuted,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                    )),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: d == today
+                        ? AppColors.red.withValues(alpha: 0.16)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(_days[d],
+                      style: GoogleFonts.inter(
+                        color:
+                            d == today ? AppColors.red : AppColors.textMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ),
               ),
             ),
         ]),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         for (final m in roster) ...[
-          _memberRow(context, m, today),
-          if (m != roster.last) const SizedBox(height: 8),
+          _row(context, m, today),
+          if (m != roster.last)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 7),
+              child: Container(height: 1, color: AppColors.divider),
+            ),
         ],
       ]),
-    );
+    ).animate().fadeIn(duration: 340.ms);
   }
 
-  Widget _memberRow(BuildContext context, SquadMember m, int today) {
+  Widget _row(BuildContext context, SquadMember m, int today) {
     final mine = m.userId == AuthService.userId;
+    final weekDone = marks
+        .where((w) => w.userId == m.userId && w.completed)
+        .length;
     return Row(children: [
       SizedBox(
-        width: 86,
-        child: Text(
-          mine ? 'YOU' : (m.handle ?? 'ANON'),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.inter(
-            color: mine ? AppColors.red : AppColors.textSecondary,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w800,
+        width: 104,
+        child: Row(children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.surface2,
+              border: Border.all(
+                  color: mine ? AppColors.red : Colors.white24, width: 1.6),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              (mine ? 'YOU' : (m.handle ?? 'A')).characters.first.toUpperCase(),
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
-        ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(mine ? 'YOU' : (m.handle ?? 'ANON'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: mine ? AppColors.red : AppColors.textPrimary,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w900,
+                    )),
+                Text('$weekDone/7',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textMuted,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    )),
+              ],
+            ),
+          ),
+        ]),
       ),
       for (var d = 0; d < 7; d++)
-        Expanded(child: Center(child: _cell(context, m, d, today))),
+        Expanded(child: Center(child: _tile(context, m, d, today))),
     ]);
   }
 
-  Widget _cell(BuildContext context, SquadMember m, int day, int today) {
+  Widget _tile(BuildContext context, SquadMember m, int day, int today) {
     WeekMark? mark;
     for (final w in marks) {
       if (w.userId == m.userId && w.day.weekday - 1 == day) {
-        // Completed beats committed if both exist that day.
         if (mark == null || (w.completed && !mark.completed)) mark = w;
       }
     }
     final future = day > today;
-    final Widget dot;
-    if (mark != null && mark.completed) {
-      dot = Container(
-        width: 20,
-        height: 20,
+    final captured = mark;
+
+    Widget tile;
+    if (captured != null && captured.completed) {
+      tile = Container(
+        width: 26,
+        height: 26,
         decoration: BoxDecoration(
-          color: AppColors.red,
-          borderRadius: BorderRadius.circular(6),
-          boxShadow: const [
-            BoxShadow(color: AppColors.redGlow, blurRadius: 10)
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFF6B70), AppColors.red],
+          ),
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+                color: AppColors.red.withValues(alpha: 0.55), blurRadius: 12)
           ],
         ),
-        child: const Icon(Icons.check_rounded, size: 14, color: Colors.white),
+        child: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
       );
-    } else if (mark != null) {
-      dot = Container(
-        width: 20,
-        height: 20,
+    } else if (captured != null) {
+      tile = Container(
+        width: 26,
+        height: 26,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: AppColors.red, width: 1.4),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.red, width: 1.8),
         ),
       );
     } else {
-      dot = Container(
-        width: 20,
-        height: 20,
+      tile = Container(
+        width: 26,
+        height: 26,
         decoration: BoxDecoration(
           color: future ? Colors.transparent : AppColors.surface2,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(8),
           border: future
-              ? Border.all(color: Colors.white.withValues(alpha: 0.05))
+              ? Border.all(color: Colors.white.withValues(alpha: 0.06))
               : null,
         ),
       );
     }
-    final captured = mark;
+
+    if (captured == null) return tile;
     return GestureDetector(
-      onTap: captured == null
-          ? null
-          : () {
-              HapticFeedback.selectionClick();
-              AcademyModal.show(
-                context,
-                kicker: captured.completed ? 'COMPLETED' : 'COMMITTED',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(captured.missionTitle ?? 'Mission',
-                        style: GoogleFonts.inter(
-                            color: AppColors.textPrimary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 4),
-                    Text(
-                        '${m.handle ?? 'ANON'} · '
-                        '${captured.day.hour.toString().padLeft(2, '0')}:'
-                        '${captured.day.minute.toString().padLeft(2, '0')}',
-                        style: GoogleFonts.inter(
-                            color: AppColors.textTertiary,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              );
-            },
-      child: dot,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        AcademyModal.show(
+          context,
+          kicker: captured.completed ? 'COMPLETED' : 'COMMITTED',
+          accent: captured.completed ? kNeon : AppColors.red,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(captured.missionTitle ?? 'Mission',
+                  style: GoogleFonts.inter(
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900)),
+              const SizedBox(height: 4),
+              Text(
+                  '${m.handle ?? 'ANON'} · '
+                  '${captured.day.hour.toString().padLeft(2, '0')}:'
+                  '${captured.day.minute.toString().padLeft(2, '0')}',
+                  style: GoogleFonts.inter(
+                      color: AppColors.textTertiary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
+        );
+      },
+      child: tile,
     );
   }
 }
 
-// ════════════════════════════════════════════════════════════════════
-//  MISSION CARD — call your shot / mark it done
-// ════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+//  MISSION CARD
+// ══════════════════════════════════════════════════════════════════════
 
 class _MissionCard extends StatelessWidget {
   final Mission? mission;
@@ -671,15 +894,22 @@ class _MissionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = mission;
+    final committed = state == 'committed';
+    final completed = state == 'completed';
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-            color: state == 'committed'
-                ? AppColors.red.withValues(alpha: 0.5)
-                : Colors.white.withValues(alpha: 0.06)),
+            color: completed
+                ? kNeon.withValues(alpha: 0.5)
+                : committed
+                    ? AppColors.red.withValues(alpha: 0.55)
+                    : Colors.white.withValues(alpha: 0.06)),
+        boxShadow: committed
+            ? const [BoxShadow(color: AppColors.redGlow, blurRadius: 22)]
+            : null,
       ),
       child: m == null
           ? Text(
@@ -692,69 +922,95 @@ class _MissionCard extends StatelessWidget {
                 fontWeight: FontWeight.w500,
               ))
           : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('TIER ${m.tier}',
-                  style: GoogleFonts.inter(
-                    color: AppColors.red,
-                    fontSize: 9.5,
-                    letterSpacing: 2.4,
-                    fontWeight: FontWeight.w800,
-                  )),
-              const SizedBox(height: 6),
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.red.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                        color: AppColors.red.withValues(alpha: 0.5)),
+                  ),
+                  child: Text('TIER ${m.tier}',
+                      style: GoogleFonts.inter(
+                        color: AppColors.red,
+                        fontSize: 9,
+                        letterSpacing: 1.6,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ),
+                const Spacer(),
+                if (completed)
+                  const Icon(Icons.check_circle_rounded,
+                      size: 20, color: kNeon),
+              ]),
+              const SizedBox(height: 12),
               Text(m.title,
                   style: GoogleFonts.inter(
-                    color: AppColors.textPrimary,
-                    fontSize: 19,
+                    color: Colors.white,
+                    fontSize: 22,
+                    height: 1.1,
+                    letterSpacing: -0.4,
                     fontWeight: FontWeight.w900,
                   )),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(m.prompt,
                   style: GoogleFonts.inter(
                     color: AppColors.textSecondary,
                     fontSize: 13.5,
-                    height: 1.45,
+                    height: 1.5,
                     fontWeight: FontWeight.w500,
                   )),
-              const SizedBox(height: 16),
-              if (state == 'completed')
+              const SizedBox(height: 18),
+              if (completed)
                 Row(children: [
-                  const Icon(Icons.check_circle_rounded,
-                      size: 18, color: Color(0xFF2EE87A)),
-                  const SizedBox(width: 8),
                   Text('DONE. SQUARE FILLED.',
                       style: GoogleFonts.inter(
-                        color: const Color(0xFF2EE87A),
+                        color: kNeon,
                         fontSize: 12,
-                        letterSpacing: 1.8,
-                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2,
+                        fontWeight: FontWeight.w900,
                       )),
                 ])
-              else if (state == 'committed')
-                GameButton(label: 'MARK IT DONE', onTap: onComplete)
-              else
+              else if (committed) ...[
+                GameButton(label: 'MARK IT DONE', onTap: onComplete),
+                const SizedBox(height: 8),
+                Text('You called it. They\'re watching for the check.',
+                    style: GoogleFonts.inter(
+                      color: AppColors.red,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    )),
+              ] else ...[
                 GameButton(
                     label: 'CALL YOUR SHOT', onTap: onCommit, pulse: true),
-              if (state == null) ...[
                 const SizedBox(height: 8),
                 Text('Committing posts it to the squad. No hiding after.',
                     style: GoogleFonts.inter(
                       color: AppColors.textMuted,
-                      fontSize: 11,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w500,
                     )),
               ],
             ]),
-    );
+    ).animate().fadeIn(duration: 340.ms);
   }
 }
 
-// ════════════════════════════════════════════════════════════════════
-//  PULSE ROW
-// ════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+//  PULSE — a timeline, not a list
+// ══════════════════════════════════════════════════════════════════════
 
 class _PulseRow extends StatelessWidget {
   final SquadEvent event;
   final List<SquadMember> roster;
-  const _PulseRow({required this.event, required this.roster});
+  final bool first, last;
+  const _PulseRow(
+      {required this.event,
+      required this.roster,
+      required this.first,
+      required this.last});
 
   @override
   Widget build(BuildContext context) {
@@ -777,61 +1033,78 @@ class _PulseRow extends StatelessWidget {
           Icons.check_circle_rounded,
           '$who completed'
               '${event.payload['mission'] != null ? ' ${event.payload['mission']}' : ' the mission'}',
-          const Color(0xFF2EE87A)
+          kNeon
         ),
       'scored' => (
           Icons.graphic_eq_rounded,
           '$who scored ${event.payload['score'] ?? '—'}',
-          AppColors.textPrimary
+          Colors.white
         ),
       'rankup' => (
           Icons.trending_up_rounded,
           '$who ranked up to ${event.payload['tier'] ?? ''}',
-          const Color(0xFF2EE87A)
+          kNeon
         ),
-      _ => (Icons.circle, '$who did something', AppColors.textTertiary),
+      _ => (Icons.circle, '$who made a move', AppColors.textTertiary),
     };
     final t = event.createdAt;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(children: [
-        Icon(icon, size: 15, color: color),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
-                color: AppColors.textSecondary,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-              )),
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // Timeline spine
+        SizedBox(
+          width: 26,
+          child: Column(children: [
+            Container(
+                width: 1.5,
+                height: 6,
+                color: first ? Colors.transparent : AppColors.divider),
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.14),
+                border: Border.all(color: color.withValues(alpha: 0.6)),
+              ),
+              child: Icon(icon, size: 11, color: color),
+            ),
+            Expanded(
+              child: Container(
+                  width: 1.5,
+                  color: last ? Colors.transparent : AppColors.divider),
+            ),
+          ]),
         ),
-        Text(
-          '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
-          style: GoogleFonts.inter(
-            color: AppColors.textMuted,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w600,
+        const SizedBox(width: 11),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 12, top: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(text,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textPrimary,
+                      fontSize: 12.5,
+                      height: 1.35,
+                      fontWeight: FontWeight.w700,
+                    )),
+                const SizedBox(height: 2),
+                Text(
+                  '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ]),
     );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(text,
-        style: GoogleFonts.inter(
-          color: AppColors.textTertiary,
-          fontSize: 10.5,
-          letterSpacing: 2.4,
-          fontWeight: FontWeight.w800,
-        ));
   }
 }
