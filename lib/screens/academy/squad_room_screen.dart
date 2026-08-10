@@ -16,6 +16,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/academy_modal.dart';
 import '../../widgets/academy/game_button.dart';
+import '../../widgets/academy/squad_grade.dart';
 
 /// THE SQUAD ROOM. Not a settings page — a room you walk into. The
 /// banner tells you who you are, the WEEK BOARD tells you who showed
@@ -313,6 +314,12 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
           _banner(squad, done, possible),
           const SizedBox(height: 20),
 
+          // ── THE RATING — who's carrying, who's hiding ─────────────
+          _label('SQUAD REPORT', 'Graded every week.'),
+          const SizedBox(height: 12),
+          SquadReport(roster: _roster, marks: _marks),
+          const SizedBox(height: 22),
+
           // ── THE WEEK BOARD ────────────────────────────────────────
           _label('THE WEEK BOARD', 'Who showed up.'),
           const SizedBox(height: 12),
@@ -515,8 +522,7 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
             style: GoogleFonts.inter(
               color: AppColors.textMuted,
               fontSize: 11,
-              fontStyle: FontStyle.italic,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             )),
       ),
     ]);
