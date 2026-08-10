@@ -265,6 +265,25 @@ class SquadService {
         .subscribe();
   }
 
+  /// Raw-row pulse subscription — the global watcher needs the payload
+  /// itself, not just a "something changed" ping.
+  static RealtimeChannel watchPulseEvents(
+      String squadId, void Function(Map<String, dynamic>) onRow) {
+    return _sb
+        .channel('pulse-live-$squadId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'squad_events',
+          filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'squad_id',
+              value: squadId),
+          callback: (payload) => onRow(payload.newRecord),
+        )
+        .subscribe();
+  }
+
   static void unwatch(RealtimeChannel channel) {
     try {
       _sb.removeChannel(channel);

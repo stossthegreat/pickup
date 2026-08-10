@@ -8,7 +8,9 @@ import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
 
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/mission_service.dart';
+import '../../services/backend/squad_live_service.dart';
 import '../../services/backend/squad_service.dart';
+import '../../services/live_events.dart';
 import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
@@ -105,6 +107,9 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     final squad = await SquadService.create(name);
     if (squad == null || !mounted) return;
     await SquadService.postEvent(squad.id, 'joined');
+    // ignore: discarded_futures
+    SquadLiveService.start();
+    LiveEvents.milestone('SQUAD FOUNDED', squad.name);
     _load();
   }
 
@@ -119,6 +124,9 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
       return;
     }
     await SquadService.postEvent(squad.id, 'joined');
+    // ignore: discarded_futures
+    SquadLiveService.start();
+    LiveEvents.milestone('YOU\'RE IN', squad.name);
     _load();
   }
 
@@ -129,6 +137,12 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     HapticFeedback.heavyImpact();
     if (await MissionService.commit(m.id)) {
       await SquadService.postEvent(s.id, 'committed', {'mission': m.title});
+      LiveEvents.fire(const LiveEvent(
+        title: 'Shot called',
+        subtitle: 'Your squad can see it now.',
+        icon: Icons.campaign_rounded,
+        color: AppColors.red,
+      ));
       _load();
     }
   }
@@ -140,6 +154,7 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     HapticFeedback.heavyImpact();
     if (await MissionService.complete(m.id)) {
       await SquadService.postEvent(s.id, 'completed', {'mission': m.title});
+      LiveEvents.xp(100, 'Mission complete');
       if (!mounted) return;
       _celebrate(m.title);
       _load();

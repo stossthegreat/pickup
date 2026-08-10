@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../live_events.dart';
 import 'backend_service.dart';
 
 class DailyBoardEntry {
@@ -193,6 +194,7 @@ class DailyGameService {
       worldAvg: (d['worldAvg'] as num).toInt(),
     );
     lastResult = result;
+    LiveEvents.scored(result.score, 'The Daily · #${result.rankToday} today');
     return result;
   }
 }
