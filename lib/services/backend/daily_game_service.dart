@@ -10,6 +10,18 @@ class DailyBoardEntry {
       {required this.userId, this.handle, required this.score});
 }
 
+class LeagueStanding {
+  final String userId;
+  final String? handle;
+  final String? avatarUrl;
+  final int points;
+  const LeagueStanding(
+      {required this.userId,
+      this.handle,
+      this.avatarUrl,
+      required this.points});
+}
+
 class LeagueState {
   final int division;
   final String divisionName;
@@ -18,6 +30,9 @@ class LeagueState {
   final int size;
   final DateTime locksAt;
   final String zone; // promotion | safe | drop
+  final int promoteTop;
+  final int relegateBottom;
+  final List<LeagueStanding> standings;
   const LeagueState(
       {required this.division,
       required this.divisionName,
@@ -25,7 +40,10 @@ class LeagueState {
       required this.points,
       required this.size,
       required this.locksAt,
-      required this.zone});
+      required this.zone,
+      this.promoteTop = 10,
+      this.relegateBottom = 5,
+      this.standings = const []});
 }
 
 class FixtureState {
@@ -133,6 +151,17 @@ class DailyGameService {
           size: (l['size'] as num).toInt(),
           locksAt: DateTime.parse(l['locksAt'] as String),
           zone: l['zone'] as String,
+          promoteTop: (l['promoteTop'] as num?)?.toInt() ?? 10,
+          relegateBottom: (l['relegateBottom'] as num?)?.toInt() ?? 5,
+          standings: [
+            for (final r in ((l['standings'] as List?) ?? const []))
+              LeagueStanding(
+                userId: r['userId'] as String,
+                handle: r['handle'] as String?,
+                avatarUrl: r['avatarUrl'] as String?,
+                points: (r['points'] as num).toInt(),
+              )
+          ],
         ),
         fixture: f == null
             ? null

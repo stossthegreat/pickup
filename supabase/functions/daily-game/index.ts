@@ -106,7 +106,8 @@ Deno.serve(async (req) => {
       const { data: league } = await admin.from("leagues")
         .select("division, week_start").eq("id", leagueId).single();
       const { data: standings } = await admin.from("league_members")
-        .select("user_id, points").eq("league_id", leagueId)
+        .select("user_id, points, profiles(handle, avatar_url)")
+        .eq("league_id", leagueId)
         .order("points", { ascending: false });
       const rank =
         (standings ?? []).findIndex((r) => r.user_id === uid) + 1;
@@ -161,6 +162,18 @@ Deno.serve(async (req) => {
           size,
           locksAt: lockTime(league!.week_start as string),
           zone,
+          promoteTop: PROMOTE_TOP,
+          relegateBottom: RELEGATE_BOTTOM,
+          // The full table — the client renders the zone bands.
+          standings: (standings ?? []).map((r) => ({
+            userId: r.user_id,
+            points: r.points,
+            handle:
+              (r.profiles as { handle?: string } | null)?.handle ?? null,
+            avatarUrl:
+              (r.profiles as { avatar_url?: string } | null)?.avatar_url ??
+                null,
+          })),
         },
         fixture: fixtureOut,
         ceremony,

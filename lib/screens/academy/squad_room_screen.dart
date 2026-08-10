@@ -11,6 +11,7 @@ import '../../services/backend/mission_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/academy_modal.dart';
+import '../../widgets/academy/game_button.dart';
 
 /// THE SQUAD ROOM. Not a settings page — a room you walk into.
 /// Week Grid (who did what, what day) · Call Your Shot · The Pulse ·
@@ -417,7 +418,7 @@ class _NoSquad extends StatelessWidget {
         const SizedBox(height: 32),
         _Field(controller: nameCtrl, hint: 'SQUAD NAME'),
         const SizedBox(height: 10),
-        AcademyButton(label: 'FOUND A SQUAD', onTap: onCreate),
+        GameButton(label: 'FOUND A SQUAD', onTap: onCreate),
         const SizedBox(height: 28),
         Row(children: [
           Expanded(child: Container(height: 1, color: AppColors.divider)),
@@ -440,7 +441,10 @@ class _NoSquad extends StatelessWidget {
             caps: true,
             letterSpacing: 6),
         const SizedBox(height: 10),
-        AcademyButton(label: 'ENTER WITH CODE', onTap: onJoin, ghost: true),
+        GameButton(
+            label: 'ENTER WITH CODE',
+            color: AppColors.surface2,
+            onTap: onJoin),
       ],
     );
   }
@@ -725,9 +729,10 @@ class _MissionCard extends StatelessWidget {
                       )),
                 ])
               else if (state == 'committed')
-                AcademyButton(label: 'MARK IT DONE', onTap: onComplete)
+                GameButton(label: 'MARK IT DONE', onTap: onComplete)
               else
-                AcademyButton(label: 'CALL YOUR SHOT', onTap: onCommit),
+                GameButton(
+                    label: 'CALL YOUR SHOT', onTap: onCommit, pulse: true),
               if (state == null) ...[
                 const SizedBox(height: 8),
                 Text('Committing posts it to the squad. No hiding after.',
