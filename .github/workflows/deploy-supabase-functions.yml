@@ -35,24 +35,35 @@ jobs:
         with:
           version: latest
 
-      - name: Push the OpenAI key (only if the secret is set)
-        if: ${{ secrets.OPENAI_API_KEY != '' }}
+      - name: Push the OpenAI key (skipped when the secret isn't set)
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
-          supabase secrets set OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
-            --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "No OPENAI_API_KEY secret set — skipping (add it in the"
+            echo "Supabase dashboard instead if you prefer)."
+            exit 0
+          fi
+          supabase secrets set OPENAI_API_KEY="$OPENAI_API_KEY" \
+            --project-ref "$PROJECT_REF"
 
       # Each function is deployed with --no-verify-jwt=false (the
       # default): the functions verify the caller's token themselves.
       - name: Deploy functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
           set -e
+          if [ -z "$PROJECT_REF" ]; then
+            echo "SUPABASE_PROJECT_REF secret is missing."
+            echo "Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
           for fn in score-voice battle-action daily-game; do
             echo "── deploying $fn ─────────────────────────────"
-            supabase functions deploy "$fn" \
-              --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+            supabase functions deploy "$fn" --project-ref "$PROJECT_REF"
           done
           echo "All functions deployed."
