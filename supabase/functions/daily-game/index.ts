@@ -17,6 +17,11 @@
 // ═════════════════════════════════════════════════════════════════════
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  ensureFixture,
+  settleLastFixture,
+  weekPoints,
+} from "../_shared/fixtures.ts";
 import { gradeTranscript } from "../_shared/grade.ts";
 import {
   addLeaguePoints,
@@ -75,8 +80,10 @@ Deno.serve(async (req) => {
   const ymd = utcYmd();
   const scenarioKey = scenarioOfDay();
 
-  // Lazy week-end verdict — fires once, the client shows the ceremony.
+  // Lazy week-end verdicts — each fires once; the client shows the
+  // ceremonies (league promotion/relegation + fixture result).
   const ceremony = await settleLastWeek(admin, uid);
+  const fixtureCeremony = await settleLastFixture(admin, uid);
 
   switch (body.action) {
     case "status": {
@@ -110,6 +117,31 @@ Deno.serve(async (req) => {
         ? "drop"
         : "safe";
 
+      // ── FIXTURE — this week's head-to-head vs one squadmate ──────
+      const fixture = await ensureFixture(admin, uid);
+      let fixtureOut = null;
+      if (fixture) {
+        const oppId =
+          fixture.player_a === uid ? fixture.player_b : fixture.player_a;
+        const week = weekStart();
+        const [myPts, theirPts, { data: opp }] = await Promise.all([
+          weekPoints(admin, uid, week),
+          weekPoints(admin, oppId, week),
+          admin.from("profiles")
+            .select("handle, fixture_wins, fixture_losses")
+            .eq("id", oppId).single(),
+        ]);
+        fixtureOut = {
+          opponentId: oppId,
+          opponentHandle: opp?.handle ?? null,
+          opponentRecord:
+            `${opp?.fixture_wins ?? 0}W-${opp?.fixture_losses ?? 0}L`,
+          myPoints: myPts,
+          theirPoints: theirPts,
+          locksAt: lockTime(week),
+        };
+      }
+
       return Response.json({
         scenarioKey,
         ymd,
@@ -130,7 +162,9 @@ Deno.serve(async (req) => {
           locksAt: lockTime(league!.week_start as string),
           zone,
         },
+        fixture: fixtureOut,
         ceremony,
+        fixtureCeremony,
       });
     }
 

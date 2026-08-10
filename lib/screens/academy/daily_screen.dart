@@ -9,14 +9,17 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../services/backend/daily_game_service.dart';
 import '../../services/backend/tiers.dart';
+import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/academy/academy_modal.dart';
+import '../../widgets/academy/daily_card.dart' show girlForVibe;
+import '../../widgets/academy/game_button.dart';
+import '../../widgets/academy/league_crest.dart';
 import '../game/freeflow/free_flow_screen.dart';
 
-/// THE DAILY — the appointment. One scenario, the same for the whole
-/// world, ONE attempt. Below it: your league, with the promotion zone,
-/// the drop zone, and the Sunday-21:00 lock counting down on screen.
-/// This screen is the Duolingo engine wearing our black-and-red.
+/// THE DAILY — the arena. Her face fills the top third like a fight
+/// poster, the crest carries the division, the league panel shows the
+/// promotion and drop zones with the Sunday lock counting down, and the
+/// weekly fixture puts one squadmate's name against yours.
 class DailyScreen extends StatefulWidget {
   const DailyScreen({super.key});
 
@@ -51,49 +54,87 @@ class _DailyScreenState extends State<DailyScreen> {
       _s = s;
       _loading = false;
     });
-    // Week-end verdict — fire the ceremony once.
-    if (s?.ceremony == 'promoted' || s?.ceremony == 'relegated') {
-      final promoted = s!.ceremony == 'promoted';
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        AcademyModal.show(
-          context,
-          kicker: promoted ? 'PROMOTED' : 'RELEGATED',
-          accent: promoted ? kNeon : AppColors.red,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                  promoted
-                      ? 'You climbed to ${s.league.divisionName}.'
-                      : 'You dropped to ${s.league.divisionName}.',
-                  style: GoogleFonts.inter(
-                      color: AppColors.textPrimary,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900)),
-              const SizedBox(height: 6),
-              Text(
-                  promoted
-                      ? 'New league. Harder men. Keep climbing.'
-                      : 'One week to take it back. Run the daily.',
-                  style: GoogleFonts.inter(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500)),
-              const SizedBox(height: 16),
-              AcademyButton(
-                  label: promoted ? 'KEEP CLIMBING' : 'TAKE IT BACK',
-                  onTap: () => Navigator.of(context).pop()),
-            ],
-          ),
-        );
-      });
+    if (s == null) return;
+    // Week-end verdicts — league first, then the fixture.
+    if (s.ceremony == 'promoted' || s.ceremony == 'relegated') {
+      _ceremony(promoted: s.ceremony == 'promoted', league: s.league);
+    } else if (s.fixtureCeremony == 'won' || s.fixtureCeremony == 'lost') {
+      _fixtureCeremony(won: s.fixtureCeremony == 'won');
     }
   }
 
-  /// Launch the one attempt — armed session; the transcript submits
-  /// itself at session end (same pattern as battles).
+  // ── Ceremonies — full-screen, with confetti ─────────────────────────
+  void _ceremony({required bool promoted, required LeagueState league}) {
+    HapticFeedback.heavyImpact();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showGeneralDialog<void>(
+        context: context,
+        barrierColor: Colors.black.withValues(alpha: 0.92),
+        barrierDismissible: true,
+        barrierLabel: 'result',
+        transitionDuration: const Duration(milliseconds: 420),
+        pageBuilder: (ctx, _, __) => _CeremonySheet(
+          title: promoted ? 'PROMOTED' : 'RELEGATED',
+          subtitle: promoted
+              ? 'You climbed into ${league.divisionName}.'
+              : 'You dropped to ${league.divisionName}.',
+          body: promoted
+              ? 'New league. Harder men. Keep climbing.'
+              : 'One week to take it back. Run the daily.',
+          division: league.division,
+          accent: promoted ? kNeon : AppColors.red,
+          confetti: promoted,
+          cta: promoted ? 'KEEP CLIMBING' : 'TAKE IT BACK',
+        ),
+        transitionBuilder: (ctx, a, __, child) => FadeTransition(
+          opacity: a,
+          child: ScaleTransition(
+            scale: Tween(begin: 0.88, end: 1.0).animate(
+                CurvedAnimation(parent: a, curve: Curves.easeOutBack)),
+            child: child,
+          ),
+        ),
+      );
+    });
+  }
+
+  void _fixtureCeremony({required bool won}) {
+    HapticFeedback.heavyImpact();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showGeneralDialog<void>(
+        context: context,
+        barrierColor: Colors.black.withValues(alpha: 0.92),
+        barrierDismissible: true,
+        barrierLabel: 'fixture',
+        transitionDuration: const Duration(milliseconds: 420),
+        pageBuilder: (ctx, _, __) => _CeremonySheet(
+          title: won ? 'FIXTURE WON' : 'FIXTURE LOST',
+          subtitle: won
+              ? 'You outworked your man this week.'
+              : 'He outworked you this week.',
+          body: won
+              ? 'One in the record. New fixture Monday.'
+              : 'New fixture Monday. Even it up.',
+          division: _s?.league.division ?? 1,
+          accent: won ? kNeon : AppColors.red,
+          confetti: won,
+          cta: won ? 'NICE' : 'RUN IT BACK',
+        ),
+        transitionBuilder: (ctx, a, __, child) => FadeTransition(
+          opacity: a,
+          child: ScaleTransition(
+            scale: Tween(begin: 0.88, end: 1.0).animate(
+                CurvedAnimation(parent: a, curve: Curves.easeOutBack)),
+            child: child,
+          ),
+        ),
+      );
+    });
+  }
+
+  /// The one attempt — armed session; the transcript submits itself.
   Future<void> _run() async {
     final s = _s;
     if (s == null || s.attempted) return;
@@ -104,47 +145,30 @@ class _DailyScreenState extends State<DailyScreen> {
     ));
     DailyGameService.armedDaily = false;
     if (!mounted) return;
-    // The hook parked the result — reveal it.
     final r = DailyGameService.lastResult;
     if (r != null) {
       DailyGameService.lastResult = null;
-      final beatWorld = r.score >= r.worldAvg;
-      AcademyModal.show(
-        context,
-        kicker: 'THE DAILY — SCORED',
-        accent: beatWorld ? kNeon : AppColors.red,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('${r.score}',
-                style: GoogleFonts.inter(
-                    color: AppColors.textPrimary,
-                    fontSize: 52,
-                    height: 1,
-                    fontWeight: FontWeight.w900)),
-            const SizedBox(height: 8),
-            Text('#${r.rankToday} IN THE WORLD TODAY · AVG ${r.worldAvg}',
-                style: GoogleFonts.inter(
-                    color: beatWorld ? kNeon : AppColors.textSecondary,
-                    fontSize: 12.5,
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.w800)),
-            const SizedBox(height: 16),
-            AcademyButton(
-              label: 'SHARE IT',
-              onTap: () {
-                Share.share('THE DAILY on ImHim Rizz: ${r.score} — '
-                    '#${r.rankToday} in the world today (avg ${r.worldAvg}). '
-                    'One attempt. Same scenario. Your turn.');
-              },
-            ),
-            const SizedBox(height: 8),
-            AcademyButton(
-                label: 'CLOSE',
-                ghost: true,
-                onTap: () => Navigator.of(context).pop()),
-          ],
+      final beat = r.score >= r.worldAvg;
+      showGeneralDialog<void>(
+        context: context,
+        barrierColor: Colors.black.withValues(alpha: 0.94),
+        barrierDismissible: true,
+        barrierLabel: 'scored',
+        transitionDuration: const Duration(milliseconds: 420),
+        pageBuilder: (ctx, _, __) => _ScoredSheet(
+          score: r.score,
+          rank: r.rankToday,
+          worldAvg: r.worldAvg,
+          beat: beat,
+          girl: girlForVibe(s.scenarioKey),
+        ),
+        transitionBuilder: (ctx, a, __, child) => FadeTransition(
+          opacity: a,
+          child: ScaleTransition(
+            scale: Tween(begin: 0.9, end: 1.0).animate(
+                CurvedAnimation(parent: a, curve: Curves.easeOutBack)),
+            child: child,
+          ),
         ),
       );
     }
@@ -153,17 +177,16 @@ class _DailyScreenState extends State<DailyScreen> {
 
   String _fmt(Duration d) {
     if (d.isNegative) return '00:00:00';
-    final h = d.inHours, m = d.inMinutes % 60, s = d.inSeconds % 60;
     String two(int v) => v.toString().padLeft(2, '0');
-    if (d.inDays > 0) return '${d.inDays}D ${two(h % 24)}H';
-    return '${two(h)}:${two(m)}:${two(s)}';
+    if (d.inDays > 0) return '${d.inDays}D ${two(d.inHours % 24)}H';
+    return '${two(d.inHours)}:${two(d.inMinutes % 60)}:${two(d.inSeconds % 60)}';
   }
 
   Duration get _untilReset {
     final now = DateTime.now().toUtc();
-    final midnight =
-        DateTime.utc(now.year, now.month, now.day).add(const Duration(days: 1));
-    return midnight.difference(now);
+    return DateTime.utc(now.year, now.month, now.day)
+        .add(const Duration(days: 1))
+        .difference(now);
   }
 
   @override
@@ -171,64 +194,38 @@ class _DailyScreenState extends State<DailyScreen> {
     final s = _s;
     return Scaffold(
       backgroundColor: AppColors.base,
-      body: SafeArea(
-        child: _loading
-            ? const Center(
-                child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppColors.red)))
-            : s == null
-                ? _offline()
-                : RefreshIndicator(
-                    color: AppColors.red,
-                    backgroundColor: AppColors.surface1,
-                    onRefresh: _load,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
-                      children: [
-                        Row(children: [
-                          IconButton(
-                            padding: EdgeInsets.zero,
-                            onPressed: () => context.pop(),
-                            icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                                size: 18, color: Colors.white),
-                          ),
-                          Text('THE DAILY',
-                              style: GoogleFonts.inter(
-                                color: AppColors.textPrimary,
-                                fontSize: 15,
-                                letterSpacing: 3,
-                                fontWeight: FontWeight.w900,
-                              )),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface1,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text('RESETS ${_fmt(_untilReset)}',
-                                style: GoogleFonts.inter(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 10,
-                                  letterSpacing: 1.4,
-                                  fontWeight: FontWeight.w800,
-                                )),
-                          ),
+      body: _loading
+          ? const Center(
+              child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: AppColors.red)))
+          : s == null
+              ? SafeArea(child: _offline())
+              : RefreshIndicator(
+                  color: AppColors.red,
+                  backgroundColor: AppColors.surface1,
+                  onRefresh: _load,
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      _hero(s),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+                        child: Column(children: [
+                          if (s.fixture != null) ...[
+                            _fixture(s.fixture!),
+                            const SizedBox(height: 18),
+                          ],
+                          _league(s.league),
+                          const SizedBox(height: 18),
+                          _board(s),
                         ]),
-                        const SizedBox(height: 14),
-                        _scenarioHero(s),
-                        const SizedBox(height: 22),
-                        _board(s),
-                        const SizedBox(height: 22),
-                        _league(s.league),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-      ),
+                ),
     );
   }
 
@@ -240,114 +237,416 @@ class _DailyScreenState extends State<DailyScreen> {
                 fontWeight: FontWeight.w600)),
       );
 
-  // ── Scenario hero + the one shot ────────────────────────────────────
-  Widget _scenarioHero(DailyStatus s) {
-    final label = s.scenarioKey.replaceAll('_', ' ').toUpperCase();
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.red.withValues(alpha: 0.22),
-            AppColors.surface1,
-          ],
-        ),
-        border: Border.all(color: AppColors.red.withValues(alpha: 0.5)),
-        boxShadow: const [BoxShadow(color: AppColors.redGlow, blurRadius: 34)],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('TODAY · THE WHOLE WORLD · ONE SHOT EACH',
-            style: GoogleFonts.inter(
-              color: AppColors.red,
-              fontSize: 10,
-              letterSpacing: 2.2,
-              fontWeight: FontWeight.w800,
-            )),
-        const SizedBox(height: 8),
-        Text('SHE\'S $label.',
-            style: GoogleFonts.inter(
-              color: AppColors.textPrimary,
-              fontSize: 34,
-              height: 1.05,
-              letterSpacing: -1,
-              fontWeight: FontWeight.w900,
-            )),
-        const SizedBox(height: 16),
-        if (s.attempted) ...[
-          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('${s.myScore}',
-                style: GoogleFonts.inter(
-                  color: AppColors.textPrimary,
-                  fontSize: 46,
-                  height: 1,
-                  fontWeight: FontWeight.w900,
-                  shadows: [
-                    Shadow(
-                        color: AppColors.red.withValues(alpha: 0.5),
-                        blurRadius: 30)
-                  ],
-                )),
-            const SizedBox(width: 10),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text(
-                  s.worldAvg == null ? 'SCORED' : 'WORLD AVG ${s.worldAvg}',
-                  style: GoogleFonts.inter(
-                    color: (s.myScore ?? 0) >= (s.worldAvg ?? 0)
-                        ? kNeon
-                        : AppColors.textSecondary,
-                    fontSize: 12,
-                    letterSpacing: 1.4,
-                    fontWeight: FontWeight.w800,
-                  )),
-            ),
-          ]),
-          const SizedBox(height: 6),
-          Text('Shot taken. New scenario at reset.',
-              style: GoogleFonts.inter(
-                color: AppColors.textTertiary,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              )),
-        ] else ...[
-          SizedBox(
-            height: 58,
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _run,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.red,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+  // ── HERO — her face, the poster ─────────────────────────────────────
+  Widget _hero(DailyStatus s) {
+    final girl = girlForVibe(s.scenarioKey);
+    return SizedBox(
+      height: 430,
+      child: Stack(fit: StackFit.expand, children: [
+        Image.asset(
+          girl.asset,
+          fit: BoxFit.cover,
+          alignment: const Alignment(0, -0.25),
+          errorBuilder: (_, __, ___) => DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  girl.accent.withValues(alpha: 0.4),
+                  AppColors.base
+                ],
               ),
-              child: Text('ONE SHOT — RUN IT',
-                  style: GoogleFonts.inter(
-                    fontSize: 15,
-                    letterSpacing: 2.4,
-                    fontWeight: FontWeight.w900,
-                  )),
             ),
-          )
-              .animate(onPlay: (c) => c.repeat(reverse: true))
-              .scaleXY(begin: 1.0, end: 1.02, duration: 900.ms),
-          const SizedBox(height: 8),
-          Text('No retries. No warm-up. This is the rep that counts.',
-              style: GoogleFonts.inter(
-                color: AppColors.textTertiary,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-              )),
-        ],
+          ),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.55),
+                Colors.black.withValues(alpha: 0.10),
+                Colors.black.withValues(alpha: 0.80),
+                AppColors.base,
+              ],
+              stops: const [0.0, 0.34, 0.76, 1.0],
+            ),
+          ),
+        ),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 4, 18, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  IconButton(
+                    onPressed: () => context.pop(),
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                        size: 18, color: Colors.white),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 11, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.16)),
+                    ),
+                    child: Text('RESETS ${_fmt(_untilReset)}',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 10,
+                          letterSpacing: 1.4,
+                          fontWeight: FontWeight.w800,
+                        )),
+                  ),
+                ]),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('TODAY · ONE SHOT · THE WHOLE WORLD',
+                          style: GoogleFonts.inter(
+                            color: girl.accent,
+                            fontSize: 10,
+                            letterSpacing: 2.6,
+                            fontWeight: FontWeight.w900,
+                          )),
+                      const SizedBox(height: 8),
+                      Text(girl.name.toUpperCase(),
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 54,
+                            height: 0.94,
+                            letterSpacing: -2.4,
+                            fontWeight: FontWeight.w900,
+                            shadows: [
+                              Shadow(
+                                  color: Colors.black.withValues(alpha: 0.7),
+                                  blurRadius: 18)
+                            ],
+                          )),
+                      const SizedBox(height: 4),
+                      Text(girl.archetype,
+                          style: GoogleFonts.inter(
+                            color: Colors.white.withValues(alpha: 0.82),
+                            fontSize: 13.5,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          )),
+                      const SizedBox(height: 16),
+                      if (s.attempted)
+                        _scoredStrip(s)
+                      else
+                        GameButton(
+                          label: 'ONE SHOT — RUN IT',
+                          color: girl.accent,
+                          pulse: true,
+                          onTap: _run,
+                        ),
+                      if (!s.attempted) ...[
+                        const SizedBox(height: 8),
+                        Text('No retries. No warm-up. This is the rep.',
+                            style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            )),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ]),
-    ).animate().fadeIn(duration: 350.ms);
+    );
   }
 
-  // ── Today's world board ─────────────────────────────────────────────
+  Widget _scoredStrip(DailyStatus s) {
+    final beat = (s.myScore ?? 0) >= (s.worldAvg ?? 0);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: (beat ? kNeon : Colors.white).withValues(alpha: 0.3)),
+      ),
+      child: Row(children: [
+        CountUp(
+          value: s.myScore ?? 0,
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 30,
+            height: 1,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(s.worldAvg == null ? 'SCORED' : 'WORLD AVG ${s.worldAvg}',
+            style: GoogleFonts.inter(
+              color: beat ? kNeon : AppColors.textSecondary,
+              fontSize: 11,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w800,
+            )),
+        const Spacer(),
+        Icon(beat ? Icons.trending_up_rounded : Icons.remove_rounded,
+            size: 18, color: beat ? kNeon : AppColors.textTertiary),
+      ]),
+    );
+  }
+
+  // ── FIXTURE — you vs one squadmate, all week ────────────────────────
+  Widget _fixture(FixtureState f) {
+    final me = f.myPoints, them = f.theirPoints;
+    final total = (me + them) == 0 ? 1 : (me + them);
+    final lead = f.winning
+        ? kNeon
+        : f.level
+            ? AppColors.textSecondary
+            : AppColors.red;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: lead.withValues(alpha: 0.45)),
+        boxShadow: [
+          BoxShadow(color: lead.withValues(alpha: 0.14), blurRadius: 24)
+        ],
+      ),
+      child: Column(children: [
+        Row(children: [
+          Text('THIS WEEK\'S FIXTURE',
+              style: GoogleFonts.inter(
+                color: AppColors.textTertiary,
+                fontSize: 10,
+                letterSpacing: 2.4,
+                fontWeight: FontWeight.w800,
+              )),
+          const Spacer(),
+          Text('LOCKS ${_fmt(f.locksAt.difference(DateTime.now().toUtc()))}',
+              style: GoogleFonts.inter(
+                color: AppColors.red,
+                fontSize: 10,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w800,
+              )),
+        ]),
+        const SizedBox(height: 14),
+        Row(children: [
+          Expanded(
+            child: Column(children: [
+              Text('YOU',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 12,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 6),
+              CountUp(
+                value: me,
+                style: GoogleFonts.inter(
+                  color: f.winning ? kNeon : Colors.white,
+                  fontSize: 38,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ]),
+          ),
+          Column(children: [
+            Text('VS',
+                style: GoogleFonts.inter(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                  letterSpacing: 1,
+                  fontWeight: FontWeight.w900,
+                )),
+            const SizedBox(height: 4),
+            Container(width: 1, height: 30, color: AppColors.surface3),
+          ]),
+          Expanded(
+            child: Column(children: [
+              Text((f.opponentHandle ?? 'RIVAL').toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 12,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 6),
+              CountUp(
+                value: them,
+                style: GoogleFonts.inter(
+                  color: !f.winning && !f.level ? AppColors.red : Colors.white,
+                  fontSize: 38,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        // Tug-of-war bar — the lead is visible, not implied.
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: SizedBox(
+            height: 8,
+            child: Row(children: [
+              Expanded(
+                flex: (me * 100 ~/ total).clamp(1, 99),
+                child: Container(color: kNeon),
+              ),
+              Expanded(
+                flex: (them * 100 ~/ total).clamp(1, 99),
+                child: Container(color: AppColors.red),
+              ),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+            f.level
+                ? 'Dead level. Every rep counts.'
+                : f.winning
+                    ? 'You\'re ahead — don\'t coast.'
+                    : 'You\'re behind. ${f.opponentRecord} on his record.',
+            style: GoogleFonts.inter(
+              color: AppColors.textTertiary,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            )),
+      ]),
+    ).animate().fadeIn(duration: 340.ms);
+  }
+
+  // ── LEAGUE — crest, ring, zones ─────────────────────────────────────
+  Widget _league(LeagueState l) {
+    final until = l.locksAt.difference(DateTime.now().toUtc());
+    final (zoneColor, zoneText) = switch (l.zone) {
+      'promotion' => (kNeon, 'PROMOTION ZONE · TOP 10 CLIMB'),
+      'drop' => (AppColors.red, 'DROP ZONE · BOTTOM 5 FALL'),
+      _ => (AppColors.textSecondary, 'SAFE — FOR NOW'),
+    };
+    // Progress toward the promotion cut (rank 10 of the table).
+    final progress = l.size <= 1
+        ? 0.0
+        : ((l.size - l.rank) / (l.size - 1)).clamp(0.0, 1.0);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: zoneColor.withValues(alpha: 0.4)),
+        boxShadow: l.zone != 'safe'
+            ? [BoxShadow(color: zoneColor.withValues(alpha: 0.16), blurRadius: 28)]
+            : null,
+      ),
+      child: Column(children: [
+        Row(children: [
+          LeagueCrest(division: l.division, size: 66),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l.divisionName,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 17,
+                      letterSpacing: 1.6,
+                      fontWeight: FontWeight.w900,
+                    )),
+                const SizedBox(height: 3),
+                Text('${l.points} PTS · ${l.size} MEN',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    )),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: zoneColor.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                        color: zoneColor.withValues(alpha: 0.5)),
+                  ),
+                  child: Text(zoneText,
+                      style: GoogleFonts.inter(
+                        color: zoneColor,
+                        fontSize: 9.5,
+                        letterSpacing: 1.4,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ),
+              ],
+            ),
+          ),
+          ProgressRing(
+            value: progress,
+            size: 68,
+            color: zoneColor,
+            center: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('#${l.rank}',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 20,
+                    height: 1,
+                    fontWeight: FontWeight.w900,
+                  )),
+              Text('OF ${l.size}',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 8,
+                    letterSpacing: 0.8,
+                    fontWeight: FontWeight.w800,
+                  )),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 14),
+        Row(children: [
+          Icon(Icons.lock_clock_rounded, size: 13, color: AppColors.red),
+          const SizedBox(width: 6),
+          Text('LOCKS IN ${_fmt(until)}',
+              style: GoogleFonts.inter(
+                color: AppColors.red,
+                fontSize: 11,
+                letterSpacing: 1.4,
+                fontWeight: FontWeight.w900,
+              )),
+          const Spacer(),
+          Text('SUNDAY 21:00',
+              style: GoogleFonts.inter(
+                color: AppColors.textMuted,
+                fontSize: 10,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w700,
+              )),
+        ]),
+      ]),
+    ).animate().fadeIn(duration: 340.ms);
+  }
+
+  // ── TODAY'S BOARD ───────────────────────────────────────────────────
   Widget _board(DailyStatus s) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('TODAY\'S BOARD',
@@ -370,20 +669,27 @@ class _DailyScreenState extends State<DailyScreen> {
           Container(
             margin: const EdgeInsets.only(bottom: 6),
             padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
               color: AppColors.surface1,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
+              border: i == 0
+                  ? Border.all(
+                      color: const Color(0xFFF5C542).withValues(alpha: 0.55))
+                  : null,
             ),
             child: Row(children: [
               SizedBox(
                 width: 30,
-                child: Text('#${i + 1}',
-                    style: GoogleFonts.inter(
-                      color: i == 0 ? AppColors.red : AppColors.textTertiary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                    )),
+                child: i == 0
+                    ? const Icon(Icons.emoji_events_rounded,
+                        size: 17, color: Color(0xFFF5C542))
+                    : Text('${i + 1}',
+                        style: GoogleFonts.inter(
+                          color: AppColors.textTertiary,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w900,
+                        )),
               ),
               Expanded(
                 child: Text(e.handle ?? 'ANON',
@@ -397,98 +703,209 @@ class _DailyScreenState extends State<DailyScreen> {
               ),
               Text('${e.score}',
                   style: GoogleFonts.inter(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
+                    color: Colors.white,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w900,
                   )),
             ]),
           ),
     ]);
   }
+}
 
-  // ── The league — zones + the Sunday lock ────────────────────────────
-  Widget _league(LeagueState l) {
-    final untilLock = l.locksAt.difference(DateTime.now().toUtc());
-    final (zoneColor, zoneText) = switch (l.zone) {
-      'promotion' => (kNeon, 'PROMOTION ZONE — TOP 10 GO UP'),
-      'drop' => (AppColors.red, 'DROP ZONE — BOTTOM 5 GO DOWN'),
-      _ => (AppColors.textSecondary, 'SAFE — FOR NOW'),
-    };
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: zoneColor.withValues(alpha: 0.5)),
-        boxShadow: l.zone != 'safe'
-            ? [BoxShadow(color: zoneColor.withValues(alpha: 0.2), blurRadius: 26)]
-            : null,
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Text(l.divisionName,
-              style: GoogleFonts.inter(
-                color: AppColors.textPrimary,
-                fontSize: 15,
-                letterSpacing: 2,
-                fontWeight: FontWeight.w900,
-              )),
-          const Spacer(),
-          Text('LOCKS ${_fmt(untilLock)}',
-              style: GoogleFonts.inter(
-                color: AppColors.red,
-                fontSize: 10.5,
-                letterSpacing: 1.4,
-                fontWeight: FontWeight.w800,
-              )),
-        ]),
-        const SizedBox(height: 12),
-        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('#${l.rank}',
-              style: GoogleFonts.inter(
-                color: zoneColor,
-                fontSize: 40,
-                height: 1,
-                fontWeight: FontWeight.w900,
-                shadows: l.zone != 'safe'
-                    ? [
-                        Shadow(
-                            color: zoneColor.withValues(alpha: 0.6),
-                            blurRadius: 22)
-                      ]
-                    : null,
-              )),
-          const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 5),
-            child: Text('OF ${l.size} · ${l.points} PTS',
-                style: GoogleFonts.inter(
-                  color: AppColors.textSecondary,
-                  fontSize: 12.5,
-                  letterSpacing: 1,
-                  fontWeight: FontWeight.w700,
-                )),
+// ══════════════════════════════════════════════════════════════════════
+//  CEREMONIES — full-screen moments with confetti
+// ══════════════════════════════════════════════════════════════════════
+
+class _CeremonySheet extends StatelessWidget {
+  final String title, subtitle, body, cta;
+  final int division;
+  final Color accent;
+  final bool confetti;
+  const _CeremonySheet({
+    required this.title,
+    required this.subtitle,
+    required this.body,
+    required this.cta,
+    required this.division,
+    required this.accent,
+    required this.confetti,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Stack(children: [
+        if (confetti) Positioned.fill(child: Burst(color: accent)),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              LeagueCrest(division: division, size: 132)
+                  .animate()
+                  .scale(
+                      begin: const Offset(0.5, 0.5),
+                      end: const Offset(1, 1),
+                      duration: 520.ms,
+                      curve: Curves.elasticOut)
+                  .then()
+                  .shimmer(duration: 1100.ms, color: Colors.white54),
+              const SizedBox(height: 26),
+              Text(title,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        color: accent,
+                        fontSize: 38,
+                        letterSpacing: 3,
+                        height: 1,
+                        fontWeight: FontWeight.w900,
+                        shadows: [
+                          Shadow(
+                              color: accent.withValues(alpha: 0.6),
+                              blurRadius: 34)
+                        ],
+                      ))
+                  .animate()
+                  .fadeIn(delay: 220.ms, duration: 340.ms)
+                  .slideY(begin: 0.3, end: 0),
+              const SizedBox(height: 12),
+              Text(subtitle,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  )).animate().fadeIn(delay: 380.ms),
+              const SizedBox(height: 6),
+              Text(body,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textSecondary,
+                    fontSize: 13.5,
+                    height: 1.45,
+                    fontWeight: FontWeight.w500,
+                  )).animate().fadeIn(delay: 480.ms),
+              const SizedBox(height: 30),
+              SizedBox(
+                width: 240,
+                child: GameButton(
+                  label: cta,
+                  color: accent,
+                  textColor: accent == kNeon ? Colors.black : Colors.white,
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+              ).animate().fadeIn(delay: 620.ms),
+            ]),
           ),
-        ]),
-        const SizedBox(height: 8),
-        Text(zoneText,
-            style: GoogleFonts.inter(
-              color: zoneColor,
-              fontSize: 11,
-              letterSpacing: 1.8,
-              fontWeight: FontWeight.w800,
-            )),
-        const SizedBox(height: 6),
-        Text(
-            'Every rep counts — dailies, roleplay sessions, battles all '
-            'feed your points. Sunday it locks: top 10 climb, bottom 5 drop.',
-            style: GoogleFonts.inter(
-              color: AppColors.textTertiary,
-              fontSize: 11.5,
-              height: 1.4,
-              fontWeight: FontWeight.w500,
-            )),
+        ),
       ]),
-    ).animate().fadeIn(duration: 350.ms);
+    );
+  }
+}
+
+class _ScoredSheet extends StatelessWidget {
+  final int score, rank, worldAvg;
+  final bool beat;
+  final GirlBrief girl;
+  const _ScoredSheet({
+    required this.score,
+    required this.rank,
+    required this.worldAvg,
+    required this.beat,
+    required this.girl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = beat ? kNeon : AppColors.red;
+    return Material(
+      color: Colors.transparent,
+      child: Stack(children: [
+        if (beat) Positioned.fill(child: Burst(color: kNeon)),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('THE DAILY · ${girl.name.toUpperCase()}',
+                  style: GoogleFonts.inter(
+                    color: girl.accent,
+                    fontSize: 11,
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 18),
+              CountUp(
+                value: score,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 88,
+                  height: 1,
+                  letterSpacing: -3,
+                  fontWeight: FontWeight.w900,
+                  shadows: [
+                    Shadow(
+                        color: accent.withValues(alpha: 0.55),
+                        blurRadius: 60)
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: accent.withValues(alpha: 0.6)),
+                ),
+                child: Text('#$rank IN THE WORLD TODAY',
+                    style: GoogleFonts.inter(
+                      color: accent,
+                      fontSize: 13,
+                      letterSpacing: 1.6,
+                      fontWeight: FontWeight.w900,
+                    )),
+              ).animate().fadeIn(delay: 900.ms).scale(
+                  begin: const Offset(0.85, 0.85),
+                  end: const Offset(1, 1),
+                  curve: Curves.easeOutBack),
+              const SizedBox(height: 8),
+              Text('World average $worldAvg',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  )).animate().fadeIn(delay: 1050.ms),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: 240,
+                child: GameButton(
+                  label: 'SHARE IT',
+                  color: accent,
+                  textColor: beat ? Colors.black : Colors.white,
+                  icon: Icons.ios_share_rounded,
+                  onTap: () => Share.share(
+                      'THE DAILY on ImHim Rizz: $score — #$rank in the world '
+                      'today (avg $worldAvg). One attempt. Same girl for '
+                      'everyone. Your turn.'),
+                ),
+              ).animate().fadeIn(delay: 1150.ms),
+              const SizedBox(height: 10),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text('CLOSE',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textTertiary,
+                      fontSize: 12,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w800,
+                    )),
+              ).animate().fadeIn(delay: 1250.ms),
+            ]),
+          ),
+        ),
+      ]),
+    );
   }
 }

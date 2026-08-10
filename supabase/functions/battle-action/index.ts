@@ -20,6 +20,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { gradeTranscript, tierFor } from "../_shared/grade.ts";
+import { addLeaguePoints } from "../_shared/league.ts";
 
 // Scenario keys mirror the app's vibe keys — both players are forced
 // into the SAME AI personality, which is what makes it a duel.
@@ -169,6 +170,9 @@ Deno.serve(async (req) => {
         return Response.json({ error: "grader unavailable" }, { status: 502 });
       }
 
+      // Battles fuel the weekly league/fixture engine like any session.
+      await addLeaguePoints(admin, uid, Math.round(graded.score / 200));
+
       const patch: Record<string, unknown> = isA
         ? { a_score: graded.score }
         : { b_score: graded.score };
@@ -212,6 +216,10 @@ Deno.serve(async (req) => {
           ]);
         }
         // Tie → state scored, winner stays null, no ELO movement.
+        // Duel winner banks a league bonus on top of the session fuel.
+        if (patch.winner) {
+          await addLeaguePoints(admin, patch.winner as string, 15);
+        }
       }
 
       const { data: updated } = await admin.from("battles").update(patch)

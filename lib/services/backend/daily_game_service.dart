@@ -28,6 +28,25 @@ class LeagueState {
       required this.zone});
 }
 
+class FixtureState {
+  final String opponentId;
+  final String? opponentHandle;
+  final String opponentRecord; // "7W-2L"
+  final int myPoints;
+  final int theirPoints;
+  final DateTime locksAt;
+  const FixtureState(
+      {required this.opponentId,
+      this.opponentHandle,
+      required this.opponentRecord,
+      required this.myPoints,
+      required this.theirPoints,
+      required this.locksAt});
+
+  bool get winning => myPoints > theirPoints;
+  bool get level => myPoints == theirPoints;
+}
+
 class DailyStatus {
   final String scenarioKey;
   final bool attempted;
@@ -35,7 +54,9 @@ class DailyStatus {
   final List<DailyBoardEntry> board;
   final int? worldAvg;
   final LeagueState league;
+  final FixtureState? fixture; // null: no squad / bye week
   final String? ceremony; // promoted | relegated | held | null
+  final String? fixtureCeremony; // won | lost | draw | null
   const DailyStatus(
       {required this.scenarioKey,
       required this.attempted,
@@ -43,7 +64,9 @@ class DailyStatus {
       required this.board,
       this.worldAvg,
       required this.league,
-      this.ceremony});
+      this.fixture,
+      this.ceremony,
+      this.fixtureCeremony});
 }
 
 class DailyResult {
@@ -86,6 +109,9 @@ class DailyGameService {
     if (d == null) return null;
     try {
       final l = (d['league'] as Map).cast<String, dynamic>();
+      final f = d['fixture'] == null
+          ? null
+          : (d['fixture'] as Map).cast<String, dynamic>();
       return DailyStatus(
         scenarioKey: d['scenarioKey'] as String,
         attempted: d['attempted'] == true,
@@ -108,7 +134,18 @@ class DailyGameService {
           locksAt: DateTime.parse(l['locksAt'] as String),
           zone: l['zone'] as String,
         ),
+        fixture: f == null
+            ? null
+            : FixtureState(
+                opponentId: f['opponentId'] as String,
+                opponentHandle: f['opponentHandle'] as String?,
+                opponentRecord: f['opponentRecord'] as String? ?? '0W-0L',
+                myPoints: (f['myPoints'] as num).toInt(),
+                theirPoints: (f['theirPoints'] as num).toInt(),
+                locksAt: DateTime.parse(f['locksAt'] as String),
+              ),
         ceremony: d['ceremony'] as String?,
+        fixtureCeremony: d['fixtureCeremony'] as String?,
       );
     } catch (e) {
       debugPrint('DailyGameService.status parse: $e');
