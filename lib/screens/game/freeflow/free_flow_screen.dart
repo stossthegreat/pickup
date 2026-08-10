@@ -16,7 +16,9 @@ import '../../../config/dev_flags.dart';
 import '../../../services/analytics_service.dart';
 import '../../../services/audio_session.dart';
 import '../../../services/backend/battle_service.dart';
+import '../../../services/backend/daily_game_service.dart';
 import '../../../services/backend/rizz_score_service.dart';
+import '../../../services/language_service.dart';
 import '../../../services/creator_mode_store.dart';
 import '../../../services/local_store_service.dart';
 import '../../../services/paywall_gate.dart';
@@ -932,6 +934,10 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         'scenarioSetting': vibe.setting,
         'creator':         _creator,
         'memoryBlock':     memoryBlock,
+        // She speaks the user's language — the single biggest retention
+        // lever for non-English markets. Server folds this into the
+        // persona prompt ('en' = today's behaviour, unchanged).
+        'language':        LanguageService.cachedCode,
         if (userName != null || userAge != null)
           'userProfile': {
             if (userName != null) 'name': userName,
@@ -1791,6 +1797,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         BattleService.armedBattleId = null;
         // ignore: discarded_futures
         BattleService.submit(armedBattle, academyTranscript);
+      }
+      // Armed DAILY → this session IS today's one shot. The service
+      // parks the result; the Daily screen reveals it on return.
+      if (DailyGameService.armedDaily) {
+        DailyGameService.armedDaily = false;
+        // ignore: discarded_futures
+        DailyGameService.submit(academyTranscript);
       }
       // Blend the five dimension scores into the running total so The Five
       // CLIMBS over the 60 days instead of snapping to the last session.
