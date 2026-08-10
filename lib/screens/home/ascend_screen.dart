@@ -255,7 +255,7 @@ class _AscendScreenState extends State<AscendScreen> {
                   const SizedBox(height: 4),
                   Text('Every real rep moves you closer to becoming him.',
                       style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.red, fontStyle: FontStyle.italic)),
+                          color: AppColors.red)),
                 ],
               ),
             ),
@@ -617,12 +617,11 @@ class _FlameHeroState extends State<_FlameHero>
                                 )),
                               const SizedBox(height: 6),
                               Text('${widget.day}',
-                                style: GoogleFonts.playfairDisplay(
+                                style: GoogleFonts.inter(
                                   color: Colors.white,
                                   fontSize: 96, height: 1,
                                   letterSpacing: -3,
                                   fontWeight: FontWeight.w900,
-                                  fontStyle: FontStyle.italic,
                                 )),
                               const SizedBox(height: 2),
                               Text('/ ${widget.total}',
@@ -668,11 +667,10 @@ class _FlameHeroState extends State<_FlameHero>
           child: Text(
             widget.rank.tagline,
             textAlign: TextAlign.center,
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.inter(
               color: AppColors.textPrimary,
               fontSize: 18, height: 1.35,
               letterSpacing: -0.4,
-              fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -777,12 +775,11 @@ class _ImHimScoreHero extends StatelessWidget {
               )),
             const SizedBox(height: 6),
             Text('$score',
-              style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.inter(
                 color: Colors.white,
                 fontSize: 72, height: 1,
                 letterSpacing: -2.4,
                 fontWeight: FontWeight.w900,
-                fontStyle: FontStyle.italic,
               )),
             const SizedBox(height: 6),
             Text(deltaText,
@@ -900,11 +897,10 @@ class _TodayMessageCard extends StatelessWidget {
             const _SectionHead(index: '01', label: 'TODAY'),
             const SizedBox(height: 10),
             Text(line,
-              style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.inter(
                 color: AppColors.textPrimary,
                 fontSize: 18, height: 1.35,
                 letterSpacing: -0.4,
-                fontStyle: FontStyle.italic,
                 fontWeight: FontWeight.w600,
               )),
           ],
@@ -1141,7 +1137,7 @@ class _RankRow extends StatelessWidget {
               fontSize: 16, height: 1.2,
               letterSpacing: 1.4,
               fontWeight: isCurrent ? FontWeight.w900 : FontWeight.w700,
-              fontStyle: isCurrent ? FontStyle.italic : FontStyle.normal,
+              fontStyle: FontStyle.normal,
             )),
         ),
         if (isCurrent)
@@ -1192,7 +1188,6 @@ class _RecordTimeline extends StatelessWidget {
                 style: GoogleFonts.inter(
                   color: AppColors.textTertiary,
                   fontSize: 13, height: 1.5,
-                  fontStyle: FontStyle.italic,
                   fontWeight: FontWeight.w500,
                 )),
             for (var i = 0; i < milestones.length; i++) ...[
@@ -1340,11 +1335,10 @@ class _StreakPanel extends StatelessWidget {
                       // to match the flame's optical height so the
                       // pair reads as one unit.
                       Text('$current',
-                        style: GoogleFonts.playfairDisplay(
+                        style: GoogleFonts.inter(
                           color: Colors.white,
                           fontSize: 92, height: 1,
                           letterSpacing: -3.4,
-                          fontStyle: FontStyle.italic,
                           fontWeight: FontWeight.w900,
                         )),
                       const SizedBox(width: 10),
@@ -1439,12 +1433,11 @@ class _FinalFormCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text('BECOME HIM',
-              style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.inter(
                 color: AppColors.textPrimary,
                 fontSize: 30, height: 1.1,
                 letterSpacing: -0.8,
                 fontWeight: FontWeight.w900,
-                fontStyle: FontStyle.italic,
               )),
             const SizedBox(height: 14),
             Text(

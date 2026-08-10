@@ -50,6 +50,18 @@ class PurchaseService {
     lines.add('Platform: ${Platform.isIOS ? "iOS" : "Android"}');
     lines.add('Configured: ${PurchaseConfig.isConfigured}');
     lines.add('Initialised: $_initialized');
+    // WHICH KEY IS IN THIS BINARY. The Android sub was dead for a full
+    // release because the goog_ key still pointed at the previous
+    // RevenueCat project while iOS had already moved — and nothing
+    // on-device said so. Fingerprint (never the whole key) so a
+    // wrong-project build is identifiable from a screenshot.
+    final key = Platform.isIOS
+        ? PurchaseConfig.iosApiKey
+        : PurchaseConfig.androidApiKey;
+    lines.add('SDK key: ${key.length < 12
+        ? (key.isEmpty ? "(empty)" : "(malformed, len ${key.length})")
+        : "${key.substring(0, 5)}…${key.substring(key.length - 6)} "
+            "(len ${key.length})"}');
     if (!_initialized) {
       lines.add('→ Init never ran. Check API key in purchase_config.dart.');
       return lines.join('\n');

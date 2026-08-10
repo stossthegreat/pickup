@@ -42,7 +42,22 @@ class PurchaseConfig {
   static const iosApiKey     = 'appl_qLSVUdcrgjVeLZqNkuoOgaBCtOv';
 
   /// RevenueCat public SDK key for Android. Starts with `goog_`.
-  static const androidApiKey = 'goog_cdoFAjjiwMkzsxNjPBwoKalEwkF';
+  ///
+  /// THE ANDROID BILLING BUG (fixed here): when the app moved to the new
+  /// RevenueCat project, only the iOS `appl_` key was swapped. This one
+  /// still pointed at the OLD project — so on Android the SDK configured
+  /// fine, `getOfferings()` succeeded, and came back with the old
+  /// project's offerings, which contain no `imhim_pro_weekly` and no
+  /// products registered against the `com.imhim.app` package. Zero
+  /// packages survived, `_offerings.weekly` stayed null, and the paywall
+  /// bailed at its `pkg == null` branch with "Subscription isn't
+  /// available right now" WITHOUT ever calling purchasePackage(). iOS
+  /// worked the whole time because its key was already correct.
+  ///
+  /// Both keys must come from the SAME RevenueCat project — the one that
+  /// owns `imhim_pro_weekly`. These are publishable SDK keys (safe to
+  /// ship); the secret key never belongs in the app.
+  static const androidApiKey = 'goog_pvyTRZSUsrXkGWCDBCtnUXEBDkk';
 
   /// The entitlement identifier that grants Mirrorly Pro. Configured
   /// in RevenueCat dashboard → Entitlements. Both weekly and annual

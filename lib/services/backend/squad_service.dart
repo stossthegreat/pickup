@@ -42,6 +42,27 @@ class SquadMember {
       {required this.userId, this.handle, this.avatarUrl, required this.role});
 }
 
+/// Where the squad stands on one mission today. Mutable sets because
+/// this is built by folding a single flat query.
+class MissionPulse {
+  final String missionId;
+  final Set<String> committed = {};
+  final Set<String> completed = {};
+  MissionPulse({required this.missionId});
+
+  int get touched => committed.length + completed.length;
+}
+
+/// One squadmate's run at today's AI Daily.
+/// [finished] false = they opened it and bailed before the end.
+class DailyMark {
+  final String userId;
+  final int? score;
+  final bool finished;
+  const DailyMark(
+      {required this.userId, required this.score, required this.finished});
+}
+
 class Squad {
   final String id;
   final String name;
@@ -200,6 +221,99 @@ class SquadService {
       ];
     } catch (e) {
       debugPrint('SquadService.weekMarks: $e');
+      return const [];
+    }
+  }
+
+  static const _emptyPulse = <String, MissionPulse>{};
+
+  /// Every squadmate's state on today's missions, keyed by mission id.
+  ///
+  /// This is what turns a mission card from a personal to-do into a
+  /// scoreboard — "3/5 of the squad did this one" is only possible if
+  /// the room can see each other's rows, which migration 0003 allows
+  /// for active squadmates and nobody else.
+  static Future<Map<String, MissionPulse>> missionPulseToday(
+      List<String> memberIds) async {
+    if (memberIds.isEmpty) return _emptyPulse;
+    try {
+      final now = DateTime.now();
+      final iso = DateTime(now.year, now.month, now.day).toIso8601String();
+      final rows = await _sb
+          .from('user_missions')
+          .select('user_id, mission_id, state')
+          .inFilter('user_id', memberIds)
+          .gte('created_at', iso);
+      final out = <String, MissionPulse>{};
+      for (final r in rows) {
+        final mid = r['mission_id'] as String;
+        final uid = r['user_id'] as String;
+        final p = out.putIfAbsent(mid, () => MissionPulse(missionId: mid));
+        if (r['state'] == 'completed') {
+          p.completed.add(uid);
+        } else {
+          p.committed.add(uid);
+        }
+      }
+      return out;
+    } catch (e) {
+      debugPrint('SquadService.missionPulseToday: $e');
+      return _emptyPulse;
+    }
+  }
+
+  /// UTC day stamp the Daily is keyed by — 20260810.
+  static int todayYmd() {
+    final u = DateTime.now().toUtc();
+    return u.year * 10000 + u.month * 100 + u.day;
+  }
+
+  /// THE AI RUN — who in the squad took today's voice Daily, and did
+  /// they get to the END of it.
+  ///
+  /// A real-life mission is binary: you did it or you didn't. An AI
+  /// roleplay isn't — plenty of people open it, freeze, and bail after
+  /// two lines. So the squad sees both states: a row in daily_attempts
+  /// means they went the distance and got scored; a 'daily_started'
+  /// pulse event with no attempt row means they opened it and walked.
+  static Future<List<DailyMark>> dailyToday(List<String> memberIds,
+      {String? squadId}) async {
+    if (memberIds.isEmpty) return const [];
+    try {
+      final finished = await _sb
+          .from('daily_attempts')
+          .select('user_id, score')
+          .inFilter('user_id', memberIds)
+          .eq('ymd', todayYmd());
+
+      final marks = <String, DailyMark>{
+        for (final r in finished)
+          r['user_id'] as String: DailyMark(
+            userId: r['user_id'] as String,
+            score: (r['score'] as num?)?.toInt(),
+            finished: true,
+          )
+      };
+
+      // Anyone who opened it today but isn't in the finished set walked.
+      if (squadId != null) {
+        final now = DateTime.now();
+        final iso = DateTime(now.year, now.month, now.day).toIso8601String();
+        final started = await _sb
+            .from('squad_events')
+            .select('actor')
+            .eq('squad_id', squadId)
+            .eq('kind', 'daily_started')
+            .gte('created_at', iso);
+        for (final r in started) {
+          final uid = r['actor'] as String;
+          marks.putIfAbsent(
+              uid, () => DailyMark(userId: uid, score: null, finished: false));
+        }
+      }
+      return marks.values.toList();
+    } catch (e) {
+      debugPrint('SquadService.dailyToday: $e');
       return const [];
     }
   }

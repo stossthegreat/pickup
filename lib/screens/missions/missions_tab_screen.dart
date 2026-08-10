@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../config/dev_flags.dart';
 import '../../services/analytics_service.dart';
 import '../../services/backend/catch_up_service.dart';
 import '../../services/backend/squad_broadcast.dart';
@@ -52,11 +53,14 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     _load();
     // WHILE YOU WERE GONE — a returning user never opens to a static
     // screen. Runs after the first frame so it lands on top of home.
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final events = await CatchUpService.collect();
-      if (!mounted || events.isEmpty) return;
-      await CatchUpSheet.show(context, events);
-    });
+    // Squad-sourced, so it stays down with the rest of the Academy.
+    if (kAcademyEnabled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final events = await CatchUpService.collect();
+        if (!mounted || events.isEmpty) return;
+        await CatchUpSheet.show(context, events);
+      });
+    }
   }
 
   Future<void> _load() async {
@@ -236,12 +240,16 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(child: _TopBar(xp: _xp, streak: _streak)),
-          // THE DAILY — the appointment. Pulsing until today's shot is
-          // taken; carries the league line (division · rank · lock).
-          const SliverToBoxAdapter(child: DailyCard()),
-          // THE SQUAD STRIP — the app's liveness, on the first screen.
-          // Every open answers "where is everyone at?" with zero taps.
-          const SliverToBoxAdapter(child: SquadStrip()),
+          // THE DAILY + THE SQUAD STRIP — the social layer, dark until
+          // there's a population to fill it (see kAcademyEnabled).
+          if (kAcademyEnabled) ...[
+            // THE DAILY — the appointment. Pulsing until today's shot is
+            // taken; carries the league line (division · rank · lock).
+            const SliverToBoxAdapter(child: DailyCard()),
+            // THE SQUAD STRIP — the app's liveness, on the first screen.
+            // Every open answers "where is everyone at?" with zero taps.
+            const SliverToBoxAdapter(child: SquadStrip()),
+          ],
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.lg, Sp.lg, Sp.sm),
@@ -285,7 +293,6 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
                 child: Center(
                   child: Text('Real reps build real game.',
                       style: AppTypography.bodySmall.copyWith(
-                        fontStyle: FontStyle.italic,
                         color: AppColors.textTertiary,
                       )),
                 ),
@@ -330,10 +337,9 @@ class _TopBar extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 9),
                 child: Text(
                   'Rizz',
-                  style: GoogleFonts.playfairDisplay(
+                  style: GoogleFonts.inter(
                     fontSize: 17,
                     height: 1.0,
-                    fontStyle: FontStyle.italic,
                     fontWeight: FontWeight.w600,
                     letterSpacing: -0.2,
                     color: Colors.white.withValues(alpha: 0.5),
@@ -347,12 +353,14 @@ class _TopBar extends StatelessWidget {
               ],
               // The Academy — the Board (rankings) and the Squad Room.
               // One tap from the masthead, everywhere, always.
-              _IconBtn(
-                  icon: Icons.emoji_events_outlined,
-                  onTap: () => context.push('/leaderboard')),
-              _IconBtn(
-                  icon: Icons.shield_outlined,
-                  onTap: () => context.push('/squad')),
+              if (kAcademyEnabled) ...[
+                _IconBtn(
+                    icon: Icons.emoji_events_outlined,
+                    onTap: () => context.push('/leaderboard')),
+                _IconBtn(
+                    icon: Icons.shield_outlined,
+                    onTap: () => context.push('/squad')),
+              ],
               _IconBtn(icon: Icons.settings_outlined, onTap: () => context.push('/settings')),
             ],
           ),

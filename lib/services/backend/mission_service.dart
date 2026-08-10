@@ -9,11 +9,21 @@ class Mission {
   final String title;
   final String prompt;
   final int tier;
+  final String category;
   const Mission(
       {required this.id,
       required this.title,
       required this.prompt,
-      required this.tier});
+      required this.tier,
+      this.category = 'presence'});
+
+  static Mission fromRow(Map<String, dynamic> r) => Mission(
+        id: r['id'] as String,
+        title: r['title'] as String,
+        prompt: r['prompt'] as String,
+        tier: (r['tier'] as num).toInt(),
+        category: (r['category'] as String?) ?? 'presence',
+      );
 }
 
 /// v1 mission loop: today's mission → COMMIT (call your shot) →
@@ -40,16 +50,65 @@ class MissionService {
       }
       final rows = await q.order('tier', ascending: true).limit(1);
       if (rows.isEmpty) return null;
-      final r = rows.first;
-      return Mission(
-        id: r['id'] as String,
-        title: r['title'] as String,
-        prompt: r['prompt'] as String,
-        tier: (r['tier'] as num).toInt(),
-      );
+      return Mission.fromRow(rows.first);
     } catch (e) {
       debugPrint('MissionService.todayMission: $e');
       return null;
+    }
+  }
+
+  /// TODAY'S BOARD — the day's whole slate, not a single card.
+  ///
+  /// One mission a day made the squad room look empty and gave the room
+  /// nothing to talk about. Five gives everyone a different lane to pick
+  /// from and makes "3/5 of the squad did THIS one" a real number.
+  ///
+  /// The board is the [count] lowest-tier missions this user hasn't
+  /// completed, so the ladder still escalates — it just serves a rung's
+  /// worth at a time instead of one step.
+  static Future<List<Mission>> todayBoard({int count = 5}) async {
+    final uid = AuthService.userId;
+    if (uid == null) return const [];
+    try {
+      final done = await _sb
+          .from('user_missions')
+          .select('mission_id')
+          .eq('user_id', uid)
+          .eq('state', 'completed');
+      final doneIds = [for (final r in done) r['mission_id'] as String];
+      var q = _sb.from('missions').select().eq('active', true);
+      if (doneIds.isNotEmpty) {
+        q = q.not('id', 'in', '(${doneIds.join(',')})');
+      }
+      final rows = await q.order('tier', ascending: true).limit(count);
+      return [for (final r in rows) Mission.fromRow(r)];
+    } catch (e) {
+      debugPrint('MissionService.todayBoard: $e');
+      return const [];
+    }
+  }
+
+  /// My state on every mission on the board, in one round trip:
+  /// missionId → 'committed' | 'completed'. Absent key = untouched.
+  static Future<Map<String, String>> myStatesToday(
+      List<String> missionIds) async {
+    final uid = AuthService.userId;
+    if (uid == null || missionIds.isEmpty) return const {};
+    try {
+      final now = DateTime.now();
+      final iso = DateTime(now.year, now.month, now.day).toIso8601String();
+      final rows = await _sb
+          .from('user_missions')
+          .select('mission_id, state')
+          .eq('user_id', uid)
+          .inFilter('mission_id', missionIds)
+          .gte('created_at', iso);
+      return {
+        for (final r in rows) r['mission_id'] as String: r['state'] as String,
+      };
+    } catch (e) {
+      debugPrint('MissionService.myStatesToday: $e');
+      return const {};
     }
   }
 

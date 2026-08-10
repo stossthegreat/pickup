@@ -110,10 +110,9 @@ class _SplashScreenState extends State<SplashScreen> {
                       padding: const EdgeInsets.only(top: 16),
                       child: Text(
                         'Rizz',
-                        style: GoogleFonts.playfairDisplay(
+                        style: GoogleFonts.inter(
                           fontSize: 26,
                           height: 1.0,
-                          fontStyle: FontStyle.italic,
                           fontWeight: FontWeight.w600,
                           letterSpacing: -0.4,
                           color: Colors.white.withValues(alpha: 0.55),

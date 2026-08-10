@@ -60,6 +60,19 @@ class SquadBroadcast {
     }
   }
 
+  /// He opened today's AI Daily. Paired with the daily_attempts row the
+  /// scorer writes, this is what lets the squad room tell "took the run
+  /// and got to the end" apart from "opened it and walked".
+  static Future<void> dailyStarted(String scenario) async {
+    try {
+      final id = await _squadId();
+      if (id == null) return;
+      await SquadService.postEvent(id, 'daily_started', {'vibe': scenario});
+    } catch (e) {
+      debugPrint('SquadBroadcast.dailyStarted: $e');
+    }
+  }
+
   /// He finished it — with the XP so the toast can carry a number.
   static Future<void> completed(String title,
       {int? xp, String? girlId}) async {

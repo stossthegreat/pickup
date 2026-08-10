@@ -225,15 +225,20 @@ class _PaywallScreenState extends State<PaywallScreen> {
     if (_purchasing) return;
     final pkg = _packageFor(_Tier.weekly);
     if (pkg == null) {
-      // No live weekly Package yet — RevenueCat returned no Offering, so the
-      // subscription isn't fetchable (product not submitted/approved, or the
-      // Paid Apps Agreement isn't active). Give IMMEDIATE, clean feedback so
-      // the button never feels dead — "no response after tapping BECOME HIM"
-      // was an App Review finding. (The real fix is server-side: submit the
-      // IAP + sign the Paid Apps Agreement so a real package loads here.)
+      // NO PACKAGE = the store never handed us a purchasable product, so
+      // there is nothing to charge. This branch used to end at a vague
+      // "check your connection" toast — which is exactly backwards: an
+      // empty offering does NOT throw, so loadOfferings() returns
+      // normally, nothing is logged, and the one screen that could name
+      // the cause stayed silent. The diagnostic now runs HERE, where the
+      // failure actually happens, instead of only on a purchase error we
+      // can never reach from this state.
       HapticFeedback.mediumImpact();
-      _snack('Subscription isn\'t available right now — please check your '
-          'connection and try again in a moment.');
+      final diag = await PurchaseService.diagnose();
+      if (!mounted) return;
+      _showDiagnostic(
+          'No purchasable subscription came back from the store, so the '
+          'purchase was never started.\n\n──────────\n$diag');
       return;
     }
 

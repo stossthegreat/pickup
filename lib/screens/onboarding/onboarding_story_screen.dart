@@ -582,7 +582,6 @@ class _BeatView extends StatelessWidget {
                       color: AppColors.textTertiary,
                       fontSize: 12.5,
                       height: 1.35,
-                      fontStyle: FontStyle.italic,
                       fontWeight: FontWeight.w500,
                     )),
               ),
@@ -707,7 +706,6 @@ class _BeatView extends StatelessWidget {
               color: AppColors.red,
               fontSize: 15,
               height: 1.4,
-              fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w700,
             )).animate().fadeIn(delay: 560.ms, duration: 400.ms),
       ],
@@ -789,12 +787,11 @@ class _BeatView extends StatelessWidget {
         fontWeight: FontWeight.w800,
       )).animate().fadeIn(duration: 400.ms);
 
-  TextStyle _headlineStyle(double size) => GoogleFonts.playfairDisplay(
+  TextStyle _headlineStyle(double size) => GoogleFonts.inter(
         color: Colors.white,
         fontSize: size,
         height: 1.06,
         letterSpacing: -0.6,
-        fontStyle: FontStyle.italic,
         fontWeight: FontWeight.w800,
       );
 
