@@ -347,7 +347,6 @@ class _DailyScreenState extends State<DailyScreen> {
                       else
                         GameButton(
                           label: 'ONE SHOT — RUN IT',
-                          color: girl.accent,
                           pulse: true,
                           onTap: _run,
                         ),

@@ -196,7 +196,6 @@ class _DailyCardState extends State<DailyCard> {
                   const SizedBox(height: 16),
                   GameButton(
                     label: 'ONE SHOT — RUN IT',
-                    color: girl.accent,
                     pulse: true,
                     onTap: _open,
                   ),

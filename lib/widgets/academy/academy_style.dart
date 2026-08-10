@@ -28,7 +28,14 @@ class AcademyHeading extends StatelessWidget {
         Text(kicker!, style: AppTypography.label),
         const SizedBox(height: 6),
       ],
-      Text(title, style: AppTypography.h1Italic.copyWith(fontSize: size)),
+      Text(title,
+          style: GoogleFonts.inter(
+            color: AppColors.textPrimary,
+            fontSize: size * 0.85,
+            height: 1.05,
+            letterSpacing: -1,
+            fontWeight: FontWeight.w900,
+          )),
       if (sub != null) ...[
         const SizedBox(height: 4),
         Text(sub!,

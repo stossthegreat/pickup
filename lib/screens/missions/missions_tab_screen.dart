@@ -433,11 +433,18 @@ class _Heading extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        Text('Today\'s Mission', style: AppTypography.h1Italic),
+        Text('Today\'s Mission',
+            style: GoogleFonts.inter(
+              color: AppColors.textPrimary,
+              fontSize: 30,
+              height: 1.1,
+              letterSpacing: -1,
+              fontWeight: FontWeight.w900,
+            )),
         const SizedBox(height: 6),
         Text('Practice on AI. Then prove it in real life.',
-            style: AppTypography.bodySmall.copyWith(
-                color: AppColors.red, fontStyle: FontStyle.italic)),
+            style: AppTypography.bodySmall
+                .copyWith(color: AppColors.red, fontWeight: FontWeight.w700)),
       ],
     );
   }
