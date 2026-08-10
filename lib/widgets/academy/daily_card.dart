@@ -19,6 +19,26 @@ GirlBrief girlForVibe(String vibeKey) => kRoster.firstWhere(
       orElse: () => kRoster.first,
     );
 
+/// The daily rotation, computed client-side with the SAME rule the
+/// server uses (epoch-day modulo the scenario list). This is what lets
+/// the card render today's real woman before the backend answers — the
+/// app must never look empty while a request is in flight or while the
+/// Edge Function isn't deployed yet.
+const kDailyScenarios = [
+  'cold',
+  'into_you',
+  'chaos',
+  'testing',
+  'ice_then_fire',
+  'sweet',
+];
+
+String scenarioOfToday() {
+  final epochDay =
+      DateTime.now().toUtc().millisecondsSinceEpoch ~/ 86400000;
+  return kDailyScenarios[epochDay % kDailyScenarios.length];
+}
+
 /// THE DAILY — the hero card on home. Her face, full bleed. Her name in
 /// display type. The division crest riding the corner. One chunky
 /// button. This is the appointment, and it should look like a fight
@@ -75,8 +95,12 @@ class _DailyCardState extends State<DailyCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_loaded || _s == null) return const SizedBox.shrink();
-    final s = _s!;
+    final s = _s;
+    // OFFLINE / PRE-BACKEND: still show today's real woman and the
+    // invitation to run it. Rendering nothing here is what made the
+    // home screen look empty — never do that again.
+    if (s == null) return _preview();
+
     final girl = girlForVibe(s.scenarioKey);
     final l = s.league;
     final zone = switch (l.zone) {
@@ -85,6 +109,115 @@ class _DailyCardState extends State<DailyCard> {
       _ => AppColors.textSecondary,
     };
 
+    return _shell(girl, s, l, zone);
+  }
+
+  /// The card before the backend answers: her face, her name, the CTA.
+  /// Same shell, live-state line replaced with an honest status.
+  Widget _preview() {
+    final girl = girlForVibe(scenarioOfToday());
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
+      child: GestureDetector(
+        onTap: _open,
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+                color: girl.accent.withValues(alpha: 0.55), width: 1.4),
+            boxShadow: [
+              BoxShadow(
+                  color: girl.accent.withValues(alpha: 0.24),
+                  blurRadius: 30,
+                  spreadRadius: -4)
+            ],
+          ),
+          child: Stack(children: [
+            Positioned.fill(
+              child: Image.asset(
+                girl.asset,
+                fit: BoxFit.cover,
+                alignment: const Alignment(0, -0.32),
+                errorBuilder: (_, __, ___) => ColoredBox(
+                    color: girl.accent.withValues(alpha: 0.25)),
+              ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.15),
+                      Colors.black.withValues(alpha: 0.72),
+                      Colors.black.withValues(alpha: 0.94),
+                    ],
+                    stops: const [0.0, 0.52, 1.0],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('THE DAILY',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 10.5,
+                        letterSpacing: 3,
+                        fontWeight: FontWeight.w900,
+                      )),
+                  const SizedBox(height: 10),
+                  Text(girl.name.toUpperCase(),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 40,
+                        height: 0.98,
+                        letterSpacing: -1.6,
+                        fontWeight: FontWeight.w900,
+                        shadows: [
+                          Shadow(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              blurRadius: 14)
+                        ],
+                      )),
+                  Text(girl.type,
+                      style: GoogleFonts.inter(
+                        color: girl.accent,
+                        fontSize: 11.5,
+                        letterSpacing: 2.4,
+                        fontWeight: FontWeight.w800,
+                      )),
+                  const SizedBox(height: 16),
+                  GameButton(
+                    label: 'ONE SHOT — RUN IT',
+                    color: girl.accent,
+                    pulse: true,
+                    onTap: _open,
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Today\'s woman. One attempt. Everyone gets the same one.',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                      )),
+                ],
+              ),
+            ),
+          ]),
+        ),
+      ).animate().fadeIn(duration: 340.ms),
+    );
+  }
+
+  Widget _shell(
+      GirlBrief girl, DailyStatus s, LeagueState l, Color zone) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
       child: GestureDetector(

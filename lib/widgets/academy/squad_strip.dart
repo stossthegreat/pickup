@@ -31,6 +31,7 @@ class SquadStrip extends StatefulWidget {
 }
 
 class _SquadStripState extends State<SquadStrip> {
+  // ignore: unused_field
   bool _loaded = false;
   Squad? _squad;
   List<SquadMember> _roster = const [];
@@ -117,9 +118,8 @@ class _SquadStripState extends State<SquadStrip> {
 
   @override
   Widget build(BuildContext context) {
-    // Loading or backend unreachable → take no space at all.
-    if (!_loaded) return const SizedBox.shrink();
-
+    // Even before the backend answers, show the recruiting card — an
+    // empty gap on home is what made the app feel dead.
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 2, 20, 4),
       child: _squad == null ? _recruit(context) : _live(context),
