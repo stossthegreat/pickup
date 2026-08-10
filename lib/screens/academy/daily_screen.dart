@@ -229,12 +229,52 @@ class _DailyScreenState extends State<DailyScreen> {
     );
   }
 
+  /// Offline state. The message alone was a dead end — you saw the
+  /// failure and had nowhere to go with it. Now the diagnostic is one
+  /// tap away FROM THE SCREEN THAT FAILED, not buried in settings.
   Widget _offline() => Center(
-        child: Text('THE DAILY needs a connection.',
-            style: GoogleFonts.inter(
-                color: AppColors.textTertiary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.cloud_off_rounded,
+                size: 34, color: AppColors.textTertiary),
+            const SizedBox(height: 14),
+            Text('THE DAILY needs a connection.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Text(
+                'The server didn\'t answer. Run the check below and '
+                'it will tell you exactly which call failed.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 12,
+                    height: 1.45,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 20),
+            GameButton(
+              label: 'RUN BACKEND CHECK',
+              color: AppColors.red,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                context.push('/backend-check');
+              },
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: _load,
+              child: Text('Try again',
+                  style: GoogleFonts.inter(
+                      color: AppColors.textTertiary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+            ),
+          ]),
+        ),
       );
 
   // ── HERO — her face, the poster ─────────────────────────────────────
