@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/analytics_service.dart';
+import '../../services/backend/squad_broadcast.dart';
+import '../../services/live_events.dart';
 import '../../services/local_store_service.dart';
 import '../../services/mission_catalog.dart';
 import '../../services/mission_engine.dart';
@@ -85,10 +87,15 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     // ignore: discarded_futures
     AnalyticsService.missionCompleted(kind: m.kind.name, title: m.title, xp: m.xp);
     HapticFeedback.mediumImpact();
+    // The live layer replaces the grey snackbar — a real celebration
+    // that lands over any screen, and the squad hears about it too.
+    LiveEvents.xp(m.xp, m.title);
+    // ignore: discarded_futures
+    SquadBroadcast.completed(m.title, xp: m.xp, girlId: m.girlId);
     await _load();
-    if (mounted) _toast('+${m.xp} XP  ·  ${m.title}');
   }
 
+  // ignore: unused_element
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
@@ -101,6 +108,10 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
   void _tap(MissionSpec m) {
     // ignore: discarded_futures
     AnalyticsService.missionOpened(kind: m.kind.name, title: m.title);
+    // Tell the squad he STARTED it — 'Marcus is on Daisy's post right
+    // now' is a far stronger pull than only hearing about finishes.
+    // ignore: discarded_futures
+    SquadBroadcast.started(m.title, girlId: m.girlId);
     switch (m.kind) {
       case MissionKind.aiVoice:
         _openVoice(m);

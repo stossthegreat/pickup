@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
 
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/mission_service.dart';
+import '../../services/backend/squad_broadcast.dart';
 import '../../services/backend/squad_live_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/live_events.dart';
@@ -108,6 +109,7 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     final squad = await SquadService.create(name);
     if (squad == null || !mounted) return;
     await SquadService.postEvent(squad.id, 'joined');
+    SquadBroadcast.invalidate();
     // ignore: discarded_futures
     SquadLiveService.start();
     LiveEvents.milestone('SQUAD FOUNDED', squad.name);
@@ -125,6 +127,7 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
       return;
     }
     await SquadService.postEvent(squad.id, 'joined');
+    SquadBroadcast.invalidate();
     // ignore: discarded_futures
     SquadLiveService.start();
     LiveEvents.milestone('YOU\'RE IN', squad.name);
@@ -1036,6 +1039,11 @@ class _PulseRow extends StatelessWidget {
     final (icon, text, color) = switch (event.kind) {
       'joined' => (Icons.bolt_rounded, '$who joined the squad',
           AppColors.textSecondary),
+      'started' => (
+          Icons.play_circle_fill_rounded,
+          '$who started ${event.payload['mission'] ?? 'a mission'}',
+          AppColors.accent
+        ),
       'committed' => (
           Icons.radio_button_checked_rounded,
           '$who called their shot'
