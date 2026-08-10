@@ -5,16 +5,18 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/backend/auth_service.dart';
+import '../../services/backend/daily_game_service.dart';
 import '../../services/backend/leaderboard_service.dart';
-import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/academy/game_button.dart';
+import '../../widgets/academy/league_crest.dart';
 
-enum _Scope { squad, friends, weekly, global }
-
-/// The board. Podium top-3 with tier glow, ranked list, and YOUR row
-/// pinned to the bottom permanently — the gap to the next man is always
-/// on screen. WEEKLY resets Monday: "I can win this one."
+/// THE BOARD — the league table, built the way the best ones are: the
+/// crest as the hero, the full field ranked, and the two lines that
+/// create all the tension — the PROMOTION CUT and the RELEGATION CUT.
+/// You always see exactly how far you are from climbing and how close
+/// you are to falling.
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
 
@@ -23,10 +25,10 @@ class LeaderboardScreen extends StatefulWidget {
 }
 
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
-  _Scope _scope = _Scope.global;
+  bool _league = true; // league table vs all-time
   bool _loading = true;
-  List<LeaderboardEntry> _entries = const [];
-  LeaderboardEntry? _me;
+  DailyStatus? _s;
+  List<LeaderboardEntry> _allTime = const [];
 
   @override
   void initState() {
@@ -36,445 +38,516 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    List<LeaderboardEntry> entries = const [];
-    switch (_scope) {
-      case _Scope.global:
-      case _Scope.weekly: // weekly board goes live with the first season
-        entries = await LeaderboardService.global();
-        break;
-      case _Scope.squad:
-        final squad = await SquadService.mySquad();
-        if (squad != null) {
-          final roster = await SquadService.roster(squad.id);
-          entries = await LeaderboardService.forUsers(
-              [for (final m in roster) m.userId]);
-        }
-        break;
-      case _Scope.friends:
-        entries = const []; // friend graph ships with challenges
-        break;
-    }
-    final me = await LeaderboardService.me();
+    final s = await DailyGameService.status();
+    final all = await LeaderboardService.global();
     if (!mounted) return;
     setState(() {
-      _entries = entries;
-      _me = me;
+      _s = s;
+      _allTime = all;
       _loading = false;
     });
   }
 
-  int? get _myRank {
-    final uid = AuthService.userId;
-    if (uid == null) return null;
-    final i = _entries.indexWhere((e) => e.userId == uid);
-    return i < 0 ? null : i + 1;
+  String _fmt(Duration d) {
+    if (d.isNegative) return 'LOCKED';
+    if (d.inDays > 0) return '${d.inDays}D ${d.inHours % 24}H';
+    if (d.inHours > 0) return '${d.inHours}H ${d.inMinutes % 60}M';
+    return '${d.inMinutes}M';
   }
 
   @override
   Widget build(BuildContext context) {
-    final podium = _entries.take(3).toList();
-    final rest = _entries.length > 3 ? _entries.sublist(3) : const <LeaderboardEntry>[];
-
     return Scaffold(
       backgroundColor: AppColors.base,
-      body: SafeArea(
-        child: Column(children: [
-          // ── Header ────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
-            child: Row(children: [
-              IconButton(
-                onPressed: () => context.pop(),
-                icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                    size: 18, color: Colors.white),
-              ),
-              Text('THE BOARD',
-                  style: GoogleFonts.inter(
-                    color: AppColors.textPrimary,
-                    fontSize: 15,
-                    letterSpacing: 3,
-                    fontWeight: FontWeight.w900,
-                  )),
-              const Spacer(),
-              // Battles lives off the Board — rankings are where you
-              // find someone worth fighting.
-              IconButton(
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  context.push('/battles');
-                },
-                icon: const Icon(Icons.sports_mma_rounded,
-                    size: 20, color: AppColors.red),
-              ),
-            ]),
-          ),
-
-          // ── Scope tabs ────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
-            child: Row(children: [
-              for (final s in _Scope.values) ...[
-                if (s != _Scope.values.first) const SizedBox(width: 6),
-                Expanded(child: _ScopeChip(
-                  label: s.name.toUpperCase(),
-                  active: s == _scope,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    setState(() => _scope = s);
-                    _load();
-                  },
-                )),
-              ],
-            ]),
-          ),
-
-          // ── Body ──────────────────────────────────────────────────
-          Expanded(
-            child: _loading
-                ? const Center(
-                    child: SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: AppColors.red)))
-                : _entries.isEmpty
-                    ? _EmptyBoard(scope: _scope)
-                    : ListView(
-                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-                        children: [
-                          if (podium.isNotEmpty)
-                            _Podium(entries: podium)
-                                .animate()
-                                .fadeIn(duration: 350.ms),
-                          const SizedBox(height: 16),
-                          for (final (i, e) in rest.indexed)
-                            _BoardRow(rank: i + 4, entry: e, mine: e.userId == AuthService.userId)
-                                .animate()
-                                .fadeIn(
-                                    delay: (60 * i).clamp(0, 500).ms,
-                                    duration: 250.ms),
-                        ],
-                      ),
-          ),
-
-          // ── Your row — pinned. The gap is always visible. Tapping
-          //    it opens identity (set your name, claim the account).
-          if (_me != null)
-            GestureDetector(
-              onTap: () async {
-                HapticFeedback.selectionClick();
-                await context.push('/account');
-                _load(); // handle may have changed
-              },
-              child: Container(
-              margin: const EdgeInsets.fromLTRB(14, 4, 14, 10),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.surface1,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: AppColors.red.withValues(alpha: 0.45)),
-                boxShadow: [
-                  BoxShadow(
-                      color: AppColors.redGlow, blurRadius: 24),
-                ],
-              ),
-              child: Row(children: [
-                Text(_myRank == null ? '—' : '#$_myRank',
-                    style: GoogleFonts.inter(
-                      color: AppColors.red,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                    )),
-                const SizedBox(width: 14),
-                Text('YOU',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textPrimary,
-                      fontSize: 13,
-                      letterSpacing: 2,
-                      fontWeight: FontWeight.w800,
-                    )),
-                const Spacer(),
-                _TierTag(rating: _me!.rating),
-                const SizedBox(width: 12),
-                Text('${_me!.rating}',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    )),
+      body: _loading
+          ? const Center(
+              child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: AppColors.red)))
+          : SafeArea(
+              child: Column(children: [
+                _topBar(),
+                Expanded(
+                  child: RefreshIndicator(
+                    color: AppColors.red,
+                    backgroundColor: AppColors.surface1,
+                    onRefresh: _load,
+                    child: _league ? _leagueTable() : _allTimeTable(),
+                  ),
+                ),
               ]),
-              ),
             ),
-        ]),
-      ),
     );
   }
-}
 
-class _ScopeChip extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  const _ScopeChip(
-      {required this.label, required this.active, required this.onTap});
+  Widget _topBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 2, 18, 8),
+      child: Row(children: [
+        IconButton(
+          onPressed: () => context.pop(),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              size: 18, color: Colors.white),
+        ),
+        Expanded(
+          child: Row(children: [
+            _tab('LEAGUE', _league, () => setState(() => _league = true)),
+            const SizedBox(width: 8),
+            _tab('ALL TIME', !_league, () => setState(() => _league = false)),
+          ]),
+        ),
+        IconButton(
+          onPressed: () {
+            HapticFeedback.selectionClick();
+            context.push('/battles');
+          },
+          icon: const Icon(Icons.sports_mma_rounded,
+              size: 20, color: AppColors.red),
+        ),
+      ]),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _tab(String label, bool active, VoidCallback onTap) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        height: 34,
-        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
           color: active ? AppColors.red : AppColors.surface1,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-              color: active
-                  ? AppColors.red
-                  : Colors.white.withValues(alpha: 0.1)),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                      color: AppColors.red.withValues(alpha: 0.35),
+                      blurRadius: 16)
+                ]
+              : null,
         ),
         child: Text(label,
             style: GoogleFonts.inter(
               color: active ? Colors.white : AppColors.textTertiary,
-              fontSize: 10,
+              fontSize: 10.5,
               letterSpacing: 1.6,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
             )),
       ),
     );
   }
-}
 
-class _Podium extends StatelessWidget {
-  final List<LeaderboardEntry> entries;
-  const _Podium({required this.entries});
+  // ══════════════════════════════════════════════════════════════════
+  //  THE LEAGUE TABLE
+  // ══════════════════════════════════════════════════════════════════
 
-  @override
-  Widget build(BuildContext context) {
-    // Visual order: 2nd · 1st · 3rd
-    final order = [
-      if (entries.length > 1) (2, entries[1], 84.0),
-      (1, entries[0], 108.0),
-      if (entries.length > 2) (3, entries[2], 68.0),
-    ];
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+  Widget _leagueTable() {
+    final s = _s;
+    if (s == null) {
+      return ListView(children: [
+        const SizedBox(height: 80),
+        Center(
+          child: Text('The league needs a connection.',
+              style: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600)),
+        ),
+      ]);
+    }
+    final l = s.league;
+    final me = AuthService.userId;
+    final rows = l.standings;
+    final promoteCut = l.promoteTop;
+    final dropCut = rows.length - l.relegateBottom;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
       children: [
-        for (final (rank, e, h) in order)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 5),
-              child: _PodiumSpot(rank: rank, entry: e, height: h),
+        _leagueHero(l),
+        const SizedBox(height: 18),
+        if (rows.isEmpty)
+          _emptyLeague()
+        else
+          for (var i = 0; i < rows.length; i++) ...[
+            // ── The cut lines: where all the tension lives ─────────
+            if (i == promoteCut && rows.length > promoteCut)
+              _cutLine('PROMOTION CUT', kNeon, Icons.arrow_upward_rounded),
+            if (i == dropCut && dropCut > promoteCut)
+              _cutLine(
+                  'RELEGATION CUT', AppColors.red, Icons.arrow_downward_rounded),
+            _row(
+              rank: i + 1,
+              handle: rows[i].handle,
+              points: rows[i].points,
+              mine: rows[i].userId == me,
+              zone: i < promoteCut
+                  ? 'promotion'
+                  : i >= dropCut
+                      ? 'drop'
+                      : 'safe',
+            ).animate().fadeIn(
+                delay: (28 * i).clamp(0, 600).ms, duration: 240.ms),
+          ],
+      ],
+    );
+  }
+
+  Widget _leagueHero(LeagueState l) {
+    final zone = switch (l.zone) {
+      'promotion' => kNeon,
+      'drop' => AppColors.red,
+      _ => AppColors.textSecondary,
+    };
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            crestPalette(l.division).metalMid.withValues(alpha: 0.18),
+            AppColors.surface1,
+          ],
+        ),
+        border: Border.all(
+            color: crestPalette(l.division)
+                .metalMid
+                .withValues(alpha: 0.45)),
+      ),
+      child: Column(children: [
+        LeagueCrest(division: l.division, size: 96)
+            .animate()
+            .fadeIn(duration: 400.ms)
+            .scale(
+                begin: const Offset(0.85, 0.85),
+                end: const Offset(1, 1),
+                curve: Curves.easeOutBack),
+        const SizedBox(height: 12),
+        Text(l.divisionName,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 24,
+              letterSpacing: 2.4,
+              fontWeight: FontWeight.w900,
+            )),
+        const SizedBox(height: 4),
+        Text('TOP ${l.promoteTop} CLIMB · BOTTOM ${l.relegateBottom} FALL',
+            style: GoogleFonts.inter(
+              color: AppColors.textTertiary,
+              fontSize: 10,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w800,
+            )),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: zone.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: zone.withValues(alpha: 0.55)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.lock_clock_rounded, size: 13, color: zone),
+            const SizedBox(width: 7),
+            Text('LOCKS IN ${_fmt(l.locksAt.difference(DateTime.now().toUtc()))}',
+                style: GoogleFonts.inter(
+                  color: zone,
+                  fontSize: 11,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w900,
+                )),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  /// The dashed cut line — the single most important pixel on the board.
+  Widget _cutLine(String label, Color color, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(children: [
+        Expanded(child: _Dashes(color: color)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(children: [
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 5),
+            Text(label,
+                style: GoogleFonts.inter(
+                  color: color,
+                  fontSize: 9.5,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w900,
+                )),
+          ]),
+        ),
+        Expanded(child: _Dashes(color: color)),
+      ]),
+    );
+  }
+
+  Widget _row({
+    required int rank,
+    required String? handle,
+    required int points,
+    required bool mine,
+    required String zone,
+  }) {
+    final zoneColor = switch (zone) {
+      'promotion' => kNeon,
+      'drop' => AppColors.red,
+      _ => AppColors.textMuted,
+    };
+    final medal = switch (rank) {
+      1 => const Color(0xFFF5C542),
+      2 => const Color(0xFFC5CDD8),
+      3 => const Color(0xFFCE8946),
+      _ => null,
+    };
+    return Container(
+      margin: const EdgeInsets.only(bottom: 7),
+      decoration: BoxDecoration(
+        color: mine ? AppColors.surface2 : AppColors.surface1,
+        borderRadius: BorderRadius.circular(15),
+        border: mine
+            ? Border.all(color: AppColors.red, width: 1.5)
+            : Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        boxShadow: mine
+            ? [
+                BoxShadow(
+                    color: AppColors.red.withValues(alpha: 0.28),
+                    blurRadius: 22)
+              ]
+            : null,
+      ),
+      child: Row(children: [
+        // Zone edge — a colour stripe so the band is readable at a glance.
+        Container(
+          width: 4,
+          height: 54,
+          decoration: BoxDecoration(
+            color: zone == 'safe' ? Colors.transparent : zoneColor,
+            borderRadius:
+                const BorderRadius.horizontal(left: Radius.circular(15)),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 26,
+          child: medal != null
+              ? Icon(Icons.workspace_premium_rounded, size: 19, color: medal)
+              : Text('$rank',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  )),
+        ),
+        const SizedBox(width: 10),
+        _Avatar(
+          label: mine ? 'YOU' : (handle ?? 'A'),
+          ring: medal ?? (mine ? AppColors.red : Colors.white24),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Text(mine ? 'YOU' : (handle ?? 'ANON'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                color: mine ? Colors.white : AppColors.textPrimary,
+                fontSize: 14,
+                fontWeight: mine ? FontWeight.w900 : FontWeight.w700,
+              )),
+        ),
+        Text('$points',
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            )),
+        const SizedBox(width: 4),
+        Text('PTS',
+            style: GoogleFonts.inter(
+              color: AppColors.textMuted,
+              fontSize: 9,
+              letterSpacing: 0.8,
+              fontWeight: FontWeight.w800,
+            )),
+        const SizedBox(width: 14),
+      ]),
+    );
+  }
+
+  Widget _emptyLeague() {
+    return Column(children: [
+      const SizedBox(height: 20),
+      Text('YOUR LEAGUE IS FORMING',
+          style: GoogleFonts.inter(
+            color: AppColors.textSecondary,
+            fontSize: 14,
+            letterSpacing: 2,
+            fontWeight: FontWeight.w900,
+          )),
+      const SizedBox(height: 8),
+      Text('Take today\'s shot and you\'re on the table.\n'
+          'Every session, mission and battle adds points.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(
+            color: AppColors.textTertiary,
+            fontSize: 12.5,
+            height: 1.5,
+            fontWeight: FontWeight.w500,
+          )),
+      const SizedBox(height: 20),
+      SizedBox(
+        width: 220,
+        child: GameButton(
+          label: 'RUN THE DAILY',
+          onTap: () => context.push('/daily'),
+        ),
+      ),
+    ]);
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  ALL TIME (ELO / tiers)
+  // ══════════════════════════════════════════════════════════════════
+
+  Widget _allTimeTable() {
+    if (_allTime.isEmpty) {
+      return ListView(children: [
+        const SizedBox(height: 70),
+        Center(
+          child: Text('No scored sessions yet. First one takes #1.',
+              style: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600)),
+        ),
+      ]);
+    }
+    final me = AuthService.userId;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+      children: [
+        for (final (i, e) in _allTime.indexed)
+          Container(
+            margin: const EdgeInsets.only(bottom: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: e.userId == me ? AppColors.surface2 : AppColors.surface1,
+              borderRadius: BorderRadius.circular(15),
+              border: e.userId == me
+                  ? Border.all(color: AppColors.red, width: 1.5)
+                  : Border.all(color: Colors.white.withValues(alpha: 0.05)),
             ),
+            child: Row(children: [
+              SizedBox(
+                width: 26,
+                child: Text('${i + 1}',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textTertiary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    )),
+              ),
+              const SizedBox(width: 8),
+              _Avatar(
+                label: e.userId == me ? 'YOU' : (e.handle ?? 'A'),
+                ring: tierFor(e.rating).color,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(e.userId == me ? 'YOU' : (e.handle ?? 'ANON'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        )),
+                    Text(tierFor(e.rating).name,
+                        style: GoogleFonts.inter(
+                          color: tierFor(e.rating).color,
+                          fontSize: 9,
+                          letterSpacing: 1.6,
+                          fontWeight: FontWeight.w900,
+                        )),
+                  ],
+                ),
+              ),
+              Text('${e.rating}',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ]),
           ),
       ],
     );
   }
 }
 
-class _PodiumSpot extends StatelessWidget {
-  final int rank;
-  final LeaderboardEntry entry;
-  final double height;
-  const _PodiumSpot(
-      {required this.rank, required this.entry, required this.height});
-
-  @override
-  Widget build(BuildContext context) {
-    final tier = tierFor(entry.rating);
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      _Avatar(entry: entry, size: rank == 1 ? 58 : 46, glow: rank == 1),
-      const SizedBox(height: 6),
-      Text(entry.handle ?? 'ANON',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.inter(
-            color: AppColors.textPrimary,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w800,
-          )),
-      Text('${entry.rating}',
-          style: GoogleFonts.inter(
-            color: tier.color,
-            fontSize: 13,
-            fontWeight: FontWeight.w900,
-          )),
-      const SizedBox(height: 6),
-      Container(
-        height: height,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              AppColors.red.withValues(alpha: rank == 1 ? 0.55 : 0.22),
-              AppColors.surface1,
-            ],
-          ),
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(12)),
-        ),
-        alignment: Alignment.topCenter,
-        padding: const EdgeInsets.only(top: 8),
-        child: Text('$rank',
-            style: GoogleFonts.inter(
-              color: Colors.white.withValues(alpha: 0.9),
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-            )),
-      ),
-    ]);
-  }
-}
-
-class _BoardRow extends StatelessWidget {
-  final int rank;
-  final LeaderboardEntry entry;
-  final bool mine;
-  const _BoardRow(
-      {required this.rank, required this.entry, required this.mine});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: mine ? AppColors.surface2 : AppColors.surface1,
-        borderRadius: BorderRadius.circular(14),
-        border: mine
-            ? Border.all(color: AppColors.red.withValues(alpha: 0.4))
-            : null,
-      ),
-      child: Row(children: [
-        SizedBox(
-          width: 34,
-          child: Text('#$rank',
-              style: GoogleFonts.inter(
-                color: AppColors.textTertiary,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w800,
-              )),
-        ),
-        _Avatar(entry: entry, size: 34),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(entry.handle ?? 'ANON',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
-                color: AppColors.textPrimary,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
-              )),
-        ),
-        _TierTag(rating: entry.rating),
-        const SizedBox(width: 12),
-        Text('${entry.rating}',
-            style: GoogleFonts.inter(
-              color: AppColors.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-            )),
-      ]),
-    );
-  }
-}
-
-class _TierTag extends StatelessWidget {
-  final int rating;
-  const _TierTag({required this.rating});
-
-  @override
-  Widget build(BuildContext context) {
-    final tier = tierFor(rating);
-    return Text(tier.name,
-        style: GoogleFonts.inter(
-          color: tier.color,
-          fontSize: 9.5,
-          letterSpacing: 1.8,
-          fontWeight: FontWeight.w800,
-          shadows: tier.glow
-              ? [Shadow(color: tier.color.withValues(alpha: 0.7), blurRadius: 12)]
-              : null,
-        ));
-  }
-}
+// ── Small parts ───────────────────────────────────────────────────────
 
 class _Avatar extends StatelessWidget {
-  final LeaderboardEntry entry;
-  final double size;
-  final bool glow;
-  const _Avatar({required this.entry, required this.size, this.glow = false});
+  final String label;
+  final Color ring;
+  const _Avatar({required this.label, required this.ring});
 
   @override
   Widget build(BuildContext context) {
-    final tier = tierFor(entry.rating);
     return Container(
-      width: size,
-      height: size,
+      width: 36,
+      height: 36,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: AppColors.surface2,
-        border: Border.all(color: tier.color.withValues(alpha: 0.7), width: 1.6),
-        boxShadow: glow
-            ? [BoxShadow(color: tier.color.withValues(alpha: 0.4), blurRadius: 22)]
-            : null,
-        image: entry.avatarUrl != null
-            ? DecorationImage(
-                image: NetworkImage(entry.avatarUrl!), fit: BoxFit.cover)
-            : null,
+        border: Border.all(color: ring.withValues(alpha: 0.85), width: 1.8),
       ),
-      child: entry.avatarUrl == null
-          ? Center(
-              child: Text(
-                (entry.handle ?? 'A').characters.first.toUpperCase(),
-                style: GoogleFonts.inter(
-                  color: AppColors.textSecondary,
-                  fontSize: size * 0.4,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            )
-          : null,
+      alignment: Alignment.center,
+      child: Text(label.characters.first.toUpperCase(),
+          style: GoogleFonts.inter(
+            color: AppColors.textSecondary,
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+          )),
     );
   }
 }
 
-class _EmptyBoard extends StatelessWidget {
-  final _Scope scope;
-  const _EmptyBoard({required this.scope});
+/// Dashed rule used by the cut lines.
+class _Dashes extends StatelessWidget {
+  final Color color;
+  const _Dashes({required this.color});
 
   @override
   Widget build(BuildContext context) {
-    final (title, sub) = switch (scope) {
-      _Scope.squad => ('NO SQUAD YET',
-          'Join a squad and this board becomes personal.'),
-      _Scope.friends => ('NO RIVALS YET',
-          'Challenge someone — beaten rivals appear here.'),
-      _ => ('THE BOARD IS EMPTY', 'First scored session takes #1.'),
-    };
-    return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(title,
-            style: GoogleFonts.inter(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-              letterSpacing: 2.4,
-              fontWeight: FontWeight.w800,
-            )),
-        const SizedBox(height: 6),
-        Text(sub,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              color: AppColors.textTertiary,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
-            )),
-      ]),
-    );
+    return LayoutBuilder(builder: (_, c) {
+      final n = (c.maxWidth / 9).floor().clamp(1, 60);
+      return Row(
+        children: List.generate(
+          n,
+          (_) => Container(
+            width: 5,
+            height: 2,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            color: color.withValues(alpha: 0.45),
+          ),
+        ),
+      );
+    });
   }
 }

@@ -17,6 +17,11 @@
 // ═════════════════════════════════════════════════════════════════════
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  ensureFixture,
+  settleLastFixture,
+  weekPoints,
+} from "../_shared/fixtures.ts";
 import { gradeTranscript } from "../_shared/grade.ts";
 import {
   addLeaguePoints,
@@ -75,8 +80,10 @@ Deno.serve(async (req) => {
   const ymd = utcYmd();
   const scenarioKey = scenarioOfDay();
 
-  // Lazy week-end verdict — fires once, the client shows the ceremony.
+  // Lazy week-end verdicts — each fires once; the client shows the
+  // ceremonies (league promotion/relegation + fixture result).
   const ceremony = await settleLastWeek(admin, uid);
+  const fixtureCeremony = await settleLastFixture(admin, uid);
 
   switch (body.action) {
     case "status": {
@@ -99,7 +106,8 @@ Deno.serve(async (req) => {
       const { data: league } = await admin.from("leagues")
         .select("division, week_start").eq("id", leagueId).single();
       const { data: standings } = await admin.from("league_members")
-        .select("user_id, points").eq("league_id", leagueId)
+        .select("user_id, points, profiles(handle, avatar_url)")
+        .eq("league_id", leagueId)
         .order("points", { ascending: false });
       const rank =
         (standings ?? []).findIndex((r) => r.user_id === uid) + 1;
@@ -109,6 +117,31 @@ Deno.serve(async (req) => {
         : rank > size - RELEGATE_BOTTOM
         ? "drop"
         : "safe";
+
+      // ── FIXTURE — this week's head-to-head vs one squadmate ──────
+      const fixture = await ensureFixture(admin, uid);
+      let fixtureOut = null;
+      if (fixture) {
+        const oppId =
+          fixture.player_a === uid ? fixture.player_b : fixture.player_a;
+        const week = weekStart();
+        const [myPts, theirPts, { data: opp }] = await Promise.all([
+          weekPoints(admin, uid, week),
+          weekPoints(admin, oppId, week),
+          admin.from("profiles")
+            .select("handle, fixture_wins, fixture_losses")
+            .eq("id", oppId).single(),
+        ]);
+        fixtureOut = {
+          opponentId: oppId,
+          opponentHandle: opp?.handle ?? null,
+          opponentRecord:
+            `${opp?.fixture_wins ?? 0}W-${opp?.fixture_losses ?? 0}L`,
+          myPoints: myPts,
+          theirPoints: theirPts,
+          locksAt: lockTime(week),
+        };
+      }
 
       return Response.json({
         scenarioKey,
@@ -129,8 +162,22 @@ Deno.serve(async (req) => {
           size,
           locksAt: lockTime(league!.week_start as string),
           zone,
+          promoteTop: PROMOTE_TOP,
+          relegateBottom: RELEGATE_BOTTOM,
+          // The full table — the client renders the zone bands.
+          standings: (standings ?? []).map((r) => ({
+            userId: r.user_id,
+            points: r.points,
+            handle:
+              (r.profiles as { handle?: string } | null)?.handle ?? null,
+            avatarUrl:
+              (r.profiles as { avatar_url?: string } | null)?.avatar_url ??
+                null,
+          })),
         },
+        fixture: fixtureOut,
         ceremony,
+        fixtureCeremony,
       });
     }
 
