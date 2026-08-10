@@ -55,7 +55,19 @@ class SquadLiveService {
           (row['payload'] as Map?)?.cast<String, dynamic>() ?? const {};
       final who = _names[actor] ?? 'A squadmate';
 
+      final thumb = thumbFor(payload['vibe'] as String?);
+
       switch (kind) {
+        case 'started':
+          LiveEvents.fire(LiveEvent(
+            title: who,
+            subtitle: 'is on ${payload['mission'] ?? 'a mission'} right now',
+            icon: Icons.play_circle_fill_rounded,
+            color: const Color(0xFF8B94F5),
+            thumbAsset: thumb,
+            route: '/squad',
+          ));
+          break;
         case 'committed':
           LiveEvents.squad(who,
               'called their shot — ${payload['mission'] ?? 'today\'s mission'}');
@@ -67,8 +79,9 @@ class SquadLiveService {
                 'completed ${payload['mission'] ?? 'the mission'}',
             icon: Icons.check_circle_rounded,
             color: const Color(0xFF2EE87A),
+            thumbAsset: thumb,
             route: '/squad',
-            stat: '+100',
+            stat: payload['xp'] != null ? '+${payload['xp']}' : '+100',
           ));
           break;
         case 'scored':

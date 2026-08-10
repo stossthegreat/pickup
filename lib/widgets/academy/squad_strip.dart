@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../theme/app_colors.dart';
+import 'squad_grade.dart';
 
 /// THE SQUAD STRIP — the liveness engine, mounted at the top of home.
 ///
@@ -193,6 +194,33 @@ class _SquadStripState extends State<SquadStrip> {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
+            // The week's grade, right on home.
+            Builder(builder: (_) {
+              final g = SquadGrade.of(done, _roster.length * 7);
+              return Container(
+                width: 26,
+                height: 26,
+                margin: const EdgeInsets.only(right: 9),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: g.color.withValues(alpha: 0.16),
+                  border: Border.all(color: g.color, width: 1.6),
+                  boxShadow: [
+                    BoxShadow(
+                        color: g.color.withValues(alpha: 0.4),
+                        blurRadius: 12)
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Text(g.letter,
+                    style: GoogleFonts.inter(
+                      color: g.color,
+                      fontSize: g.letter.length > 1 ? 10 : 12.5,
+                      height: 1,
+                      fontWeight: FontWeight.w900,
+                    )),
+              );
+            }),
             Text(_squad!.name.toUpperCase(),
                 style: GoogleFonts.inter(
                   color: AppColors.textPrimary,

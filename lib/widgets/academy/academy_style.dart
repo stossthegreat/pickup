@@ -36,8 +36,7 @@ class AcademyHeading extends StatelessWidget {
               color: AppColors.red,
               fontSize: 14,
               height: 1.35,
-              fontStyle: FontStyle.italic,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             )),
       ],
     ]);
