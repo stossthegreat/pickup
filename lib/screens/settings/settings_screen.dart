@@ -10,6 +10,7 @@ import '../../config/app_store_config.dart';
 import '../../config/dev_flags.dart';
 import '../../services/analytics_service.dart';
 import '../../services/creator_mode_store.dart';
+import '../../services/language_service.dart';
 import '../../services/face_asset_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/purchase_service.dart';
@@ -89,6 +90,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   HapticFeedback.selectionClick();
                   context.push('/account');
                 },
+              ),
+
+              // ── Roleplay language — she speaks yours ──────────────────
+              _SettingTile(
+                icon: Icons.language_rounded,
+                title: 'Language · ${LanguageService.current.native}',
+                onTap: () => _pickLanguage(context),
               ),
 
               // ── Get ImHim Pro — top of the list (red crown) ───────────
@@ -210,6 +218,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// the real ImHim listing's review tab; until then we fall back to the
   /// native in-app prompt, which targets the CURRENT app (never the old one).
   /// Android uses the native Play in-app review, else the store listing.
+  /// Language sheet — flag + native name rows, tap to save instantly.
+  /// She (and the coach) switch language on the very next session.
+  Future<void> _pickLanguage(BuildContext ctx) async {
+    HapticFeedback.selectionClick();
+    await showModalBottomSheet<void>(
+      context: ctx,
+      backgroundColor: AppColors.surface1,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(8, 14, 8, 10),
+          children: [
+            for (final l in LanguageService.supported)
+              ListTile(
+                dense: true,
+                leading: Text(l.flag, style: const TextStyle(fontSize: 20)),
+                title: Text(l.native,
+                    style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700)),
+                trailing: LanguageService.cachedCode == l.code
+                    ? const Icon(Icons.check_rounded,
+                        size: 18, color: AppColors.red)
+                    : null,
+                onTap: () async {
+                  HapticFeedback.selectionClick();
+                  await LanguageService.set(l.code);
+                  if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
+                  if (mounted) setState(() {});
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _rateUs(BuildContext ctx) async {
     HapticFeedback.selectionClick();
     // ignore: discarded_futures
