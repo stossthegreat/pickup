@@ -15,6 +15,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { gradeTranscript, tierFor } from "../_shared/grade.ts";
+import { addLeaguePoints } from "../_shared/league.ts";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -77,6 +78,11 @@ Deno.serve(async (req) => {
     peak: Math.max(eloRow?.peak ?? 1000, newRating),
     updated_at: new Date().toISOString(),
   });
+
+  // Every session quietly fuels the weekly league (auto-enrol) — the
+  // casual roleplayer IS in the game without ever opting in. Half the
+  // daily's rate so THE DAILY stays the big score of the day.
+  await addLeaguePoints(admin, uid, Math.round(score / 200));
 
   return Response.json({ score, rubric, eloDelta, newRating, tier });
 });

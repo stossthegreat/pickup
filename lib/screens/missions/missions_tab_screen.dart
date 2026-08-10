@@ -13,6 +13,7 @@ import '../../services/roster.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
+import '../../widgets/academy/daily_card.dart';
 import '../../widgets/academy/squad_strip.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/streak_badge.dart';
@@ -215,6 +216,9 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(child: _TopBar(xp: _xp, streak: _streak)),
+          // THE DAILY — the appointment. Pulsing until today's shot is
+          // taken; carries the league line (division · rank · lock).
+          const SliverToBoxAdapter(child: DailyCard()),
           // THE SQUAD STRIP — the app's liveness, on the first screen.
           // Every open answers "where is everyone at?" with zero taps.
           const SliverToBoxAdapter(child: SquadStrip()),

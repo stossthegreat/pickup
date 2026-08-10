@@ -16,6 +16,7 @@ import '../../../config/dev_flags.dart';
 import '../../../services/analytics_service.dart';
 import '../../../services/audio_session.dart';
 import '../../../services/backend/battle_service.dart';
+import '../../../services/backend/daily_game_service.dart';
 import '../../../services/backend/rizz_score_service.dart';
 import '../../../services/language_service.dart';
 import '../../../services/creator_mode_store.dart';
@@ -1796,6 +1797,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         BattleService.armedBattleId = null;
         // ignore: discarded_futures
         BattleService.submit(armedBattle, academyTranscript);
+      }
+      // Armed DAILY → this session IS today's one shot. The service
+      // parks the result; the Daily screen reveals it on return.
+      if (DailyGameService.armedDaily) {
+        DailyGameService.armedDaily = false;
+        // ignore: discarded_futures
+        DailyGameService.submit(academyTranscript);
       }
       // Blend the five dimension scores into the running total so The Five
       // CLIMBS over the 60 days instead of snapping to the last session.
