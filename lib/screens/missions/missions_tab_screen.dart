@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/analytics_service.dart';
+import '../../services/backend/catch_up_service.dart';
 import '../../services/backend/squad_broadcast.dart';
 import '../../services/live_events.dart';
 import '../../services/local_store_service.dart';
@@ -16,6 +17,7 @@ import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/daily_card.dart';
+import '../../widgets/academy/live_toast.dart';
 import '../../widgets/academy/squad_strip.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/streak_badge.dart';
@@ -48,6 +50,13 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     super.initState();
     // ignore: discarded_futures
     _load();
+    // WHILE YOU WERE GONE — a returning user never opens to a static
+    // screen. Runs after the first frame so it lands on top of home.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final events = await CatchUpService.collect();
+      if (!mounted || events.isEmpty) return;
+      await CatchUpSheet.show(context, events);
+    });
   }
 
   Future<void> _load() async {
