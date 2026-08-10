@@ -40,14 +40,21 @@ void main() async {
   // anonymous sign-in is fire-and-forget so it never delays first frame
   // — every user gets a server identity with zero friction, and claims
   // it with Apple later once they have a rank worth keeping.
-  await BackendService.init();
-  // ignore: discarded_futures
-  AuthService.ensureSignedIn()
-      // Global squad watcher — a squadmate's move reaches you anywhere
-      // in the app, not only while the Squad Room is open. This is the
-      // difference between an app you inspect and one that talks.
-      // ignore: discarded_futures
-      .then((_) => SquadLiveService.start());
+  //
+  // Gated on kAcademyEnabled: while the social layer is dark the app
+  // makes NO backend calls at all — no Supabase connection, no anonymous
+  // account created, no realtime subscription. A plain build is plain all
+  // the way down, not a social build with the buttons hidden.
+  if (kAcademyEnabled) {
+    await BackendService.init();
+    // ignore: discarded_futures
+    AuthService.ensureSignedIn()
+        // Global squad watcher — a squadmate's move reaches you anywhere
+        // in the app, not only while the Squad Room is open. This is the
+        // difference between an app you inspect and one that talks.
+        // ignore: discarded_futures
+        .then((_) => SquadLiveService.start());
+  }
 
   // Roleplay language — hydrated before any voice session can start so
   // the synchronous cache is always right. English default.
@@ -193,9 +200,13 @@ class _MirrorAppState extends State<MirrorApp> with WidgetsBindingObserver {
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
         routerConfig: appRouter,
-        // Live events land over whatever screen is showing.
-        builder: (context, child) =>
-            LiveToastHost(child: child ?? const SizedBox.shrink()),
+        // Live events land over whatever screen is showing. With the
+        // Academy dark there are no events to land, so the overlay host
+        // isn't mounted at all.
+        builder: (context, child) {
+          final app = child ?? const SizedBox.shrink();
+          return kAcademyEnabled ? LiveToastHost(child: app) : app;
+        },
       ),
     );
   }

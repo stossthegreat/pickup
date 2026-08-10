@@ -81,27 +81,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // toast the tile fires on tap, so the list reads as
               // tall clean rectangles like the reference image.
 
-              // ── Backend check — diagnose 'needs a connection' ─────────
-              _SettingTile(
-                icon: Icons.wifi_tethering_rounded,
-                iconColor: AppColors.measure,
-                title: 'Backend check',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  context.push('/backend-check');
-                },
-              ),
+              // ── Academy-only tiles. Both need a backend account, so
+              //    they're hidden while the social layer is dark and
+              //    there's no Supabase connection to check or claim.
+              if (kAcademyEnabled) ...[
+                // ── Backend check — diagnose 'needs a connection' ───────
+                _SettingTile(
+                  icon: Icons.wifi_tethering_rounded,
+                  iconColor: AppColors.measure,
+                  title: 'Backend check',
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    context.push('/backend-check');
+                  },
+                ),
 
-              // ── Your identity — handle + Apple/Google claim ───────────
-              _SettingTile(
-                icon: Icons.person_rounded,
-                iconColor: AppColors.red,
-                title: 'Your identity',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  context.push('/account');
-                },
-              ),
+                // ── Your identity — handle + Apple/Google claim ─────────
+                _SettingTile(
+                  icon: Icons.person_rounded,
+                  iconColor: AppColors.red,
+                  title: 'Your identity',
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    context.push('/account');
+                  },
+                ),
+              ],
 
               // ── Roleplay language — she speaks yours ──────────────────
               _SettingTile(

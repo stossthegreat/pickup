@@ -81,8 +81,39 @@ const kPaywallDemoUnlock = false;
 /// before shipping, otherwise real users see onboarding on every launch.
 const kForceOnboarding = false;
 
+/// ═══════════════════════════════════════════════════════════════════════
+///  THE ACADEMY — squads, leagues, the Daily, battles, identity/auth
+/// ═══════════════════════════════════════════════════════════════════════
+///
+/// FALSE = the app ships as the PLAIN single-player product: missions,
+/// practice, roleplay, rizz, progress. Nothing social, nothing ranked.
+///
+/// Why it's off: every social surface is empty until there's a population
+/// to fill it. A leaderboard with one name, a squad you can't fill, and a
+/// Daily whose "world average" is your own score all read as a broken app
+/// rather than a young one. So the whole layer stays dark until there are
+/// users to make it true. Per bro: "just plain version for all as well
+/// until we build users up."
+///
+/// NOTHING WAS DELETED. Every screen, service, migration and Edge
+/// Function is still in the repo and still compiles — this flag only
+/// gates the entry points. What it switches off:
+///   · main.dart      — Supabase init, anonymous sign-in, the live squad
+///                      watcher, and the LiveToastHost overlay
+///   · missions tab   — the Daily card, the squad strip, the leaderboard
+///                      and squad masthead buttons, the Fear Button
+///   · settings       — "Backend check" and "Your identity" tiles
+/// The /squad, /daily, /leaderboard, /battles, /fear, /account and
+/// /backend-check routes stay registered but become unreachable, since
+/// nothing links to them any more.
+///
+/// TO TURN IT ALL BACK ON: set this to true. That's the whole job — no
+/// other file needs editing. The Supabase project, the RLS policies and
+/// the deployed Edge Functions are untouched and keep working.
+const kAcademyEnabled = false;
+
 /// Human-readable build tag shown tiny on the paywall so we can instantly
 /// tell which build is actually installed on-device (TestFlight lag has
 /// repeatedly made us debug a stale build). Bump this with every pubspec
 /// build-number bump.
-const kBuildTag = 'b104-billing';
+const kBuildTag = 'b105-plain';
