@@ -101,11 +101,17 @@ const kForceOnboarding = false;
 ///   · main.dart      — Supabase init, anonymous sign-in, the live squad
 ///                      watcher, and the LiveToastHost overlay
 ///   · missions tab   — the Daily card, the squad strip, the leaderboard
-///                      and squad masthead buttons, the Fear Button
+///                      and squad masthead buttons, and the "while you
+///                      were gone" catch-up sheet
 ///   · settings       — "Backend check" and "Your identity" tiles
-/// The /squad, /daily, /leaderboard, /battles, /fear, /account and
+/// The /squad, /daily, /leaderboard, /battles, /account and
 /// /backend-check routes stay registered but become unreachable, since
 /// nothing links to them any more.
+///
+/// DELIBERATELY LEFT ON: the Fear Button (/fear) and the roleplay
+/// language picker. Neither imports the backend and both work perfectly
+/// with a single user, so gating them would only make the plain build
+/// worse. Say the word if you want the Fear Button down too.
 ///
 /// TO TURN IT ALL BACK ON: set this to true. That's the whole job — no
 /// other file needs editing. The Supabase project, the RLS policies and
