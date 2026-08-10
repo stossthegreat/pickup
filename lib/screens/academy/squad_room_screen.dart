@@ -8,9 +8,12 @@ import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
 
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/mission_service.dart';
+import '../../services/backend/squad_live_service.dart';
 import '../../services/backend/squad_service.dart';
+import '../../services/live_events.dart';
 import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_typography.dart';
 import '../../widgets/academy/academy_modal.dart';
 import '../../widgets/academy/game_button.dart';
 
@@ -104,6 +107,9 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     final squad = await SquadService.create(name);
     if (squad == null || !mounted) return;
     await SquadService.postEvent(squad.id, 'joined');
+    // ignore: discarded_futures
+    SquadLiveService.start();
+    LiveEvents.milestone('SQUAD FOUNDED', squad.name);
     _load();
   }
 
@@ -118,6 +124,9 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
       return;
     }
     await SquadService.postEvent(squad.id, 'joined');
+    // ignore: discarded_futures
+    SquadLiveService.start();
+    LiveEvents.milestone('YOU\'RE IN', squad.name);
     _load();
   }
 
@@ -128,6 +137,12 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     HapticFeedback.heavyImpact();
     if (await MissionService.commit(m.id)) {
       await SquadService.postEvent(s.id, 'committed', {'mission': m.title});
+      LiveEvents.fire(const LiveEvent(
+        title: 'Shot called',
+        subtitle: 'Your squad can see it now.',
+        icon: Icons.campaign_rounded,
+        color: AppColors.red,
+      ));
       _load();
     }
   }
@@ -139,6 +154,7 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     HapticFeedback.heavyImpact();
     if (await MissionService.complete(m.id)) {
       await SquadService.postEvent(s.id, 'completed', {'mission': m.title});
+      LiveEvents.xp(100, 'Mission complete');
       if (!mounted) return;
       _celebrate(m.title);
       _load();
@@ -492,20 +508,15 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
 
   Widget _label(String title, String sub) {
     return Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-      Text(title,
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontSize: 13,
-            letterSpacing: 2.2,
-            fontWeight: FontWeight.w900,
-          )),
+      Text(title, style: AppTypography.labelBold.copyWith(fontSize: 10.5)),
       const SizedBox(width: 8),
       Expanded(
         child: Text(sub,
             style: GoogleFonts.inter(
               color: AppColors.textMuted,
               fontSize: 11,
-              fontWeight: FontWeight.w600,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w500,
             )),
       ),
     ]);
@@ -564,26 +575,22 @@ class _NoSquad extends StatelessWidget {
               .scaleXY(begin: 1.0, end: 1.05, duration: 1600.ms),
         ),
         const SizedBox(height: 24),
-        Text('NOBODY\nCHANGES ALONE.',
+        Text('THE SQUAD', textAlign: TextAlign.center,
+            style: AppTypography.label).animate().fadeIn(duration: 300.ms),
+        const SizedBox(height: 8),
+        Text('Nobody changes alone.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 33,
-              height: 1.04,
-              letterSpacing: -1.2,
-              fontWeight: FontWeight.w900,
-            )).animate().fadeIn(duration: 400.ms),
-        const SizedBox(height: 10),
+            style: AppTypography.h1Italic)
+            .animate()
+            .fadeIn(duration: 400.ms),
+        const SizedBox(height: 8),
         Text(
-            'A squad sees your missions. Your streak. Your silence. '
-            'That\'s the point.',
+            'Five men, one week. They see your missions, your streak — '
+            'and your silence. That\'s the point.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-              height: 1.45,
-              fontWeight: FontWeight.w500,
-            )).animate().fadeIn(delay: 120.ms, duration: 400.ms),
+            style: AppTypography.bodySmall)
+            .animate()
+            .fadeIn(delay: 120.ms, duration: 400.ms),
         const SizedBox(height: 30),
         _Field(controller: nameCtrl, hint: 'SQUAD NAME'),
         const SizedBox(height: 12),
