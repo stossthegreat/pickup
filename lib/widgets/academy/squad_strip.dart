@@ -127,52 +127,41 @@ class _SquadStripState extends State<SquadStrip> {
     );
   }
 
-  // ── No squad — the recruiting card ─────────────────────────────────
+  // ── No squad — one quiet line, not a red slab ──────────────────────
   Widget _recruit(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        context.push('/squad');
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface1,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.red.withValues(alpha: 0.45)),
-          boxShadow: const [
-            BoxShadow(color: AppColors.redGlow, blurRadius: 24),
-          ],
-        ),
-        child: Row(children: [
-          const Icon(Icons.shield_outlined, size: 26, color: AppColors.red),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('GET IN A SQUAD',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textPrimary,
-                      fontSize: 14,
-                      letterSpacing: 1.4,
-                      fontWeight: FontWeight.w900,
-                    )),
-                const SizedBox(height: 2),
-                Text('Train alone and you\'ll quit alone. Create one or '
-                    'enter a code.',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      height: 1.35,
-                      fontWeight: FontWeight.w500,
-                    )),
-              ],
-            ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          context.push('/squad');
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
           ),
-          const Icon(Icons.chevron_right_rounded,
-              size: 22, color: AppColors.textTertiary),
-        ]),
+          child: Row(children: [
+            const Icon(Icons.shield_outlined,
+                size: 17, color: AppColors.textTertiary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('Get in a squad — train alone, quit alone.',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textSecondary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  )),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                size: 18, color: AppColors.textTertiary),
+          ]),
+        ),
       ),
     ).animate().fadeIn(duration: 300.ms);
   }
