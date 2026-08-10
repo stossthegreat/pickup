@@ -163,7 +163,7 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                     'Voice calls, texts and scenarios that prepare you '
                     'for real conversations.',
                     style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.red, fontStyle: FontStyle.italic),
+                        color: AppColors.red),
                   ),
                 ],
               ),

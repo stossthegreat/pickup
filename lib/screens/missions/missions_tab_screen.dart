@@ -285,7 +285,6 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
                 child: Center(
                   child: Text('Real reps build real game.',
                       style: AppTypography.bodySmall.copyWith(
-                        fontStyle: FontStyle.italic,
                         color: AppColors.textTertiary,
                       )),
                 ),
@@ -330,10 +329,9 @@ class _TopBar extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 9),
                 child: Text(
                   'Rizz',
-                  style: GoogleFonts.playfairDisplay(
+                  style: GoogleFonts.inter(
                     fontSize: 17,
                     height: 1.0,
-                    fontStyle: FontStyle.italic,
                     fontWeight: FontWeight.w600,
                     letterSpacing: -0.2,
                     color: Colors.white.withValues(alpha: 0.5),

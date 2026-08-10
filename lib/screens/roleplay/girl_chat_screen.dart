@@ -548,7 +548,6 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
                             style: GoogleFonts.inter(
                               color: AppColors.textTertiary,
                               fontSize: 12,
-                              fontStyle: FontStyle.italic,
                               fontWeight: FontWeight.w500,
                             )),
                       ),
@@ -1191,7 +1190,6 @@ class _LucienThinking extends StatelessWidget {
               style: GoogleFonts.inter(
                 color: AppColors.accent,
                 fontSize: 12.5,
-                fontStyle: FontStyle.italic,
                 fontWeight: FontWeight.w600,
               )),
         ],
@@ -1412,7 +1410,7 @@ class _TaskScoreCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text('$overall',
-              style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.inter(
                 color: Colors.white,
                 fontSize: 66,
                 height: 1,

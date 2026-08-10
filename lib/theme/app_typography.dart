@@ -2,34 +2,37 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
-/// Mirrorly typography — editorial. Serif for display (luxury fragrance ad
-/// energy), sans for body (modern, clinical), mono for measurements
-/// (scanner/diagnostic feel).
+/// ImHim typography — one voice. Inter everywhere, tight and heavy for
+/// display, regular for body, mono for measurements.
+///
+/// The italic Playfair serif used to carry every headline in the app.
+/// It now survives in exactly ONE place — the ImHim wordmark in the
+/// masthead (see widgets/common/imhim_wordmark.dart) — because that's
+/// the logo. Everywhere else it read as a different app bolted onto
+/// this one. Display styles keep their names so call sites don't move;
+/// only the letterforms changed.
 abstract final class AppTypography {
-  // ── Editorial display (serif) ────────────────────────────────────────────
-  // Playfair Display — high-contrast serif, sophisticated, reads like
-  // Chanel / Armani / high-fashion editorial.
+  // ── Display (sans, heavy) ────────────────────────────────────────────────
 
-  static TextStyle get displayXL => GoogleFonts.playfairDisplay(
-    fontSize: 64, fontWeight: FontWeight.w700,
-    letterSpacing: -2.5, color: AppColors.textPrimary, height: 1.02,
-    fontStyle: FontStyle.italic,
+  static TextStyle get displayXL => GoogleFonts.inter(
+    fontSize: 60, fontWeight: FontWeight.w900,
+    letterSpacing: -3.0, color: AppColors.textPrimary, height: 1.0,
   );
 
-  static TextStyle get display => GoogleFonts.playfairDisplay(
-    fontSize: 48, fontWeight: FontWeight.w700,
-    letterSpacing: -1.8, color: AppColors.textPrimary, height: 1.06,
+  static TextStyle get display => GoogleFonts.inter(
+    fontSize: 44, fontWeight: FontWeight.w900,
+    letterSpacing: -2.0, color: AppColors.textPrimary, height: 1.04,
   );
 
-  static TextStyle get h1 => GoogleFonts.playfairDisplay(
-    fontSize: 34, fontWeight: FontWeight.w700,
-    letterSpacing: -1.0, color: AppColors.textPrimary, height: 1.1,
+  static TextStyle get h1 => GoogleFonts.inter(
+    fontSize: 32, fontWeight: FontWeight.w900,
+    letterSpacing: -1.1, color: AppColors.textPrimary, height: 1.1,
   );
 
-  static TextStyle get h1Italic => GoogleFonts.playfairDisplay(
-    fontSize: 34, fontWeight: FontWeight.w500,
-    letterSpacing: -0.8, color: AppColors.textPrimary, height: 1.1,
-    fontStyle: FontStyle.italic,
+  /// Kept for call-site compatibility — no longer italic, just lighter.
+  static TextStyle get h1Italic => GoogleFonts.inter(
+    fontSize: 32, fontWeight: FontWeight.w700,
+    letterSpacing: -0.9, color: AppColors.textPrimary, height: 1.1,
   );
 
   // ── Sans (body / UI) — Inter ─────────────────────────────────────────────

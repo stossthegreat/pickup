@@ -105,11 +105,10 @@ class GenderPickScreen extends StatelessWidget {
                   // the upper third of the screen.
                   Text('So you want\nto be him?',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.playfairDisplay(
+                    style: GoogleFonts.inter(
                       color: AppColors.textPrimary,
                       fontSize: 38, height: 1.1,
                       letterSpacing: -0.6,
-                      fontStyle: FontStyle.italic,
                       fontWeight: FontWeight.w800,
                     ))
                     .animate().fadeIn(duration: 460.ms)
@@ -206,11 +205,10 @@ class _Pillar extends StatelessWidget {
             )),
           const SizedBox(height: 8),
           Text(line,
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.inter(
               color: AppColors.textPrimary,
               fontSize: 26, height: 1.2,
               letterSpacing: -0.4,
-              fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w700,
             )),
         ],

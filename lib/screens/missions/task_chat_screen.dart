@@ -562,7 +562,6 @@ class _SendThisCard extends StatelessWidget {
                       fontSize: 14,
                       height: 1.35,
                       fontWeight: FontWeight.w600,
-                      fontStyle: FontStyle.italic,
                     )),
               ),
               const SizedBox(width: 6),

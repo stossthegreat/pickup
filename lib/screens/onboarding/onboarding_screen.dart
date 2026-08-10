@@ -191,7 +191,7 @@ class _PageShell extends StatelessWidget {
           const SizedBox(height: 14),
 
           Text(headlineA,
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 44, height: 1.02,
               letterSpacing: -1.6,
@@ -200,11 +200,10 @@ class _PageShell extends StatelessWidget {
               .slideY(begin: 0.06, end: 0, curve: Curves.easeOutCubic),
 
           Text(headlineB,
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.inter(
               color: AppColors.red,
               fontSize: 44, height: 1.02,
               letterSpacing: -1.6,
-              fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w700,
             )).animate().fadeIn(delay: 200.ms, duration: 420.ms)
               .slideY(begin: 0.06, end: 0, curve: Curves.easeOutCubic),
@@ -404,10 +403,9 @@ class _ProofRow extends StatelessWidget {
             fontSize: 12, letterSpacing: 1.8,
             fontWeight: FontWeight.w700)),
         Text(value,
-          style: GoogleFonts.playfairDisplay(
+          style: GoogleFonts.inter(
             color: Colors.white,
             fontSize: 18, height: 1,
-            fontStyle: FontStyle.italic,
             fontWeight: FontWeight.w600)),
       ],
     );
@@ -481,11 +479,11 @@ class _ScoreCol extends StatelessWidget {
             fontWeight: FontWeight.w800)),
         const SizedBox(height: 10),
         Text('$value',
-          style: GoogleFonts.playfairDisplay(
+          style: GoogleFonts.inter(
             color: tint,
             fontSize: 64, height: 1,
             letterSpacing: -2.2,
-            fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+            fontStyle: FontStyle.normal,
             fontWeight: FontWeight.w700,
             shadows: italic ? [
               Shadow(
@@ -596,10 +594,9 @@ class _MirrorCard extends StatelessWidget {
                   ),
                   TextSpan(
                     text: '124°',
-                    style: GoogleFonts.playfairDisplay(
+                    style: GoogleFonts.inter(
                       color: AppColors.red,
                       fontSize: 15, height: 1,
-                      fontStyle: FontStyle.italic,
                       fontWeight: FontWeight.w700)),
                   TextSpan(
                     text: ' — soft side. A mid-fade with 4cm textured crop, '

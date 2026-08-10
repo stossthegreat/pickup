@@ -8,11 +8,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../services/backend/daily_game_service.dart';
+import '../../services/backend/squad_broadcast.dart';
 import '../../services/backend/tiers.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/game_button.dart';
+import '../../widgets/academy/grade_stamp.dart';
 import '../../widgets/academy/league_crest.dart';
 import '../game/freeflow/free_flow_screen.dart';
 
@@ -139,6 +141,9 @@ class _DailyScreenState extends State<DailyScreen> {
     final s = _s;
     if (s == null || s.attempted) return;
     HapticFeedback.heavyImpact();
+    // Tell the room he's in it before he starts, so bailing is visible.
+    // ignore: discarded_futures
+    SquadBroadcast.dailyStarted(s.scenarioKey);
     DailyGameService.armedDaily = true;
     await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
       builder: (_) => FreeFlowScreen(initialVibeKey: s.scenarioKey),
@@ -843,7 +848,15 @@ class _CeremonySheet extends StatelessWidget {
   }
 }
 
-class _ScoredSheet extends StatelessWidget {
+/// THE RIZZ-OFF RESULT. Not a receipt — a results screen.
+///
+/// Staged in beats, because a result you watch land is worth ten times a
+/// result you're handed: the number climbs with haptic ticks, shrinks
+/// out of the way, the GRADE slams into the middle of the screen with a
+/// shockwave, the screen shakes and flashes on the impact frame, the
+/// verdict prints under it, then the world bar draws your score against
+/// everyone else's and the rank chip lands last.
+class _ScoredSheet extends StatefulWidget {
   final int score, rank, worldAvg;
   final bool beat;
   final GirlBrief girl;
@@ -856,95 +869,276 @@ class _ScoredSheet extends StatelessWidget {
   });
 
   @override
+  State<_ScoredSheet> createState() => _ScoredSheetState();
+}
+
+class _ScoredSheetState extends State<_ScoredSheet>
+    with SingleTickerProviderStateMixin {
+  final _shakeKey = GlobalKey<ImpactShakeState>();
+  bool _burst = false;
+
+  late final AnimationController _flash = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 380),
+  );
+
+  RizzGrade get _grade => RizzGrade.of(widget.score);
+
+  @override
+  void dispose() {
+    _flash.dispose();
+    super.dispose();
+  }
+
+  void _onImpact() {
+    if (!mounted) return;
+    _shakeKey.currentState?.shake();
+    _flash.forward(from: 0);
+    if (widget.beat || widget.score >= 680) setState(() => _burst = true);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final accent = beat ? kNeon : AppColors.red;
+    final grade = _grade;
+    final accent = grade.color;
+    final s = widget;
     return Material(
       color: Colors.transparent,
       child: Stack(children: [
-        if (beat) Positioned.fill(child: Burst(color: kNeon)),
+        if (_burst) Positioned.fill(child: Burst(color: accent)),
         Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text('THE DAILY · ${girl.name.toUpperCase()}',
-                  style: GoogleFonts.inter(
-                    color: girl.accent,
-                    fontSize: 11,
-                    letterSpacing: 3,
-                    fontWeight: FontWeight.w900,
-                  )),
-              const SizedBox(height: 18),
-              CountUp(
-                value: score,
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 88,
-                  height: 1,
-                  letterSpacing: -3,
-                  fontWeight: FontWeight.w900,
-                  shadows: [
-                    Shadow(
-                        color: accent.withValues(alpha: 0.55),
-                        blurRadius: 60)
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: accent.withValues(alpha: 0.6)),
-                ),
-                child: Text('#$rank IN THE WORLD TODAY',
+          child: ImpactShake(
+            key: _shakeKey,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text('THE DAILY · ${s.girl.name.toUpperCase()}',
                     style: GoogleFonts.inter(
-                      color: accent,
-                      fontSize: 13,
-                      letterSpacing: 1.6,
+                      color: s.girl.accent,
+                      fontSize: 11,
+                      letterSpacing: 3,
                       fontWeight: FontWeight.w900,
                     )),
-              ).animate().fadeIn(delay: 900.ms).scale(
-                  begin: const Offset(0.85, 0.85),
-                  end: const Offset(1, 1),
-                  curve: Curves.easeOutBack),
-              const SizedBox(height: 8),
-              Text('World average $worldAvg',
-                  style: GoogleFonts.inter(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  )).animate().fadeIn(delay: 1050.ms),
-              const SizedBox(height: 28),
-              SizedBox(
-                width: 240,
-                child: GameButton(
-                  label: 'SHARE IT',
-                  color: accent,
-                  textColor: beat ? Colors.black : Colors.white,
-                  icon: Icons.ios_share_rounded,
-                  onTap: () => Share.share(
-                      'THE DAILY on ImHim Rizz: $score — #$rank in the world '
-                      'today (avg $worldAvg). One attempt. Same girl for '
-                      'everyone. Your turn.'),
+                const SizedBox(height: 10),
+
+                // ── The number, then the grade on top of it ────────
+                SizedBox(
+                  height: 210,
+                  child: Stack(alignment: Alignment.center, children: [
+                    Positioned(
+                      top: 0,
+                      child: CountUp(
+                        value: s.score,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 88,
+                          height: 1,
+                          letterSpacing: -3,
+                          fontWeight: FontWeight.w900,
+                          shadows: [
+                            Shadow(
+                                color: accent.withValues(alpha: 0.55),
+                                blurRadius: 60)
+                          ],
+                        ),
+                      )
+                          .animate()
+                          .then(delay: 1500.ms)
+                          .scaleXY(
+                              begin: 1,
+                              end: 0.46,
+                              duration: 300.ms,
+                              curve: Curves.easeOutBack)
+                          .moveY(begin: 0, end: -14, duration: 300.ms),
+                    ),
+                    Positioned(
+                      top: 58,
+                      child: GradeStamp(
+                        grade: grade,
+                        delay: const Duration(milliseconds: 1700),
+                        size: 128,
+                        onImpact: _onImpact,
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 2,
+                      child: Text(grade.verdict,
+                              style: GoogleFonts.inter(
+                                color: accent,
+                                fontSize: 13,
+                                letterSpacing: 4.5,
+                                fontWeight: FontWeight.w900,
+                              ))
+                          .animate()
+                          .fadeIn(delay: 2180.ms, duration: 260.ms)
+                          .slideY(begin: 0.6, end: 0, curve: Curves.easeOut),
+                    ),
+                  ]),
                 ),
-              ).animate().fadeIn(delay: 1150.ms),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text('CLOSE',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textTertiary,
-                      fontSize: 12,
-                      letterSpacing: 2,
-                      fontWeight: FontWeight.w800,
-                    )),
-              ).animate().fadeIn(delay: 1250.ms),
-            ]),
+
+                const SizedBox(height: 6),
+                // ── YOU vs THE WORLD — the bar that makes it a sport ─
+                _WorldBar(
+                    score: s.score, worldAvg: s.worldAvg, accent: accent),
+                const SizedBox(height: 14),
+
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: accent.withValues(alpha: 0.6)),
+                    boxShadow: [
+                      BoxShadow(
+                          color: accent.withValues(alpha: 0.3), blurRadius: 18)
+                    ],
+                  ),
+                  child: Text('#${s.rank} IN THE WORLD TODAY',
+                      style: GoogleFonts.inter(
+                        color: accent,
+                        fontSize: 13,
+                        letterSpacing: 1.6,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ).animate().fadeIn(delay: 2700.ms).scale(
+                    begin: const Offset(0.8, 0.8),
+                    end: const Offset(1, 1),
+                    curve: Curves.easeOutBack),
+
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: 240,
+                  child: GameButton(
+                    label: 'SHARE IT',
+                    color: accent,
+                    textColor:
+                        accent.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+                    icon: Icons.ios_share_rounded,
+                    onTap: () => Share.share(
+                        'THE DAILY on ImHim Rizz: ${s.score} — grade '
+                        '${grade.letter}, #${s.rank} in the world today '
+                        '(avg ${s.worldAvg}). One attempt. Same girl for '
+                        'everyone. Your turn.'),
+                  ),
+                ).animate().fadeIn(delay: 2850.ms),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text('CLOSE',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 12,
+                        letterSpacing: 2,
+                        fontWeight: FontWeight.w800,
+                      )),
+                ).animate().fadeIn(delay: 2950.ms),
+              ]),
+            ),
+          ),
+        ),
+
+        // Impact flash — above everything, never eats a tap.
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedBuilder(
+              animation: _flash,
+              builder: (_, __) {
+                if (_flash.value == 0) return const SizedBox.shrink();
+                final a = (1 - Curves.easeOutQuart.transform(_flash.value))
+                    .clamp(0.0, 1.0);
+                return ColoredBox(color: accent.withValues(alpha: a * 0.5));
+              },
+            ),
           ),
         ),
       ]),
     );
+  }
+}
+
+/// Your score against the world average on one track. The marker slides
+/// out to your position after the grade lands, so the comparison is the
+/// last thing you read — and it's the reason to come back tomorrow.
+class _WorldBar extends StatelessWidget {
+  final int score, worldAvg;
+  final Color accent;
+  const _WorldBar(
+      {required this.score, required this.worldAvg, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    final me = (score / 1000).clamp(0.0, 1.0);
+    final avg = (worldAvg / 1000).clamp(0.0, 1.0);
+    final delta = score - worldAvg;
+    return Column(children: [
+      SizedBox(
+        height: 26,
+        child: LayoutBuilder(builder: (_, c) {
+          final w = c.maxWidth;
+          return Stack(children: [
+            Positioned(
+              top: 10,
+              left: 0,
+              right: 0,
+              child: Container(
+                height: 6,
+                decoration: BoxDecoration(
+                  color: AppColors.surface2,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            // Your fill, drawn after the grade lands.
+            Positioned(
+              top: 10,
+              left: 0,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: me),
+                duration: const Duration(milliseconds: 900),
+                curve: Curves.easeOutCubic,
+                builder: (_, v, __) => Container(
+                  height: 6,
+                  width: w * v,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [
+                      accent.withValues(alpha: 0.5),
+                      accent,
+                    ]),
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: [
+                      BoxShadow(
+                          color: accent.withValues(alpha: 0.55),
+                          blurRadius: 12)
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // The world's mark — the thing to beat.
+            Positioned(
+              left: (w * avg - 1).clamp(0.0, w - 2),
+              top: 3,
+              child: Container(width: 2, height: 20, color: Colors.white54),
+            ),
+          ]);
+        }),
+      ),
+      const SizedBox(height: 5),
+      Text(
+        delta >= 0
+            ? '+$delta ABOVE THE WORLD'
+            : '$delta BEHIND THE WORLD',
+        style: GoogleFonts.inter(
+          color: delta >= 0 ? accent : AppColors.textTertiary,
+          fontSize: 10,
+          letterSpacing: 1.8,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    ])
+        .animate()
+        .fadeIn(delay: 2400.ms, duration: 300.ms)
+        .slideY(begin: 0.3, end: 0, curve: Curves.easeOut);
   }
 }

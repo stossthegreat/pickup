@@ -8,6 +8,7 @@ import '../../services/backend/tiers.dart';
 import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/game_button.dart';
+import '../../widgets/academy/grade_stamp.dart';
 import '../../widgets/academy/league_crest.dart';
 
 /// Everything the reveal needs, handed over via route extra.
@@ -38,25 +39,40 @@ class ScoreRevealScreen extends StatefulWidget {
   State<ScoreRevealScreen> createState() => _ScoreRevealScreenState();
 }
 
-class _ScoreRevealScreenState extends State<ScoreRevealScreen> {
+class _ScoreRevealScreenState extends State<ScoreRevealScreen>
+    with SingleTickerProviderStateMixin {
   int _lastTick = 0;
   bool _celebrated = false;
+  final _shakeKey = GlobalKey<ImpactShakeState>();
+
+  /// White-out on the frame the grade lands. One frame of pure light is
+  /// what sells an impact — every fighting game does it.
+  late final AnimationController _flash = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 380),
+  );
 
   ScoreRevealPayload get p => widget.payload;
+
+  RizzGrade get _grade => RizzGrade.of(p.score);
 
   /// A gain in rating is the honest "that went well" signal.
   bool get _good => p.eloDelta >= 0;
 
   @override
-  void initState() {
-    super.initState();
-    // Fire the celebration once the number has finished climbing.
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (mounted && _good) {
-        HapticFeedback.heavyImpact();
-        setState(() => _celebrated = true);
-      }
-    });
+  void dispose() {
+    _flash.dispose();
+    super.dispose();
+  }
+
+  /// The grade hit the screen: shake, flash, confetti if it earned it.
+  void _onImpact() {
+    if (!mounted) return;
+    _shakeKey.currentState?.shake();
+    _flash.forward(from: 0);
+    HapticFeedback.heavyImpact();
+    // A win throws confetti; anything below a B just takes the hit.
+    if (_good || p.score >= 680) setState(() => _celebrated = true);
   }
 
   void _share() {
@@ -75,7 +91,10 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen> {
   Widget build(BuildContext context) {
     final tier = tierFor(p.newRating);
     final next = nextTier(p.newRating);
-    final accent = _good ? kNeon : AppColors.red;
+    final grade = _grade;
+    // The GRADE drives the palette now, not the ELO sign — an S-rank
+    // that happens to lose a point of rating should still read gold.
+    final accent = grade.color;
 
     return Scaffold(
       backgroundColor: AppColors.base,
@@ -97,9 +116,11 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen> {
             ),
           ),
         ),
-        if (_celebrated) Positioned.fill(child: Burst(color: kNeon)),
+        if (_celebrated) Positioned.fill(child: Burst(color: grade.color)),
         SafeArea(
-          child: Padding(
+          child: ImpactShake(
+            key: _shakeKey,
+            child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 6, 24, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -124,11 +145,13 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen> {
                       fontWeight: FontWeight.w700,
                     )).animate().fadeIn(delay: 90.ms, duration: 260.ms),
 
-                // ── The number ────────────────────────────────────
+                // ── The number climbs, then the GRADE lands on it ──
                 Expanded(
                   flex: 5,
-                  child: Center(
-                    child: TweenAnimationBuilder<double>(
+                  child: Stack(alignment: Alignment.center, children: [
+                    // Number rides up, then slides out of the way so the
+                    // letter owns the centre of the screen.
+                    TweenAnimationBuilder<double>(
                       tween: Tween(begin: 0, end: p.score.toDouble()),
                       duration: const Duration(milliseconds: 1400),
                       curve: Curves.easeOutQuart,
@@ -155,8 +178,43 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen> {
                           ),
                         );
                       },
+                    )
+                        .animate()
+                        .fadeIn(duration: 200.ms)
+                        // Clears the middle for the stamp on impact.
+                        .then(delay: 1700.ms)
+                        .moveY(
+                            begin: 0,
+                            end: -74,
+                            duration: 320.ms,
+                            curve: Curves.easeOutBack)
+                        .scaleXY(begin: 1, end: 0.44, duration: 320.ms),
+
+                    // THE GRADE.
+                    Padding(
+                      padding: const EdgeInsets.only(top: 46),
+                      child: GradeStamp(
+                        grade: grade,
+                        delay: const Duration(milliseconds: 1900),
+                        onImpact: _onImpact,
+                      ),
                     ),
-                  ),
+
+                    // The verdict, under the letter.
+                    Positioned(
+                      bottom: 4,
+                      child: Text(grade.verdict,
+                              style: GoogleFonts.inter(
+                                color: grade.color,
+                                fontSize: 13,
+                                letterSpacing: 4.5,
+                                fontWeight: FontWeight.w900,
+                              ))
+                          .animate()
+                          .fadeIn(delay: 2380.ms, duration: 260.ms)
+                          .slideY(begin: 0.5, end: 0, curve: Curves.easeOut),
+                    ),
+                  ]),
                 ),
 
                 // ── Rubric bars — poured in one by one ────────────
@@ -165,7 +223,7 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _RubricBar(label: entry.key, value: entry.value)
                         .animate()
-                        .fadeIn(delay: (1250 + i * 130).ms, duration: 300.ms)
+                        .fadeIn(delay: (2520 + i * 120).ms, duration: 300.ms)
                         .slideX(begin: 0.08, end: 0, curve: Curves.easeOut),
                   ),
 
@@ -236,7 +294,7 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen> {
                       ),
                     )
                         .animate()
-                        .fadeIn(delay: 1950.ms)
+                        .fadeIn(delay: 3220.ms)
                         .scale(
                             begin: const Offset(0.6, 0.6),
                             end: const Offset(1, 1),
@@ -255,7 +313,7 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen> {
                           )),
                     ),
                   ]),
-                ).animate().fadeIn(delay: 1850.ms, duration: 340.ms),
+                ).animate().fadeIn(delay: 3120.ms, duration: 340.ms),
 
                 const SizedBox(height: 16),
 
@@ -278,7 +336,7 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen> {
                       onTap: () => context.pop('rematch'),
                     ),
                   ),
-                ]).animate().fadeIn(delay: 2150.ms, duration: 320.ms),
+                ]).animate().fadeIn(delay: 3360.ms, duration: 320.ms),
                 const SizedBox(height: 4),
                 TextButton(
                   onPressed: () => context.pop(),
@@ -289,8 +347,26 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen> {
                         letterSpacing: 2,
                         fontWeight: FontWeight.w800,
                       )),
-                ).animate().fadeIn(delay: 2300.ms),
+                ).animate().fadeIn(delay: 3480.ms),
               ],
+            ),
+            ),
+          ),
+        ),
+
+        // ── IMPACT FLASH — sits above everything, ignores taps ──────
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedBuilder(
+              animation: _flash,
+              builder: (_, __) {
+                if (_flash.value == 0) return const SizedBox.shrink();
+                // Instant white-out, fast fall-off.
+                final a = (1 - Curves.easeOutQuart.transform(_flash.value))
+                    .clamp(0.0, 1.0);
+                return ColoredBox(
+                    color: grade.color.withValues(alpha: a * 0.5));
+              },
             ),
           ),
         ),

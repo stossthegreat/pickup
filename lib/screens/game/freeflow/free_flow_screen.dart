@@ -2087,7 +2087,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                           color: AppColors.textPrimary,
                           fontSize: 34,
                           letterSpacing: -1.2,
-                          fontStyle: FontStyle.italic,
                           fontWeight: FontWeight.w900,
                           height: 1.0,
                         )),
@@ -2096,7 +2095,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                         style: AppTypography.bodySmall.copyWith(
                           color: AppColors.accent,
                           fontSize: 14,
-                          fontStyle: FontStyle.italic,
                         )),
                   ],
                 ),
@@ -2394,7 +2392,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                               color: Colors.white,
                               fontSize: 18,
                               height: 1.5,
-                              fontStyle: FontStyle.italic,
                             ))
                       else if (_herCaption.isNotEmpty)
                         Text(_herCaption,
@@ -2403,7 +2400,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                               color: Colors.white,
                               fontSize: 19,
                               height: 1.45,
-                              fontStyle: FontStyle.italic,
                             )),
                       if (_youCaption.isNotEmpty) ...[
                         const SizedBox(height: 14),
@@ -2717,7 +2713,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                         color: color,
                         fontSize: 130,
                         height: 1.0,
-                        fontStyle: FontStyle.italic,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -5,
                       )),
@@ -2741,7 +2736,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                       color: Colors.white,
                       fontSize: 20,
                       height: 1.45,
-                      fontStyle: FontStyle.italic,
                     )),
               const SizedBox(height: 8),
               Text('— YOUR COACH',
@@ -2785,7 +2779,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                             color: AppColors.textPrimary,
                             fontSize: 14,
                             height: 1.4,
-                            fontStyle: FontStyle.italic,
                           )),
                     ],
                   ),
@@ -2952,7 +2945,6 @@ class _VibeCard extends StatelessWidget {
                           color: AppColors.accent,
                           fontSize: 13,
                           height: 1.35,
-                          fontStyle: FontStyle.italic,
                         )),
                   ],
                 ),
@@ -3432,11 +3424,10 @@ class _LucienUpsellSheet extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text('Tap in your coach.\nMaster every reply.',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.playfairDisplay(
+                    style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 30, height: 1.15,
                       letterSpacing: -0.5,
-                      fontStyle: FontStyle.italic,
                       fontWeight: FontWeight.w800,
                     )),
                   const SizedBox(height: 10),
@@ -3685,11 +3676,10 @@ class _FirstTimeBubble extends StatelessWidget {
           Text(
             'Live AI. Real pressure.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 24, height: 1.1,
               letterSpacing: -0.6,
-              fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -3807,11 +3797,10 @@ class _LucienNudgeBubble extends StatelessWidget {
               children: [
                 Text('Tap the master.',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.playfairDisplay(
+                  style: GoogleFonts.inter(
                     color: Colors.white,
                     fontSize: 22, height: 1.1,
                     letterSpacing: -0.4,
-                    fontStyle: FontStyle.italic,
                     fontWeight: FontWeight.w800,
                   ),
                 ),

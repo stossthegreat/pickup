@@ -37,8 +37,10 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
   List<SquadMember> _roster = const [];
   List<WeekMark> _marks = const [];
   List<SquadEvent> _pulse = const [];
-  Mission? _mission;
-  String? _missionState; // null | committed | completed
+  List<Mission> _board = const [];
+  Map<String, String> _myStates = const {}; // missionId → committed|completed
+  Map<String, MissionPulse> _squadStates = const {};
+  List<DailyMark> _daily = const [];
   RealtimeChannel? _pulseChannel;
   RealtimeChannel? _rosterChannel;
 
@@ -75,11 +77,13 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     final results = await Future.wait([
       SquadService.weekMarks(ids),
       SquadService.pulse(squad.id),
-      MissionService.todayMission(),
+      MissionService.todayBoard(),
+      SquadService.missionPulseToday(ids),
+      SquadService.dailyToday(ids, squadId: squad.id),
     ]);
-    final mission = results[2] as Mission?;
-    final state =
-        mission == null ? null : await MissionService.todayState(mission.id);
+    final board = results[2] as List<Mission>;
+    final myStates =
+        await MissionService.myStatesToday([for (final m in board) m.id]);
     if (!mounted) return;
 
     _pulseChannel ??= SquadService.watchPulse(squad.id, _refreshSoft);
@@ -90,8 +94,10 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
       _roster = roster;
       _marks = results[0] as List<WeekMark>;
       _pulse = results[1] as List<SquadEvent>;
-      _mission = mission;
-      _missionState = state;
+      _board = board;
+      _squadStates = results[3] as Map<String, MissionPulse>;
+      _daily = results[4] as List<DailyMark>;
+      _myStates = myStates;
       _loading = false;
     });
   }
@@ -134,10 +140,9 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     _load();
   }
 
-  Future<void> _commit() async {
-    final m = _mission;
+  Future<void> _commit(Mission m) async {
     final s = _squad;
-    if (m == null || s == null) return;
+    if (s == null) return;
     HapticFeedback.heavyImpact();
     if (await MissionService.commit(m.id)) {
       await SquadService.postEvent(s.id, 'committed', {'mission': m.title});
@@ -151,10 +156,9 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     }
   }
 
-  Future<void> _complete() async {
-    final m = _mission;
+  Future<void> _complete(Mission m) async {
     final s = _squad;
-    if (m == null || s == null) return;
+    if (s == null) return;
     HapticFeedback.heavyImpact();
     if (await MissionService.complete(m.id)) {
       await SquadService.postEvent(s.id, 'completed', {'mission': m.title});
@@ -163,6 +167,18 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
       _celebrate(m.title);
       _load();
     }
+  }
+
+  /// Tap the code = it's on the clipboard. Sharing is a second, separate
+  /// action — most invites get read out or pasted into a group chat, and
+  /// a share sheet is the wrong tool for both.
+  void _copyCode() {
+    final s = _squad;
+    if (s == null) return;
+    HapticFeedback.mediumImpact();
+    // ignore: discarded_futures
+    Clipboard.setData(ClipboardData(text: s.inviteCode));
+    _snack('Code ${s.inviteCode} copied — send it to your boys.');
   }
 
   /// Full-screen moment with confetti — a filled square is a real win.
@@ -329,15 +345,31 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
           _WeekBoard(roster: _roster, marks: _marks),
           const SizedBox(height: 22),
 
-          // ── CALL YOUR SHOT ────────────────────────────────────────
-          _label("TODAY'S MISSION", 'Call it in front of them.'),
+          // ── THE AI RUN — did they get to the end? ─────────────────
+          _label("TODAY'S AI RUN", 'Who went the distance.'),
           const SizedBox(height: 12),
-          _MissionCard(
-            mission: _mission,
-            state: _missionState,
-            onCommit: _commit,
-            onComplete: _complete,
-          ),
+          _DailyRunCard(roster: _roster, marks: _daily),
+          const SizedBox(height: 22),
+
+          // ── CALL YOUR SHOT — the whole slate ──────────────────────
+          _label("TODAY'S MISSIONS", 'Pick your lane. They see it.'),
+          const SizedBox(height: 12),
+          if (_board.isEmpty)
+            const _EmptyBoard()
+          else
+            for (final (i, m) in _board.indexed) ...[
+              _MissionCard(
+                mission: m,
+                state: _myStates[m.id],
+                pulse: _squadStates[m.id],
+                squadSize: _roster.length,
+                roster: _roster,
+                index: i,
+                onCommit: () => _commit(m),
+                onComplete: () => _complete(m),
+              ),
+              if (m != _board.last) const SizedBox(height: 10),
+            ],
           const SizedBox(height: 22),
 
           // ── THE PULSE ─────────────────────────────────────────────
@@ -487,30 +519,54 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        // Invite code — big, tappable, the growth loop.
-        GestureDetector(
-          onTap: _shareInvite,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: AppColors.red.withValues(alpha: 0.45)),
-            ),
-            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const Icon(Icons.ios_share_rounded,
-                  size: 15, color: AppColors.red),
-              const SizedBox(width: 10),
-              Text(squad.inviteCode,
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 19,
-                    letterSpacing: 7,
-                    fontWeight: FontWeight.w900,
-                  )),
-            ]),
+        // ── THE INVITE CODE — the growth loop, spelled out ──────────
+        // It used to be a bare 6-letter chip that only opened a share
+        // sheet, so it read as decoration and nobody knew it was THE
+        // code. Now it says what it is, copies on tap, and shares from
+        // its own button.
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.38),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.red.withValues(alpha: 0.45)),
           ),
+          child: Row(children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: _copyCode,
+                behavior: HitTestBehavior.opaque,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('SQUAD CODE — TAP TO COPY',
+                        style: GoogleFonts.inter(
+                          color: AppColors.textMuted,
+                          fontSize: 8.5,
+                          letterSpacing: 1.6,
+                          fontWeight: FontWeight.w900,
+                        )),
+                    const SizedBox(height: 3),
+                    Text(squad.inviteCode,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 22,
+                          height: 1.1,
+                          letterSpacing: 7,
+                          fontWeight: FontWeight.w900,
+                        )),
+                  ],
+                ),
+              ),
+            ),
+            _CodeAction(
+                icon: Icons.copy_rounded, label: 'COPY', onTap: _copyCode),
+            const SizedBox(width: 6),
+            _CodeAction(
+                icon: Icons.ios_share_rounded,
+                label: 'SEND',
+                onTap: _shareInvite),
+          ]),
         ),
       ]),
     ).animate().fadeIn(duration: 340.ms);
@@ -899,30 +955,284 @@ class _WeekBoard extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  MISSION CARD
+//  CODE ACTIONS
 // ══════════════════════════════════════════════════════════════════════
 
-class _MissionCard extends StatelessWidget {
-  final Mission? mission;
-  final String? state;
-  final VoidCallback onCommit;
-  final VoidCallback onComplete;
-  const _MissionCard(
-      {required this.mission,
-      required this.state,
-      required this.onCommit,
-      required this.onComplete});
+class _CodeAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _CodeAction(
+      {required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final m = mission;
-    final committed = state == 'committed';
-    final completed = state == 'completed';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 54,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.red.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.red.withValues(alpha: 0.45)),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 15, color: AppColors.red),
+            const SizedBox(height: 3),
+            Text(label,
+                style: GoogleFonts.inter(
+                  color: AppColors.red,
+                  fontSize: 8,
+                  letterSpacing: 1.1,
+                  fontWeight: FontWeight.w900,
+                )),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  THE AI RUN — the voice Daily, seen by the squad
+// ══════════════════════════════════════════════════════════════════════
+
+/// A real-life mission is binary. The AI run isn't — the interesting
+/// number is how many opened it versus how many stayed in it to the
+/// end, because bailing at line two is the exact thing the squad is
+/// meant to make expensive.
+class _DailyRunCard extends StatelessWidget {
+  final List<SquadMember> roster;
+  final List<DailyMark> marks;
+  const _DailyRunCard({required this.roster, required this.marks});
+
+  @override
+  Widget build(BuildContext context) {
+    final finished = marks.where((m) => m.finished).toList();
+    final bailed = marks.where((m) => !m.finished).toList();
+    final untouched = roster.length - marks.length;
+    final best = finished.isEmpty
+        ? null
+        : finished.reduce((a, b) => (a.score ?? 0) >= (b.score ?? 0) ? a : b);
+
+    String nameOf(String userId) {
+      for (final m in roster) {
+        if (m.userId == userId) {
+          return m.userId == AuthService.userId ? 'YOU' : (m.handle ?? 'ANON');
+        }
+      }
+      return 'ANON';
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: kNeon.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.graphic_eq_rounded, size: 16, color: kNeon),
+          const SizedBox(width: 8),
+          Text('VOICE RIZZ-OFF',
+              style: GoogleFonts.inter(
+                color: kNeon,
+                fontSize: 11,
+                letterSpacing: 2,
+                fontWeight: FontWeight.w900,
+              )),
+          const Spacer(),
+          Text('${finished.length}/${roster.length} FINISHED',
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 10.5,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w900,
+              )),
+        ]),
+        const SizedBox(height: 12),
+        // Three states, one row: went the distance / walked / no-show.
+        Row(children: [
+          for (final f in finished) ...[
+            _RunPip(
+                label: nameOf(f.userId),
+                value: '${f.score ?? 0}',
+                color: kNeon,
+                icon: Icons.check_rounded),
+            const SizedBox(width: 8),
+          ],
+          for (final b in bailed) ...[
+            _RunPip(
+                label: nameOf(b.userId),
+                value: 'BAILED',
+                color: AppColors.red,
+                icon: Icons.close_rounded),
+            const SizedBox(width: 8),
+          ],
+          if (untouched > 0)
+            _RunPip(
+                label: '$untouched',
+                value: 'NO-SHOW',
+                color: AppColors.textMuted,
+                icon: Icons.remove_rounded),
+        ]),
+        if (best != null) ...[
+          const SizedBox(height: 12),
+          Container(height: 1, color: AppColors.divider),
+          const SizedBox(height: 10),
+          Row(children: [
+            const Icon(Icons.emoji_events_rounded, size: 14, color: kNeon),
+            const SizedBox(width: 8),
+            Text('${nameOf(best.userId)} leads the squad — ${best.score}',
+                style: GoogleFonts.inter(
+                  color: AppColors.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                )),
+          ]),
+        ],
+        if (marks.isEmpty) ...[
+          const SizedBox(height: 4),
+          Text('Nobody has taken today\'s run. Be the first name on it.',
+              style: GoogleFonts.inter(
+                color: AppColors.textTertiary,
+                fontSize: 12,
+                height: 1.45,
+                fontWeight: FontWeight.w500,
+              )),
+        ],
+      ]),
+    ).animate().fadeIn(duration: 340.ms);
+  }
+}
+
+class _RunPip extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  final IconData icon;
+  const _RunPip(
+      {required this.label,
+      required this.value,
+      required this.color,
+      required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withValues(alpha: 0.14),
+          border: Border.all(color: color.withValues(alpha: 0.7), width: 1.6),
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, size: 17, color: color),
+      ),
+      const SizedBox(height: 4),
+      SizedBox(
+        width: 48,
+        child: Text(label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              color: AppColors.textSecondary,
+              fontSize: 8.5,
+              fontWeight: FontWeight.w900,
+            )),
+      ),
+      Text(value,
+          style: GoogleFonts.inter(
+            color: color,
+            fontSize: 9,
+            fontWeight: FontWeight.w900,
+          )),
+    ]);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  MISSION CARD — one of five, with the squad's count on it
+// ══════════════════════════════════════════════════════════════════════
+
+class _EmptyBoard extends StatelessWidget {
+  const _EmptyBoard();
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.surface1,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Text(
+          'Board clear — you\'ve run every mission in the catalog. The '
+          'next tier drops with the update.',
+          style: GoogleFonts.inter(
+            color: AppColors.textTertiary,
+            fontSize: 13,
+            height: 1.5,
+            fontWeight: FontWeight.w500,
+          )),
+    );
+  }
+}
+
+class _MissionCard extends StatefulWidget {
+  final Mission mission;
+  final String? state;
+  final MissionPulse? pulse;
+  final int squadSize;
+  final List<SquadMember> roster;
+  final int index;
+  final VoidCallback onCommit;
+  final VoidCallback onComplete;
+  const _MissionCard({
+    required this.mission,
+    required this.state,
+    required this.pulse,
+    required this.squadSize,
+    required this.roster,
+    required this.index,
+    required this.onCommit,
+    required this.onComplete,
+  });
+
+  @override
+  State<_MissionCard> createState() => _MissionCardState();
+}
+
+class _MissionCardState extends State<_MissionCard> {
+  /// Five open cards would be a wall of text. Collapsed by default, and
+  /// whatever you've already committed to opens itself.
+  late bool _open = widget.state != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.mission;
+    final committed = widget.state == 'committed';
+    final completed = widget.state == 'completed';
+    final doneCount = widget.pulse?.completed.length ?? 0;
+    final onIt = widget.pulse?.committed.length ?? 0;
+    final accent = completed
+        ? kNeon
+        : committed
+            ? AppColors.red
+            : AppColors.textTertiary;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
             color: completed
                 ? kNeon.withValues(alpha: 0.5)
@@ -930,93 +1240,210 @@ class _MissionCard extends StatelessWidget {
                     ? AppColors.red.withValues(alpha: 0.55)
                     : Colors.white.withValues(alpha: 0.06)),
         boxShadow: committed
-            ? const [BoxShadow(color: AppColors.redGlow, blurRadius: 22)]
+            ? const [BoxShadow(color: AppColors.redGlow, blurRadius: 18)]
             : null,
       ),
-      child: m == null
-          ? Text(
-              'The mission engine is arming. First drop lands with the '
-              'next update.',
-              style: GoogleFonts.inter(
-                color: AppColors.textTertiary,
-                fontSize: 13,
-                height: 1.5,
-                fontWeight: FontWeight.w500,
-              ))
-          : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 9, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.red.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                        color: AppColors.red.withValues(alpha: 0.5)),
-                  ),
-                  child: Text('TIER ${m.tier}',
-                      style: GoogleFonts.inter(
-                        color: AppColors.red,
-                        fontSize: 9,
-                        letterSpacing: 1.6,
-                        fontWeight: FontWeight.w900,
-                      )),
+      child: Column(children: [
+        // ── Header row — always visible, tap to open ──────────────
+        InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() => _open = !_open);
+          },
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
+            child: Row(children: [
+              // Tier disc doubles as the completed check.
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accent.withValues(alpha: 0.15),
+                  border: Border.all(
+                      color: accent.withValues(alpha: 0.7), width: 1.5),
                 ),
-                const Spacer(),
+                alignment: Alignment.center,
+                child: completed
+                    ? const Icon(Icons.check_rounded, size: 16, color: kNeon)
+                    : Text('${m.tier}',
+                        style: GoogleFonts.inter(
+                          color: accent,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        )),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(m.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 14.5,
+                          height: 1.15,
+                          letterSpacing: -0.2,
+                          fontWeight: FontWeight.w900,
+                        )),
+                    const SizedBox(height: 3),
+                    // THE SQUAD NUMBER — the whole point of five cards.
+                    Row(children: [
+                      Text('$doneCount/${widget.squadSize} SQUAD DONE',
+                          style: GoogleFonts.inter(
+                            color: doneCount > 0
+                                ? kNeon
+                                : AppColors.textMuted,
+                            fontSize: 9.5,
+                            letterSpacing: 1.1,
+                            fontWeight: FontWeight.w900,
+                          )),
+                      if (onIt > 0) ...[
+                        const SizedBox(width: 8),
+                        Text('· $onIt ON IT',
+                            style: GoogleFonts.inter(
+                              color: AppColors.red,
+                              fontSize: 9.5,
+                              letterSpacing: 1.1,
+                              fontWeight: FontWeight.w900,
+                            )),
+                      ],
+                    ]),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _SquadDots(
+                  roster: widget.roster,
+                  pulse: widget.pulse,
+                  size: widget.squadSize),
+              const SizedBox(width: 6),
+              Icon(
+                  _open
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 20,
+                  color: AppColors.textTertiary),
+            ]),
+          ),
+        ),
+
+        // ── Body — the brief and the action ───────────────────────
+        AnimatedCrossFade(
+          firstChild: const SizedBox(width: double.infinity),
+          secondChild: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(height: 1, color: AppColors.divider),
+                const SizedBox(height: 12),
+                Text(m.prompt,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                      height: 1.5,
+                      fontWeight: FontWeight.w500,
+                    )),
+                const SizedBox(height: 14),
                 if (completed)
-                  const Icon(Icons.check_circle_rounded,
-                      size: 20, color: kNeon),
-              ]),
-              const SizedBox(height: 12),
-              Text(m.title,
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 22,
-                    height: 1.1,
-                    letterSpacing: -0.4,
-                    fontWeight: FontWeight.w900,
-                  )),
-              const SizedBox(height: 8),
-              Text(m.prompt,
-                  style: GoogleFonts.inter(
-                    color: AppColors.textSecondary,
-                    fontSize: 13.5,
-                    height: 1.5,
-                    fontWeight: FontWeight.w500,
-                  )),
-              const SizedBox(height: 18),
-              if (completed)
-                Row(children: [
                   Text('DONE. SQUARE FILLED.',
                       style: GoogleFonts.inter(
                         color: kNeon,
-                        fontSize: 12,
+                        fontSize: 11.5,
                         letterSpacing: 2,
                         fontWeight: FontWeight.w900,
+                      ))
+                else if (committed) ...[
+                  GameButton(
+                      label: 'MARK IT DONE',
+                      height: 50,
+                      onTap: widget.onComplete),
+                  const SizedBox(height: 7),
+                  Text('You called it. They\'re watching for the check.',
+                      style: GoogleFonts.inter(
+                        color: AppColors.red,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
                       )),
-                ])
-              else if (committed) ...[
-                GameButton(label: 'MARK IT DONE', onTap: onComplete),
-                const SizedBox(height: 8),
-                Text('You called it. They\'re watching for the check.',
-                    style: GoogleFonts.inter(
-                      color: AppColors.red,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                    )),
-              ] else ...[
-                GameButton(
-                    label: 'CALL YOUR SHOT', onTap: onCommit, pulse: true),
-                const SizedBox(height: 8),
-                Text('Committing posts it to the squad. No hiding after.',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textMuted,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                    )),
+                ] else ...[
+                  GameButton(
+                    label: 'CALL YOUR SHOT',
+                    height: 50,
+                    onTap: widget.onCommit,
+                    pulse: widget.index == 0,
+                  ),
+                  const SizedBox(height: 7),
+                  Text('Committing posts it to the squad. No hiding after.',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      )),
+                ],
               ],
-            ]),
-    ).animate().fadeIn(duration: 340.ms);
+            ),
+          ),
+          crossFadeState:
+              _open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 220),
+          sizeCurve: Curves.easeOutCubic,
+        ),
+      ]),
+    )
+        .animate()
+        .fadeIn(delay: (widget.index * 60).ms, duration: 300.ms)
+        .slideY(begin: 0.06, end: 0, curve: Curves.easeOut);
+  }
+}
+
+/// One dot per squadmate: filled = done, ringed = on it, hollow = not
+/// yet. Reads at a glance without a single word.
+class _SquadDots extends StatelessWidget {
+  final List<SquadMember> roster;
+  final MissionPulse? pulse;
+  final int size;
+  const _SquadDots(
+      {required this.roster, required this.pulse, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      for (final m in roster.take(6))
+        Padding(
+          padding: const EdgeInsets.only(left: 3),
+          child: Builder(builder: (_) {
+            final done = pulse?.completed.contains(m.userId) ?? false;
+            final on = pulse?.committed.contains(m.userId) ?? false;
+            return Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: done ? kNeon : Colors.transparent,
+                border: Border.all(
+                  color: done
+                      ? kNeon
+                      : on
+                          ? AppColors.red
+                          : Colors.white.withValues(alpha: 0.18),
+                  width: 1.6,
+                ),
+                boxShadow: done
+                    ? [
+                        BoxShadow(
+                            color: kNeon.withValues(alpha: 0.6),
+                            blurRadius: 7)
+                      ]
+                    : null,
+              ),
+            );
+          }),
+        ),
+    ]);
   }
 }
 

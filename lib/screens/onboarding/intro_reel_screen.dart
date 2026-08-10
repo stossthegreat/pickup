@@ -275,12 +275,12 @@ class _Word extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(text,
       textAlign: TextAlign.center,
-      style: GoogleFonts.playfairDisplay(
+      style: GoogleFonts.inter(
         color: color,
         fontSize: size,
         height: 1.05,
         letterSpacing: -1.2,
-        fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+        fontStyle: FontStyle.normal,
         fontWeight: weight,
       ),
     )

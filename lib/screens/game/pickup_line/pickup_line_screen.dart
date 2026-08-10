@@ -241,21 +241,19 @@ class _PickupLineScreenState extends State<PickupLineScreen> {
                                 // as a quote without competing with the
                                 // copy itself.
                                 Text('"',
-                                  style: GoogleFonts.playfairDisplay(
+                                  style: GoogleFonts.inter(
                                     color: AppColors.red.withValues(
                                         alpha: 0.55),
                                     fontSize: 80, height: 0.5,
-                                    fontStyle: FontStyle.italic,
                                     fontWeight: FontWeight.w900,
                                   )),
                                 const SizedBox(height: 8),
                                 Text(line.text,
                                   textAlign: TextAlign.center,
-                                  style: GoogleFonts.playfairDisplay(
+                                  style: GoogleFonts.inter(
                                     color: Colors.white,
                                     fontSize: 30, height: 1.25,
                                     letterSpacing: -0.6,
-                                    fontStyle: FontStyle.italic,
                                     fontWeight: FontWeight.w700,
                                   )),
                                 const SizedBox(height: 26),

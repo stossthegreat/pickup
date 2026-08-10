@@ -218,6 +218,45 @@ class _SquadStripState extends State<SquadStrip> {
                   fontWeight: FontWeight.w900,
                 )),
             const Spacer(),
+            // The code, right on home — tap to copy. Growth only happens
+            // if the invite is one tap from the screen they open most.
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                // ignore: discarded_futures
+                Clipboard.setData(ClipboardData(text: _squad!.inviteCode));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Code ${_squad!.inviteCode} copied',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w600)),
+                  backgroundColor: AppColors.toastBg,
+                  behavior: SnackBarBehavior.floating,
+                ));
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(7),
+                  border:
+                      Border.all(color: AppColors.red.withValues(alpha: 0.4)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.copy_rounded,
+                      size: 10, color: AppColors.red),
+                  const SizedBox(width: 5),
+                  Text(_squad!.inviteCode,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 10.5,
+                        letterSpacing: 2,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ]),
+              ),
+            ),
             Text('${done * 100} PTS',
                 style: GoogleFonts.inter(
                   color: AppColors.red,

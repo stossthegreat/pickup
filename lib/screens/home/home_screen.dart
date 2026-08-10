@@ -387,7 +387,6 @@ class _ScanHubTab extends StatelessWidget {
                 style: GoogleFonts.inter(
                   color: AppColors.textSecondary,
                   fontSize: 15, height: 1.35,
-                  fontStyle: FontStyle.italic,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -650,11 +649,10 @@ class _HopeCard extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.inter(
               color: AppColors.red,
               fontSize: 14, height: 1.15,
               letterSpacing: -0.2,
-              fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w800,
             )),
         ],
@@ -736,11 +734,10 @@ class _HopeCard extends StatelessWidget {
         Transform.translate(
           offset: Offset(0, isNow ? -4 : 0),
           child: Text(shown,
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.inter(
               color: mainColor,
               fontSize: 48, height: 0.95,
               letterSpacing: -2.0,
-              fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w900,
               shadows: isNow || locked
                   ? null
@@ -947,11 +944,10 @@ class _MirrorHeroCard extends StatelessWidget {
                             )),
                           const SizedBox(height: 8),
                           Text('See what could\nchange.',
-                            style: GoogleFonts.playfairDisplay(
+                            style: GoogleFonts.inter(
                               color: AppColors.textPrimary,
                               fontSize: 20, height: 1.1,
                               letterSpacing: -0.4,
-                              fontStyle: FontStyle.italic,
                               fontWeight: FontWeight.w800,
                             )),
                           const SizedBox(height: 6),

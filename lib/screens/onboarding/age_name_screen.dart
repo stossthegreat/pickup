@@ -141,12 +141,11 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
                   const SizedBox(height: 30),
 
                   Text('Before we start.',
-                      style: GoogleFonts.playfairDisplay(
+                      style: GoogleFonts.inter(
                         color: AppColors.textPrimary,
                         fontSize: 34,
                         height: 1.05,
                         letterSpacing: -0.6,
-                        fontStyle: FontStyle.italic,
                         fontWeight: FontWeight.w800,
                       )).animate().fadeIn(duration: 420.ms),
                   const SizedBox(height: 8),

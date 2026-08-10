@@ -70,7 +70,6 @@ class MirrorlyMasthead extends StatelessWidget {
                     subtitle!,
                     style: GoogleFonts.inter(
                       fontSize: 13,
-                      fontStyle: FontStyle.italic,
                       color: AppColors.red,
                       letterSpacing: 0.2,
                       height: 1.35,
@@ -105,10 +104,9 @@ class _TitleWithRedDot extends StatelessWidget {
   Widget build(BuildContext context) {
     return RichText(
       text: TextSpan(
-        style: GoogleFonts.playfairDisplay(
+        style: GoogleFonts.inter(
           fontSize: 26,
           fontWeight: FontWeight.w700,
-          fontStyle: FontStyle.italic,
           letterSpacing: -0.6,
           color: AppColors.textPrimary,
           height: 1.0,
@@ -203,10 +201,9 @@ class DisplayBlock extends StatelessWidget {
     // the block stays visually consistent. Previously each line had
     // its own FittedBox which let one line stay big while the other
     // wrapped mid-word — the bug in the Mirror screenshot.
-    final display = GoogleFonts.playfairDisplay(
+    final display = GoogleFonts.inter(
       fontSize: 34,
       fontWeight: FontWeight.w800,
-      fontStyle: FontStyle.italic,
       letterSpacing: -1.2,
       height: 1.05,
     );
@@ -484,7 +481,6 @@ class LockStrip extends StatelessWidget {
                     highlight.toUpperCase(),
                     style: GoogleFonts.inter(
                       fontSize: 17,
-                      fontStyle: FontStyle.italic,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
                       letterSpacing: 1.0,
@@ -618,10 +614,9 @@ class CharacterCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         title.toUpperCase(),
-                        style: GoogleFonts.playfairDisplay(
+                        style: GoogleFonts.inter(
                           fontSize: 30,
                           fontWeight: FontWeight.w700,
-                          fontStyle: FontStyle.italic,
                           color: AppColors.textPrimary,
                           height: 1.0,
                           letterSpacing: -0.8,
@@ -851,7 +846,6 @@ class LessonListPanel extends StatelessWidget {
                   currentSubtitle!,
                   style: GoogleFonts.inter(
                     fontSize: 13,
-                    fontStyle: FontStyle.italic,
                     color: AppColors.red,
                     height: 1.4,
                   ),
@@ -1024,7 +1018,6 @@ class RoleplayTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
                       fontSize: 12,
-                      fontStyle: FontStyle.italic,
                       color: AppColors.textSecondary,
                       height: 1.35,
                     ),
@@ -1072,7 +1065,6 @@ class HookLine extends StatelessWidget {
         style: GoogleFonts.inter(
           fontSize: 14,
           fontWeight: FontWeight.w600,
-          fontStyle: FontStyle.italic,
           color: emphasised ? AppColors.red : AppColors.textPrimary,
           letterSpacing: 0.1,
           height: 1.45,
@@ -1162,7 +1154,6 @@ class FeedbackStrip extends StatelessWidget {
                     close,
                     style: GoogleFonts.inter(
                       fontSize: 13,
-                      fontStyle: FontStyle.italic,
                       fontWeight: FontWeight.w600,
                       color: AppColors.red,
                       height: 1.4,
