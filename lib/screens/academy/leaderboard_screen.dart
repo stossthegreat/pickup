@@ -9,6 +9,8 @@ import '../../services/backend/daily_game_service.dart';
 import '../../services/backend/leaderboard_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_typography.dart';
+import '../../widgets/academy/academy_style.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/league_crest.dart';
 
@@ -147,18 +149,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   Widget _leagueTable() {
     final s = _s;
-    if (s == null) {
-      return ListView(children: [
-        const SizedBox(height: 80),
-        Center(
-          child: Text('The league needs a connection.',
-              style: GoogleFonts.inter(
-                  color: AppColors.textTertiary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600)),
-        ),
-      ]);
-    }
+    if (s == null) return _leaguePreview();
     final l = s.league;
     final me = AuthService.userId;
     final rows = l.standings;
@@ -195,6 +186,119 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ],
       ],
     );
+  }
+
+  /// Before the league answers, SHOW THE LEAGUE — the five divisions,
+  /// the rules, and the way in. An empty screen with one grey sentence
+  /// was the single worst surface in the app.
+  Widget _leaguePreview() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 4, 18, 30),
+      children: [
+        const AcademyHeading(
+          kicker: 'THE LEAGUE',
+          title: 'Climb or fall.',
+          sub: 'Every week. 30 men. Nobody stands still.',
+        ),
+        const SizedBox(height: 20),
+
+        // The five divisions — the ladder, visible from day one.
+        AcademyCard(
+          accent: AppColors.accent,
+          padding: const EdgeInsets.fromLTRB(14, 18, 14, 16),
+          child: Column(children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var d = 1; d <= 5; d++)
+                  Column(children: [
+                    LeagueCrest(
+                        division: d, size: d == 1 ? 48 : 40, locked: d != 1),
+                    const SizedBox(height: 6),
+                    Text(crestPalette(d).label,
+                        style: AppTypography.label.copyWith(
+                          fontSize: 7.5,
+                          letterSpacing: 0.8,
+                          color: d == 1
+                              ? crestPalette(d).metalMid
+                              : AppColors.textMuted,
+                        )),
+                  ]),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text('You start in ROOKIE. Win your week and you climb.',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodySmall),
+          ]),
+        ),
+        const SizedBox(height: 14),
+
+        // The rules, as three readable lines.
+        AcademyCard(
+          accent: kNeon,
+          child: Column(children: [
+            _rule(Icons.arrow_upward_rounded, kNeon, 'TOP 10 CLIMB',
+                'Finish in the top ten and you move up a division.'),
+            const SizedBox(height: 14),
+            _rule(Icons.arrow_downward_rounded, AppColors.red,
+                'BOTTOM 5 FALL', 'Finish in the last five and you drop.'),
+            const SizedBox(height: 14),
+            _rule(Icons.lock_clock_rounded, AppColors.textSecondary,
+                'LOCKS SUNDAY 21:00',
+                'Then it resets and everyone starts level again.'),
+          ]),
+        ),
+        const SizedBox(height: 14),
+
+        AcademyCard(
+          accent: AppColors.red,
+          hot: true,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('How you earn points',
+                style: AppTypography.h3
+                    .copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Text(
+                'Every roleplay you run, every daily you take and every '
+                'battle you win adds points. You don\'t have to opt in — '
+                'just use the app and you\'re on the table.',
+                style: AppTypography.bodySmall),
+            const SizedBox(height: 14),
+            GameButton(
+              label: 'RUN THE DAILY',
+              pulse: true,
+              onTap: () => context.push('/daily'),
+            ),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  Widget _rule(IconData icon, Color color, String title, String body) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Icon(icon, size: 16, color: color),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              style: AppTypography.label
+                  .copyWith(color: color, fontSize: 9.5, letterSpacing: 1.6)),
+          const SizedBox(height: 3),
+          Text(body, style: AppTypography.bodySmall.copyWith(fontSize: 12.5)),
+        ]),
+      ),
+    ]);
   }
 
   Widget _leagueHero(LeagueState l) {
