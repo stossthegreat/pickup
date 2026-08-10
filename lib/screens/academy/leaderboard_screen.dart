@@ -527,6 +527,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   Widget _allTimeTable() {
     if (_allTime.isEmpty) {
+      // Empty here means one of two things — nobody has scored yet, OR
+      // the board never loaded. The user can't tell those apart, so the
+      // diagnostic sits right here rather than in settings.
       return ListView(children: [
         const SizedBox(height: 70),
         Center(
@@ -535,6 +538,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   color: AppColors.textTertiary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(height: 14),
+        Center(
+          child: TextButton.icon(
+            onPressed: () {
+              HapticFeedback.selectionClick();
+              context.push('/backend-check');
+            },
+            icon: const Icon(Icons.wifi_tethering_rounded,
+                size: 15, color: AppColors.textTertiary),
+            label: Text('Board empty? Run backend check',
+                style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+          ),
         ),
       ]);
     }

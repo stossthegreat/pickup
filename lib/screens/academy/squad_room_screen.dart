@@ -587,9 +587,15 @@ class _NoSquad extends StatelessWidget {
         Text('THE SQUAD', textAlign: TextAlign.center,
             style: AppTypography.label).animate().fadeIn(duration: 300.ms),
         const SizedBox(height: 8),
-        Text('Nobody changes alone.',
+        Text('NOBODY CHANGES ALONE.',
             textAlign: TextAlign.center,
-            style: AppTypography.h1Italic)
+            style: GoogleFonts.inter(
+              color: AppColors.textPrimary,
+              fontSize: 30,
+              height: 1.05,
+              letterSpacing: -1,
+              fontWeight: FontWeight.w900,
+            ))
             .animate()
             .fadeIn(duration: 400.ms),
         const SizedBox(height: 8),
