@@ -4,11 +4,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../config/dev_flags.dart';
 import '../../services/analytics_service.dart';
-import '../../services/backend/catch_up_service.dart';
-import '../../services/backend/squad_broadcast.dart';
-import '../../services/live_events.dart';
+// ACADEMY OFF — social layer commented out until there's a user base.
+// import '../../services/backend/catch_up_service.dart';
+// import '../../services/backend/squad_broadcast.dart';
+// import '../../services/live_events.dart';
 import '../../services/local_store_service.dart';
 import '../../services/mission_catalog.dart';
 import '../../services/mission_engine.dart';
@@ -17,9 +17,10 @@ import '../../services/roster.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
-import '../../widgets/academy/daily_card.dart';
-import '../../widgets/academy/live_toast.dart';
-import '../../widgets/academy/squad_strip.dart';
+// ACADEMY OFF
+// import '../../widgets/academy/daily_card.dart';
+// import '../../widgets/academy/live_toast.dart';
+// import '../../widgets/academy/squad_strip.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/streak_badge.dart';
 import '../game/freeflow/free_flow_screen.dart';
@@ -51,16 +52,12 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     super.initState();
     // ignore: discarded_futures
     _load();
-    // WHILE YOU WERE GONE — a returning user never opens to a static
-    // screen. Runs after the first frame so it lands on top of home.
-    // Squad-sourced, so it stays down with the rest of the Academy.
-    if (kAcademyEnabled) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        final events = await CatchUpService.collect();
-        if (!mounted || events.isEmpty) return;
-        await CatchUpSheet.show(context, events);
-      });
-    }
+    // ACADEMY OFF — "while you were gone" is squad-sourced.
+    // WidgetsBinding.instance.addPostFrameCallback((_) async {
+    //   final events = await CatchUpService.collect();
+    //   if (!mounted || events.isEmpty) return;
+    //   await CatchUpSheet.show(context, events);
+    // });
   }
 
   Future<void> _load() async {
@@ -100,15 +97,14 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     // ignore: discarded_futures
     AnalyticsService.missionCompleted(kind: m.kind.name, title: m.title, xp: m.xp);
     HapticFeedback.mediumImpact();
-    // The live layer replaces the grey snackbar — a real celebration
-    // that lands over any screen, and the squad hears about it too.
-    LiveEvents.xp(m.xp, m.title);
+    // ACADEMY OFF — no live toast, nobody to broadcast to.
+    // LiveEvents.xp(m.xp, m.title);
     // ignore: discarded_futures
-    SquadBroadcast.completed(m.title, xp: m.xp, girlId: m.girlId);
+    // SquadBroadcast.completed(m.title, xp: m.xp, girlId: m.girlId);
+    _toast('+${m.xp} XP · ${m.title}');
     await _load();
   }
 
-  // ignore: unused_element
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
@@ -121,10 +117,9 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
   void _tap(MissionSpec m) {
     // ignore: discarded_futures
     AnalyticsService.missionOpened(kind: m.kind.name, title: m.title);
-    // Tell the squad he STARTED it — 'Marcus is on Daisy's post right
-    // now' is a far stronger pull than only hearing about finishes.
+    // ACADEMY OFF — nobody to tell.
     // ignore: discarded_futures
-    SquadBroadcast.started(m.title, girlId: m.girlId);
+    // SquadBroadcast.started(m.title, girlId: m.girlId);
     switch (m.kind) {
       case MissionKind.aiVoice:
         _openVoice(m);
@@ -240,16 +235,11 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(child: _TopBar(xp: _xp, streak: _streak)),
-          // THE DAILY + THE SQUAD STRIP — the social layer, dark until
-          // there's a population to fill it (see kAcademyEnabled).
-          if (kAcademyEnabled) ...[
-            // THE DAILY — the appointment. Pulsing until today's shot is
-            // taken; carries the league line (division · rank · lock).
-            const SliverToBoxAdapter(child: DailyCard()),
-            // THE SQUAD STRIP — the app's liveness, on the first screen.
-            // Every open answers "where is everyone at?" with zero taps.
-            const SliverToBoxAdapter(child: SquadStrip()),
-          ],
+          // ACADEMY OFF — the two group cards that sat above the
+          // missions: THE DAILY (league line, division, rank, lock) and
+          // THE SQUAD STRIP (roster faces, squad points, pulse).
+          // const SliverToBoxAdapter(child: DailyCard()),
+          // const SliverToBoxAdapter(child: SquadStrip()),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.lg, Sp.lg, Sp.sm),
@@ -351,16 +341,14 @@ class _TopBar extends StatelessWidget {
                 StreakBadge(days: streak),
                 const SizedBox(width: 8),
               ],
-              // The Academy — the Board (rankings) and the Squad Room.
-              // One tap from the masthead, everywhere, always.
-              if (kAcademyEnabled) ...[
-                _IconBtn(
-                    icon: Icons.emoji_events_outlined,
-                    onTap: () => context.push('/leaderboard')),
-                _IconBtn(
-                    icon: Icons.shield_outlined,
-                    onTap: () => context.push('/squad')),
-              ],
+              // ACADEMY OFF — the trophy (leagues / leaderboards) and
+              // the shield (Squad Room) icons at the top.
+              // _IconBtn(
+              //     icon: Icons.emoji_events_outlined,
+              //     onTap: () => context.push('/leaderboard')),
+              // _IconBtn(
+              //     icon: Icons.shield_outlined,
+              //     onTap: () => context.push('/squad')),
               _IconBtn(icon: Icons.settings_outlined, onTap: () => context.push('/settings')),
             ],
           ),
@@ -369,36 +357,35 @@ class _TopBar extends StatelessWidget {
             children: [
               XpBadge(label: _xpLabel),
               const Spacer(),
-              // THE FEAR BUTTON — always in reach. For the exact second
-              // he's frozen and needs the app to push him through.
-              GestureDetector(
-                onTap: () {
-                  HapticFeedback.heavyImpact();
-                  context.push('/fear');
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 13, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.red.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                        color: AppColors.red.withValues(alpha: 0.6)),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.bolt_rounded,
-                        size: 15, color: AppColors.red),
-                    const SizedBox(width: 5),
-                    Text('BOTTLING IT?',
-                        style: GoogleFonts.inter(
-                          color: AppColors.red,
-                          fontSize: 10.5,
-                          letterSpacing: 1.6,
-                          fontWeight: FontWeight.w900,
-                        )),
-                  ]),
-                ),
-              ),
+              // ACADEMY OFF — the "BOTTLING IT?" Fear Button chip.
+              // GestureDetector(
+              //   onTap: () {
+              //     HapticFeedback.heavyImpact();
+              //     context.push('/fear');
+              //   },
+              //   child: Container(
+              //     padding: const EdgeInsets.symmetric(
+              //         horizontal: 13, vertical: 8),
+              //     decoration: BoxDecoration(
+              //       color: AppColors.red.withValues(alpha: 0.12),
+              //       borderRadius: BorderRadius.circular(999),
+              //       border: Border.all(
+              //           color: AppColors.red.withValues(alpha: 0.6)),
+              //     ),
+              //     child: Row(mainAxisSize: MainAxisSize.min, children: [
+              //       const Icon(Icons.bolt_rounded,
+              //           size: 15, color: AppColors.red),
+              //       const SizedBox(width: 5),
+              //       Text('BOTTLING IT?',
+              //           style: GoogleFonts.inter(
+              //             color: AppColors.red,
+              //             fontSize: 10.5,
+              //             letterSpacing: 1.6,
+              //             fontWeight: FontWeight.w900,
+              //           )),
+              //     ]),
+              //   ),
+              // ),
             ],
           ),
         ],
