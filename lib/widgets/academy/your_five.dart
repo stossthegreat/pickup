@@ -312,9 +312,14 @@ class _YourFiveState extends State<YourFive> {
   }
 }
 
-/// Voice scores are 1–10, displayed as such. The grader stores 0–1000
-/// for resolution; a human reads 8.7 instantly and 8,742 not at all.
-String voiceOutOfTen(int raw) => (raw / 100).clamp(0, 10).toStringAsFixed(1);
+/// Voice scores are shown out of 10, because a human reads 8.7
+/// instantly and 8,742 not at all.
+///
+/// The grader keeps full resolution server-side: five axes scored 0–100,
+/// weighted into 0–100, then stored as `weighted * 99.99` → 0–9999.
+/// Dividing by 999.9 puts it back on the scale people actually think in.
+String voiceOutOfTen(int raw) =>
+    (raw / 999.9).clamp(0, 10).toStringAsFixed(1);
 
 class _Bar extends StatelessWidget {
   final String label;
