@@ -488,7 +488,12 @@ class _AxisRow extends StatelessWidget {
 }
 
 /// A squad card that slams in from the right and settles.
-class _SlamRow extends StatelessWidget {
+///
+/// Stateful purely so the impact haptic can be fired from a Timer keyed
+/// to the same delay as the entrance. flutter_animate has a callback
+/// effect, but its exact signature isn't something to guess at when the
+/// package can't be compiled here — a Timer is unambiguous.
+class _SlamRow extends StatefulWidget {
   final int position;
   final String name;
   final double? score; // null = hasn't run it
@@ -503,10 +508,36 @@ class _SlamRow extends StatelessWidget {
     required this.delay,
   });
 
+  @override
+  State<_SlamRow> createState() => _SlamRowState();
+}
+
+class _SlamRowState extends State<_SlamRow> {
+  Timer? _thud;
+
   static const _medals = ['1', '2', '3'];
 
   @override
+  void initState() {
+    super.initState();
+    _thud = Timer(widget.delay + const Duration(milliseconds: 120), () {
+      if (mounted) HapticFeedback.mediumImpact();
+    });
+  }
+
+  @override
+  void dispose() {
+    _thud?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final position = widget.position;
+    final name = widget.name;
+    final score = widget.score;
+    final mine = widget.mine;
+    final delay = widget.delay;
     final podium = position <= 3 && score != null;
     final colour = position == 1 && score != null
         ? const Color(0xFFFFD34D)
@@ -560,7 +591,6 @@ class _SlamRow extends StatelessWidget {
         .animate()
         .fadeIn(delay: delay, duration: 180.ms)
         // Slams in from the right and overshoots — weight, not a fade.
-        .slideX(begin: 0.5, end: 0, curve: Curves.easeOutBack, duration: 340.ms)
-        .callback(callback: (_) => HapticFeedback.mediumImpact());
+        .slideX(begin: 0.5, end: 0, curve: Curves.easeOutBack, duration: 340.ms);
   }
 }

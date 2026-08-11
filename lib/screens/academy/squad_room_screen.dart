@@ -1380,3 +1380,167 @@ class _How extends StatelessWidget {
     );
   }
 }
+
+class _PulseRow extends StatelessWidget {
+  final SquadEvent event;
+  final List<SquadMember> roster;
+  final bool first, last;
+  const _PulseRow(
+      {required this.event,
+      required this.roster,
+      required this.first,
+      required this.last});
+
+  @override
+  Widget build(BuildContext context) {
+    String who = 'ANON';
+    for (final m in roster) {
+      if (m.userId == event.actorId) {
+        who = m.userId == AuthService.userId ? 'YOU' : (m.handle ?? 'ANON');
+      }
+    }
+    final (icon, text, color) = switch (event.kind) {
+      'joined' => (Icons.bolt_rounded, '$who joined the squad',
+          AppColors.textSecondary),
+      'started' => (
+          Icons.play_circle_fill_rounded,
+          '$who started ${event.payload['mission'] ?? 'a mission'}',
+          AppColors.accent
+        ),
+      'committed' => (
+          Icons.radio_button_checked_rounded,
+          '$who called their shot'
+              '${event.payload['mission'] != null ? ' — ${event.payload['mission']}' : ''}',
+          AppColors.red
+        ),
+      'completed' => (
+          Icons.check_circle_rounded,
+          '$who completed'
+              '${event.payload['mission'] != null ? ' ${event.payload['mission']}' : ' the mission'}',
+          kNeon
+        ),
+      'scored' => (
+          Icons.graphic_eq_rounded,
+          '$who scored ${event.payload['score'] ?? '—'}',
+          Colors.white
+        ),
+      'rankup' => (
+          Icons.trending_up_rounded,
+          '$who ranked up to ${event.payload['tier'] ?? ''}',
+          kNeon
+        ),
+      // A nudge is public on purpose — being called out in front of the
+      // room is the whole point, so it reads as an event, not a DM.
+      'nudge' => (
+          Icons.campaign_rounded,
+          '$who nudged ${event.payload['handle'] ?? 'someone'}',
+          AppColors.signalAmber
+        ),
+      'daily_started' => (
+          Icons.graphic_eq_rounded,
+          '$who stepped into the rizz-off',
+          AppColors.red
+        ),
+      _ => (Icons.circle, '$who made a move', AppColors.textTertiary),
+    };
+    final t = event.createdAt;
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // Timeline spine
+        SizedBox(
+          width: 26,
+          child: Column(children: [
+            Container(
+                width: 1.5,
+                height: 6,
+                color: first ? Colors.transparent : AppColors.divider),
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.14),
+                border: Border.all(color: color.withValues(alpha: 0.6)),
+              ),
+              child: Icon(icon, size: 11, color: color),
+            ),
+            Expanded(
+              child: Container(
+                  width: 1.5,
+                  color: last ? Colors.transparent : AppColors.divider),
+            ),
+          ]),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 12, top: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(text,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textPrimary,
+                      fontSize: 12.5,
+                      height: 1.35,
+                      fontWeight: FontWeight.w700,
+                    )),
+                const SizedBox(height: 2),
+                Text(
+                  '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+/// One numbered step. Three of these replace the paragraph nobody read.
+class _How extends StatelessWidget {
+  final String n, text;
+  const _How({required this.n, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(children: [
+        Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.red.withValues(alpha: 0.5)),
+          ),
+          alignment: Alignment.center,
+          child: Text(n,
+              style: GoogleFonts.inter(
+                color: AppColors.red,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              )),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Text(text,
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 12.5,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              )),
+        ),
+      ]),
+    );
+  }
+}
