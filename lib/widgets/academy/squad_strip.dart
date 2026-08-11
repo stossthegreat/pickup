@@ -5,25 +5,22 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
 
-import '../../services/backend/auth_service.dart';
+import '../../services/backend/mission_service.dart';
+import '../../services/backend/squad_day.dart';
 import '../../services/backend/squad_service.dart';
 import '../../theme/app_colors.dart';
-import 'squad_grade.dart';
 
-/// THE SQUAD STRIP — the liveness engine, mounted at the top of home.
+/// THE SQUAD STRIP — the liveness engine, at the top of home.
 ///
-/// The lesson from every app that owns daily habits: the social state
-/// lives on the FIRST screen, not behind a tab. Strava puts friends'
-/// runs in your feed; Duolingo puts the league on the path; BeReal puts
-/// everyone's status on open. So the squad lives here — every open of
-/// the app answers "where is everyone at?" without a single tap:
+/// The social state belongs on the FIRST screen, not behind a tab. But
+/// this used to be a mini dashboard — grade disc, name, points, member
+/// faces, pulse line — five things competing for attention on the screen
+/// people look at most.
 ///
-///   · member faces with live status rings (done / committed / silent)
-///   · SQUAD PTS for the week
-///   · the latest Pulse line ("MARCUS called his shot · 14:32")
-///
-/// No squad → the recruiting card with create/join one tap away.
-/// Offline / backend down → renders nothing (zero clutter, fail-soft).
+/// It's now ONE component that changes its REASON through the day.
+/// Morning: the day is live. Afternoon: who's taken their shot. Evening:
+/// what's left to save it. Done: you won. Same pixels, a different pull
+/// each time you glance at it — far more sophisticated than more icons.
 class SquadStrip extends StatefulWidget {
   const SquadStrip({super.key});
 
@@ -32,12 +29,11 @@ class SquadStrip extends StatefulWidget {
 }
 
 class _SquadStripState extends State<SquadStrip> {
-  // ignore: unused_field
-  bool _loaded = false;
   Squad? _squad;
   List<SquadMember> _roster = const [];
-  List<WeekMark> _marks = const [];
-  SquadEvent? _latest;
+  List<Mission> _board = const [];
+  Map<String, MissionPulse> _squadStates = const {};
+  List<DailyMark> _daily = const [];
   RealtimeChannel? _pulse;
 
   @override
@@ -56,74 +52,36 @@ class _SquadStripState extends State<SquadStrip> {
     final squad = await SquadService.mySquad();
     if (!mounted) return;
     if (squad == null) {
-      setState(() {
-        _squad = null;
-        _loaded = true;
-      });
+      setState(() => _squad = null);
       return;
     }
     final roster = await SquadService.roster(squad.id);
+    final ids = [for (final m in roster) m.userId];
     final results = await Future.wait([
-      SquadService.weekMarks([for (final m in roster) m.userId]),
-      SquadService.pulse(squad.id, limit: 1),
+      MissionService.todayBoard(count: SquadDay.missionsPerDay),
+      SquadService.missionPulseToday(ids),
+      SquadService.dailyToday(ids, squadId: squad.id),
     ]);
     if (!mounted) return;
+    // A squadmate's move repaints the number on your home screen while
+    // you're looking at it. That's the whole trick.
     _pulse ??= SquadService.watchPulse(squad.id, () {
-      if (mounted) _load(); // a new event repaints the strip live
+      if (mounted) _load();
     });
     setState(() {
       _squad = squad;
       _roster = roster;
-      _marks = results[0] as List<WeekMark>;
-      final events = results[1] as List<SquadEvent>;
-      _latest = events.isEmpty ? null : events.first;
-      _loaded = true;
+      _board = results[0] as List<Mission>;
+      _squadStates = results[1] as Map<String, MissionPulse>;
+      _daily = results[2] as List<DailyMark>;
     });
-  }
-
-  /// done > committed > silent, for TODAY only.
-  String _statusToday(String userId) {
-    var status = 'silent';
-    final now = DateTime.now();
-    for (final m in _marks) {
-      if (m.userId != userId) continue;
-      if (m.day.year == now.year &&
-          m.day.month == now.month &&
-          m.day.day == now.day) {
-        if (m.completed) return 'done';
-        status = 'committed';
-      }
-    }
-    return status;
-  }
-
-  String _pulseLine(SquadEvent e) {
-    String who = 'SOMEONE';
-    for (final m in _roster) {
-      if (m.userId == e.actorId) {
-        who = m.userId == AuthService.userId ? 'YOU' : (m.handle ?? 'ANON');
-      }
-    }
-    final what = switch (e.kind) {
-      'joined' => 'joined the squad',
-      'committed' => 'called their shot',
-      'completed' => 'completed ${e.payload['mission'] ?? 'the mission'}',
-      'scored' => 'scored ${e.payload['score'] ?? ''}',
-      'rankup' => 'ranked up',
-      _ => 'made a move',
-    };
-    final t = e.createdAt;
-    return '$who $what · '
-        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
-    // Even before the backend answers, show the recruiting card — an
-    // empty gap on home is what made the app feel dead.
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 2, 20, 4),
-      child: _squad == null ? _recruit(context) : _live(context),
+      child: _squad == null ? _recruit(context) : _line(context),
     );
   }
 
@@ -149,7 +107,7 @@ class _SquadStripState extends State<SquadStrip> {
                 size: 17, color: AppColors.textTertiary),
             const SizedBox(width: 10),
             Expanded(
-              child: Text('Get in a squad — train alone, quit alone.',
+              child: Text('Start a squad — you only need one mate.',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
@@ -166,129 +124,91 @@ class _SquadStripState extends State<SquadStrip> {
     ).animate().fadeIn(duration: 300.ms);
   }
 
-  // ── Squad — the live strip ─────────────────────────────────────────
-  Widget _live(BuildContext context) {
-    final done = _marks.where((m) => m.completed).length;
+  Widget _line(BuildContext context) {
+    final day = SquadDay(
+      roster: _roster,
+      board: _board,
+      squadStates: _squadStates,
+      daily: _daily,
+    );
+    final won = day.won;
+    final accent = won ? AppColors.signalGreen : AppColors.red;
+
+    // The line is chosen by where the day actually is — this is the
+    // whole component.
+    final String line;
+    if (!day.live) {
+      line = 'One more man and the day starts scoring';
+    } else if (won) {
+      line = 'Day won — ${day.complete}/${day.possible} moves';
+    } else if (day.complete == 0) {
+      line = 'The five are live — nobody has moved yet';
+    } else if (day.remaining <= 2) {
+      line = day.remaining == 1
+          ? '1 move to save the day'
+          : '${day.remaining} moves to save the day';
+    } else {
+      final took = day.daily.where((d) => d.finished).length;
+      line = took > 0
+          ? '$took/${_roster.length} have taken their shot'
+          : '${day.complete}/${day.possible} moves in';
+    }
+
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
         context.push('/squad');
       },
       child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
         decoration: BoxDecoration(
           color: AppColors.surface1,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: accent.withValues(alpha: 0.35)),
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            // The week's grade, right on home.
-            Builder(builder: (_) {
-              final g = SquadGrade.of(done, _roster.length * 7);
-              return Container(
-                width: 26,
-                height: 26,
-                margin: const EdgeInsets.only(right: 9),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: g.color.withValues(alpha: 0.16),
-                  border: Border.all(color: g.color, width: 1.6),
-                  boxShadow: [
-                    BoxShadow(
-                        color: g.color.withValues(alpha: 0.4),
-                        blurRadius: 12)
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: Text(g.letter,
+        child: Row(children: [
+          // Form is the one stat worth carrying to the home screen.
+          SizedBox(
+            width: 42,
+            child: Column(children: [
+              Text('${day.form}',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 22,
+                    height: 1,
+                    letterSpacing: -1,
+                    fontWeight: FontWeight.w900,
+                  )),
+              Text('FORM',
+                  style: GoogleFonts.inter(
+                    color: accent,
+                    fontSize: 7.5,
+                    letterSpacing: 1.6,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ]),
+          ),
+          const SizedBox(width: 12),
+          Container(
+              width: 1,
+              height: 30,
+              color: Colors.white.withValues(alpha: 0.07)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_squad!.name.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
-                      color: g.color,
-                      fontSize: g.letter.length > 1 ? 10 : 12.5,
-                      height: 1,
+                      color: Colors.white,
+                      fontSize: 12,
+                      letterSpacing: 1.6,
                       fontWeight: FontWeight.w900,
                     )),
-              );
-            }),
-            Text(_squad!.name.toUpperCase(),
-                style: GoogleFonts.inter(
-                  color: AppColors.textPrimary,
-                  fontSize: 12,
-                  letterSpacing: 1.8,
-                  fontWeight: FontWeight.w900,
-                )),
-            const Spacer(),
-            // The code, right on home — tap to copy. Growth only happens
-            // if the invite is one tap from the screen they open most.
-            GestureDetector(
-              onTap: () {
-                HapticFeedback.mediumImpact();
-                // ignore: discarded_futures
-                Clipboard.setData(ClipboardData(text: _squad!.inviteCode));
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('Code ${_squad!.inviteCode} copied',
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w600)),
-                  backgroundColor: AppColors.toastBg,
-                  behavior: SnackBarBehavior.floating,
-                ));
-              },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(7),
-                  border:
-                      Border.all(color: AppColors.red.withValues(alpha: 0.4)),
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.copy_rounded,
-                      size: 10, color: AppColors.red),
-                  const SizedBox(width: 5),
-                  Text(_squad!.inviteCode,
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 10.5,
-                        letterSpacing: 2,
-                        fontWeight: FontWeight.w900,
-                      )),
-                ]),
-              ),
-            ),
-            Text('${done * 100} PTS',
-                style: GoogleFonts.inter(
-                  color: AppColors.red,
-                  fontSize: 12,
-                  letterSpacing: 1,
-                  fontWeight: FontWeight.w900,
-                )),
-            const Icon(Icons.chevron_right_rounded,
-                size: 18, color: AppColors.textTertiary),
-          ]),
-          const SizedBox(height: 10),
-          // Faces with live status rings — where is everyone at, today.
-          Row(children: [
-            for (final m in _roster.take(8)) ...[
-              _face(m),
-              const SizedBox(width: 8),
-            ],
-          ]),
-          if (_latest != null) ...[
-            const SizedBox(height: 10),
-            Row(children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                    color: AppColors.red, shape: BoxShape.circle),
-              )
-                  .animate(onPlay: (c) => c.repeat(reverse: true))
-                  .fade(begin: 0.3, end: 1, duration: 900.ms),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(_pulseLine(_latest!),
+                const SizedBox(height: 2),
+                Text(line,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
@@ -296,70 +216,13 @@ class _SquadStripState extends State<SquadStrip> {
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
                     )),
-              ),
-            ]),
-          ],
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded,
+              size: 18, color: AppColors.textTertiary),
         ]),
       ),
     ).animate().fadeIn(duration: 300.ms);
-  }
-
-  Widget _face(SquadMember m) {
-    final status = _statusToday(m.userId);
-    final ring = switch (status) {
-      'done' => AppColors.red,
-      'committed' => AppColors.red.withValues(alpha: 0.55),
-      _ => Colors.white.withValues(alpha: 0.14),
-    };
-    final mine = m.userId == AuthService.userId;
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      Stack(clipBehavior: Clip.none, children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.surface2,
-            border: Border.all(
-                color: ring, width: status == 'silent' ? 1.2 : 2),
-            image: m.avatarUrl != null
-                ? DecorationImage(
-                    image: NetworkImage(m.avatarUrl!), fit: BoxFit.cover)
-                : null,
-          ),
-          child: m.avatarUrl == null
-              ? Center(
-                  child: Text(
-                    (mine ? 'YOU' : (m.handle ?? 'A'))
-                        .characters
-                        .first
-                        .toUpperCase(),
-                    style: GoogleFonts.inter(
-                      color: AppColors.textSecondary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                )
-              : null,
-        ),
-        if (status == 'done')
-          Positioned(
-            right: -2,
-            bottom: -2,
-            child: Container(
-              width: 15,
-              height: 15,
-              decoration: BoxDecoration(
-                color: AppColors.red,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.surface1, width: 2),
-              ),
-              child: const Icon(Icons.check_rounded,
-                  size: 9, color: Colors.white),
-            ),
-          ),
-      ]),
-    ]);
   }
 }
