@@ -124,13 +124,33 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             ],
           ),
         ),
-        IconButton(
-          onPressed: () {
+        // BATTLES is a whole mode, not a glyph. A bare glove icon in the
+        // corner told nobody what it was — a labelled button does.
+        GestureDetector(
+          onTap: () {
             HapticFeedback.selectionClick();
             context.push('/battles');
           },
-          icon: const Icon(Icons.sports_mma_rounded,
-              size: 20, color: AppColors.red),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.red.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: AppColors.red.withValues(alpha: 0.55)),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.sports_mma_rounded,
+                  size: 14, color: AppColors.red),
+              const SizedBox(width: 6),
+              Text('BATTLES',
+                  style: GoogleFonts.inter(
+                    color: AppColors.red,
+                    fontSize: 10.5,
+                    letterSpacing: 1.6,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ]),
+          ),
         ),
       ]),
     );

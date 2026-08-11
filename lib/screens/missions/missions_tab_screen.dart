@@ -352,14 +352,13 @@ class _TopBar extends StatelessWidget {
                 StreakBadge(days: streak),
                 const SizedBox(width: 8),
               ],
-              // The Academy — the Board (rankings) and the Squad Room.
-              // One tap from the masthead, everywhere, always.
+              // THE BOARD. The squad shield used to sit here too, but the
+              // squad already has its own card further down this very
+              // screen — two doors to one room is clutter, and the card
+              // carries live state the icon never could.
               _IconBtn(
                   icon: Icons.emoji_events_outlined,
                   onTap: () => context.push('/leaderboard')),
-              _IconBtn(
-                  icon: Icons.shield_outlined,
-                  onTap: () => context.push('/squad')),
               _IconBtn(icon: Icons.settings_outlined, onTap: () => context.push('/settings')),
             ],
           ),

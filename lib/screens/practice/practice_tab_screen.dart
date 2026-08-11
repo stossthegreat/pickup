@@ -151,6 +151,15 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                             style: AppTypography.h1Italic),
                       ),
                       const SizedBox(width: 10),
+                      // THE BOARD reaches every tab now — the rankings are
+                      // the point of practising, so they shouldn't only be
+                      // findable from Missions.
+                      _BoardCog(
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            context.push('/leaderboard');
+                          }),
+                      const SizedBox(width: 6),
                       _SettingsCog(
                           onTap: () {
                             HapticFeedback.selectionClick();
@@ -486,6 +495,34 @@ class _SettingsCog extends StatelessWidget {
           ),
           alignment: Alignment.center,
           child: const Icon(Icons.settings_outlined,
+              size: 18, color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+}
+
+class _BoardCog extends StatelessWidget {
+  final VoidCallback onTap;
+  const _BoardCog({required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.divider, width: 0.8),
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.emoji_events_outlined,
               size: 18, color: AppColors.textSecondary),
         ),
       ),
