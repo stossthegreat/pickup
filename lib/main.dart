@@ -7,10 +7,9 @@ import 'config/dev_flags.dart';
 import 'navigation/app_router.dart';
 import 'providers/auralay_app_provider.dart';
 import 'services/analytics_service.dart';
-// ACADEMY OFF
-// import 'services/backend/auth_service.dart';
-// import 'services/backend/backend_service.dart';
-// import 'services/backend/squad_live_service.dart';
+import 'services/backend/auth_service.dart';
+import 'services/backend/backend_service.dart';
+import 'services/backend/squad_live_service.dart';
 import 'services/daily_nudge_service.dart';
 import 'services/language_service.dart';
 import 'services/local_store_service.dart';
@@ -18,8 +17,7 @@ import 'services/notification_service.dart';
 import 'services/purchase_service.dart';
 import 'services/share_intake_service.dart';
 import 'theme/app_theme.dart';
-// ACADEMY OFF
-// import 'widgets/academy/live_toast.dart';
+import 'widgets/academy/live_toast.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,13 +41,20 @@ void main() async {
   // — every user gets a server identity with zero friction, and claims
   // it with Apple later once they have a rank worth keeping.
   //
-  // ACADEMY OFF — no Supabase connection, no anonymous account is
-  // created, no realtime subscription. The plain build makes ZERO
-  // backend calls; it isn't a social build with the buttons hidden.
-  // await BackendService.init();
-  // ignore: discarded_futures
-  // AuthService.ensureSignedIn()
-  //     .then((_) => SquadLiveService.start());
+  // Gated on kAcademyEnabled: while the social layer is dark the app
+  // makes NO backend calls at all — no Supabase connection, no anonymous
+  // account created, no realtime subscription. A plain build is plain all
+  // the way down, not a social build with the buttons hidden.
+  if (kAcademyEnabled) {
+    await BackendService.init();
+    // ignore: discarded_futures
+    AuthService.ensureSignedIn()
+        // Global squad watcher — a squadmate's move reaches you anywhere
+        // in the app, not only while the Squad Room is open. This is the
+        // difference between an app you inspect and one that talks.
+        // ignore: discarded_futures
+        .then((_) => SquadLiveService.start());
+  }
 
   // Roleplay language — hydrated before any voice session can start so
   // the synchronous cache is always right. English default.
@@ -195,11 +200,13 @@ class _MirrorAppState extends State<MirrorApp> with WidgetsBindingObserver {
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
         routerConfig: appRouter,
-        // ACADEMY OFF — live events land over whatever screen is
-        // showing; with the social layer down there are none, so the
-        // overlay host isn't mounted at all.
-        // builder: (context, child) =>
-        //     LiveToastHost(child: child ?? const SizedBox.shrink()),
+        // Live events land over whatever screen is showing. With the
+        // Academy dark there are no events to land, so the overlay host
+        // isn't mounted at all.
+        builder: (context, child) {
+          final app = child ?? const SizedBox.shrink();
+          return kAcademyEnabled ? LiveToastHost(child: app) : app;
+        },
       ),
     );
   }
