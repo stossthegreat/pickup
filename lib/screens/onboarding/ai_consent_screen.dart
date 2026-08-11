@@ -1,22 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/analytics_service.dart';
+import '../../services/backend/auth_service.dart';
 import '../../services/local_store_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 
-/// Onboarding AI-data consent — the single, up-front permission gate
-/// required by App Store guidelines 5.1.1(i) / 5.1.2(i). It sits between
-/// the gender pick and the first scan, so every new user reads exactly
-/// what data is sent, to whom, and must tick to agree BEFORE any data
-/// reaches a third-party AI service.
+/// THE DOOR — sign in, agree, go.
 ///
-/// Granting persists [LocalStoreService.setAiConsent] once, so no feature
-/// screen ever has to prompt again (the per-feature checks read this flag
-/// and stay silent). Revocable later in Settings.
+/// This screen used to print the entire AI-disclosure essay inline:
+/// three headed sections of body copy the user had to scroll past
+/// before reaching two checkboxes, with sign-in on a separate screen
+/// afterwards. Nobody reads a wall of terms, it looks amateur, and it
+/// split one decision across two pages.
+///
+/// The professional shape, and the one every serious app uses: the
+/// sign-in buttons first, the consent as two short ticked lines, and
+/// the legal text behind links for the people who genuinely want it.
+/// The full disclosure still exists verbatim in the Privacy Policy —
+/// this screen names what's shared in one sentence and links out.
+///
+/// Consent is still explicit, still two separate ticks (18+/Terms, and
+/// Privacy/AI processing), and still blocks entry until both are given,
+/// so 5.1.1(i) / 5.1.2(i) are satisfied exactly as before.
 class AiConsentScreen extends StatefulWidget {
   const AiConsentScreen({super.key});
 
@@ -25,17 +36,15 @@ class AiConsentScreen extends StatefulWidget {
 }
 
 class _AiConsentScreenState extends State<AiConsentScreen> {
-  // Two separate, explicit consents — the pattern professional apps use.
-  // Both must be ticked before the user can enter the app.
-  bool _agreedTerms = false;   // 18+ and Terms of Use
+  bool _agreedTerms = false; // 18+ and Terms of Use
   bool _agreedPrivacy = false; // Privacy Policy + AI data processing
+  bool _busy = false;
 
   bool get _canContinue => _agreedTerms && _agreedPrivacy;
 
   @override
   void initState() {
     super.initState();
-    // Already granted (e.g. re-entering the funnel) → straight to home.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (await LocalStoreService.hasAiConsent() && mounted) {
         context.go('/home');
@@ -44,289 +53,327 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
     AnalyticsService.consentShown();
   }
 
-  Future<void> _continue() async {
-    if (!_canContinue) return;
-    HapticFeedback.mediumImpact();
+  Future<void> _persistConsent() async {
     await LocalStoreService.setAiConsent(true);
     AnalyticsService.consentGranted();
+  }
+
+  /// Both providers land here: record consent, sign in, then go pick a
+  /// name. A failure never blocks entry — you can always claim later.
+  Future<void> _claim(Future<bool> Function() provider) async {
+    if (!_canContinue || _busy) return;
+    HapticFeedback.mediumImpact();
+    setState(() => _busy = true);
+    await _persistConsent();
+    final ok = await provider();
     if (!mounted) return;
-    // Consent granted → the identity step (Apple / Google / SKIP FOR
-    // NOW — claiming is optional, always). No entry-wall paywall — the
-    // paywall fires on ACTIONS (opening a girl / mission / call), and
-    // it's dismissible.
-    context.go('/onboarding/identity');
+    setState(() => _busy = false);
+    if (ok) {
+      context.go('/onboarding/handle');
+      return;
+    }
+    final why = AuthService.lastError;
+    if (why == null) return; // user cancelled the sheet — say nothing
+    _showFailure(why);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
-              child: Row(
-                children: [
-                  const ImHimWordmark(fontSize: 28, letterSpacing: -0.7),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 4, height: 4,
-                    margin: const EdgeInsets.only(top: 11),
-                    decoration: const BoxDecoration(
-                        color: AppColors.red, shape: BoxShape.circle),
-                  ),
-                ],
-              ),
-            ),
-
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('AI & YOUR PRIVACY',
-                        style: GoogleFonts.inter(
-                          color: AppColors.red,
-                          fontSize: 11, letterSpacing: 2.6,
-                          fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 12),
-                    Text('ImHim uses AI to power your live voice '
-                        'roleplay, text roleplay, and Rizz replies.',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 24, height: 1.2,
-                          letterSpacing: -0.4,
-                          fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 8),
-                    Text('The data each feature needs is sent over an '
-                        'encrypted connection to our AI provider. Your '
-                        'dating-app screenshots are read on your device '
-                        '(OCR) first, so only the text leaves for the '
-                        'common case.',
-                        style: GoogleFonts.inter(
-                          color: AppColors.textSecondary,
-                          fontSize: 14, height: 1.5,
-                          fontWeight: FontWeight.w500)),
-                    const SizedBox(height: 22),
-
-                    const _Row(
-                      head: 'WHAT IS SENT',
-                      body: 'Your voice during live roleplay, the messages '
-                          'you type in roleplay and to the coach, and the '
-                          'screenshots or text you submit in Rizz. Nothing '
-                          'else — no name, email, contacts, location, or '
-                          'tracking IDs.'),
-                    const _Row(
-                      head: 'WHO RECEIVES IT',
-                      body: 'OpenAI (voice roleplay, text roleplay, and '
-                          'Rizz replies). It processes your data for one '
-                          'request only and excludes it from training '
-                          'under its standard API terms.'),
-                    const _Row(
-                      head: 'EQUAL PROTECTION',
-                      body: 'OpenAI contractually guarantees the same or '
-                          'equal privacy protection: encrypted in transit, '
-                          'no long-term retention, no training, no '
-                          'advertising, no resale.'),
-                    const _Row(
-                      head: 'YOU\'RE IN CONTROL',
-                      body: 'You can revoke this permission any time in '
-                          'Settings → Revoke AI permission, and delete all '
-                          'on-device data. Nothing is tied to an account — '
-                          'there is no account.'),
-
-                    const SizedBox(height: 6),
-                    // Functional links to the full documents.
-                    Wrap(
-                      spacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text('Read the full',
-                            style: GoogleFonts.inter(
-                              color: AppColors.textTertiary,
-                              fontSize: 13, fontWeight: FontWeight.w500)),
-                        _LinkText(
-                            label: 'Privacy Policy',
-                            onTap: () => context.push('/privacy')),
-                        Text('and',
-                            style: GoogleFonts.inter(
-                              color: AppColors.textTertiary,
-                              fontSize: 13, fontWeight: FontWeight.w500)),
-                        _LinkText(
-                            label: 'Terms of Use',
-                            onTap: () => context.push('/terms')),
-                        Text('.',
-                            style: GoogleFonts.inter(
-                              color: AppColors.textTertiary,
-                              fontSize: 13, fontWeight: FontWeight.w500)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Tick-to-agree + continue, pinned to the bottom.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _ConsentCheck(
-                    value: _agreedTerms,
-                    label: 'I confirm I am 18 or older and agree to the '
-                        'Terms of Use.',
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      setState(() => _agreedTerms = !_agreedTerms);
-                    },
-                  ),
-                  const SizedBox(height: 4),
-                  _ConsentCheck(
-                    value: _agreedPrivacy,
-                    label: 'I agree to the Privacy Policy and consent to '
-                        'ImHim sharing the data described above with its AI '
-                        'provider (OpenAI).',
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      setState(() => _agreedPrivacy = !_agreedPrivacy);
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _canContinue ? _continue : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.red,
-                        disabledBackgroundColor:
-                            AppColors.red.withValues(alpha: 0.25),
-                        foregroundColor: Colors.white,
-                        disabledForegroundColor:
-                            Colors.white.withValues(alpha: 0.5),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                      ),
-                      child: Text('AGREE & CONTINUE',
-                          style: GoogleFonts.inter(
-                            fontSize: 15, letterSpacing: 2,
-                            fontWeight: FontWeight.w900)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+  /// Sign-in failures used to surface as a shrug. The provider's own
+  /// message names the cause — nearly always a dashboard field — so it
+  /// gets shown, and copied, instead of thrown away.
+  void _showFailure(String why) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface1,
+        title: Text('Sign-in failed',
+            style: GoogleFonts.inter(
+                color: Colors.white, fontWeight: FontWeight.w900)),
+        content: SingleChildScrollView(
+          child: SelectableText(why,
+              style: GoogleFonts.inter(
+                  color: AppColors.textSecondary, fontSize: 12.5, height: 1.5)),
         ),
-      ),
-    );
-  }
-}
-
-/// One required-consent row: a tick box + label, the whole row tappable.
-/// Used twice on the gate (Terms/age, and Privacy/AI) — both must be
-/// ticked before the user can enter the app.
-class _ConsentCheck extends StatelessWidget {
-  final bool value;
-  final String label;
-  final VoidCallback onTap;
-  const _ConsentCheck(
-      {required this.value, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              width: 24, height: 24,
-              margin: const EdgeInsets.only(top: 1),
-              decoration: BoxDecoration(
-                color: value ? AppColors.red : Colors.transparent,
-                borderRadius: BorderRadius.circular(7),
-                border: Border.all(
-                  color: value
-                      ? AppColors.red
-                      : Colors.white.withValues(alpha: 0.35),
-                  width: 1.4),
-              ),
-              child: value
-                  ? const Icon(Icons.check_rounded,
-                      size: 16, color: Colors.white)
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
+        actions: [
+          TextButton(
+            onPressed: () {
+              // ignore: discarded_futures
+              Clipboard.setData(ClipboardData(text: why));
+              Navigator.of(ctx).pop();
+            },
+            child: Text('COPY',
                 style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 12.5, height: 1.4,
-                  fontWeight: FontWeight.w500),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Row extends StatelessWidget {
-  final String head, body;
-  const _Row({required this.head, required this.body});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(head,
-              style: GoogleFonts.inter(
-                color: AppColors.red,
-                fontSize: 9.5, letterSpacing: 2.0,
-                fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          Text(body,
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 13, height: 1.45,
-                fontWeight: FontWeight.w500)),
+                    color: AppColors.textTertiary,
+                    fontWeight: FontWeight.w800)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('OK',
+                style: GoogleFonts.inter(
+                    color: AppColors.red, fontWeight: FontWeight.w900)),
+          ),
         ],
       ),
     );
   }
+
+  Future<void> _skip() async {
+    if (!_canContinue) return;
+    HapticFeedback.mediumImpact();
+    await _persistConsent();
+    if (!mounted) return;
+    context.go('/onboarding/handle');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = _canContinue && !_busy;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 14, 24, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                const ImHimWordmark(fontSize: 28, letterSpacing: -0.7),
+                const SizedBox(width: 8),
+                Container(
+                  width: 4,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 11),
+                  decoration: const BoxDecoration(
+                      color: AppColors.red, shape: BoxShape.circle),
+                ),
+              ]),
+
+              const Spacer(flex: 2),
+
+              Text('Save your progress.',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 30,
+                        height: 1.12,
+                        letterSpacing: -1,
+                        fontWeight: FontWeight.w900,
+                      ))
+                  .animate()
+                  .fadeIn(duration: 320.ms),
+              const SizedBox(height: 8),
+              Text(
+                  'Sign in so your rank, streak and squad survive a lost '
+                  'phone. Or skip — everything works without it.',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                    height: 1.5,
+                    fontWeight: FontWeight.w500,
+                  )).animate().fadeIn(delay: 70.ms, duration: 320.ms),
+
+              const SizedBox(height: 26),
+
+              // ── SIGN IN — above the small print, like every real app ──
+              _ProviderButton(
+                label: 'CONTINUE WITH APPLE',
+                icon: Icons.apple,
+                filled: true,
+                enabled: ready,
+                onTap: () => _claim(AuthService.signInWithApple),
+              ),
+              const SizedBox(height: 10),
+              _ProviderButton(
+                label: 'CONTINUE WITH GOOGLE',
+                glyph: 'G',
+                filled: false,
+                enabled: ready,
+                onTap: () => _claim(AuthService.signInWithGoogle),
+              ),
+              const SizedBox(height: 10),
+              _ProviderButton(
+                label: 'SKIP FOR NOW',
+                filled: false,
+                muted: true,
+                enabled: ready,
+                onTap: _skip,
+              ),
+
+              const Spacer(flex: 3),
+
+              // ── THE TWO TICKS — short lines, links, no essay ─────────
+              _Tick(
+                value: _agreedTerms,
+                onChanged: (v) => setState(() => _agreedTerms = v),
+                child: _legal(
+                  'I\'m 18 or over and agree to the ',
+                  linkText: 'Terms of Use',
+                  onTap: () => context.push('/terms'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _Tick(
+                value: _agreedPrivacy,
+                onChanged: (v) => setState(() => _agreedPrivacy = v),
+                child: _legal(
+                  'I agree to the ',
+                  linkText: 'Privacy Policy',
+                  onTap: () => context.push('/privacy'),
+                  tail: ' and to my voice, messages and screenshots being '
+                      'sent to OpenAI to power the AI features.',
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (!_canContinue)
+                Text('Tick both to continue.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textMuted,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _legal(String lead,
+      {required String linkText,
+      required VoidCallback onTap,
+      String? tail}) {
+    final base = GoogleFonts.inter(
+      color: AppColors.textSecondary,
+      fontSize: 12.5,
+      height: 1.45,
+      fontWeight: FontWeight.w500,
+    );
+    return RichText(
+      text: TextSpan(style: base, children: [
+        TextSpan(text: lead),
+        TextSpan(
+          text: linkText,
+          style: base.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            decoration: TextDecoration.underline,
+            decorationColor: AppColors.red,
+          ),
+          recognizer: TapGestureRecognizer()..onTap = onTap,
+        ),
+        if (tail != null) TextSpan(text: tail),
+      ]),
+    );
+  }
 }
 
-class _LinkText extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  const _LinkText({required this.label, required this.onTap});
+/// Big tap target — the whole row toggles, not just the 20pt box.
+class _Tick extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final Widget child;
+  const _Tick(
+      {required this.value, required this.onChanged, required this.child});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: Text(label,
-          style: GoogleFonts.inter(
-            color: AppColors.red,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            decoration: TextDecoration.underline,
-            decorationColor: AppColors.red,
-          )),
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onChanged(!value);
+      },
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 24,
+          height: 24,
+          margin: const EdgeInsets.only(top: 1),
+          decoration: BoxDecoration(
+            color: value ? AppColors.red : Colors.transparent,
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(
+              color: value ? AppColors.red : Colors.white.withValues(alpha: 0.25),
+              width: 1.8,
+            ),
+          ),
+          child: value
+              ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+              : null,
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: child),
+      ]),
+    );
+  }
+}
+
+class _ProviderButton extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final String? glyph;
+  final bool filled;
+  final bool muted;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _ProviderButton({
+    required this.label,
+    this.icon,
+    this.glyph,
+    required this.filled,
+    this.muted = false,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = filled
+        ? Colors.black
+        : muted
+            ? AppColors.textTertiary
+            : Colors.white;
+    return Opacity(
+      opacity: enabled ? 1 : 0.35,
+      child: Material(
+        color: filled ? Colors.white : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: filled
+                  ? null
+                  : Border.all(color: Colors.white.withValues(alpha: 0.18)),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              if (icon != null) ...[
+                Icon(icon, size: 19, color: fg),
+                const SizedBox(width: 10),
+              ],
+              if (glyph != null) ...[
+                Text(glyph!,
+                    style: GoogleFonts.inter(
+                      color: fg,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                    )),
+                const SizedBox(width: 10),
+              ],
+              Text(label,
+                  style: GoogleFonts.inter(
+                    color: fg,
+                    fontSize: 13,
+                    letterSpacing: 1.6,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 }
