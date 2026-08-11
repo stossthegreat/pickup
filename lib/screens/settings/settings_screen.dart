@@ -81,26 +81,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // toast the tile fires on tap, so the list reads as
               // tall clean rectangles like the reference image.
 
-              // ACADEMY OFF — the backend diagnostic tile and the whole
-              // AUTH tile (handle + Sign in with Apple / Google claim).
-              // _SettingTile(
-              //   icon: Icons.wifi_tethering_rounded,
-              //   iconColor: AppColors.measure,
-              //   title: 'Backend check',
-              //   onTap: () {
-              //     HapticFeedback.selectionClick();
-              //     context.push('/backend-check');
-              //   },
-              // ),
-              // _SettingTile(
-              //   icon: Icons.person_rounded,
-              //   iconColor: AppColors.red,
-              //   title: 'Your identity',
-              //   onTap: () {
-              //     HapticFeedback.selectionClick();
-              //     context.push('/account');
-              //   },
-              // ),
+              // ── Backend check — diagnose 'needs a connection' ─────────
+              _SettingTile(
+                icon: Icons.wifi_tethering_rounded,
+                iconColor: AppColors.measure,
+                title: 'Backend check',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  context.push('/backend-check');
+                },
+              ),
+
+              // ── Your identity — handle + Apple/Google claim ───────────
+              _SettingTile(
+                icon: Icons.person_rounded,
+                iconColor: AppColors.red,
+                title: 'Your identity',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  context.push('/account');
+                },
+              ),
 
               // ── Roleplay language — she speaks yours ──────────────────
               _SettingTile(

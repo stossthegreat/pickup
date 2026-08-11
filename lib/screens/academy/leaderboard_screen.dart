@@ -93,12 +93,36 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               size: 18, color: Colors.white),
         ),
+        // THE BOARD IS ABOUT VOICE. Nothing else on it moves your rank —
+        // real-life missions build the squad's grade, the voice rizz-off
+        // builds YOUR rating. That was never said anywhere, so the two
+        // systems read as one confusing pile. Now the title says it.
         Expanded(
-          child: Row(children: [
-            _tab('LEAGUE', _league, () => setState(() => _league = true)),
-            const SizedBox(width: 8),
-            _tab('ALL TIME', !_league, () => setState(() => _league = false)),
-          ]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Icon(Icons.graphic_eq_rounded,
+                    size: 13, color: AppColors.red),
+                const SizedBox(width: 6),
+                Text('VOICE RIZZ RANKINGS',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 11.5,
+                      letterSpacing: 1.8,
+                      fontWeight: FontWeight.w900,
+                    )),
+              ]),
+              const SizedBox(height: 6),
+              Row(children: [
+                _tab('THIS WEEK', _league,
+                    () => setState(() => _league = true)),
+                const SizedBox(width: 8),
+                _tab('ALL TIME', !_league,
+                    () => setState(() => _league = false)),
+              ]),
+            ],
+          ),
         ),
         IconButton(
           onPressed: () {

@@ -81,68 +81,8 @@ const kPaywallDemoUnlock = false;
 /// before shipping, otherwise real users see onboarding on every launch.
 const kForceOnboarding = false;
 
-// ═══════════════════════════════════════════════════════════════════════
-//  THE ACADEMY IS COMMENTED OUT — squads, leagues, leaderboards,
-//  the Daily, battles, the Fear Button, and Apple/Google auth.
-// ═══════════════════════════════════════════════════════════════════════
-//
-// The app ships as the PLAIN single-player product: missions, practice,
-// roleplay, rizz, progress. Nothing social, nothing ranked, and it makes
-// ZERO backend calls — no Supabase connection, no anonymous account, no
-// realtime subscription.
-//
-// Why: every social surface is empty until there's a population to fill
-// it. A leaderboard with one name, a squad you can't fill, and a Daily
-// whose "world average" is your own score all read as a broken app
-// rather than a young one. Per bro: "just plain version for all as well
-// until we build users up."
-//
-// THERE IS NO FLAG. Every call site is commented out in place, each one
-// tagged `ACADEMY OFF`. Grep that string to find all of them:
-//
-//     grep -rn "ACADEMY OFF" lib/
-//
-//   main.dart                      Supabase init, anonymous sign-in,
-//                                  realtime watcher, LiveToastHost, imports
-//   navigation/app_router          EVERY Academy route: /squad /daily
-//                                  /leaderboard /battles /fear /account
-//                                  /onboarding/identity /backend-check
-//                                  /score-reveal, and all 8 screen imports.
-//                                  The routes are gone, not just the
-//                                  buttons — nothing can reach these
-//                                  screens by deep link or stray push.
-//   onboarding/ai_consent_screen   the handoff into /onboarding/identity,
-//                                  the "Continue with Apple / Continue
-//                                  with Google / SKIP FOR NOW" screen.
-//                                  Consent is now the LAST onboarding
-//                                  step and goes straight to /home.
-//                                  (setOnboarded(true) already happens at
-//                                  the profile + gender steps, so nobody
-//                                  gets stranded in onboarding.)
-//   missions/missions_tab_screen   the trophy (leagues/leaderboards) and
-//                                  shield (Squad Room) icons at the top,
-//                                  the two group cards above the mission
-//                                  list (THE DAILY + THE SQUAD STRIP),
-//                                  the "BOTTLING IT?" Fear Button chip,
-//                                  the catch-up sheet, the live-toast and
-//                                  squad-broadcast calls, 6 imports
-//   settings/settings_screen       "Backend check" and "Your identity"
-//   game/freeflow/free_flow_screen the post-session transcript handoff to
-//                                  the ELO grader, the armed Battle
-//                                  submitter and the armed Daily
-//                                  submitter, plus 3 imports
-//
-// NOTHING WAS DELETED. Every Academy screen, service, widget, migration
-// and Edge Function is still in the repo. The Supabase project, its RLS
-// policies and the three deployed Edge Functions are untouched.
-//
-// TO BRING IT BACK: grep `ACADEMY OFF` and uncomment each block. The
-// only non-mechanical step is missions_tab_screen's mission-complete
-// handler, where a plain `_toast(...)` now stands in for the live XP
-// event — delete that line when the toast layer comes back.
-
 /// Human-readable build tag shown tiny on the paywall so we can instantly
 /// tell which build is actually installed on-device (TestFlight lag has
 /// repeatedly made us debug a stale build). Bump this with every pubspec
 /// build-number bump.
-const kBuildTag = 'b108-plain';
+const kBuildTag = 'b111-leave';

@@ -59,29 +59,34 @@ class MissionService {
 
   /// TODAY'S BOARD — the day's whole slate, not a single card.
   ///
-  /// One mission a day made the squad room look empty and gave the room
-  /// nothing to talk about. Five gives everyone a different lane to pick
-  /// from and makes "3/5 of the squad did THIS one" a real number.
+  /// THE FIVE — today's mission board. THE SAME FIVE FOR EVERYONE.
   ///
-  /// The board is the [count] lowest-tier missions this user hasn't
-  /// completed, so the ladder still escalates — it just serves a rung's
-  /// worth at a time instead of one step.
+  /// This used to serve "the five lowest-tier missions THIS USER hasn't
+  /// completed", which quietly broke the entire squad feature: two
+  /// squadmates at different points in the ladder were looking at
+  /// different missions, so "3/5 SQUAD DONE" was counting people against
+  /// a mission that wasn't even on their board. The number was noise.
+  ///
+  /// Now the day picks the five, not the user. A rotating window over
+  /// the catalog, seeded by the UTC day number — the same rule every
+  /// client runs, so everyone in the world opens the app to the same
+  /// five missions, the same way everyone gets the same Daily scenario
+  /// (see scenarioOfToday()). That is what makes a shared count mean
+  /// something, and what gives the room something to talk about.
+  ///
+  /// Completed missions are NOT filtered out here — if you've done one
+  /// before, it still shows, marked done. The board is a shared board;
+  /// hiding rows per-person would break the shared-ness all over again.
   static Future<List<Mission>> todayBoard({int count = 5}) async {
-    final uid = AuthService.userId;
-    if (uid == null) return const [];
     try {
-      final done = await _sb
-          .from('user_missions')
-          .select('mission_id')
-          .eq('user_id', uid)
-          .eq('state', 'completed');
-      final doneIds = [for (final r in done) r['mission_id'] as String];
-      var q = _sb.from('missions').select().eq('active', true);
-      if (doneIds.isNotEmpty) {
-        q = q.not('id', 'in', '(${doneIds.join(',')})');
-      }
-      final rows = await q.order('tier', ascending: true).limit(count);
-      return [for (final r in rows) Mission.fromRow(r)];
+      // Order by id so every device folds the catalog identically.
+      final rows =
+          await _sb.from('missions').select().eq('active', true).order('id');
+      final all = [for (final r in rows) Mission.fromRow(r)];
+      if (all.length <= count) return all;
+      final day = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 86400000;
+      final start = (day * count) % all.length;
+      return [for (var i = 0; i < count; i++) all[(start + i) % all.length]];
     } catch (e) {
       debugPrint('MissionService.todayBoard: $e');
       return const [];
