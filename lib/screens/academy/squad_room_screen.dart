@@ -17,6 +17,7 @@ import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/academy_modal.dart';
+import '../../widgets/academy/day_beat.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/squad_grade.dart';
 import '../../widgets/academy/squad_gauge.dart';
@@ -341,8 +342,12 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     final s = _squad;
     if (s == null) return;
     HapticFeedback.selectionClick();
-    Share.share('Join my squad "${s.name}" on ImHim Rizz. '
-        'Code: ${s.inviteCode}');
+    Share.share(
+        'Get in my squad on ImHim Rizz.\n\n'
+        'Squad: ${s.name}\n'
+        'Code: ${s.inviteCode}\n\n'
+        'Open the app → Squad → type the code. Five missions a day, '
+        'one voice rizz-off, and we both see who actually did them.');
   }
 
   void _snack(String msg) {
@@ -424,7 +429,11 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
             squadName: squad.name,
             onWin: _dayWon,
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
+
+          // ── THE BEAT — the day's clock, right under the dial ──────
+          DayBeat(day: _day),
+          const SizedBox(height: 20),
 
           // ── YOUR FIVE — portraits, arcs, empty seats ──────────────
           Row(children: [
@@ -707,13 +716,23 @@ class _NoSquad extends StatelessWidget {
             .fadeIn(duration: 400.ms),
         const SizedBox(height: 8),
         Text(
-            'Five men, one week. They see your missions, your streak — '
-            'and your silence. That\'s the point.',
+            'You do the reps whether anyone watches or not. You just do '
+            'more of them when they do. Two men is enough — five is the '
+            'most.',
             textAlign: TextAlign.center,
             style: AppTypography.bodySmall)
             .animate()
             .fadeIn(delay: 120.ms, duration: 400.ms),
-        const SizedBox(height: 30),
+        const SizedBox(height: 26),
+
+        // HOW IT WORKS — three lines. The invite-code system was never
+        // explained anywhere, so "how does anyone actually join?" was a
+        // fair question with no answer on screen.
+        _How(n: '1', text: 'Found a squad — you get a 6-letter code'),
+        _How(n: '2', text: 'Send the code to your mate'),
+        _How(n: '3', text: 'He types it in below — that\'s it, you\'re a squad'),
+
+        const SizedBox(height: 26),
         _Field(controller: nameCtrl, hint: 'SQUAD NAME'),
         const SizedBox(height: 12),
         GameButton(label: 'FOUND A SQUAD', onTap: onCreate, pulse: true),
@@ -733,9 +752,18 @@ class _NoSquad extends StatelessWidget {
           Expanded(child: Container(height: 1, color: AppColors.divider)),
         ]),
         const SizedBox(height: 26),
+        Text('GOT A CODE FROM A MATE?',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: AppColors.textSecondary,
+              fontSize: 11.5,
+              letterSpacing: 1.4,
+              fontWeight: FontWeight.w800,
+            )),
+        const SizedBox(height: 12),
         _Field(
             controller: codeCtrl,
-            hint: 'INVITE CODE',
+            hint: 'ABC123',
             caps: true,
             letterSpacing: 6),
         const SizedBox(height: 12),
@@ -1622,6 +1650,46 @@ class _PulseRow extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ]),
+    );
+  }
+}
+
+/// One numbered step. Three of these replace the paragraph nobody read.
+class _How extends StatelessWidget {
+  final String n, text;
+  const _How({required this.n, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(children: [
+        Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.red.withValues(alpha: 0.5)),
+          ),
+          alignment: Alignment.center,
+          child: Text(n,
+              style: GoogleFonts.inter(
+                color: AppColors.red,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              )),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Text(text,
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 12.5,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              )),
         ),
       ]),
     );
