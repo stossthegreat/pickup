@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import '../../config/auralay_dev_flags.dart';
 import '../../services/analytics_service.dart';
 import '../../services/creator_mode_store.dart';
+import '../../services/backend/chat_score_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/paywall_gate.dart';
 import '../../services/roster.dart';
@@ -253,9 +254,40 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
 
   @override
   void dispose() {
+    _submitForScoring();
     _ctrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  bool _submitted = false;
+
+  /// Hand the conversation to the text grader on the way out.
+  ///
+  /// This is what turns a text mission from a flat +50 XP into a real
+  /// number. Fire-and-forget and context-free, so it's safe from
+  /// dispose(); the result parks in ChatScoreService.lastResult for
+  /// whichever screen wants to show it.
+  ///
+  /// Only submits a conversation with something in it — three lines from
+  /// you, minimum. Anything less isn't a performance to judge, and a
+  /// board full of two-word attempts would be worthless.
+  void _submitForScoring() {
+    if (_submitted) return;
+    _submitted = true;
+    final mine = _msgs.where((m) => m.who == 'you').length;
+    if (mine < 3) return;
+    final transcript = [
+      for (final m in _msgs)
+        if (m.who == 'you' || m.who == 'her')
+          '${m.who == 'you' ? 'YOU' : 'HER'}: ${m.text}',
+    ].join('\n');
+    // ignore: discarded_futures
+    ChatScoreService.score(
+      transcript: transcript,
+      surface: 'roleplay',
+      scenario: widget.config.name,
+    );
   }
 
   void _scrollToBottom() {

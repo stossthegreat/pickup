@@ -62,7 +62,7 @@ jobs:
             echo "Add it in Settings > Secrets and variables > Actions."
             exit 1
           fi
-          for fn in score-voice battle-action daily-game; do
+          for fn in score-voice score-chat battle-action daily-game; do
             echo "── deploying $fn ─────────────────────────────"
             supabase functions deploy "$fn" --project-ref "$PROJECT_REF"
           done

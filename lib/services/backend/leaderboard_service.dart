@@ -92,3 +92,50 @@ class LeaderboardService {
     }
   }
 }
+
+/// One row of the TEXT board. Ranked on best score, not ELO — text has
+/// its own ladder (see migration 0009 for why they don't mix).
+class ChatBoardEntry {
+  final String userId;
+  final String? handle;
+  final String? avatarUrl;
+  final int best;
+  final int attempts;
+  final int average;
+  const ChatBoardEntry({
+    required this.userId,
+    this.handle,
+    this.avatarUrl,
+    required this.best,
+    required this.attempts,
+    required this.average,
+  });
+}
+
+/// Chat-rizz leaderboard reads. Same guarantee as the voice board:
+/// chat_score is written EXCLUSIVELY by the score-chat Edge Function
+/// under the service role, so no phone can post its own number.
+class ChatLeaderboardService {
+  static SupabaseClient get _sb => BackendService.client;
+
+  static Future<List<ChatBoardEntry>> global({int limit = 50}) async {
+    if (!BackendService.enabled) return const [];
+    try {
+      final rows = await _sb.from('chat_leaderboard').select().limit(limit);
+      return [
+        for (final r in rows)
+          ChatBoardEntry(
+            userId: r['id'] as String,
+            handle: r['handle'] as String?,
+            avatarUrl: r['avatar_url'] as String?,
+            best: (r['best'] as num?)?.toInt() ?? 0,
+            attempts: (r['attempts'] as num?)?.toInt() ?? 0,
+            average: (r['average'] as num?)?.toInt() ?? 0,
+          )
+      ];
+    } catch (e) {
+      debugPrint('ChatLeaderboardService.global: $e');
+      return const [];
+    }
+  }
+}
