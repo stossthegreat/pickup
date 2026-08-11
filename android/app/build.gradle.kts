@@ -45,6 +45,34 @@ android {
         buildConfig = true
     }
 
+    // ── 16 KB PAGE SIZE (Google Play requirement) ────────────────────────
+    // Every app targeting Android 15 (API 35)+ must support 16 KB memory
+    // pages on 64-bit devices; from 1 Feb 2027 Play blocks updates that
+    // don't. Flutter 3.35 targets well above 35, so this app is in scope,
+    // and it ships a lot of native code — ML Kit (face detection, face
+    // mesh, text recognition), camera, record, flutter_pcm_sound,
+    // secure_storage, Firebase — so it is NOT automatically compliant the
+    // way a pure Kotlin/Java app is.
+    //
+    // useLegacyPackaging = false stores the .so files UNCOMPRESSED and
+    // page-aligned in the APK/AAB. On AGP 8.5.1+ (this project is on
+    // 8.9.1) that alignment is 16 KB. It is the default on modern AGP,
+    // but it is set explicitly here because the whole requirement turns
+    // on it and a silent default change would be expensive to notice.
+    //
+    // NOTE — this covers the PACKAGING half only. The other half is the
+    // ELF segment alignment compiled INTO each third-party .so, which
+    // comes from the plugin authors shipping NDK r28+ builds. Verify the
+    // built artifact, don't assume:
+    //     bundletool dump config --bundle=app.aab | grep alignment
+    //     → expect PAGE_ALIGNMENT_16K
+    // Play Console also flags non-compliant bundles on upload.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
     defaultConfig {
         // Android uses com.imhim.app everywhere: applicationId, namespace,
         // the MainActivity package, google-services.json and the asset-link
