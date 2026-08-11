@@ -84,48 +84,108 @@ class SquadService {
         .join();
   }
 
-  /// Create a squad and join it as captain. Returns null offline.
+  /// RFC-4122 v4, generated on-device. See [create] for why the id can't
+  /// come back from the server.
+  static String _uuid() {
+    final r = Random.secure();
+    final b = List<int>.generate(16, (_) => r.nextInt(256));
+    b[6] = (b[6] & 0x0f) | 0x40; // version 4
+    b[8] = (b[8] & 0x3f) | 0x80; // variant 10
+    final h = b.map((x) => x.toRadixString(16).padLeft(2, '0')).join();
+    return '${h.substring(0, 8)}-${h.substring(8, 12)}-'
+        '${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20)}';
+  }
+
+  /// Why the last create/join failed, in Postgres' own words. Both used
+  /// to collapse every failure into `null`, which the UI rendered as
+  /// absolutely nothing happening when you tapped FOUND A SQUAD.
+  static String? lastError;
+
+  /// Create a squad and join it as captain.
+  ///
+  /// THE BUG THIS FIXES: the insert used to end `.select().single()`, and
+  /// PostgREST runs that returning-clause through the SELECT policy —
+  /// which is `is_squad_member(id)`. At that instant the creator is NOT
+  /// yet a member, because the squad_members insert is the NEXT
+  /// statement. So the row was written, the read of it came back empty,
+  /// .single() threw, the catch swallowed it, and the button did nothing
+  /// at all. A classic RLS + RETURNING trap.
+  ///
+  /// The id is therefore minted on-device and the insert asks for
+  /// nothing back. Nothing needs the SELECT policy, so this works under
+  /// the existing policies — no migration required to unbreak it.
+  /// (0008 fixes the policy properly as well, for every other reader.)
   static Future<Squad?> create(String name) async {
+    lastError = null;
     final uid = AuthService.userId;
-    if (uid == null) return null;
+    if (uid == null) {
+      lastError = 'Not signed in yet — the app has no account to own the '
+          'squad. Check Settings → Backend check.';
+      return null;
+    }
+    final id = _uuid();
+    final code = _mintCode();
     try {
-      final code = _mintCode();
-      final row = await _sb
-          .from('squads')
-          .insert({'name': name, 'invite_code': code, 'created_by': uid})
-          .select()
-          .single();
+      await _sb.from('squads').insert({
+        'id': id,
+        'name': name,
+        'invite_code': code,
+        'created_by': uid,
+      });
+    } catch (e) {
+      lastError = 'Could not create the squad.\n\n$e';
+      debugPrint('SquadService.create (squads): $e');
+      return null;
+    }
+    try {
       await _sb.from('squad_members').insert({
-        'squad_id': row['id'],
+        'squad_id': id,
         'user_id': uid,
         'role': 'captain',
       });
-      return Squad(
-          id: row['id'] as String,
-          name: row['name'] as String,
-          inviteCode: row['invite_code'] as String);
     } catch (e) {
-      debugPrint('SquadService.create: $e');
+      // The squad exists but we're not in it — worse than failing
+      // outright, because the code works for everyone except you.
+      lastError = 'Squad created but joining it failed.\n\n$e';
+      debugPrint('SquadService.create (members): $e');
       return null;
     }
+    return Squad(id: id, name: name, inviteCode: code);
   }
 
   /// Join by invite code. Goes through the join_squad_by_code RPC
   /// (SECURITY DEFINER) because RLS correctly stops non-members from
   /// reading squads — the function is the one sanctioned door in.
   static Future<Squad?> joinByCode(String code) async {
-    if (AuthService.userId == null) return null;
+    lastError = null;
+    if (AuthService.userId == null) {
+      lastError = 'Not signed in yet. Check Settings → Backend check.';
+      return null;
+    }
     try {
       final row = await _sb.rpc('join_squad_by_code',
           params: {'code': code.trim().toUpperCase()});
-      if (row == null) return null;
-      final m = (row as List).first as Map<String, dynamic>;
+      final list = row as List?;
+      if (list == null || list.isEmpty) {
+        lastError = 'No squad has that code.';
+        return null;
+      }
+      final m = list.first as Map<String, dynamic>;
       return Squad(
           id: m['id'] as String,
           name: m['name'] as String,
           inviteCode: m['invite_code'] as String);
     } catch (e) {
-      debugPrint('SquadService.joinByCode: $e'); // bad code lands here too
+      // The RPC raises for a bad code, a full squad, and for genuine
+      // faults — they are not the same thing and shouldn't read alike.
+      final s = e.toString();
+      lastError = s.contains('invalid invite code')
+          ? 'No squad has that code. Codes are 6 characters and are not '
+              'the squad\'s name.'
+          : s.contains('full')
+              ? 'That squad is full — five is the maximum.'
+              : 'Could not join.\n\n$e';
+      debugPrint('SquadService.joinByCode: $e');
       return null;
     }
   }

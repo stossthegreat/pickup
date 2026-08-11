@@ -99,9 +99,36 @@ class _HandleScreenState extends State<HandleScreen> {
     if (!mounted) return;
     setState(() => _saving = false);
     if (!ok) {
-      // The unique index is the real referee — it can still reject if
-      // someone claimed the name in the seconds since we checked.
-      setState(() => _state = _Check.taken);
+      // Say WHY. 'Taken' is only one of the reasons a save can fail, and
+      // showing it for all of them sent people hunting for a new name
+      // when the real problem was their profile row.
+      final why = AuthService.lastError ?? '';
+      if (why.contains('taken')) {
+        setState(() => _state = _Check.taken);
+      } else {
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: AppColors.surface1,
+            title: Text('Couldn\'t save that name',
+                style: GoogleFonts.inter(
+                    color: Colors.white, fontWeight: FontWeight.w900)),
+            content: SelectableText(why.isEmpty ? 'Unknown error.' : why,
+                style: GoogleFonts.inter(
+                    color: AppColors.textSecondary,
+                    fontSize: 12.5,
+                    height: 1.5)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text('OK',
+                    style: GoogleFonts.inter(
+                        color: AppColors.red, fontWeight: FontWeight.w900)),
+              ),
+            ],
+          ),
+        );
+      }
       return;
     }
     _done();

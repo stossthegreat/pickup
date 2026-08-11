@@ -239,6 +239,9 @@ class _AscendScreenState extends State<AscendScreen> {
                     StreakBadge(days: widget.dayStreak),
                     const SizedBox(width: 8),
                   ],
+                  _MastheadBoardCog(
+                    onTap: () => context.push('/leaderboard')),
+                  const SizedBox(width: 6),
                   _MastheadSettingsCog(
                     onTap: () => context.push('/settings')),
                 ],
@@ -1635,6 +1638,34 @@ class _MastheadSettingsCog extends StatelessWidget {
           ),
           alignment: Alignment.center,
           child: const Icon(Icons.settings_outlined,
+            size: 18, color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+}
+
+class _MastheadBoardCog extends StatelessWidget {
+  final VoidCallback onTap;
+  const _MastheadBoardCog({required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 38, height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: AppColors.divider, width: 0.8),
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.emoji_events_outlined,
             size: 18, color: AppColors.textSecondary),
         ),
       ),

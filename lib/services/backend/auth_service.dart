@@ -214,14 +214,55 @@ class AuthService {
   }
 
   /// Set/replace the public handle shown on leaderboards + squad rosters.
+  /// Set the public handle, and PROVE it landed.
+  ///
+  /// This used to be a bare `.update()` that returned true unconditionally.
+  /// An update matching ZERO rows is not an error in Postgres — it's a
+  /// no-op — so if the profiles row didn't exist (the on_auth_user_created
+  /// trigger only fires for users created AFTER it was installed, and
+  /// linking an anonymous account to Apple can leave you on a different
+  /// id than the one you typed the name under), the app cheerfully said
+  /// "saved" and you stayed ANON on every board forever.
+  ///
+  /// Now: upsert, so a missing row is created rather than silently
+  /// skipped, then read it straight back and only report success if the
+  /// value is actually there.
   static Future<bool> setHandle(String handle) async {
+    lastError = null;
     final uid = userId;
-    if (uid == null) return false;
+    if (uid == null) {
+      lastError = 'Not signed in.';
+      return false;
+    }
+    final clean = handle.trim();
     try {
-      await _sb.from('profiles').update({'handle': handle}).eq('id', uid);
+      await _sb.from('profiles').upsert({'id': uid, 'handle': clean});
+    } catch (e) {
+      final s = e.toString();
+      lastError = s.contains('duplicate') || s.contains('unique')
+          ? 'That name is already taken.'
+          : 'Could not save the name.\n\n$e';
+      debugPrint('AuthService.setHandle: $e');
+      return false;
+    }
+    // Trust nothing — read it back.
+    try {
+      final row = await _sb
+          .from('profiles')
+          .select('handle')
+          .eq('id', uid)
+          .maybeSingle();
+      final saved = (row?['handle'] as String?) ?? '';
+      if (saved.toLowerCase() != clean.toLowerCase()) {
+        lastError = 'The name did not stick — the server still has '
+            '"${saved.isEmpty ? '(nothing)' : saved}". '
+            'Your profile row may be missing.';
+        return false;
+      }
       return true;
     } catch (e) {
-      debugPrint('AuthService.setHandle: $e');
+      lastError = 'Saved, but could not confirm it.\n\n$e';
+      debugPrint('AuthService.setHandle (verify): $e');
       return false;
     }
   }
