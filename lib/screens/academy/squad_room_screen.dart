@@ -18,6 +18,7 @@ import '../../theme/app_typography.dart';
 import '../../widgets/academy/academy_modal.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/squad_grade.dart';
+import '../../widgets/academy/today_board.dart';
 
 /// THE SQUAD ROOM. Not a settings page — a room you walk into. The
 /// banner tells you who you are, the WEEK BOARD tells you who showed
@@ -333,26 +334,31 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
           _banner(squad, done, possible),
           const SizedBox(height: 20),
 
-          // ── THE RATING — who's carrying, who's hiding ─────────────
-          _label('SQUAD REPORT', 'Graded every week.'),
+          // ── TODAY'S BOARD — the whole day, one grid ───────────────
+          // This is the screen's answer to "what has everyone actually
+          // done?". It goes FIRST because it's the question you open the
+          // room to ask. Rows are men, columns are the five missions,
+          // last column is the scored voice run.
+          _label("TODAY'S BOARD", 'Everyone, everything, one look.'),
           const SizedBox(height: 12),
-          SquadReport(roster: _roster, marks: _marks),
-          const SizedBox(height: 22),
-
-          // ── THE WEEK BOARD ────────────────────────────────────────
-          _label('THE WEEK BOARD', 'Who showed up.'),
-          const SizedBox(height: 12),
-          _WeekBoard(roster: _roster, marks: _marks),
+          TodayBoard(
+            roster: _roster,
+            board: _board,
+            squadStates: _squadStates,
+            daily: _daily,
+          ),
           const SizedBox(height: 22),
 
           // ── THE AI RUN — did they get to the end? ─────────────────
-          _label("TODAY'S AI RUN", 'Who went the distance.'),
+          _label("TODAY'S VOICE RUN", 'Who went the distance.'),
           const SizedBox(height: 12),
           _DailyRunCard(roster: _roster, marks: _daily),
           const SizedBox(height: 22),
 
           // ── CALL YOUR SHOT — the whole slate ──────────────────────
-          _label("TODAY'S MISSIONS", 'Pick your lane. They see it.'),
+          // Numbered 1..5 to match the board's columns above, so the
+          // grid and the cards are obviously the same five things.
+          _label("THE FIVE", 'Same five for everyone today.'),
           const SizedBox(height: 12),
           if (_board.isEmpty)
             const _EmptyBoard()
@@ -370,6 +376,18 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
               ),
               if (m != _board.last) const SizedBox(height: 10),
             ],
+          const SizedBox(height: 22),
+
+          // ── THE RATING — who's carrying, who's hiding ─────────────
+          _label('SQUAD REPORT', 'Graded every week.'),
+          const SizedBox(height: 12),
+          SquadReport(roster: _roster, marks: _marks),
+          const SizedBox(height: 22),
+
+          // ── THE WEEK BOARD ────────────────────────────────────────
+          _label('THE WEEK', 'Seven days, who showed up.'),
+          const SizedBox(height: 12),
+          _WeekBoard(roster: _roster, marks: _marks),
           const SizedBox(height: 22),
 
           // ── THE PULSE ─────────────────────────────────────────────
@@ -1267,7 +1285,9 @@ class _MissionCardState extends State<_MissionCard> {
                 alignment: Alignment.center,
                 child: completed
                     ? const Icon(Icons.check_rounded, size: 16, color: kNeon)
-                    : Text('${m.tier}',
+                    // The card's number is its COLUMN on today's board,
+                    // not its ladder tier — the two were being confused.
+                    : Text('${widget.index + 1}',
                         style: GoogleFonts.inter(
                           color: accent,
                           fontSize: 13,
