@@ -349,7 +349,15 @@ class PurchaseService {
         AnalyticsService.purchaseCompleted(pkg.identifier);
         return PurchaseOutcome.success;
       }
-      lastErrorMessage = _humanise(code, err.message);
+      // KEEP THE STORE'S OWN WORDS. _humanise() returns one fixed
+      // sentence per error code, which threw away the single most
+      // useful string in the whole failure: Play's DebugMessage. On
+      // Android a DEVELOPER_ERROR can mean "Please ensure the app is
+      // signed correctly", "Expired Product details", or a handful of
+      // other things — same code, completely different fixes. Without
+      // the raw text you cannot tell them apart, which is exactly the
+      // hole we spent a release falling into.
+      lastErrorMessage = _withRaw(_humanise(code, err.message), code, err);
       AnalyticsService.purchaseFailed(pkg.identifier, code?.name ?? 'unknown');
       return PurchaseOutcome.error;
     } catch (err) {
@@ -505,6 +513,27 @@ class PurchaseService {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Append the store's verbatim reason under the friendly sentence.
+  ///
+  /// The friendly line is what a real user should read; everything after
+  /// the rule is for us. `err.message` is RevenueCat's message and
+  /// `err.details` carries the underlying store payload — on Android
+  /// that's where Play's own DebugMessage ends up, and it names the
+  /// actual cause instead of leaving us to guess between several very
+  /// different fixes that share one error code.
+  static String _withRaw(
+      String friendly, PurchasesErrorCode? code, PlatformException err) {
+    final bits = <String>[
+      if (code != null) 'code: ${code.name}',
+      if (err.code.isNotEmpty) 'platform: ${err.code}',
+      if (err.message != null && err.message!.isNotEmpty)
+        'message: ${err.message}',
+      if (err.details != null) 'details: ${err.details}',
+    ];
+    if (bits.isEmpty) return friendly;
+    return '$friendly\n\n── store said ──\n${bits.join('\n')}';
   }
 
   /// Map a RevenueCat error code + raw message into something a user
