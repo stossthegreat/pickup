@@ -170,6 +170,49 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     }
   }
 
+  /// Leaving is destructive and irreversible without the code, so it
+  /// asks first and says plainly what is lost.
+  Future<void> _confirmLeave() async {
+    final s = _squad;
+    if (s == null) return;
+    HapticFeedback.selectionClick();
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface1,
+        title: Text('Leave ${s.name}?',
+            style: GoogleFonts.inter(
+                color: Colors.white, fontWeight: FontWeight.w900)),
+        content: Text(
+            'You drop off their board and lose the squad grade you built '
+            'together. You can rejoin with the code ${s.inviteCode}.',
+            style: GoogleFonts.inter(
+                color: AppColors.textSecondary, height: 1.45)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('STAY',
+                style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontWeight: FontWeight.w800)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('LEAVE',
+                style: GoogleFonts.inter(
+                    color: AppColors.red, fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    await SquadService.leave(s.id);
+    SquadBroadcast.invalidate();
+    if (!mounted) return;
+    _snack('You left ${s.name}.');
+    _load();
+  }
+
   /// Tap the code = it's on the clipboard. Sharing is a second, separate
   /// action — most invites get read out or pasted into a group chat, and
   /// a share sheet is the wrong tool for both.
@@ -327,6 +370,15 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
               onPressed: _shareInvite,
               icon: const Icon(Icons.person_add_alt_1_rounded,
                   size: 20, color: AppColors.red),
+            ),
+            // LEAVE. SquadService.leave() existed from day one but
+            // nothing ever called it — you could join a squad and had
+            // no way out, which is both a trap and an App Review
+            // problem for anything social.
+            IconButton(
+              onPressed: _confirmLeave,
+              icon: const Icon(Icons.logout_rounded,
+                  size: 19, color: AppColors.textTertiary),
             ),
           ]),
 
