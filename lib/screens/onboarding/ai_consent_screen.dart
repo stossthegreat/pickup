@@ -50,13 +50,11 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
     await LocalStoreService.setAiConsent(true);
     AnalyticsService.consentGranted();
     if (!mounted) return;
-    // ACADEMY OFF — this used to go to /onboarding/identity, the
-    // "Continue with Apple / Continue with Google / SKIP FOR NOW"
-    // screen. There is no account to claim while the social layer is
-    // down, so consent is now the LAST onboarding step and drops
-    // straight into the app.
-    // context.go('/onboarding/identity');
-    context.go('/home');
+    // Consent granted → the identity step (Apple / Google / SKIP FOR
+    // NOW — claiming is optional, always). No entry-wall paywall — the
+    // paywall fires on ACTIONS (opening a girl / mission / call), and
+    // it's dismissible.
+    context.go('/onboarding/identity');
   }
 
   @override
