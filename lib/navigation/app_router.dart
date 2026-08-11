@@ -12,6 +12,7 @@ import '../screens/legal/legal_screen.dart';
 import '../screens/onboarding/age_name_screen.dart';
 import '../screens/onboarding/ai_consent_screen.dart';
 import '../screens/onboarding/gender_pick_screen.dart';
+import '../screens/onboarding/handle_screen.dart';
 import '../screens/onboarding/onboarding_story_screen.dart';
 import '../screens/onboarding/intro_reel_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
@@ -125,6 +126,12 @@ final appRouter = GoRouter(
     GoRoute(
         path: '/onboarding/identity',
         builder: (_, __) => const AccountScreen(onboarding: true)),
+    // PICK YOUR NAME — its own page now. Onboarding: consent+sign-in,
+    // then this. Settings reaches the same screen without `onboarding`.
+    GoRoute(
+        path: '/onboarding/handle',
+        builder: (_, __) => const HandleScreen(onboarding: true)),
+    GoRoute(path: '/handle', builder: (_, __) => const HandleScreen()),
     GoRoute(
         path: '/leaderboard',
         builder: (_, __) => const LeaderboardScreen()),

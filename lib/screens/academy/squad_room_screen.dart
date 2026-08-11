@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/mission_service.dart';
 import '../../services/backend/squad_broadcast.dart';
+import '../../services/backend/squad_day.dart';
 import '../../services/backend/squad_live_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/live_events.dart';
@@ -16,9 +17,13 @@ import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/academy_modal.dart';
+import '../../widgets/academy/day_beat.dart';
+import '../../widgets/academy/five_journey.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/squad_grade.dart';
+import '../../widgets/academy/squad_gauge.dart';
 import '../../widgets/academy/today_board.dart';
+import '../../widgets/academy/your_five.dart';
 
 /// THE SQUAD ROOM. Not a settings page — a room you walk into. The
 /// banner tells you who you are, the WEEK BOARD tells you who showed
@@ -78,7 +83,7 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     final results = await Future.wait([
       SquadService.weekMarks(ids),
       SquadService.pulse(squad.id),
-      MissionService.todayBoard(),
+      MissionService.todayBoard(count: SquadDay.missionsPerDay),
       SquadService.missionPulseToday(ids),
       SquadService.dailyToday(ids, squadId: squad.id),
     ]);
@@ -101,6 +106,38 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
       _myStates = myStates;
       _loading = false;
     });
+  }
+
+  /// The single source of truth for every number on this screen.
+  SquadDay get _day => SquadDay(
+        roster: _roster,
+        board: _board,
+        squadStates: _squadStates,
+        daily: _daily,
+      );
+
+  bool _wonShown = false;
+
+  /// The gauge closing is the day's big moment — full-screen, heavy
+  /// haptic, once per day.
+  void _dayWon() {
+    if (_wonShown || !mounted) return;
+    _wonShown = true;
+    HapticFeedback.heavyImpact();
+    _celebrate('DAY WON');
+  }
+
+  /// A nudge is a squad-visible poke, not a private DM — the point is
+  /// that the room sees you were called out.
+  Future<void> _nudge(SquadMember m) async {
+    final s = _squad;
+    if (s == null) return;
+    await SquadService.postEvent(s.id, 'nudge', {
+      'target': m.userId,
+      'handle': m.handle ?? 'ANON',
+    });
+    if (!mounted) return;
+    _snack('Nudged ${m.handle ?? 'them'}. The room saw it.');
   }
 
   void _refreshSoft() {
@@ -168,6 +205,87 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
       _celebrate(m.title);
       _load();
     }
+  }
+
+  /// A node opens the brief and the one action it needs — call your
+  /// shot, or mark it done. A sheet rather than a page: the journey
+  /// stays behind it so you never lose your place on the spine.
+  void _openMission(Mission m) {
+    final state = _myStates[m.id];
+    final completed = state == 'completed';
+    final committed = state == 'committed';
+    AcademyModal.show(
+      context,
+      kicker: completed
+          ? 'COMPLETED'
+          : committed
+              ? 'CALLED IT'
+              : 'MISSION',
+      accent: completed ? kNeon : AppColors.red,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(m.title,
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 20,
+                height: 1.15,
+                letterSpacing: -0.4,
+                fontWeight: FontWeight.w900,
+              )),
+          const SizedBox(height: 10),
+          Text(m.prompt,
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 13.5,
+                height: 1.5,
+                fontWeight: FontWeight.w500,
+              )),
+          const SizedBox(height: 18),
+          if (completed)
+            Text('DONE. THE SQUAD SAW IT.',
+                style: GoogleFonts.inter(
+                  color: kNeon,
+                  fontSize: 11.5,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w900,
+                ))
+          else if (committed) ...[
+            GameButton(
+                label: 'MARK IT DONE',
+                height: 52,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _complete(m);
+                }),
+            const SizedBox(height: 8),
+            Text('You called it. They\'re watching for the check.',
+                style: GoogleFonts.inter(
+                  color: AppColors.red,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                )),
+          ] else ...[
+            GameButton(
+                label: 'CALL YOUR SHOT',
+                height: 52,
+                pulse: true,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _commit(m);
+                }),
+            const SizedBox(height: 8),
+            Text('Committing posts it to the squad. No hiding after.',
+                style: GoogleFonts.inter(
+                  color: AppColors.textMuted,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                )),
+          ],
+        ],
+      ),
+    );
   }
 
   /// Leaving is destructive and irreversible without the code, so it
@@ -306,8 +424,12 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     final s = _squad;
     if (s == null) return;
     HapticFeedback.selectionClick();
-    Share.share('Join my squad "${s.name}" on ImHim Rizz. '
-        'Code: ${s.inviteCode}');
+    Share.share(
+        'Get in my squad on ImHim Rizz.\n\n'
+        'Squad: ${s.name}\n'
+        'Code: ${s.inviteCode}\n\n'
+        'Open the app → Squad → type the code. Five missions a day, '
+        'one voice rizz-off, and we both see who actually did them.');
   }
 
   void _snack(String msg) {
@@ -349,8 +471,6 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
 
   Widget _room() {
     final squad = _squad!;
-    final done = _marks.where((m) => m.completed).length;
-    final possible = _roster.length * 7;
     return RefreshIndicator(
       color: AppColors.red,
       backgroundColor: AppColors.surface1,
@@ -382,9 +502,63 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
             ),
           ]),
 
-          // ── BANNER — who you are ──────────────────────────────────
-          _banner(squad, done, possible),
+          // ── THE GAUGE — one hero instrument, top third ────────────
+          // Replaces the old banner-of-stats. Five segments, one per
+          // seat, each filling with that man's five moves. The team's
+          // whole day, readable without a legend.
+          SquadGauge(
+            day: _day,
+            squadName: squad.name,
+            onWin: _dayWon,
+          ),
+          const SizedBox(height: 14),
+
+          // ── THE BEAT — the day's clock, right under the dial ──────
+          DayBeat(day: _day),
           const SizedBox(height: 20),
+
+          // ── YOUR FIVE — portraits, arcs, empty seats ──────────────
+          Row(children: [
+            Text('YOUR FIVE',
+                style: AppTypography.labelBold.copyWith(fontSize: 10.5)),
+            const SizedBox(width: 8),
+            Text('${_roster.length}/${SquadDay.maxMembers}',
+                style: GoogleFonts.inter(
+                  color: AppColors.red,
+                  fontSize: 10.5,
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w900,
+                )),
+            const Spacer(),
+            if (_day.openSeats > 0)
+              Text(
+                  _day.openSeats == 1
+                      ? 'ONE SEAT OPEN'
+                      : '${_day.openSeats} SEATS OPEN',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textMuted,
+                    fontSize: 10,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w800,
+                  )),
+          ]),
+          const SizedBox(height: 12),
+          YourFive(
+            day: _day,
+            onRecruit: _shareInvite,
+            onNudge: _nudge,
+          ),
+          const SizedBox(height: 14),
+
+          // The code sits right under the seats — the moment you notice
+          // an empty one is the moment you want the invite.
+          _codeStrip(squad),
+          const SizedBox(height: 22),
+
+          if (!_day.live) ...[
+            _needTwo(),
+            const SizedBox(height: 22),
+          ],
 
           // ── TODAY'S BOARD — the whole day, one grid ───────────────
           // This is the screen's answer to "what has everyone actually
@@ -415,19 +589,12 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
           if (_board.isEmpty)
             const _EmptyBoard()
           else
-            for (final (i, m) in _board.indexed) ...[
-              _MissionCard(
-                mission: m,
-                state: _myStates[m.id],
-                pulse: _squadStates[m.id],
-                squadSize: _roster.length,
-                roster: _roster,
-                index: i,
-                onCommit: () => _commit(m),
-                onComplete: () => _complete(m),
-              ),
-              if (m != _board.last) const SizedBox(height: 10),
-            ],
+            FiveJourney(
+              day: _day,
+              myStates: _myStates,
+              onOpenMission: _openMission,
+              onOpenRizzOff: () => context.push('/daily'),
+            ),
           const SizedBox(height: 22),
 
           // ── THE RATING — who's carrying, who's hiding ─────────────
@@ -465,181 +632,79 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     );
   }
 
-  /// Squad banner — emblem, name, member faces, the code chip and the
-  /// week's progress bar. The identity object of the whole feature.
-  Widget _banner(Squad squad, int done, int possible) {
-    final pct = possible == 0 ? 0.0 : done / possible;
+  /// The invite, sitting directly under the empty seats.
+  Widget _codeStrip(Squad squad) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.red.withValues(alpha: 0.24),
-            AppColors.surface1,
-            AppColors.surface1,
-          ],
-        ),
-        border: Border.all(color: AppColors.red.withValues(alpha: 0.4)),
-        boxShadow: const [BoxShadow(color: AppColors.redGlow, blurRadius: 30)],
+        color: Colors.black.withValues(alpha: 0.38),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.red.withValues(alpha: 0.35)),
       ),
-      child: Column(children: [
-        Row(children: [
-          // Emblem — the squad initial struck into a disc.
-          Container(
-            width: 62,
-            height: 62,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFFFF6B70), AppColors.red, Color(0xFF7E0E12)],
-              ),
-              border:
-                  Border.all(color: Colors.white.withValues(alpha: 0.28), width: 2),
-              boxShadow: [
-                BoxShadow(
-                    color: AppColors.red.withValues(alpha: 0.5),
-                    blurRadius: 26)
-              ],
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              squad.name.characters.first.toUpperCase(),
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                shadows: [
-                  Shadow(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      blurRadius: 8)
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
+      child: Row(children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: _copyCode,
+            behavior: HitTestBehavior.opaque,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(squad.name.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                Text('SQUAD CODE — TAP TO COPY',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textMuted,
+                      fontSize: 8.5,
+                      letterSpacing: 1.6,
+                      fontWeight: FontWeight.w900,
+                    )),
+                const SizedBox(height: 3),
+                Text(squad.inviteCode,
                     style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 22,
-                      height: 1.05,
-                      letterSpacing: -0.4,
+                      height: 1.1,
+                      letterSpacing: 7,
                       fontWeight: FontWeight.w900,
-                    )),
-                const SizedBox(height: 4),
-                Text('${_roster.length} OPERATIVES',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textTertiary,
-                      fontSize: 10,
-                      letterSpacing: 2,
-                      fontWeight: FontWeight.w800,
                     )),
               ],
             ),
           ),
-        ]),
-        const SizedBox(height: 16),
-        // Week progress — the squad's shared number.
-        Row(children: [
-          Text('$done',
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 26,
-                height: 1,
-                fontWeight: FontWeight.w900,
-              )),
-          Text(' / $possible SQUARES',
+        ),
+        _CodeAction(
+            icon: Icons.copy_rounded, label: 'COPY', onTap: _copyCode),
+        const SizedBox(width: 6),
+        _CodeAction(
+            icon: Icons.ios_share_rounded, label: 'SEND', onTap: _shareInvite),
+      ]),
+    );
+  }
+
+  /// Below the minimum the day can't be scored — one man ticking his own
+  /// boxes isn't accountability. Said plainly, without calling the squad
+  /// broken.
+  Widget _needTwo() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.red.withValues(alpha: 0.3)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.group_add_rounded, size: 18, color: AppColors.red),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+              'One more man and the day starts scoring. Two is enough — '
+              'you don\'t need five.',
               style: GoogleFonts.inter(
                 color: AppColors.textSecondary,
-                fontSize: 11,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w800,
+                fontSize: 12.5,
+                height: 1.45,
+                fontWeight: FontWeight.w600,
               )),
-          const Spacer(),
-          Text('${done * 100} PTS',
-              style: GoogleFonts.inter(
-                color: AppColors.red,
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-              )),
-        ]),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: pct),
-            duration: const Duration(milliseconds: 900),
-            curve: Curves.easeOutCubic,
-            builder: (_, v, __) => LinearProgressIndicator(
-              value: v,
-              minHeight: 7,
-              backgroundColor: AppColors.surface2,
-              valueColor: const AlwaysStoppedAnimation(AppColors.red),
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        // ── THE INVITE CODE — the growth loop, spelled out ──────────
-        // It used to be a bare 6-letter chip that only opened a share
-        // sheet, so it read as decoration and nobody knew it was THE
-        // code. Now it says what it is, copies on tap, and shares from
-        // its own button.
-        Container(
-          padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.38),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.red.withValues(alpha: 0.45)),
-          ),
-          child: Row(children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: _copyCode,
-                behavior: HitTestBehavior.opaque,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('SQUAD CODE — TAP TO COPY',
-                        style: GoogleFonts.inter(
-                          color: AppColors.textMuted,
-                          fontSize: 8.5,
-                          letterSpacing: 1.6,
-                          fontWeight: FontWeight.w900,
-                        )),
-                    const SizedBox(height: 3),
-                    Text(squad.inviteCode,
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 22,
-                          height: 1.1,
-                          letterSpacing: 7,
-                          fontWeight: FontWeight.w900,
-                        )),
-                  ],
-                ),
-              ),
-            ),
-            _CodeAction(
-                icon: Icons.copy_rounded, label: 'COPY', onTap: _copyCode),
-            const SizedBox(width: 6),
-            _CodeAction(
-                icon: Icons.ios_share_rounded,
-                label: 'SEND',
-                onTap: _shareInvite),
-          ]),
         ),
       ]),
-    ).animate().fadeIn(duration: 340.ms);
+    );
   }
 
   Widget _label(String title, String sub) {
@@ -726,13 +791,23 @@ class _NoSquad extends StatelessWidget {
             .fadeIn(duration: 400.ms),
         const SizedBox(height: 8),
         Text(
-            'Five men, one week. They see your missions, your streak — '
-            'and your silence. That\'s the point.',
+            'You do the reps whether anyone watches or not. You just do '
+            'more of them when they do. Two men is enough — five is the '
+            'most.',
             textAlign: TextAlign.center,
             style: AppTypography.bodySmall)
             .animate()
             .fadeIn(delay: 120.ms, duration: 400.ms),
-        const SizedBox(height: 30),
+        const SizedBox(height: 26),
+
+        // HOW IT WORKS — three lines. The invite-code system was never
+        // explained anywhere, so "how does anyone actually join?" was a
+        // fair question with no answer on screen.
+        _How(n: '1', text: 'Found a squad — you get a 6-letter code'),
+        _How(n: '2', text: 'Send the code to your mate'),
+        _How(n: '3', text: 'He types it in below — that\'s it, you\'re a squad'),
+
+        const SizedBox(height: 26),
         _Field(controller: nameCtrl, hint: 'SQUAD NAME'),
         const SizedBox(height: 12),
         GameButton(label: 'FOUND A SQUAD', onTap: onCreate, pulse: true),
@@ -752,9 +827,18 @@ class _NoSquad extends StatelessWidget {
           Expanded(child: Container(height: 1, color: AppColors.divider)),
         ]),
         const SizedBox(height: 26),
+        Text('GOT A CODE FROM A MATE?',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: AppColors.textSecondary,
+              fontSize: 11.5,
+              letterSpacing: 1.4,
+              fontWeight: FontWeight.w800,
+            )),
+        const SizedBox(height: 12),
         _Field(
             controller: codeCtrl,
-            hint: 'INVITE CODE',
+            hint: 'ABC123',
             caps: true,
             letterSpacing: 6),
         const SizedBox(height: 12),
@@ -1257,378 +1341,40 @@ class _EmptyBoard extends StatelessWidget {
   }
 }
 
-class _MissionCard extends StatefulWidget {
-  final Mission mission;
-  final String? state;
-  final MissionPulse? pulse;
-  final int squadSize;
-  final List<SquadMember> roster;
-  final int index;
-  final VoidCallback onCommit;
-  final VoidCallback onComplete;
-  const _MissionCard({
-    required this.mission,
-    required this.state,
-    required this.pulse,
-    required this.squadSize,
-    required this.roster,
-    required this.index,
-    required this.onCommit,
-    required this.onComplete,
-  });
-
-  @override
-  State<_MissionCard> createState() => _MissionCardState();
-}
-
-class _MissionCardState extends State<_MissionCard> {
-  /// Five open cards would be a wall of text. Collapsed by default, and
-  /// whatever you've already committed to opens itself.
-  late bool _open = widget.state != null;
+/// One numbered step. Three of these replace the paragraph nobody read.
+class _How extends StatelessWidget {
+  final String n, text;
+  const _How({required this.n, required this.text});
 
   @override
   Widget build(BuildContext context) {
-    final m = widget.mission;
-    final committed = widget.state == 'committed';
-    final completed = widget.state == 'completed';
-    final doneCount = widget.pulse?.completed.length ?? 0;
-    final onIt = widget.pulse?.committed.length ?? 0;
-    final accent = completed
-        ? kNeon
-        : committed
-            ? AppColors.red
-            : AppColors.textTertiary;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-            color: completed
-                ? kNeon.withValues(alpha: 0.5)
-                : committed
-                    ? AppColors.red.withValues(alpha: 0.55)
-                    : Colors.white.withValues(alpha: 0.06)),
-        boxShadow: committed
-            ? const [BoxShadow(color: AppColors.redGlow, blurRadius: 18)]
-            : null,
-      ),
-      child: Column(children: [
-        // ── Header row — always visible, tap to open ──────────────
-        InkWell(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            setState(() => _open = !_open);
-          },
-          borderRadius: BorderRadius.circular(18),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
-            child: Row(children: [
-              // Tier disc doubles as the completed check.
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: accent.withValues(alpha: 0.15),
-                  border: Border.all(
-                      color: accent.withValues(alpha: 0.7), width: 1.5),
-                ),
-                alignment: Alignment.center,
-                child: completed
-                    ? const Icon(Icons.check_rounded, size: 16, color: kNeon)
-                    // The card's number is its COLUMN on today's board,
-                    // not its ladder tier — the two were being confused.
-                    : Text('${widget.index + 1}',
-                        style: GoogleFonts.inter(
-                          color: accent,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w900,
-                        )),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(m.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 14.5,
-                          height: 1.15,
-                          letterSpacing: -0.2,
-                          fontWeight: FontWeight.w900,
-                        )),
-                    const SizedBox(height: 3),
-                    // THE SQUAD NUMBER — the whole point of five cards.
-                    Row(children: [
-                      Text('$doneCount/${widget.squadSize} SQUAD DONE',
-                          style: GoogleFonts.inter(
-                            color: doneCount > 0
-                                ? kNeon
-                                : AppColors.textMuted,
-                            fontSize: 9.5,
-                            letterSpacing: 1.1,
-                            fontWeight: FontWeight.w900,
-                          )),
-                      if (onIt > 0) ...[
-                        const SizedBox(width: 8),
-                        Text('· $onIt ON IT',
-                            style: GoogleFonts.inter(
-                              color: AppColors.red,
-                              fontSize: 9.5,
-                              letterSpacing: 1.1,
-                              fontWeight: FontWeight.w900,
-                            )),
-                      ],
-                    ]),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              _SquadDots(
-                  roster: widget.roster,
-                  pulse: widget.pulse,
-                  size: widget.squadSize),
-              const SizedBox(width: 6),
-              Icon(
-                  _open
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  size: 20,
-                  color: AppColors.textTertiary),
-            ]),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(children: [
+        Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.red.withValues(alpha: 0.5)),
           ),
-        ),
-
-        // ── Body — the brief and the action ───────────────────────
-        AnimatedCrossFade(
-          firstChild: const SizedBox(width: double.infinity),
-          secondChild: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(height: 1, color: AppColors.divider),
-                const SizedBox(height: 12),
-                Text(m.prompt,
-                    style: GoogleFonts.inter(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                      height: 1.5,
-                      fontWeight: FontWeight.w500,
-                    )),
-                const SizedBox(height: 14),
-                if (completed)
-                  Text('DONE. SQUARE FILLED.',
-                      style: GoogleFonts.inter(
-                        color: kNeon,
-                        fontSize: 11.5,
-                        letterSpacing: 2,
-                        fontWeight: FontWeight.w900,
-                      ))
-                else if (committed) ...[
-                  GameButton(
-                      label: 'MARK IT DONE',
-                      height: 50,
-                      onTap: widget.onComplete),
-                  const SizedBox(height: 7),
-                  Text('You called it. They\'re watching for the check.',
-                      style: GoogleFonts.inter(
-                        color: AppColors.red,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      )),
-                ] else ...[
-                  GameButton(
-                    label: 'CALL YOUR SHOT',
-                    height: 50,
-                    onTap: widget.onCommit,
-                    pulse: widget.index == 0,
-                  ),
-                  const SizedBox(height: 7),
-                  Text('Committing posts it to the squad. No hiding after.',
-                      style: GoogleFonts.inter(
-                        color: AppColors.textMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      )),
-                ],
-              ],
-            ),
-          ),
-          crossFadeState:
-              _open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-          duration: const Duration(milliseconds: 220),
-          sizeCurve: Curves.easeOutCubic,
-        ),
-      ]),
-    )
-        .animate()
-        .fadeIn(delay: (widget.index * 60).ms, duration: 300.ms)
-        .slideY(begin: 0.06, end: 0, curve: Curves.easeOut);
-  }
-}
-
-/// One dot per squadmate: filled = done, ringed = on it, hollow = not
-/// yet. Reads at a glance without a single word.
-class _SquadDots extends StatelessWidget {
-  final List<SquadMember> roster;
-  final MissionPulse? pulse;
-  final int size;
-  const _SquadDots(
-      {required this.roster, required this.pulse, required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      for (final m in roster.take(6))
-        Padding(
-          padding: const EdgeInsets.only(left: 3),
-          child: Builder(builder: (_) {
-            final done = pulse?.completed.contains(m.userId) ?? false;
-            final on = pulse?.committed.contains(m.userId) ?? false;
-            return Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: done ? kNeon : Colors.transparent,
-                border: Border.all(
-                  color: done
-                      ? kNeon
-                      : on
-                          ? AppColors.red
-                          : Colors.white.withValues(alpha: 0.18),
-                  width: 1.6,
-                ),
-                boxShadow: done
-                    ? [
-                        BoxShadow(
-                            color: kNeon.withValues(alpha: 0.6),
-                            blurRadius: 7)
-                      ]
-                    : null,
-              ),
-            );
-          }),
-        ),
-    ]);
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════
-//  PULSE — a timeline, not a list
-// ══════════════════════════════════════════════════════════════════════
-
-class _PulseRow extends StatelessWidget {
-  final SquadEvent event;
-  final List<SquadMember> roster;
-  final bool first, last;
-  const _PulseRow(
-      {required this.event,
-      required this.roster,
-      required this.first,
-      required this.last});
-
-  @override
-  Widget build(BuildContext context) {
-    String who = 'ANON';
-    for (final m in roster) {
-      if (m.userId == event.actorId) {
-        who = m.userId == AuthService.userId ? 'YOU' : (m.handle ?? 'ANON');
-      }
-    }
-    final (icon, text, color) = switch (event.kind) {
-      'joined' => (Icons.bolt_rounded, '$who joined the squad',
-          AppColors.textSecondary),
-      'started' => (
-          Icons.play_circle_fill_rounded,
-          '$who started ${event.payload['mission'] ?? 'a mission'}',
-          AppColors.accent
-        ),
-      'committed' => (
-          Icons.radio_button_checked_rounded,
-          '$who called their shot'
-              '${event.payload['mission'] != null ? ' — ${event.payload['mission']}' : ''}',
-          AppColors.red
-        ),
-      'completed' => (
-          Icons.check_circle_rounded,
-          '$who completed'
-              '${event.payload['mission'] != null ? ' ${event.payload['mission']}' : ' the mission'}',
-          kNeon
-        ),
-      'scored' => (
-          Icons.graphic_eq_rounded,
-          '$who scored ${event.payload['score'] ?? '—'}',
-          Colors.white
-        ),
-      'rankup' => (
-          Icons.trending_up_rounded,
-          '$who ranked up to ${event.payload['tier'] ?? ''}',
-          kNeon
-        ),
-      _ => (Icons.circle, '$who made a move', AppColors.textTertiary),
-    };
-    final t = event.createdAt;
-    return IntrinsicHeight(
-      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        // Timeline spine
-        SizedBox(
-          width: 26,
-          child: Column(children: [
-            Container(
-                width: 1.5,
-                height: 6,
-                color: first ? Colors.transparent : AppColors.divider),
-            Container(
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color.withValues(alpha: 0.14),
-                border: Border.all(color: color.withValues(alpha: 0.6)),
-              ),
-              child: Icon(icon, size: 11, color: color),
-            ),
-            Expanded(
-              child: Container(
-                  width: 1.5,
-                  color: last ? Colors.transparent : AppColors.divider),
-            ),
-          ]),
+          alignment: Alignment.center,
+          child: Text(n,
+              style: GoogleFonts.inter(
+                color: AppColors.red,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              )),
         ),
         const SizedBox(width: 11),
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 12, top: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(text,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      color: AppColors.textPrimary,
-                      fontSize: 12.5,
-                      height: 1.35,
-                      fontWeight: FontWeight.w700,
-                    )),
-                const SizedBox(height: 2),
-                Text(
-                  '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
-                  style: GoogleFonts.inter(
-                    color: AppColors.textMuted,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          child: Text(text,
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 12.5,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              )),
         ),
       ]),
     );

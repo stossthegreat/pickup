@@ -19,19 +19,22 @@ class RizzGrade {
   final String verdict;
   const RizzGrade(this.letter, this.color, this.verdict);
 
-  /// Scores come back 0..1000 from the grader.
+  /// Scores come back 0..9999 (weighted 0..100 × 99.99), NOT 0..1000 —
+  /// these thresholds were an order of magnitude out, which graded an
+  /// average attempt as S. The grader's own scale is the reference:
+  /// 50 = average nervous attempt, 70 = genuinely good, 85+ = rare.
   static RizzGrade of(int score) {
-    if (score >= 900) {
+    if (score >= 8800) {
       return const RizzGrade('S', Color(0xFFFFD34D), 'UNTOUCHABLE');
     }
-    if (score >= 800) return const RizzGrade('A', kNeon, 'SHE FELT THAT');
-    if (score >= 680) {
+    if (score >= 7500) return const RizzGrade('A', kNeon, 'SHE FELT THAT');
+    if (score >= 6200) {
       return const RizzGrade('B', AppColors.signalGreen, 'SOLID WORK');
     }
-    if (score >= 540) {
+    if (score >= 4500) {
       return const RizzGrade('C', AppColors.signalAmber, 'YOU SURVIVED');
     }
-    if (score >= 380) {
+    if (score >= 3000) {
       return const RizzGrade('D', AppColors.red, 'SHE DRIFTED');
     }
     return const RizzGrade('F', AppColors.redDim, 'RUN IT BACK');

@@ -49,10 +49,24 @@ class AuthService {
     }
   }
 
+  /// Why the last sign-in attempt failed, in the provider's own words.
+  ///
+  /// Both sign-in methods used to swallow every failure into `false`, so
+  /// the UI could only ever say "that didn't work". The overwhelmingly
+  /// common cause is a dashboard field, not a bug — Supabase rejects a
+  /// perfectly good Apple token when the app's bundle id isn't listed
+  /// under the Apple provider's "Client IDs", and the message says so.
+  /// Throwing that away turned a 30-second fix into a guessing game.
+  static String? lastError;
+
   /// Claim the account with Apple (native sheet → Supabase id-token).
   /// Returns true on success.
   static Future<bool> signInWithApple() async {
-    if (!BackendService.enabled) return false;
+    lastError = null;
+    if (!BackendService.enabled) {
+      lastError = 'No backend connection.';
+      return false;
+    }
     try {
       // Raw nonce goes to Supabase, its sha256 goes to Apple — Supabase
       // verifies the pair so a stolen token can't be replayed.
@@ -75,11 +89,44 @@ class AuthService {
     } on SignInWithAppleAuthorizationException catch (e) {
       // User cancelled the sheet — not an error worth surfacing.
       if (e.code == AuthorizationErrorCode.canceled) return false;
+      lastError = 'Apple: ${e.code.name} — ${e.message}';
       debugPrint('AuthService.signInWithApple: $e');
+      return false;
+    } on AuthException catch (e) {
+      // Supabase refused the token. Nine times out of ten this is
+      // "Unacceptable audience in id_token", meaning the bundle id is
+      // missing from Supabase → Auth → Providers → Apple → Client IDs.
+      lastError = 'Supabase rejected the Apple token: ${e.message}\n\n'
+          'Usually means com.imhimrizz.app is missing from '
+          'Supabase → Authentication → Providers → Apple → Client IDs.';
+      debugPrint('AuthService.signInWithApple (supabase): $e');
       return false;
     } catch (e) {
+      lastError = e.toString();
       debugPrint('AuthService.signInWithApple: $e');
       return false;
+    }
+  }
+
+  /// Is this handle free? The DB has `handle text unique`, so the real
+  /// guarantee is server-side — this is the fast pre-check that lets the
+  /// picker say "taken" while you're still typing instead of failing on
+  /// save. Returns null when we genuinely can't tell (offline).
+  static Future<bool?> isHandleFree(String handle) async {
+    if (!BackendService.enabled) return null;
+    final clean = handle.trim();
+    if (clean.isEmpty) return null;
+    try {
+      final rows = await _sb
+          .from('profiles')
+          .select('id')
+          .ilike('handle', clean) // case-insensitive: no Dave vs dave
+          .limit(1);
+      if (rows.isEmpty) return true;
+      return rows.first['id'] == userId; // my own handle is "free" to me
+    } catch (e) {
+      debugPrint('AuthService.isHandleFree: $e');
+      return null;
     }
   }
 
@@ -87,8 +134,14 @@ class AuthService {
   /// Returns false when cancelled, offline, or not yet configured
   /// (BackendConfig.googleWebClientId empty).
   static Future<bool> signInWithGoogle() async {
-    if (!BackendService.enabled) return false;
+    lastError = null;
+    if (!BackendService.enabled) {
+      lastError = 'No backend connection.';
+      return false;
+    }
     if (BackendConfig.googleWebClientId.isEmpty) {
+      lastError = 'Google isn\'t configured yet — the Web client ID is '
+          'still empty in backend_config.dart.';
       debugPrint('AuthService.signInWithGoogle: no client IDs configured');
       return false;
     }
@@ -110,7 +163,13 @@ class AuthService {
         accessToken: auth.accessToken,
       );
       return true;
+    } on AuthException catch (e) {
+      lastError = 'Supabase rejected the Google token: ${e.message}\n\n'
+          'Usually means the Web client ID is missing from '
+          'Supabase → Authentication → Providers → Google.';
+      return false;
     } catch (e) {
+      lastError = e.toString();
       debugPrint('AuthService.signInWithGoogle: $e');
       return false;
     }
