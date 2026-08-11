@@ -151,7 +151,14 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     if (name.isEmpty) return;
     HapticFeedback.mediumImpact();
     final squad = await SquadService.create(name);
-    if (squad == null || !mounted) return;
+    if (!mounted) return;
+    if (squad == null) {
+      // Never fail silently again — a dead button is the worst possible
+      // outcome because there's nothing to act on.
+      _explain('Couldn\'t found the squad',
+          SquadService.lastError ?? 'Unknown error.');
+      return;
+    }
     await SquadService.postEvent(squad.id, 'joined');
     SquadBroadcast.invalidate();
     // ignore: discarded_futures
@@ -167,7 +174,8 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     final squad = await SquadService.joinByCode(code);
     if (!mounted) return;
     if (squad == null) {
-      _snack('Invalid code — check it with your squad.');
+      _explain('Couldn\'t join',
+          SquadService.lastError ?? 'Invalid code — check it with your squad.');
       return;
     }
     await SquadService.postEvent(squad.id, 'joined');
@@ -329,6 +337,46 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     if (!mounted) return;
     _snack('You left ${s.name}.');
     _load();
+  }
+
+  /// A failure the user can act on: the real reason, copyable.
+  void _explain(String title, String detail) {
+    HapticFeedback.mediumImpact();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface1,
+        title: Text(title,
+            style: GoogleFonts.inter(
+                color: Colors.white, fontWeight: FontWeight.w900)),
+        content: SingleChildScrollView(
+          child: SelectableText(detail,
+              style: GoogleFonts.inter(
+                  color: AppColors.textSecondary,
+                  fontSize: 12.5,
+                  height: 1.5)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              // ignore: discarded_futures
+              Clipboard.setData(ClipboardData(text: detail));
+              Navigator.of(ctx).pop();
+            },
+            child: Text('COPY',
+                style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontWeight: FontWeight.w800)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('OK',
+                style: GoogleFonts.inter(
+                    color: AppColors.red, fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Tap the code = it's on the clipboard. Sharing is a second, separate
