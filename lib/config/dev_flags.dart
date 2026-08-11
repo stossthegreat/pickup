@@ -103,17 +103,34 @@ const kForceOnboarding = false;
 //     grep -rn "ACADEMY OFF" lib/
 //
 //   main.dart                      Supabase init, anonymous sign-in,
-//                                  realtime watcher, LiveToastHost, and
-//                                  the four imports they needed
+//                                  realtime watcher, LiveToastHost, imports
+//   navigation/app_router          EVERY Academy route: /squad /daily
+//                                  /leaderboard /battles /fear /account
+//                                  /onboarding/identity /backend-check
+//                                  /score-reveal, and all 8 screen imports.
+//                                  The routes are gone, not just the
+//                                  buttons — nothing can reach these
+//                                  screens by deep link or stray push.
+//   onboarding/ai_consent_screen   the handoff into /onboarding/identity,
+//                                  the "Continue with Apple / Continue
+//                                  with Google / SKIP FOR NOW" screen.
+//                                  Consent is now the LAST onboarding
+//                                  step and goes straight to /home.
+//                                  (setOnboarded(true) already happens at
+//                                  the profile + gender steps, so nobody
+//                                  gets stranded in onboarding.)
 //   missions/missions_tab_screen   the trophy (leagues/leaderboards) and
 //                                  shield (Squad Room) icons at the top,
 //                                  the two group cards above the mission
 //                                  list (THE DAILY + THE SQUAD STRIP),
 //                                  the "BOTTLING IT?" Fear Button chip,
 //                                  the catch-up sheet, the live-toast and
-//                                  squad-broadcast calls, and 6 imports
+//                                  squad-broadcast calls, 6 imports
 //   settings/settings_screen       "Backend check" and "Your identity"
-//                                  (the Apple/Google auth tile)
+//   game/freeflow/free_flow_screen the post-session transcript handoff to
+//                                  the ELO grader, the armed Battle
+//                                  submitter and the armed Daily
+//                                  submitter, plus 3 imports
 //
 // NOTHING WAS DELETED. Every Academy screen, service, widget, migration
 // and Edge Function is still in the repo. The Supabase project, its RLS
@@ -128,4 +145,4 @@ const kForceOnboarding = false;
 /// tell which build is actually installed on-device (TestFlight lag has
 /// repeatedly made us debug a stale build). Bump this with every pubspec
 /// build-number bump.
-const kBuildTag = 'b106-plain';
+const kBuildTag = 'b107-plain';

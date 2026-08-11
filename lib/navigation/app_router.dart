@@ -1,12 +1,13 @@
 import 'package:go_router/go_router.dart';
-import '../screens/academy/account_screen.dart';
-import '../screens/academy/backend_debug_screen.dart';
-import '../screens/academy/battles_screen.dart';
-import '../screens/academy/daily_screen.dart';
-import '../screens/academy/fear_button_screen.dart';
-import '../screens/academy/leaderboard_screen.dart';
-import '../screens/academy/score_reveal_screen.dart';
-import '../screens/academy/squad_room_screen.dart';
+// ACADEMY OFF — every Academy screen import.
+// import '../screens/academy/account_screen.dart';
+// import '../screens/academy/backend_debug_screen.dart';
+// import '../screens/academy/battles_screen.dart';
+// import '../screens/academy/daily_screen.dart';
+// import '../screens/academy/fear_button_screen.dart';
+// import '../screens/academy/leaderboard_screen.dart';
+// import '../screens/academy/score_reveal_screen.dart';
+// import '../screens/academy/squad_room_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/legal/legal_screen.dart';
 import '../screens/onboarding/age_name_screen.dart';
@@ -106,47 +107,49 @@ final appRouter = GoRouter(
     ),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
 
-    // ── The Academy layer — squads, the board, the reveal ────────────
-    GoRoute(path: '/squad', builder: (_, __) => const SquadRoomScreen()),
-    // The Fear Button — the moment training becomes behaviour.
-    GoRoute(path: '/fear', builder: (_, __) => const FearButtonScreen()),
-    // Rizz Battles — same scenario, both blind, higher score takes ELO.
-    GoRoute(path: '/battles', builder: (_, __) => const BattlesScreen()),
-    // THE DAILY — one scenario worldwide, one attempt, plus the league.
-    GoRoute(path: '/daily', builder: (_, __) => const DailyScreen()),
-    // Diagnostic — what exactly is failing between app and Supabase.
-    GoRoute(
-        path: '/backend-check',
-        builder: (_, __) => const BackendDebugScreen()),
-    // Identity — handle + Apple/Google account claim.
-    GoRoute(path: '/account', builder: (_, __) => const AccountScreen()),
-    // Same screen as the FINAL onboarding step: no back arrow, SKIP FOR
-    // NOW exit — claiming is pitched, never forced.
-    GoRoute(
-        path: '/onboarding/identity',
-        builder: (_, __) => const AccountScreen(onboarding: true)),
-    GoRoute(
-        path: '/leaderboard',
-        builder: (_, __) => const LeaderboardScreen()),
-    // Pushed after a scored voice session with a ScoreRevealPayload.
-    // Pops with 'rematch' when the user taps RUN IT BACK.
-    GoRoute(
-      path: '/score-reveal',
-      builder: (_, state) {
-        final p = state.extra;
-        return ScoreRevealScreen(
-          payload: p is ScoreRevealPayload
-              ? p
-              // Defensive demo payload so a stray navigation never crashes.
-              : const ScoreRevealPayload(
-                  score: 0,
-                  rubric: {},
-                  eloDelta: 0,
-                  newRating: 1000,
-                  scenario: ''),
-        );
-      },
-    ),
+    // ACADEMY OFF — the whole layer is unroutable. Not just hidden
+    // behind removed buttons: the routes themselves are gone, so no
+    // stray navigation, deep link or leftover push can reach a squad,
+    // league, leaderboard, battle or backend screen.
+    // GoRoute(path: '/squad', builder: (_, __) => const SquadRoomScreen()),
+    // GoRoute(path: '/fear', builder: (_, __) => const FearButtonScreen()),
+    // GoRoute(path: '/battles', builder: (_, __) => const BattlesScreen()),
+    // GoRoute(path: '/daily', builder: (_, __) => const DailyScreen()),
+    // GoRoute(
+    //     path: '/backend-check',
+    //     builder: (_, __) => const BackendDebugScreen()),
+    // ACADEMY OFF — BOTH routes to the "Continue with Apple / Continue
+    // with Google / SKIP FOR NOW" screen. /onboarding/identity was the
+    // one onboarding walked into automatically; the routes are gone so
+    // it cannot be reached even by a stray navigation.
+    // GoRoute(path: '/account', builder: (_, __) => const AccountScreen()),
+    // GoRoute(
+    //     path: '/onboarding/identity',
+    //     builder: (_, __) => const AccountScreen(onboarding: true)),
+    // ACADEMY OFF — leagues + leaderboards.
+    // GoRoute(
+    //     path: '/leaderboard',
+    //     builder: (_, __) => const LeaderboardScreen()),
+    // ACADEMY OFF — the ELO score reveal.
+    // // Pushed after a scored voice session with a ScoreRevealPayload.
+    // // Pops with 'rematch' when the user taps RUN IT BACK.
+    // GoRoute(
+    // path: '/score-reveal',
+    // builder: (_, state) {
+    // final p = state.extra;
+    // return ScoreRevealScreen(
+    // payload: p is ScoreRevealPayload
+    // ? p
+    // // Defensive demo payload so a stray navigation never crashes.
+    // : const ScoreRevealPayload(
+    // score: 0,
+    // rubric: {},
+    // eloDelta: 0,
+    // newRating: 1000,
+    // scenario: ''),
+    // );
+    // },
+    // ),
     GoRoute(path: '/terms',    builder: (_, __) => LegalScreen(doc: termsDoc)),
     GoRoute(path: '/privacy',  builder: (_, __) => LegalScreen(doc: privacyDoc)),
   ],
