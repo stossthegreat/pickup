@@ -2,5 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Sign in with Apple. Without this entitlement the native
+	     ASAuthorization sheet never appears: sign_in_with_apple throws
+	     AuthorizationErrorCode.unknown / error 1000 the instant it is
+	     called, no matter how correctly Supabase and the Apple Developer
+	     portal are configured. This file was empty, so the button would
+	     have failed on-device with nothing in the dashboards to explain
+	     why. The matching capability must also be ticked on the
+	     com.imhimrizz.app App ID at developer.apple.com. -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
 </dict>
 </plist>
