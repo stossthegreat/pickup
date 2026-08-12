@@ -15,7 +15,6 @@ import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday
 import '../../widgets/academy/day_beat.dart';
 import '../../widgets/academy/squad_chrome.dart';
 import '../../widgets/academy/your_five.dart' show voiceOutOfTen;
-import '../roleplay/girl_chat_screen.dart';
 
 /// TODAY — the whole day on one screen, three cards.
 ///
@@ -100,27 +99,11 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
   }
 
   Future<void> _runChat() async {
-    final girl = girlForVibe(scenarioOfToday());
-    // The chat challenge IS a graded conversation with today's woman —
-    // no separate engine, just the roleplay screen in task mode tagged
-    // to the daily_chat surface so it lands on the right board.
-    await Navigator.of(context, rootNavigator: true).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => GirlChatScreen(
-          config: GirlChatConfig(
-            characterId: girl.id,
-            vibeKey: girl.vibeKey,
-            name: girl.name,
-            archetype: girl.archetype,
-            portraitAsset: girl.asset,
-            accent: girl.accent,
-            opener: girl.opener,
-            taskMode: true,
-            scoreSurface: DailyChatService.surface,
-          ),
-        ),
-      ),
-    );
+    // Goes to the poster, not straight into the conversation. The voice
+    // challenge gets a screen that sets it up before you commit and the
+    // chat one was dropping you into a keyboard — same event, so it gets
+    // the same run-up and the same reveal on the way out.
+    await context.push('/daily-chat');
     if (mounted) _load();
   }
 
@@ -155,6 +138,31 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // 01 · THE SQUAD. It was a thin link buried at
+                          // the very bottom — the door to the whole room,
+                          // below two full-bleed posters, which is the
+                          // last place anyone looks. It leads now.
+                          ChapterMark(
+                            index: '01',
+                            title: 'YOUR SQUAD',
+                            sub: 'Where the day stands.',
+                            accent: accent,
+                          ),
+                          _SquadStatsCard(
+                            name: _squad?.name ?? 'SOLO',
+                            accent: accent,
+                            form: day.form,
+                            complete: day.complete,
+                            possible: day.possible,
+                            men: _roster.length,
+                            hasSquad: _squad != null,
+                            onTap: () async {
+                              await context.push('/squad');
+                              if (mounted) _load();
+                            },
+                          ),
+                          const SizedBox(height: 26),
+
                           ChapterMark(
                             index: '02',
                             title: 'THE VOICE CHALLENGE',
@@ -204,24 +212,6 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
                             ],
                             onRun: _runChat,
                           ),
-                          const SizedBox(height: 26),
-
-                          // The full room stays one tap away — the board,
-                          // the week, the pulse, the invite code.
-                          if (_squad != null)
-                            _RoomLink(
-                                name: _squad!.name,
-                                onTap: () async {
-                                  await context.push('/squad');
-                                  if (mounted) _load();
-                                })
-                          else
-                            _RoomLink(
-                                name: null,
-                                onTap: () async {
-                                  await context.push('/squad');
-                                  if (mounted) _load();
-                                }),
                         ],
                       ),
                     ),
@@ -287,24 +277,6 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
                   ],
                 )),
             const SizedBox(height: 16),
-            Row(children: [
-              Expanded(
-                  child: _Stat(
-                      value: '${day.form}',
-                      label: 'FORM',
-                      accent: accent)),
-              Expanded(
-                  child: _Stat(
-                      value: '${day.complete}/${day.possible}',
-                      label: 'MOVES',
-                      accent: accent)),
-              Expanded(
-                  child: _Stat(
-                      value: '${_roster.length}',
-                      label: _roster.length == 1 ? 'MAN' : 'MEN',
-                      accent: accent)),
-            ]),
-            const SizedBox(height: 16),
             DayBeat(day: _squad == null ? null : day),
             const SizedBox(height: 8),
           ]),
@@ -343,37 +315,132 @@ class _Stat extends StatelessWidget {
   }
 }
 
-class _RoomLink extends StatelessWidget {
-  final String? name;
+/// 01 — THE SQUAD. The crest, the three numbers that matter, and the
+/// way into the room. One object rather than a stat strip stuck to the
+/// masthead and a thin link stranded at the bottom of the scroll.
+class _SquadStatsCard extends StatelessWidget {
+  final String name;
+  final Color accent;
+  final int form, complete, possible, men;
+  final bool hasSquad;
   final VoidCallback onTap;
-  const _RoomLink({required this.name, required this.onTap});
+
+  const _SquadStatsCard({
+    required this.name,
+    required this.accent,
+    required this.form,
+    required this.complete,
+    required this.possible,
+    required this.men,
+    required this.hasSquad,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Panel(
-      onTap: onTap,
-      accent: name == null ? Colors.white : AppColors.red,
-      child: Row(children: [
-        Icon(name == null ? Icons.group_add_rounded : Icons.meeting_room_rounded,
-            size: 18,
-            color: name == null ? AppColors.textSecondary : AppColors.red),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-              name == null
-                  ? 'Start a squad — two men is enough'
-                  : 'The room · board, week, pulse',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
-                color: AppColors.textSecondary,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-              )),
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color.alphaBlend(
+                  accent.withValues(alpha: 0.14), AppColors.surface2),
+              AppColors.surface1,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: accent.withValues(alpha: 0.45)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 24,
+                offset: const Offset(0, 12)),
+            BoxShadow(color: accent.withValues(alpha: 0.16), blurRadius: 30),
+          ],
         ),
-        const Icon(Icons.chevron_right_rounded,
-            size: 18, color: AppColors.textTertiary),
-      ]),
+        child: Column(children: [
+          Row(children: [
+            SquadCrest(name: name, accent: accent, size: 48),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(hasSquad ? 'THE SQUAD' : 'SOLO RUN',
+                      style: GoogleFonts.inter(
+                        color: accent,
+                        fontSize: 8.5,
+                        letterSpacing: 2.4,
+                        fontWeight: FontWeight.w900,
+                      )),
+                  const SizedBox(height: 3),
+                  Text(name.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 21,
+                        height: 1.05,
+                        letterSpacing: -0.9,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                size: 20, color: AppColors.textTertiary),
+          ]),
+          const SizedBox(height: 16),
+          Row(children: [
+            Expanded(
+                child: _Stat(
+                    value: '$form', label: 'FORM', accent: accent)),
+            Container(
+                width: 1,
+                height: 30,
+                color: Colors.white.withValues(alpha: 0.07)),
+            Expanded(
+                child: _Stat(
+                    value: '$complete/$possible',
+                    label: 'MOVES',
+                    accent: accent)),
+            Container(
+                width: 1,
+                height: 30,
+                color: Colors.white.withValues(alpha: 0.07)),
+            Expanded(
+                child: _Stat(
+                    value: '$men',
+                    label: men == 1 ? 'MAN' : 'MEN',
+                    accent: accent)),
+          ]),
+          const SizedBox(height: 14),
+          Container(height: 1, color: AppColors.divider),
+          const SizedBox(height: 11),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(hasSquad ? Icons.meeting_room_rounded : Icons.group_add_rounded,
+                size: 14, color: accent),
+            const SizedBox(width: 8),
+            Text(
+                hasSquad
+                    ? 'OPEN THE ROOM · BOARD, WEEK, PULSE'
+                    : 'START A SQUAD — TWO MEN IS ENOUGH',
+                style: GoogleFonts.inter(
+                  color: accent,
+                  fontSize: 9.5,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w900,
+                )),
+          ]),
+        ]),
+      ),
     );
   }
 }

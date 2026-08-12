@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'backend_service.dart';
 
@@ -36,6 +37,28 @@ class ChatScoreService {
   /// screen the user lands on can show the reveal. Same pattern as
   /// DailyGameService.lastResult.
   static ChatResult? lastResult;
+
+  // ── REVEAL ONCE ─────────────────────────────────────────────────────
+  // Same guard as the voice Daily, for the same reason: the grade is
+  // submitted without await when the chat closes, so it can land after
+  // the screen has read null and then re-fire the moment on the next
+  // visit. A persisted per-day stamp makes it idempotent.
+  static const _kRevealYmd = 'chat.reveal.shown.ymd';
+
+  static int _todayInt() {
+    final n = DateTime.now().toUtc();
+    return n.year * 10000 + n.month * 100 + n.day;
+  }
+
+  static Future<bool> revealShownToday() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_kRevealYmd) == _todayInt();
+  }
+
+  static Future<void> markRevealShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kRevealYmd, _todayInt());
+  }
 
   /// Grade a text conversation. Returns null when offline, when the
   /// transcript is too thin to judge, or when the grader is down — all

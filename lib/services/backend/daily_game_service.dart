@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../live_events.dart';
 import 'backend_service.dart';
@@ -109,6 +110,30 @@ class DailyGameService {
   /// The submit result, parked here by the session-end hook so the
   /// Daily screen can show the reveal when the user returns.
   static DailyResult? lastResult;
+
+  // ── REVEAL ONCE ─────────────────────────────────────────────────────
+  // The reveal is the day's big moment and it was replaying. Clearing
+  // lastResult on read wasn't enough: submit() is fired without await at
+  // session end, so it can land AFTER the Daily screen has already read
+  // null, then sit there and re-fire on the next return. A persisted
+  // per-day stamp makes the moment idempotent regardless of what order
+  // the futures settle in.
+  static const _kRevealYmd = 'daily.reveal.shown.ymd';
+
+  static int _todayInt() {
+    final n = DateTime.now().toUtc();
+    return n.year * 10000 + n.month * 100 + n.day;
+  }
+
+  static Future<bool> revealShownToday() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_kRevealYmd) == _todayInt();
+  }
+
+  static Future<void> markRevealShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kRevealYmd, _todayInt());
+  }
 
   static Future<Map<String, dynamic>?> _invoke(
       Map<String, dynamic> body) async {

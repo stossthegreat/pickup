@@ -6,6 +6,7 @@ import '../screens/academy/daily_screen.dart';
 import '../screens/academy/fear_button_screen.dart';
 import '../screens/academy/leaderboard_screen.dart';
 import '../screens/academy/score_reveal_screen.dart';
+import '../screens/academy/daily_chat_screen.dart';
 import '../screens/academy/squad_day_screen.dart';
 import '../screens/academy/squad_room_screen.dart';
 import '../screens/home/home_screen.dart';
@@ -112,6 +113,8 @@ final appRouter = GoRouter(
     // TODAY — the standing + both daily challenges. Home's single card
     // opens here; the full squad room is one more tap in.
     GoRoute(path: '/today', builder: (_, __) => const SquadDayScreen()),
+    // The chat Daily — the voice screen's mirror, out of 100.
+    GoRoute(path: '/daily-chat', builder: (_, __) => const DailyChatScreen()),
     GoRoute(path: '/squad', builder: (_, __) => const SquadRoomScreen()),
     // The Fear Button — the moment training becomes behaviour.
     GoRoute(path: '/fear', builder: (_, __) => const FearButtonScreen()),
