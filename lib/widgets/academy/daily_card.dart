@@ -83,9 +83,11 @@ class _DailyCardState extends State<DailyCard> {
     final done = s?.attempted == true;
     final accent = done ? AppColors.signalGreen : AppColors.red;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.lg, 0),
-      child: Material(
+    // No padding of its own. The home stack owns the gutter and the
+    // rhythm for all three top cards — when each card carried its own,
+    // they drifted to three different insets and two of them ended up
+    // 2px apart.
+    return Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: _open,
@@ -204,8 +206,7 @@ class _DailyCardState extends State<DailyCard> {
             ]),
           ),
         ),
-      ),
-    )
+      )
         .animate(
             onPlay: (c) => done ? null : c.repeat(reverse: true),
             target: done ? 0 : 1)

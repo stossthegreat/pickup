@@ -105,10 +105,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               size: 18, color: Colors.white),
         ),
-        // TWO LADDERS, named. Voice moves competitive ELO; text has its
-        // own best-score board. Both are real graded numbers now — text
-        // used to pay a flat +50 to everyone who finished, which made a
-        // text board impossible.
+        // TWO LADDERS, and they are deliberately different shapes.
+        // VOICE is one attempt a day, skill-rated, and the ELO can fall —
+        // it rewards being good. CHAT is unlimited and cumulative, so it
+        // rewards turning up and doing it again. Ranking an uncapped
+        // surface on best-of would have made extra reps worthless.
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,7 +118,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 Icon(_voice ? Icons.graphic_eq_rounded : Icons.forum_rounded,
                     size: 13, color: AppColors.red),
                 const SizedBox(width: 6),
-                Text(_voice ? 'VOICE RANKINGS' : 'CHAT RANKINGS',
+                Text(_voice ? 'VOICE RANKINGS' : 'RIZZ CHAT POINTS',
                     style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 11.5,
@@ -586,8 +587,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 6),
               Text(
-                  'Text one of the women for a few messages and the '
-                  'grader scores it out of 100. Your best lands here.',
+                  'Run a battle, or text one of the women. Every graded '
+                  'conversation adds points and there is no daily cap.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                       color: AppColors.textTertiary,
@@ -608,9 +609,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           _ChatRow(entry: e, position: i + 1, mine: e.userId == me),
         const SizedBox(height: 16),
         Text(
-            'Scored 0–100 on opening, relevance, personality, momentum '
-            'and restraint. Ranked on your BEST — one great conversation '
-            'counts, and a bad night can\'t drag you down.',
+            'Every graded conversation adds its score (0–100) to your '
+            'total, and a battle win banks +50 on top. Unlimited — this '
+            'board rewards turning up, and it only ever climbs.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               color: AppColors.textMuted,
@@ -846,7 +847,15 @@ class _ChatRow extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   )),
               const SizedBox(height: 1),
-              Text('avg ${entry.average} · ${entry.attempts} graded',
+              // The credibility line. 400 points off 40 battles reads
+              // very differently to 400 off four, so the board says
+              // which it is rather than showing a bare total.
+              Text(
+                  entry.battles > 0
+                      ? '${entry.wins}W · ${entry.battles} battles · avg ${entry.average}'
+                      : '${entry.attempts} graded · avg ${entry.average}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     color: AppColors.textMuted,
                     fontSize: 10,
@@ -855,13 +864,14 @@ class _ChatRow extends StatelessWidget {
             ],
           ),
         ),
-        Text('${entry.best}',
+        Text('${entry.points}',
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 17,
+              letterSpacing: -0.5,
               fontWeight: FontWeight.w900,
             )),
-        Text(' BEST',
+        Text(' PTS',
             style: GoogleFonts.inter(
               color: AppColors.textMuted,
               fontSize: 8.5,

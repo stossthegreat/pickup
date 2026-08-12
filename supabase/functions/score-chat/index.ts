@@ -18,6 +18,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { gradeChat } from "../_shared/grade-chat.ts";
+import { rollChatStanding } from "../_shared/roll-chat.ts";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -75,35 +76,17 @@ Deno.serve(async (req) => {
     rubric: graded.rubric,
   });
 
-  // Roll the standing from the attempts themselves rather than
-  // incrementing a counter — idempotent, and self-heals if a write was
-  // ever lost.
-  const { data: rows } = await admin
-    .from("chat_attempts")
-    .select("score")
-    .eq("user_id", uid);
-
-  const scores: number[] = (rows ?? []).map((r) => r.score as number);
-  const attempts = scores.length;
-  const best = attempts ? Math.max(...scores) : graded.score;
-  const average = attempts
-    ? Math.round(scores.reduce((a, b) => a + b, 0) / attempts)
-    : graded.score;
-
-  await admin.from("chat_score").upsert({
-    user_id: uid,
-    best,
-    attempts,
-    average,
-    updated_at: new Date().toISOString(),
-  });
+  // One roller, shared with battle-action, so the two writers into this
+  // ladder can never disagree about a man's total.
+  const s = await rollChatStanding(admin, uid);
 
   return Response.json({
     score: graded.score,
     rubric: graded.rubric,
-    best,
-    attempts,
-    average,
-    isBest: graded.score >= best,
+    points: s.points,
+    best: s.best,
+    attempts: s.attempts,
+    average: s.average,
+    isBest: graded.score >= s.best,
   });
 });

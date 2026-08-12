@@ -79,10 +79,9 @@ class _SquadStripState extends State<SquadStrip> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 2, 20, 4),
-      child: _squad == null ? _recruit(context) : _line(context),
-    );
+    // No padding of its own — the home stack owns the gutter for all
+    // three top cards so they can't drift out of alignment again.
+    return _squad == null ? _recruit(context) : _line(context);
   }
 
   // ── No squad — a clean card, one decision ──────────────────────────
