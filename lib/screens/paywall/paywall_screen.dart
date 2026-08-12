@@ -302,9 +302,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
         _snack('No previous purchases found.');
         break;
       case PurchaseOutcome.notConfigured:
-        await LocalStoreService.setSubscribed(true);
-        await LocalStoreService.setOnboarded(true);
-        if (mounted) _forwardOnSuccess();
+        // FAIL CLOSED. This used to unlock the app — permanently, with no
+        // transaction behind it and nothing able to take it back: when the
+        // store isn't configured, _refreshEntitlementCache() never runs
+        // either, so that flag would sit true forever. One failed
+        // Purchases.configure() and that user had the paid app for good.
+        // A store that won't configure is an error to show, not a gift.
+        _snack('Store unavailable right now. Nothing was charged — '
+            'try again in a moment.');
         break;
       case PurchaseOutcome.error:
         // Last chance: the RC listener may have registered the

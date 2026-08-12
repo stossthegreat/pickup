@@ -20,8 +20,13 @@ import 'streak_service.dart';
 /// So this ladder talks to that exact moment. It knows WHAT he was locked
 /// out of (the source the gate passed through), HOW MANY TIMES he's now
 /// bounced off the same wall, and how far up the 60-day climb he'd got
-/// before he stalled. The copy is written to sound like someone who
-/// watched it happen — because functionally, it did.
+/// before he stalled.
+///
+/// It does NOT open by telling him off. At three hours he hasn't refused,
+/// he's hesitated, and confrontation turns a hesitation into a decision —
+/// which won't be the one we want. So it opens the way every app that
+/// does this well opens: still thinking about it? Then it warms, gets
+/// funny, and only goes hard once soft has had a fortnight to work.
 ///
 /// SHAPE
 ///   · HOT BEAT — roughly three hours after he walks, while the decision
@@ -214,191 +219,146 @@ class WinBackService {
   // ══════════════════════════════════════════════════════════════════
   //  THE COPY
   //
+  //  THE HARD CONSTRAINT: a notification is TWO LINES. iOS truncates the
+  //  title around 30 characters on a lock screen and the collapsed body
+  //  around 90. Anything past that is a paragraph nobody unrolls — which
+  //  makes a long, clever line strictly worse than a short blunt one.
+  //  Every string below is written to fit inside the glance.
+  //
   //  Rules it's written to:
-  //   · Speak from the moment he walked, not from the product.
-  //   · Never "Hey!", never an emoji, never a discount, never a
-  //     countdown timer. He isn't a coupon user, he's a man avoiding
-  //     something.
-  //   · Name the thing he was locked out of. Specificity is the whole
-  //     difference between "we noticed you" and "we mailed everyone".
-  //   · Be honest enough that it stings slightly. The product's entire
-  //     premise is that avoidance is the problem.
+  //   · Open soft. The three-hour message is "still thinking about it?",
+  //     not an accusation — the point is to reopen the door, and every
+  //     app that does this well does it that way. He hasn't refused, he
+  //     hesitated. Confrontation at hour three converts hesitation into
+  //     a decision, and it won't be the one we want.
+  //   · Sell the OUTCOME, not the feature. Nobody wants "AI roleplay".
+  //     They want to not be ignored, and to stop lying in bed replaying
+  //     the thing they didn't say.
+  //   · Vary the temperature. Funny, then warm, then hard. Six hard ones
+  //     in a row is a mute; six soft ones is wallpaper.
+  //   · Never an emoji, never a discount, never a countdown. He isn't a
+  //     coupon user, he's a man avoiding something.
+  //
+  //  Each rung is a small pool, picked deterministically off round +
+  //  horizon day, so the arc holds but the exact words don't repeat.
   // ══════════════════════════════════════════════════════════════════
 
-  /// The same-day hit. Keyed to the gate he bounced off, because at three
-  /// hours out he still remembers exactly what he was doing.
+  static (String, String) _pick(List<(String, String)> pool, int salt) =>
+      pool[salt.abs() % pool.length];
+
+  /// THREE HOURS OUT — the soft return.
+  ///
+  /// The whole job of this one is to reopen a door he half-closed, so
+  /// the title never changes tone: he's still thinking about it, and
+  /// we're being relaxed about that. The body is where the knowledge
+  /// goes — one short line naming what he actually walked away from.
   static (String, String) hotCopy({
     required String source,
     required int round,
   }) {
-    // He's bounced off this wall more than once. Stop re-pitching and
-    // name the pattern — it's the more interesting thing at this point.
     if (round >= 3) {
-      return (
-        'Third time at this door',
-        'You keep opening this and closing it. At some point the reading '
-            'isn\'t the part that\'s stopping you.',
-      );
+      return ('Still thinking about it?', 'Third look. Something wants it.');
     }
     if (round == 2) {
-      return (
-        'You walked again',
-        'Same wall, same decision, same ten seconds. Nothing about it gets '
-            'easier by doing it a third time.',
-      );
+      return ('Still on the fence?', 'You came back once already.');
     }
 
+    const title = 'Still thinking about it?';
     if (source.contains('voice') ||
         source.contains('speak') ||
         source.contains('lucien') ||
         source.contains('freeflow')) {
-      return (
-        'She was mid-sentence',
-        'You had a live voice waiting and backed out to a menu. That exact '
-            'move is the thing you\'re here to stop making.',
-      );
+      return (title, 'She was mid-sentence when you left.');
     }
     if (source.contains('chat') ||
         source.contains('text') ||
         source.contains('mission')) {
-      return (
-        'You stopped mid-conversation',
-        'You were in it and you walked. She\'d have replied. So would the '
-            'next one, and the real one after that.',
-      );
+      return (title, 'You were mid-conversation.');
     }
     if (source.contains('rizz') || source.contains('screenshot')) {
-      return (
-        'You had the screenshot open',
-        'One line away from sending something that actually lands. You '
-            'closed it and sent nothing instead.',
-      );
+      return (title, 'That screenshot is still unanswered.');
     }
     if (source.contains('streak') ||
         source.contains('potential') ||
         source.contains('lock')) {
-      return (
-        'You looked at the whole climb',
-        'Sixty days, laid out in front of you, and you shut it. It\'s sixty '
-            'days whether you start them or not.',
-      );
+      return (title, 'Day 1 is still sitting there.');
     }
-    return (
-      'You were one tap off',
-      'You read all of it and then closed it. Nothing about you changed in '
-          'those ten seconds — you just didn\'t do it.',
-    );
+    return (title, 'Most men think about it. Then say nothing.');
   }
 
-  /// The ladder. [daysSince] is the projected days since he walked, so
-  /// the horizon can queue the whole arc in advance and it escalates on
-  /// its own even if he never reopens the app.
+  /// The ladder. [dayOffset] projects forward so the horizon can queue
+  /// the whole arc in advance and it escalates on its own even if he
+  /// never reopens the app.
   static (String, String) ladderCopy(WinBackWindow w, {int dayOffset = 0}) {
     final d = w.daysSinceWalk + dayOffset;
-    final hard = w.round >= 2;
+    final salt = w.round + dayOffset;
 
-    // DAY 0 — the evening of the day he walked.
-    if (d <= 0) {
-      return hard
-          ? (
-              'Twice now',
-              'You\'ve stood at that page twice and left twice. The page '
-                  'isn\'t the problem and you know it.',
-            )
-          : (
-              'You closed it',
-              'You got all the way to the end and stopped. That\'s not a '
-                  'money decision, that\'s the flinch.',
-            );
-    }
+    // DAY 0 — the evening he walked. Still light. Still a door.
+    if (d <= 0) return _pick(_day0, salt);
 
-    // DAY 1 — the parachute. Nothing is coming.
-    if (d == 1) {
-      return hard
-          ? (
-              'Nobody is coming',
-              'No parachute, no moment it suddenly clicks. Just reps you '
-                  'either did or didn\'t. Today counts either way.',
-            )
-          : (
-              'Still waiting on the parachute?',
-              'Nobody drops game into your garden. It gets built, in reps, '
-                  'by men who decided to do them.',
-            );
-    }
+    // DAY 1 — the regret hook. Not the app: the girl he said nothing to.
+    // This is the single most-felt line in the whole product and it goes
+    // early, while he can still remember closing the paywall.
+    if (d == 1) return _pick(_day1, salt);
 
-    // DAYS 2-3 — what he's actually turning down: voices that fight back.
-    if (d <= 3) {
-      return d == 2
-          ? (
-              'She interrupts. She goes cold.',
-              'Live voice that actually tests you — loses interest, calls '
-                  'you out, makes you recover. Practise until none of it '
-                  'moves you.',
-            )
-          : (
-              'Practise on her, not on her',
-              'Every rep you take in here is one you don\'t fumble in front '
-                  'of someone real. That\'s the entire trade.',
-            );
-    }
+    // DAYS 2-3 — funny, and the mechanism underneath the joke.
+    if (d <= 3) return _pick(_day3, salt);
 
-    // DAYS 4-7 — the arithmetic. A 2 gets to an 8 on volume, not vibes.
+    // DAYS 4-7 — the outcome he actually wants, spelled out.
     if (d <= 7) {
+      // If he built something before he stalled, point at that instead —
+      // his own evidence beats our promise every time.
       if (w.bestStreak >= 3) {
-        return (
-          'You were on day ${w.bestStreak}',
-          'You built that yourself. Rebuilding it from zero costs more than '
-              'keeping it ever did.',
-        );
+        return ('You were on day ${w.bestStreak}', 'That was you. Still is.');
       }
-      return d <= 5
-          ? (
-              'A 2 gets to an 8 on reps',
-              'Not on confidence quotes, not on a haircut. Five real '
-                  'conversations a day and the difference is audible inside '
-                  'a fortnight.',
-            )
-          : (
-              'Consistent beats gifted',
-              'The men who are good at this were bad at it for a while, out '
-                  'loud, on purpose. That part is the skill.',
-            );
+      return _pick(_day7, salt);
     }
 
-    // DAYS 8-14 — the promise: five a day and the freeze goes.
-    if (d <= 14) {
-      return d <= 11
-          ? (
-              'Five a day. Never freeze again.',
-              'Freezing isn\'t your personality — it\'s an untrained '
-                  'response, and trained responses don\'t freeze. Five '
-                  'missions a day is the whole treatment.',
-            )
-          : (
-              'The freeze is trainable',
-              'Everyone who stopped freezing did the same boring thing: '
-                  'reps, daily, until the moment stopped being new.',
-            );
-    }
+    // DAYS 8-14 — the promise. Five a day and the freeze goes.
+    if (d <= 14) return _pick(_day14, salt);
 
-    // DAYS 15-29 — a month of the same nights.
-    if (d < _lastDay) {
-      return (
-        'Same nights, still',
-        'Nothing got easier on its own — it never does. Every man it got '
-            'easier for did something on a Tuesday he didn\'t feel like '
-            'doing.',
-      );
-    }
+    // DAYS 15-29 — now it hits hard. He's had a month of soft.
+    if (d < _lastDay) return _pick(_day29, salt);
 
     // DAY 30 — say it's the last one, and mean it.
-    return (
-      'Last one from me',
-      'You\'ve had a month of these. Either the version of you that doesn\'t '
-          'freeze is worth a week\'s coffee or he isn\'t. I won\'t ask again.',
-    );
+    return ('Last one from me', 'You know where it is.');
   }
+
+  static const _day0 = <(String, String)>[
+    ('You got to the end', 'Then stopped. Tonight still counts.'),
+    ('One tap left', 'That\'s the whole distance.'),
+    ('Door\'s still open', 'No rush. It\'s a quiet night either way.'),
+  ];
+
+  static const _day1 = <(String, String)>[
+    ('The one you said nothing to', 'You still think about it. That\'s the fix.'),
+    ('Why didn\'t I say something', 'Everyone\'s asked it. Few do anything.'),
+    ('Nothing changes on its own', 'Ask anyone still waiting.'),
+  ];
+
+  static const _day3 = <(String, String)>[
+    ('She left you on read', 'Practise on someone who has to reply.'),
+    ('Ran out of things to say?', 'That\'s a skill, not a personality.'),
+    ('She interrupts. She goes cold.', 'Better in here than in front of her.'),
+  ];
+
+  static const _day7 = <(String, String)>[
+    ('Imagine not overthinking it', 'Two weeks of reps and you just say it.'),
+    ('Stop getting ignored', 'It\'s almost always the opener. Fixable.'),
+    ('The reply you actually wanted', 'Starts with the line you practised.'),
+  ];
+
+  static const _day14 = <(String, String)>[
+    ('Freezing is trainable', 'Five a day. That\'s the whole treatment.'),
+    ('Five missions. Every day.', 'Nobody who did that still freezes.'),
+    ('It stops being a big moment', 'That\'s all confidence is. Reps.'),
+  ];
+
+  static const _day29 = <(String, String)>[
+    ('A month of the same nights', 'It doesn\'t get easier on its own.'),
+    ('Still nothing?', 'Every man it clicked for started on a dull Tuesday.'),
+    ('You\'ll remember this year', 'Make it the one it changed.'),
+  ];
 }
 
 /// A live win-back window — he walked, he hasn't paid, and the ladder

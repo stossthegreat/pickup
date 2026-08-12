@@ -175,6 +175,13 @@ class _MirrorAppState extends State<MirrorApp> with WidgetsBindingObserver {
         // retention trigger for the NEXT notification.
         // ignore: discarded_futures
         NotificationService.clearIconBadge();
+        // Re-check the subscription with the store. Without this the
+        // paid app kept working for anyone who cancelled until they
+        // next COLD-launched — iOS holds apps in memory for days, so
+        // that could be well past the week they actually bought.
+        // Throttled to 15 min inside; same on Android and iOS.
+        // ignore: discarded_futures
+        PurchaseService.refreshOnResume();
         break;
       case AppLifecycleState.detached:
       case AppLifecycleState.inactive:
