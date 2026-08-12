@@ -613,6 +613,17 @@ class PurchaseService {
         return 'The store rejected the purchase as invalid.';
       case PurchasesErrorCode.networkError:
         return 'Network error. Check your connection and try again.';
+      // CODE 17 — the App Store Connect In-App Purchase Key (.p8) has
+      // never been uploaded to RevenueCat, so Apple refuses the purchase
+      // at the server-validation step. Nothing about it is the user's
+      // fault or the user's problem, so he gets a plain apology and we
+      // keep the full diagnostic behind the developer sheet.
+      case PurchasesErrorCode.invalidAppleSubscriptionKeyError:
+        return 'Subscriptions aren\'t available right now — this one\'s on '
+            'us, not you. Nothing was charged. Try again shortly.';
+      case PurchasesErrorCode.invalidCredentialsError:
+        return 'The store rejected our credentials. Nothing was charged — '
+            'we\'re on it.';
       case PurchasesErrorCode.configurationError:
         return 'Billing not configured on this build — $sideloadFix';
       case PurchasesErrorCode.unsupportedError:
