@@ -298,12 +298,17 @@ class _DailyScreenState extends State<DailyScreen> {
   Widget _hero(DailyStatus s) {
     final girl = girlForVibe(s.scenarioKey);
     return SizedBox(
-      height: 430,
+      // Taller frame, crop pushed down the render. At 430/-0.25 the poster
+      // cut her off around the eyeline and handed the rest of the screen to
+      // chrome — you never actually met her. 470 with the crop near centre
+      // carries the frame from mid-face down past the chin, which is the
+      // part of a portrait that does the work.
+      height: 470,
       child: Stack(fit: StackFit.expand, children: [
         Image.asset(
           girl.asset,
           fit: BoxFit.cover,
-          alignment: const Alignment(0, -0.25),
+          alignment: const Alignment(0, -0.08),
           errorBuilder: (_, __, ___) => DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -322,13 +327,16 @@ class _DailyScreenState extends State<DailyScreen> {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
+              // The scrim now stays off her face and only ramps up under
+              // the chin, where the type sits. Darkening the middle third
+              // was what made her look flat and the screen look cheap.
               colors: [
-                Colors.black.withValues(alpha: 0.55),
-                Colors.black.withValues(alpha: 0.10),
-                Colors.black.withValues(alpha: 0.80),
+                Colors.black.withValues(alpha: 0.46),
+                Colors.black.withValues(alpha: 0.04),
+                Colors.black.withValues(alpha: 0.78),
                 AppColors.base,
               ],
-              stops: const [0.0, 0.34, 0.76, 1.0],
+              stops: const [0.0, 0.44, 0.82, 1.0],
             ),
           ),
         ),

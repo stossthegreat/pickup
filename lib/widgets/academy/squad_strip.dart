@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,6 +8,7 @@ import '../../services/backend/mission_service.dart';
 import '../../services/backend/squad_day.dart';
 import '../../services/backend/squad_service.dart';
 import '../../theme/app_colors.dart';
+import 'squad_chrome.dart';
 
 /// THE SQUAD STRIP — the liveness engine, at the top of home.
 ///
@@ -85,42 +85,69 @@ class _SquadStripState extends State<SquadStrip> {
     );
   }
 
-  // ── No squad — one quiet line, not a red slab ──────────────────────
+  // ── No squad — a clean card, one decision ──────────────────────────
+  // This is the door to the entire social layer and it used to be a
+  // grey one-liner that read like a settings row. It's now the same
+  // object it becomes once you're in — crest on the left, name on the
+  // right — so joining visibly fills in the card rather than replacing
+  // it with something unrelated.
   Widget _recruit(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          context.push('/squad');
-        },
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+    return Panel(
+      hot: true,
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
+      onTap: () => context.push('/squad'),
+      child: Row(children: [
+        Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppColors.surface1,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+            shape: BoxShape.circle,
+            color: AppColors.red.withValues(alpha: 0.12),
+            border:
+                Border.all(color: AppColors.red.withValues(alpha: 0.45)),
           ),
-          child: Row(children: [
-            const Icon(Icons.shield_outlined,
-                size: 17, color: AppColors.textTertiary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text('Start a squad — you only need one mate.',
+          child: const Icon(Icons.group_add_rounded,
+              size: 20, color: AppColors.red),
+        ),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('JOIN A SQUAD',
+                  style: GoogleFonts.inter(
+                    color: AppColors.red,
+                    fontSize: 9,
+                    letterSpacing: 2.2,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 3),
+              Text('Two men is enough',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
-                    color: AppColors.textSecondary,
-                    fontSize: 12.5,
+                    color: Colors.white,
+                    fontSize: 15,
+                    height: 1.1,
+                    letterSpacing: -0.4,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 2),
+              Text('Start one with a code, or enter his.',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                   )),
-            ),
-            const Icon(Icons.chevron_right_rounded,
-                size: 18, color: AppColors.textTertiary),
-          ]),
+            ],
+          ),
         ),
-      ),
+        const Icon(Icons.chevron_right_rounded,
+            size: 18, color: AppColors.textTertiary),
+      ]),
     ).animate().fadeIn(duration: 300.ms);
   }
 
@@ -154,75 +181,74 @@ class _SquadStripState extends State<SquadStrip> {
           : '${day.complete}/${day.possible} moves in';
     }
 
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        context.push('/squad');
-      },
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface1,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: accent.withValues(alpha: 0.35)),
-        ),
-        child: Row(children: [
-          // Form is the one stat worth carrying to the home screen.
-          SizedBox(
-            width: 42,
-            child: Column(children: [
-              Text('${day.form}',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 22,
-                    height: 1,
-                    letterSpacing: -1,
-                    fontWeight: FontWeight.w900,
-                  )),
-              Text('FORM',
+    // Same card, filled in: the crest and the squad's own name take the
+    // place of the invitation. Joining doesn't swap one component for
+    // another — it completes this one.
+    return Panel(
+      accent: accent,
+      hot: !day.won && day.remaining <= 2 && day.live,
+      padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
+      onTap: () => context.push('/squad'),
+      child: Row(children: [
+        SquadCrest(name: _squad!.name, accent: accent, size: 44),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('YOUR SQUAD',
                   style: GoogleFonts.inter(
                     color: accent,
-                    fontSize: 7.5,
-                    letterSpacing: 1.6,
+                    fontSize: 9,
+                    letterSpacing: 2.2,
                     fontWeight: FontWeight.w900,
                   )),
-            ]),
+              const SizedBox(height: 3),
+              Text(_squad!.name.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 15,
+                    height: 1.1,
+                    letterSpacing: -0.4,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 2),
+              Text(line,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  )),
+            ],
           ),
-          const SizedBox(width: 12),
-          Container(
-              width: 1,
-              height: 30,
-              color: Colors.white.withValues(alpha: 0.07)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(_squad!.name.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 12,
-                      letterSpacing: 1.6,
-                      fontWeight: FontWeight.w900,
-                    )),
-                const SizedBox(height: 2),
-                Text(line,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      color: AppColors.textSecondary,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                    )),
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right_rounded,
-              size: 18, color: AppColors.textTertiary),
+        ),
+        const SizedBox(width: 8),
+        // Form is the one stat worth carrying to the home screen.
+        Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('${day.form}',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 24,
+                height: 1,
+                letterSpacing: -1.2,
+                fontWeight: FontWeight.w900,
+              )),
+          Text('FORM',
+              style: GoogleFonts.inter(
+                color: accent,
+                fontSize: 7.5,
+                letterSpacing: 1.6,
+                fontWeight: FontWeight.w900,
+              )),
         ]),
-      ),
+        const SizedBox(width: 4),
+        const Icon(Icons.chevron_right_rounded,
+            size: 18, color: AppColors.textTertiary),
+      ]),
     ).animate().fadeIn(duration: 300.ms);
   }
 }

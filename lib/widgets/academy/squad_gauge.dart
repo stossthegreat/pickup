@@ -22,6 +22,12 @@ class SquadGauge extends StatefulWidget {
   final SquadDay day;
   final String squadName;
 
+  /// What the dial calls itself. The masthead now carries the squad's
+  /// name in full editorial type, so inside the instrument we'd only be
+  /// saying it twice — pass 'TODAY' there instead. Defaults to the name
+  /// for any surface that shows the gauge on its own.
+  final String? caption;
+
   /// Fires the frame the day is won, so the room can celebrate.
   final VoidCallback? onWin;
 
@@ -29,6 +35,7 @@ class SquadGauge extends StatefulWidget {
     super.key,
     required this.day,
     required this.squadName,
+    this.caption,
     this.onWin,
   });
 
@@ -98,7 +105,7 @@ class _SquadGaugeState extends State<SquadGauge>
             Padding(
               padding: const EdgeInsets.only(top: 18),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(widget.squadName.toUpperCase(),
+                Text((widget.caption ?? widget.squadName).toUpperCase(),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
