@@ -21,6 +21,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { gradeTranscript, tierFor } from "../_shared/grade.ts";
 import { addLeaguePoints } from "../_shared/league.ts";
+import { rollChatStanding } from "../_shared/roll-chat.ts";
 
 // Scenario keys mirror the app's vibe keys — both players are forced
 // into the SAME AI personality, which is what makes it a duel.
@@ -173,6 +174,21 @@ Deno.serve(async (req) => {
       // Battles fuel the weekly league/fixture engine like any session.
       await addLeaguePoints(admin, uid, Math.round(graded.score / 200));
 
+      // ── RIZZ POINTS — battles are the main feed into the text ladder.
+      // A duel IS a graded text conversation, so it records a chat_attempt
+      // like any other and the cumulative board picks it up. The grader
+      // here is the shared 0..9999 rubric (battles predate the chat one
+      // and re-grading would mean a second model call per submission), so
+      // the score is rescaled by the app's standard 99.99 factor into the
+      // 0..100 the text ladder speaks.
+      await admin.from("chat_attempts").insert({
+        user_id: uid,
+        surface: "battle",
+        scenario: b.scenario ?? null,
+        score: Math.max(0, Math.min(100, Math.round(graded.score / 99.99))),
+        rubric: graded.rubric,
+      });
+
       const patch: Record<string, unknown> = isA
         ? { a_score: graded.score }
         : { b_score: graded.score };
@@ -220,6 +236,26 @@ Deno.serve(async (req) => {
         if (patch.winner) {
           await addLeaguePoints(admin, patch.winner as string, 15);
         }
+
+        // Settle the RIZZ POINTS side too. Both men get their battle
+        // counted; the winner also banks the flat win bonus. Rolled from
+        // the attempts each time, so a retry can't inflate anyone.
+        const winnerId = patch.winner as string | undefined;
+        await Promise.all([
+          rollChatStanding(admin, b.player_a as string, {
+            addBattle: true,
+            addWin: winnerId === b.player_a,
+          }),
+          rollChatStanding(admin, b.player_b as string, {
+            addBattle: true,
+            addWin: winnerId === b.player_b,
+          }),
+        ]);
+      } else {
+        // First man in. His attempt already counts toward the ladder —
+        // the battle tally waits until the duel actually settles, so a
+        // challenge nobody answers can't pad his record.
+        await rollChatStanding(admin, uid);
       }
 
       const { data: updated } = await admin.from("battles").update(patch)

@@ -237,30 +237,52 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(child: _TopBar(xp: _xp, streak: _streak)),
-          // THE BEAT — the day, measured against you. First thing on home
-          // because the whole product runs on "today matters more than
-          // tomorrow". It gets the real counts: an instrument that only
-          // knew the time was telling you something your lock screen
-          // already had.
+
+          // ── THE TOP STACK — one gutter, one rhythm ─────────────────
+          // These three used to carry their own padding and had drifted
+          // to three different insets (20 / 24 / 20), with the Daily's
+          // zero bottom margin leaving it 2px off the squad card. Layout
+          // now belongs to the parent, so they line up by construction
+          // and can't drift again. Gutter and gap match the mission list
+          // below (Sp.lg, Sp.sm + 4) so the whole screen is one column.
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 2, 20, 6),
-              child: DayBeat(
-                done: _doneCount,
-                total: _missions.isEmpty ? 5 : _missions.length,
+              padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.lg, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // THE BEAT — the day, measured against you. First thing
+                  // on home because the whole product runs on "today
+                  // matters more than tomorrow".
+                  DayBeat(
+                    done: _doneCount,
+                    total: _missions.isEmpty ? 5 : _missions.length,
+                  ),
+                  const SizedBox(height: Sp.sm + 4),
+                  // THE DAILY — the appointment. Pulsing until today's
+                  // shot is taken; carries the league line.
+                  const DailyCard(),
+                  const SizedBox(height: Sp.sm + 4),
+                  // THE SQUAD STRIP — the app's liveness, on the first
+                  // screen. Every open answers "where is everyone at?"
+                  // with zero taps.
+                  const SquadStrip(),
+                ],
               ),
             ),
           ),
-          // THE DAILY — the appointment. Pulsing until today's shot is
-          // taken; carries the league line (division · rank · lock).
-          const SliverToBoxAdapter(child: DailyCard()),
-          // THE SQUAD STRIP — the app's liveness, on the first screen.
-          // Every open answers "where is everyone at?" with zero taps.
-          const SliverToBoxAdapter(child: SquadStrip()),
+
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.lg, Sp.lg, Sp.sm),
-              child: _Heading(done: _doneCount, total: _missions.length),
+              child: _Heading(
+                done: _doneCount,
+                total: _missions.length,
+                onPanic: () {
+                  HapticFeedback.heavyImpact();
+                  context.push('/fear');
+                },
+              ),
             ),
           ),
           if (_loading)
@@ -362,17 +384,10 @@ class _TopBar extends StatelessWidget {
               // squad already has its own card further down this very
               // screen — two doors to one room is clutter, and the card
               // carries live state the icon never could.
-              // THE FEAR BUTTON — for the exact second he's frozen and
-              // needs the app to push him through. It gave up its pill to
-              // BATTLES but it can't be buried: the whole point is that
-              // it's one tap away at the worst moment.
-              _IconBtn(
-                  icon: Icons.bolt_rounded,
-                  color: AppColors.red,
-                  onTap: () {
-                    HapticFeedback.heavyImpact();
-                    context.push('/fear');
-                  }),
+              // The fear button used to sit here and it squeezed the
+              // masthead — the streak flame ended up jammed against the
+              // wordmark. It's moved down to the mission heading, which
+              // is where you actually are when you bottle it.
               _IconBtn(
                   icon: Icons.emoji_events_outlined,
                   onTap: () => context.push('/leaderboard')),
@@ -441,7 +456,13 @@ class _IconBtn extends StatelessWidget {
 class _Heading extends StatelessWidget {
   final int done;
   final int total;
-  const _Heading({required this.done, required this.total});
+  /// THE FEAR BUTTON, rehoused. It lived in the masthead and squashed
+  /// the streak flame against the wordmark. Top-right of the five tasks
+  /// is where it belongs anyway — you bottle it looking at the missions,
+  /// not looking at your XP.
+  final VoidCallback onPanic;
+  const _Heading(
+      {required this.done, required this.total, required this.onPanic});
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -457,6 +478,28 @@ class _Heading extends StatelessWidget {
                       color: done == total && total > 0
                           ? AppColors.signalGreen
                           : AppColors.textTertiary)),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: onPanic,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.red.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                      color: AppColors.red.withValues(alpha: 0.5)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.bolt_rounded,
+                      size: 12, color: AppColors.red),
+                  const SizedBox(width: 3),
+                  Text('BOTTLING IT',
+                      style: AppTypography.label.copyWith(
+                          color: AppColors.red, fontSize: 8.5)),
+                ]),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 6),

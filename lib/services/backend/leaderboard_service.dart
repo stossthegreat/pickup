@@ -99,6 +99,18 @@ class ChatBoardEntry {
   final String userId;
   final String? handle;
   final String? avatarUrl;
+
+  /// RIZZ POINTS — the cumulative total this board actually ranks by.
+  /// Every graded text conversation adds its score; a battle win banks a
+  /// flat bonus on top. It only ever climbs.
+  final int points;
+
+  /// Duels settled, and how many were won. The credibility line under
+  /// the number: 400 points off 40 battles reads differently to 400 off
+  /// four, and the board should say which it is.
+  final int battles;
+  final int wins;
+
   final int best;
   final int attempts;
   final int average;
@@ -106,6 +118,9 @@ class ChatBoardEntry {
     required this.userId,
     this.handle,
     this.avatarUrl,
+    required this.points,
+    required this.battles,
+    required this.wins,
     required this.best,
     required this.attempts,
     required this.average,
@@ -128,6 +143,9 @@ class ChatLeaderboardService {
             userId: r['id'] as String,
             handle: r['handle'] as String?,
             avatarUrl: r['avatar_url'] as String?,
+            points: (r['points'] as num?)?.toInt() ?? 0,
+            battles: (r['battles'] as num?)?.toInt() ?? 0,
+            wins: (r['wins'] as num?)?.toInt() ?? 0,
             best: (r['best'] as num?)?.toInt() ?? 0,
             attempts: (r['attempts'] as num?)?.toInt() ?? 0,
             average: (r['average'] as num?)?.toInt() ?? 0,
