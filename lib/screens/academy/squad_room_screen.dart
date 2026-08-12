@@ -14,12 +14,15 @@ import '../../services/backend/squad_live_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/live_events.dart';
 import '../../services/backend/tiers.dart';
+import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/academy_modal.dart';
+import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
 import '../../widgets/academy/day_beat.dart';
 import '../../widgets/academy/five_journey.dart';
 import '../../widgets/academy/game_button.dart';
+import '../../widgets/academy/squad_chrome.dart';
 import '../../widgets/academy/squad_grade.dart';
 import '../../widgets/academy/squad_gauge.dart';
 import '../../widgets/academy/today_board.dart';
@@ -519,16 +522,188 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
 
   Widget _room() {
     final squad = _squad!;
+    final day = _day;
+    final accent = day.won ? kNeon : AppColors.red;
+    // Today's woman, resolved with the SAME rule the server uses. The
+    // squad's voice slot is not a second challenge — it is the Daily,
+    // and there's only one credit a day for it, so the room shows her
+    // face rather than a generic "voice run" card.
+    final girl = girlForVibe(scenarioOfToday());
+
     return RefreshIndicator(
       color: AppColors.red,
       backgroundColor: AppColors.surface1,
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 2, 18, 26),
+        padding: EdgeInsets.zero,
         children: [
-          Row(children: [
+          // ── THE MASTHEAD — full bleed, atmospheric, one identity ──
+          _masthead(squad, day, accent),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 20, 18, 30),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── YOUR FIVE — portraits, arcs, empty seats ────────
+                ChapterMark(
+                  index: '01',
+                  title: 'YOUR FIVE',
+                  sub: 'The men in it with you.',
+                  accent: accent,
+                  trailing: Text(
+                      '${_roster.length}/${SquadDay.maxMembers}',
+                      style: GoogleFonts.inter(
+                        color: accent,
+                        fontSize: 11,
+                        letterSpacing: 0.5,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ),
+                YourFive(
+                  day: day,
+                  onRecruit: _shareInvite,
+                  onNudge: _nudge,
+                ),
+                const SizedBox(height: 16),
+
+                // The code sits right under the seats — the moment you
+                // notice an empty one is the moment you want the invite.
+                InviteTicket(
+                  code: squad.inviteCode,
+                  openSeats: day.openSeats,
+                  onCopy: _copyCode,
+                  onShare: _shareInvite,
+                  accent: accent,
+                ),
+                const SizedBox(height: 26),
+
+                if (!day.live) ...[
+                  _needTwo(),
+                  const SizedBox(height: 26),
+                ],
+
+                // ── TODAY'S BOARD — the whole day, one grid ─────────
+                // The screen's answer to "what has everyone actually
+                // done?". It goes first because it's the question you
+                // open the room to ask.
+                ChapterMark(
+                  index: '02',
+                  title: "TODAY'S BOARD",
+                  sub: 'Everyone, everything, one look.',
+                  accent: accent,
+                ),
+                TodayBoard(
+                  roster: _roster,
+                  board: _board,
+                  squadStates: _squadStates,
+                  daily: _daily,
+                ),
+                const SizedBox(height: 26),
+
+                // ── THE RIZZ-OFF — her, and who's faced her ─────────
+                ChapterMark(
+                  index: '03',
+                  title: 'THE RIZZ-OFF',
+                  sub: 'Same woman as your Daily. One credit each.',
+                  accent: accent,
+                ),
+                _DailyRunCard(roster: _roster, marks: _daily, girl: girl),
+                const SizedBox(height: 26),
+
+                // ── THE FIVE — the day as a journey ─────────────────
+                ChapterMark(
+                  index: '04',
+                  title: 'THE FIVE',
+                  sub: 'Same five for everyone today.',
+                  accent: accent,
+                ),
+                if (_board.isEmpty)
+                  const _EmptyBoard()
+                else
+                  FiveJourney(
+                    day: day,
+                    myStates: _myStates,
+                    girl: girl,
+                    onOpenMission: _openMission,
+                    onOpenRizzOff: () => context.push('/daily'),
+                  ),
+                const SizedBox(height: 26),
+
+                // ── THE RATING — who's carrying, who's hiding ───────
+                ChapterMark(
+                  index: '05',
+                  title: 'SQUAD REPORT',
+                  sub: 'Graded every week.',
+                  accent: accent,
+                ),
+                SquadReport(roster: _roster, marks: _marks),
+                const SizedBox(height: 26),
+
+                // ── THE WEEK BOARD ──────────────────────────────────
+                ChapterMark(
+                  index: '06',
+                  title: 'THE WEEK',
+                  sub: 'Seven days, who showed up.',
+                  accent: accent,
+                ),
+                _WeekBoard(roster: _roster, marks: _marks),
+                const SizedBox(height: 26),
+
+                // ── THE PULSE ───────────────────────────────────────
+                ChapterMark(
+                  index: '07',
+                  title: 'THE PULSE',
+                  sub: 'The room, live.',
+                  accent: accent,
+                ),
+                if (_pulse.isEmpty)
+                  Text('Silence. Someone make a move.',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                      ))
+                else
+                  for (final (i, e) in _pulse.take(14).indexed)
+                    _PulseRow(
+                      event: e,
+                      roster: _roster,
+                      first: i == 0,
+                      last: i == _pulse.take(14).length - 1,
+                    ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── THE MASTHEAD ────────────────────────────────────────────────────
+  //  Full-bleed, with the squad's colour blooming behind the dial. The
+  //  room used to open on a bare back-arrow and a chart; now it opens on
+  //  an identity — crest, name, state — the way every other good screen
+  //  in this app opens on a poster.
+  Widget _masthead(Squad squad, SquadDay day, Color accent) {
+    final String state;
+    if (!day.live) {
+      state = 'One more man and the day starts scoring';
+    } else if (day.won) {
+      state = 'Day won · ${day.complete}/${day.possible} moves';
+    } else if (day.complete == 0) {
+      state = 'Live · nobody has moved yet';
+    } else {
+      state = 'Live · ${day.remaining} to go';
+    }
+
+    return Stack(children: [
+      Positioned.fill(child: SquadAtmosphere(accent: accent)),
+      Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(6, 0, 8, 0),
+          child: Row(children: [
             IconButton(
-              padding: EdgeInsets.zero,
               onPressed: () => context.pop(),
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   size: 18, color: Colors.white),
@@ -536,8 +711,8 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
             const Spacer(),
             IconButton(
               onPressed: _shareInvite,
-              icon: const Icon(Icons.person_add_alt_1_rounded,
-                  size: 20, color: AppColors.red),
+              icon: Icon(Icons.person_add_alt_1_rounded,
+                  size: 20, color: accent),
             ),
             // LEAVE. SquadService.leave() existed from day one but
             // nothing ever called it — you could join a squad and had
@@ -549,194 +724,102 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
                   size: 19, color: AppColors.textTertiary),
             ),
           ]),
-
-          // ── THE GAUGE — one hero instrument, top third ────────────
-          // Replaces the old banner-of-stats. Five segments, one per
-          // seat, each filling with that man's five moves. The team's
-          // whole day, readable without a legend.
-          SquadGauge(
-            day: _day,
-            squadName: squad.name,
-            onWin: _dayWon,
-          ),
-          const SizedBox(height: 14),
-
-          // ── THE BEAT — the day's clock, right under the dial ──────
-          DayBeat(day: _day),
-          const SizedBox(height: 20),
-
-          // ── YOUR FIVE — portraits, arcs, empty seats ──────────────
-          Row(children: [
-            Text('YOUR FIVE',
-                style: AppTypography.labelBold.copyWith(fontSize: 10.5)),
-            const SizedBox(width: 8),
-            Text('${_roster.length}/${SquadDay.maxMembers}',
-                style: GoogleFonts.inter(
-                  color: AppColors.red,
-                  fontSize: 10.5,
-                  letterSpacing: 1.2,
-                  fontWeight: FontWeight.w900,
-                )),
-            const Spacer(),
-            if (_day.openSeats > 0)
-              Text(
-                  _day.openSeats == 1
-                      ? 'ONE SEAT OPEN'
-                      : '${_day.openSeats} SEATS OPEN',
-                  style: GoogleFonts.inter(
-                    color: AppColors.textMuted,
-                    fontSize: 10,
-                    letterSpacing: 1.2,
-                    fontWeight: FontWeight.w800,
-                  )),
-          ]),
-          const SizedBox(height: 12),
-          YourFive(
-            day: _day,
-            onRecruit: _shareInvite,
-            onNudge: _nudge,
-          ),
-          const SizedBox(height: 14),
-
-          // The code sits right under the seats — the moment you notice
-          // an empty one is the moment you want the invite.
-          _codeStrip(squad),
-          const SizedBox(height: 22),
-
-          if (!_day.live) ...[
-            _needTwo(),
-            const SizedBox(height: 22),
-          ],
-
-          // ── TODAY'S BOARD — the whole day, one grid ───────────────
-          // This is the screen's answer to "what has everyone actually
-          // done?". It goes FIRST because it's the question you open the
-          // room to ask. Rows are men, columns are the five missions,
-          // last column is the scored voice run.
-          _label("TODAY'S BOARD", 'Everyone, everything, one look.'),
-          const SizedBox(height: 12),
-          TodayBoard(
-            roster: _roster,
-            board: _board,
-            squadStates: _squadStates,
-            daily: _daily,
-          ),
-          const SizedBox(height: 22),
-
-          // ── THE AI RUN — did they get to the end? ─────────────────
-          _label("TODAY'S VOICE RUN", 'Who went the distance.'),
-          const SizedBox(height: 12),
-          _DailyRunCard(roster: _roster, marks: _daily),
-          const SizedBox(height: 22),
-
-          // ── CALL YOUR SHOT — the whole slate ──────────────────────
-          // Numbered 1..5 to match the board's columns above, so the
-          // grid and the cards are obviously the same five things.
-          _label("THE FIVE", 'Same five for everyone today.'),
-          const SizedBox(height: 12),
-          if (_board.isEmpty)
-            const _EmptyBoard()
-          else
-            FiveJourney(
-              day: _day,
-              myStates: _myStates,
-              onOpenMission: _openMission,
-              onOpenRizzOff: () => context.push('/daily'),
-            ),
-          const SizedBox(height: 22),
-
-          // ── THE RATING — who's carrying, who's hiding ─────────────
-          _label('SQUAD REPORT', 'Graded every week.'),
-          const SizedBox(height: 12),
-          SquadReport(roster: _roster, marks: _marks),
-          const SizedBox(height: 22),
-
-          // ── THE WEEK BOARD ────────────────────────────────────────
-          _label('THE WEEK', 'Seven days, who showed up.'),
-          const SizedBox(height: 12),
-          _WeekBoard(roster: _roster, marks: _marks),
-          const SizedBox(height: 22),
-
-          // ── THE PULSE ─────────────────────────────────────────────
-          _label('THE PULSE', 'The room, live.'),
-          const SizedBox(height: 12),
-          if (_pulse.isEmpty)
-            Text('Silence. Someone make a move.',
-                style: GoogleFonts.inter(
-                  color: AppColors.textTertiary,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w500,
-                ))
-          else
-            for (final (i, e) in _pulse.take(14).indexed)
-              _PulseRow(
-                event: e,
-                roster: _roster,
-                first: i == 0,
-                last: i == _pulse.take(14).length - 1,
-              ),
-        ],
-      ),
-    );
-  }
-
-  /// The invite, sitting directly under the empty seats.
-  Widget _codeStrip(Squad squad) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.38),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.red.withValues(alpha: 0.35)),
-      ),
-      child: Row(children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: _copyCode,
-            behavior: HitTestBehavior.opaque,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('SQUAD CODE — TAP TO COPY',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textMuted,
-                      fontSize: 8.5,
-                      letterSpacing: 1.6,
-                      fontWeight: FontWeight.w900,
-                    )),
-                const SizedBox(height: 3),
-                Text(squad.inviteCode,
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 22,
-                      height: 1.1,
-                      letterSpacing: 7,
-                      fontWeight: FontWeight.w900,
-                    )),
-              ],
-            ),
-          ),
         ),
-        _CodeAction(
-            icon: Icons.copy_rounded, label: 'COPY', onTap: _copyCode),
-        const SizedBox(width: 6),
-        _CodeAction(
-            icon: Icons.ios_share_rounded, label: 'SEND', onTap: _shareInvite),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+          child: Row(children: [
+            SquadCrest(name: squad.name, accent: accent, size: 56),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('THE SQUAD',
+                      style: GoogleFonts.inter(
+                        color: accent,
+                        fontSize: 8.5,
+                        letterSpacing: 3,
+                        fontWeight: FontWeight.w900,
+                      )),
+                  const SizedBox(height: 4),
+                  Text(squad.name.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 27,
+                        height: 1.0,
+                        letterSpacing: -1.2,
+                        fontWeight: FontWeight.w900,
+                        shadows: [
+                          Shadow(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              blurRadius: 16)
+                        ],
+                      )),
+                  const SizedBox(height: 5),
+                  Row(children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: day.live ? accent : AppColors.textMuted,
+                        boxShadow: day.live
+                            ? [
+                                BoxShadow(
+                                    color: accent.withValues(alpha: 0.7),
+                                    blurRadius: 8)
+                              ]
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(state,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            color: AppColors.textSecondary,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          )),
+                    ),
+                  ]),
+                ],
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 4),
+
+        // ── THE GAUGE — one hero instrument ───────────────────────
+        // Five segments, one per seat, each filling with that man's
+        // five moves. The team's whole day, no legend needed.
+        SquadGauge(
+          day: day,
+          squadName: squad.name,
+          caption: 'TODAY',
+          onWin: _dayWon,
+        ),
+        const SizedBox(height: 12),
+
+        // ── THE BEAT — the day's clock, right under the dial ──────
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: DayBeat(day: day),
+        ),
+        const SizedBox(height: 6),
       ]),
-    );
+    ]);
   }
 
   /// Below the minimum the day can't be scored — one man ticking his own
   /// boxes isn't accountability. Said plainly, without calling the squad
   /// broken.
   Widget _needTwo() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.red.withValues(alpha: 0.3)),
-      ),
+    return Panel(
+      hot: true,
       child: Row(children: [
         const Icon(Icons.group_add_rounded, size: 18, color: AppColors.red),
         const SizedBox(width: 12),
@@ -755,20 +838,6 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     );
   }
 
-  Widget _label(String title, String sub) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-      Text(title, style: AppTypography.labelBold.copyWith(fontSize: 10.5)),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Text(sub,
-            style: GoogleFonts.inter(
-              color: AppColors.textMuted,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            )),
-      ),
-    ]);
-  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -791,109 +860,178 @@ class _NoSquad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 2, 24, 24),
+      padding: EdgeInsets.zero,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: IconButton(
-            padding: EdgeInsets.zero,
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                size: 18, color: Colors.white),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Center(
-          child: Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.red.withValues(alpha: 0.12),
-              border: Border.all(
-                  color: AppColors.red.withValues(alpha: 0.6), width: 2),
-              boxShadow: const [
-                BoxShadow(color: AppColors.redGlow, blurRadius: 34)
-              ],
+        // ── The hero band, same atmosphere as the room itself ───────
+        Stack(children: [
+          const Positioned.fill(child: SquadAtmosphere(accent: AppColors.red)),
+          Column(children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                    size: 18, color: Colors.white),
+              ),
             ),
-            child: const Icon(Icons.shield_rounded,
-                size: 42, color: AppColors.red),
-          )
-              .animate(onPlay: (c) => c.repeat(reverse: true))
-              .scaleXY(begin: 1.0, end: 1.05, duration: 1600.ms),
-        ),
-        const SizedBox(height: 24),
-        Text('THE SQUAD', textAlign: TextAlign.center,
-            style: AppTypography.label).animate().fadeIn(duration: 300.ms),
-        const SizedBox(height: 8),
-        Text('NOBODY CHANGES ALONE.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              color: AppColors.textPrimary,
-              fontSize: 30,
-              height: 1.05,
-              letterSpacing: -1,
-              fontWeight: FontWeight.w900,
-            ))
-            .animate()
-            .fadeIn(duration: 400.ms),
-        const SizedBox(height: 8),
-        Text(
-            'You do the reps whether anyone watches or not. You just do '
-            'more of them when they do. Two men is enough — five is the '
-            'most.',
-            textAlign: TextAlign.center,
-            style: AppTypography.bodySmall)
-            .animate()
-            .fadeIn(delay: 120.ms, duration: 400.ms),
-        const SizedBox(height: 26),
-
-        // HOW IT WORKS — three lines. The invite-code system was never
-        // explained anywhere, so "how does anyone actually join?" was a
-        // fair question with no answer on screen.
-        _How(n: '1', text: 'Found a squad — you get a 6-letter code'),
-        _How(n: '2', text: 'Send the code to your mate'),
-        _How(n: '3', text: 'He types it in below — that\'s it, you\'re a squad'),
-
-        const SizedBox(height: 26),
-        _Field(controller: nameCtrl, hint: 'SQUAD NAME'),
-        const SizedBox(height: 12),
-        GameButton(label: 'FOUND A SQUAD', onTap: onCreate, pulse: true),
-        const SizedBox(height: 26),
-        Row(children: [
-          Expanded(child: Container(height: 1, color: AppColors.divider)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text('OR',
+            const SizedBox(height: 10),
+            // The crest fills in live as you type the name — you can
+            // see the badge you're about to own before you commit to it.
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: nameCtrl,
+              builder: (_, v, __) => SquadCrest(
+                name: v.text.trim().isEmpty ? 'YOU' : v.text,
+                accent: AppColors.red,
+                size: 92,
+              ),
+            )
+                .animate(onPlay: (c) => c.repeat(reverse: true))
+                .scaleXY(begin: 1.0, end: 1.04, duration: 1800.ms),
+            const SizedBox(height: 22),
+            Text('THE SQUAD',
+                textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
-                  color: AppColors.textMuted,
-                  fontSize: 10,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w800,
-                )),
-          ),
-          Expanded(child: Container(height: 1, color: AppColors.divider)),
+                  color: AppColors.red,
+                  fontSize: 9.5,
+                  letterSpacing: 3.4,
+                  fontWeight: FontWeight.w900,
+                )).animate().fadeIn(duration: 300.ms),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text('NOBODY CHANGES ALONE.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        color: AppColors.textPrimary,
+                        fontSize: 32,
+                        height: 1.02,
+                        letterSpacing: -1.4,
+                        fontWeight: FontWeight.w900,
+                        shadows: [
+                          Shadow(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              blurRadius: 18)
+                        ],
+                      ))
+                  .animate()
+                  .fadeIn(duration: 400.ms),
+            ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30),
+              child: Text(
+                      'You do the reps whether anyone watches or not. You '
+                      'just do more of them when they do. Two men is enough '
+                      '— five is the most.',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodySmall)
+                  .animate()
+                  .fadeIn(delay: 120.ms, duration: 400.ms),
+            ),
+            const SizedBox(height: 26),
+          ]),
         ]),
-        const SizedBox(height: 26),
-        Text('GOT A CODE FROM A MATE?',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              color: AppColors.textSecondary,
-              fontSize: 11.5,
-              letterSpacing: 1.4,
-              fontWeight: FontWeight.w800,
-            )),
-        const SizedBox(height: 12),
-        _Field(
-            controller: codeCtrl,
-            hint: 'ABC123',
-            caps: true,
-            letterSpacing: 6),
-        const SizedBox(height: 12),
-        GameButton(
-            label: 'ENTER WITH CODE',
-            color: AppColors.surface2,
-            onTap: onJoin),
+
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 30),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // HOW IT WORKS — three lines. The invite-code system was
+              // never explained anywhere, so "how does anyone actually
+              // join?" was a fair question with no answer on screen.
+              ChapterMark(
+                index: '?',
+                title: 'HOW IT WORKS',
+                sub: 'Thirty seconds, then you\'re in.',
+              ),
+              _How(n: '1', text: 'Found a squad — you get a 6-letter code'),
+              _How(n: '2', text: 'Send the code to your mate'),
+              _How(
+                  n: '3',
+                  text: 'He types it in below — that\'s it, you\'re a squad'),
+              const SizedBox(height: 24),
+
+              // ── Two clean cards. One decision each, nothing else on
+              // them. The old screen was a loose column of fields and
+              // buttons with a divider in the middle and you had to read
+              // it to work out which half was which.
+              Panel(
+                hot: true,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.add_moderator_rounded,
+                          size: 15, color: AppColors.red),
+                      const SizedBox(width: 8),
+                      Text('START ONE',
+                          style: GoogleFonts.inter(
+                            color: AppColors.red,
+                            fontSize: 9.5,
+                            letterSpacing: 2.2,
+                            fontWeight: FontWeight.w900,
+                          )),
+                    ]),
+                    const SizedBox(height: 4),
+                    Text('Name it. You get the code.',
+                        style: GoogleFonts.inter(
+                          color: AppColors.textSecondary,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        )),
+                    const SizedBox(height: 14),
+                    _Field(controller: nameCtrl, hint: 'SQUAD NAME'),
+                    const SizedBox(height: 12),
+                    GameButton(
+                        label: 'FOUND A SQUAD', onTap: onCreate, pulse: true),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Panel(
+                accent: Colors.white,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.confirmation_number_rounded,
+                          size: 15, color: AppColors.textSecondary),
+                      const SizedBox(width: 8),
+                      Text('GOT A CODE?',
+                          style: GoogleFonts.inter(
+                            color: AppColors.textSecondary,
+                            fontSize: 9.5,
+                            letterSpacing: 2.2,
+                            fontWeight: FontWeight.w900,
+                          )),
+                    ]),
+                    const SizedBox(height: 4),
+                    Text('Type the six letters your mate sent you.',
+                        style: GoogleFonts.inter(
+                          color: AppColors.textTertiary,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        )),
+                    const SizedBox(height: 14),
+                    _Field(
+                        controller: codeCtrl,
+                        hint: 'ABC123',
+                        caps: true,
+                        letterSpacing: 6),
+                    const SizedBox(height: 12),
+                    GameButton(
+                        label: 'ENTER WITH CODE',
+                        color: AppColors.surface2,
+                        onTap: onJoin),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -966,13 +1104,8 @@ class _WeekBoard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now().weekday - 1;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
+    return Panel(
+      padding: const EdgeInsets.fromLTRB(12, 13, 12, 15),
       child: Column(children: [
         Row(children: [
           const SizedBox(width: 104),
@@ -1157,49 +1290,6 @@ class _WeekBoard extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  CODE ACTIONS
-// ══════════════════════════════════════════════════════════════════════
-
-class _CodeAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _CodeAction(
-      {required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 54,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.red.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.red.withValues(alpha: 0.45)),
-          ),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 15, color: AppColors.red),
-            const SizedBox(height: 3),
-            Text(label,
-                style: GoogleFonts.inter(
-                  color: AppColors.red,
-                  fontSize: 8,
-                  letterSpacing: 1.1,
-                  fontWeight: FontWeight.w900,
-                )),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════
 //  THE AI RUN — the voice Daily, seen by the squad
 // ══════════════════════════════════════════════════════════════════════
 
@@ -1210,7 +1300,15 @@ class _CodeAction extends StatelessWidget {
 class _DailyRunCard extends StatelessWidget {
   final List<SquadMember> roster;
   final List<DailyMark> marks;
-  const _DailyRunCard({required this.roster, required this.marks});
+
+  /// Today's woman. Not a decoration — the squad's voice slot IS the
+  /// Daily, one credit, one attempt, and showing a nameless "voice run"
+  /// card made it look like a second challenge people were missing out
+  /// on. Her face is the clearest possible way to say it's the same run.
+  final GirlBrief girl;
+
+  const _DailyRunCard(
+      {required this.roster, required this.marks, required this.girl});
 
   @override
   Widget build(BuildContext context) {
@@ -1230,34 +1328,78 @@ class _DailyRunCard extends StatelessWidget {
       return 'ANON';
     }
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: kNeon.withValues(alpha: 0.3)),
-      ),
+    return Panel(
+      accent: kNeon,
+      padding: const EdgeInsets.fromLTRB(16, 15, 16, 15),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Icon(Icons.graphic_eq_rounded, size: 16, color: kNeon),
-          const SizedBox(width: 8),
-          Text('VOICE RIZZ-OFF',
-              style: GoogleFonts.inter(
-                color: kNeon,
-                fontSize: 11,
-                letterSpacing: 2,
-                fontWeight: FontWeight.w900,
-              )),
-          const Spacer(),
-          Text('${finished.length}/${roster.length} FINISHED',
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                  color: kNeon.withValues(alpha: 0.6), width: 1.5),
+              boxShadow: [
+                BoxShadow(color: kNeon.withValues(alpha: 0.22), blurRadius: 14)
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(13.5),
+              child: Image.asset(girl.asset,
+                  fit: BoxFit.cover,
+                  alignment: const Alignment(0, -0.3),
+                  errorBuilder: (_, __, ___) => Container(
+                      color: AppColors.surface2,
+                      child: const Icon(Icons.graphic_eq_rounded,
+                          size: 22, color: kNeon))),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('TODAY · ONE CREDIT EACH',
+                    style: GoogleFonts.inter(
+                      color: kNeon,
+                      fontSize: 8.5,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w900,
+                    )),
+                const SizedBox(height: 3),
+                Text(girl.name.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 20,
+                      height: 1.05,
+                      letterSpacing: -0.8,
+                      fontWeight: FontWeight.w900,
+                    )),
+                const SizedBox(height: 2),
+                Text(girl.type,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textMuted,
+                      fontSize: 10,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w700,
+                    )),
+              ],
+            ),
+          ),
+          Text('${finished.length}/${roster.length}',
               style: GoogleFonts.inter(
                 color: AppColors.textSecondary,
-                fontSize: 10.5,
-                letterSpacing: 1.2,
+                fontSize: 15,
+                letterSpacing: -0.5,
                 fontWeight: FontWeight.w900,
               )),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         // Three states, one row: went the distance / walked / no-show.
         Row(children: [
           for (final f in finished) ...[
@@ -1369,13 +1511,8 @@ class _EmptyBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Panel(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
       child: Text(
           'Board clear — you\'ve run every mission in the catalog. The '
           'next tier drops with the update.',

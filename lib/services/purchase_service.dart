@@ -314,6 +314,11 @@ class PurchaseService {
           || pkg.storeProduct.identifier.toLowerCase().contains('rescue');
       if (!isRescue) {
         await LocalStoreService.setSubscribed(true);
+        // Start the lag grace. RevenueCat can take a beat to publish the
+        // entitlement after a completed transaction (routine in sandbox,
+        // seen in prod), and the resume refresh below must not read that
+        // gap as "cancelled" and re-lock a man who just paid.
+        _paidAt = DateTime.now();
       }
       // Keep the entitlement read purely for telemetry — never to gate.
       final entActive = result.entitlements.all[PurchaseConfig.proEntitlementId]
@@ -415,6 +420,39 @@ class PurchaseService {
   //  INTERNAL
   // ─────────────────────────────────────────────────────────────────────────
 
+  /// When the last completed transaction landed. Guards the window in
+  /// which RevenueCat may not yet be reporting the entitlement.
+  static DateTime? _paidAt;
+
+  /// Throttle for [refreshOnResume] — a man tabbing in and out shouldn't
+  /// fire a store round-trip every time.
+  static DateTime? _lastResumeRefresh;
+
+  /// How long after a completed purchase we refuse to write `false`.
+  static const _lagGrace = Duration(minutes: 10);
+
+  /// Re-check entitlements when the app comes back to the foreground.
+  ///
+  /// THE LEAK THIS CLOSES: [PaywallGate.isPro] is cache-first, and the
+  /// cache was only ever repainted `false` by [_refreshEntitlementCache],
+  /// which only runs inside [init] — i.e. on a COLD launch. iOS keeps apps
+  /// resident for days, so a man who cancelled (or whose card failed) kept
+  /// the full paid app until he happened to fully restart it. That is the
+  /// one real way this app could hand out more than the week Apple sold.
+  ///
+  /// Throttled to 15 minutes and identical on both platforms — Play and
+  /// StoreKit lapse the same way and neither told us about it.
+  static Future<void> refreshOnResume() async {
+    if (!_initialized) return;
+    final now = DateTime.now();
+    if (_lastResumeRefresh != null &&
+        now.difference(_lastResumeRefresh!) < const Duration(minutes: 15)) {
+      return;
+    }
+    _lastResumeRefresh = now;
+    await _refreshEntitlementCache();
+  }
+
   static Future<void> _refreshEntitlementCache() async {
     try {
       final info = await Purchases.getCustomerInfo();
@@ -424,6 +462,14 @@ class PurchaseService {
       final isPro = entActive ||
           info.entitlements.active.isNotEmpty ||
           info.activeSubscriptions.isNotEmpty;
+      // Unlocking is always safe. Re-LOCKING inside the post-purchase lag
+      // window is not — that's the "I just paid and it locked me out" bug,
+      // and running this on every resume would have made it far easier to
+      // hit than it was on cold launch alone.
+      if (!isPro && _paidAt != null &&
+          DateTime.now().difference(_paidAt!) < _lagGrace) {
+        return;
+      }
       await LocalStoreService.setSubscribed(isPro);
     } catch (_) {
       // Network fail on launch is not fatal — the cached flag stands.

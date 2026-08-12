@@ -7,6 +7,7 @@ import '../../services/backend/auth_service.dart';
 import '../../services/backend/mission_service.dart';
 import '../../services/backend/squad_day.dart';
 import '../../services/backend/tiers.dart';
+import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 
 /// THE FIVE — one journey, not five identical cards.
@@ -31,12 +32,19 @@ class FiveJourney extends StatelessWidget {
   final void Function(Mission m) onOpenMission;
   final VoidCallback onOpenRizzOff;
 
+  /// Today's woman — the SAME one the Daily serves the whole world.
+  /// The squad's voice slot isn't a second challenge; it IS the daily,
+  /// and you only get one credit for it, so the node has to show her
+  /// face or people reasonably assume they're two different runs.
+  final GirlBrief girl;
+
   const FiveJourney({
     super.key,
     required this.day,
     required this.myStates,
     required this.onOpenMission,
     required this.onOpenRizzOff,
+    required this.girl,
   });
 
   @override
@@ -58,7 +66,7 @@ class FiveJourney extends StatelessWidget {
           onTap: () => onOpenMission(m),
         ),
       _Stage(label: 'COMPETE', sub: 'Same woman, one shot, whole world'),
-      _RizzOffNode(day: day, onTap: onOpenRizzOff),
+      _RizzOffNode(day: day, girl: girl, onTap: onOpenRizzOff),
       _Stage(label: 'PROVE', sub: 'Off the screen'),
       for (final (i, m) in prove.indexed)
         _MissionNode(
@@ -284,8 +292,13 @@ class _MissionNode extends StatelessWidget {
 /// The jewel node — bigger, brighter, and the only one that scores.
 class _RizzOffNode extends StatelessWidget {
   final SquadDay day;
+  final GirlBrief girl;
   final VoidCallback onTap;
-  const _RizzOffNode({required this.day, required this.onTap});
+  const _RizzOffNode({
+    required this.day,
+    required this.girl,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -361,27 +374,75 @@ class _RizzOffNode extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    Text('DAILY RIZZ-OFF',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 15,
-                          letterSpacing: 0.6,
-                          fontWeight: FontWeight.w900,
-                        )),
-                    const Spacer(),
+                    // HER. Same face as the Daily, because it is the
+                    // Daily — one woman, one credit, one attempt.
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(
+                            color: AppColors.red.withValues(alpha: 0.75),
+                            width: 1.5),
+                        boxShadow: const [
+                          BoxShadow(color: AppColors.redGlow, blurRadius: 12)
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(11.5),
+                        child: Image.asset(girl.asset,
+                            fit: BoxFit.cover,
+                            alignment: const Alignment(0, -0.3),
+                            errorBuilder: (_, __, ___) => Container(
+                                color: AppColors.surface2,
+                                child: const Icon(Icons.person_rounded,
+                                    size: 20, color: AppColors.red))),
+                      ),
+                    ),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('DAILY RIZZ-OFF',
+                              style: GoogleFonts.inter(
+                                color: AppColors.red,
+                                fontSize: 9,
+                                letterSpacing: 2,
+                                fontWeight: FontWeight.w900,
+                              )),
+                          const SizedBox(height: 2),
+                          Text(girl.name.toUpperCase(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 18,
+                                height: 1.05,
+                                letterSpacing: -0.6,
+                                fontWeight: FontWeight.w900,
+                              )),
+                        ],
+                      ),
+                    ),
                     Text(took ? voiceScoreOf(mine) : 'ONE SHOT',
                         style: GoogleFonts.inter(
                           color: AppColors.red,
-                          fontSize: took ? 15 : 9,
-                          letterSpacing: took ? 0 : 1.6,
+                          fontSize: took ? 18 : 9,
+                          letterSpacing: took ? -0.5 : 1.6,
                           fontWeight: FontWeight.w900,
                         )),
                   ]),
-                  const SizedBox(height: 4),
-                  Text('The only thing that moves your rank.',
+                  const SizedBox(height: 9),
+                  Text(
+                      took
+                          ? 'Done for today. She changes at reset.'
+                          : 'Your one voice credit today — same woman as '
+                              'the Daily.',
                       style: GoogleFonts.inter(
                         color: AppColors.textSecondary,
                         fontSize: 11.5,
+                        height: 1.35,
                         fontWeight: FontWeight.w600,
                       )),
                   const SizedBox(height: 9),

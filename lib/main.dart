@@ -16,6 +16,7 @@ import 'services/local_store_service.dart';
 import 'services/notification_service.dart';
 import 'services/purchase_service.dart';
 import 'services/share_intake_service.dart';
+import 'services/win_back_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/academy/live_toast.dart';
 
@@ -73,6 +74,13 @@ void main() async {
   // SINGLE source of truth for retention notifications now; the legacy
   // streak/training/rescan schedulers are no longer wired in (they'd
   // only fight the horizon by competing for the same OS slots).
+  //
+  // Before the rebuild: stop the win-back ladder if he became a
+  // subscriber somewhere this build's paywall screen never saw (a restore
+  // on another device, the RevenueCat listener flipping the flag). It has
+  // to run FIRST so the horizon's evening slot reads the corrected state.
+  await WinBackService.syncOnLaunch();
+
   // ignore: discarded_futures
   DailyNudgeService.markAppOpened();
 
@@ -167,6 +175,13 @@ class _MirrorAppState extends State<MirrorApp> with WidgetsBindingObserver {
         // retention trigger for the NEXT notification.
         // ignore: discarded_futures
         NotificationService.clearIconBadge();
+        // Re-check the subscription with the store. Without this the
+        // paid app kept working for anyone who cancelled until they
+        // next COLD-launched — iOS holds apps in memory for days, so
+        // that could be well past the week they actually bought.
+        // Throttled to 15 min inside; same on Android and iOS.
+        // ignore: discarded_futures
+        PurchaseService.refreshOnResume();
         break;
       case AppLifecycleState.detached:
       case AppLifecycleState.inactive:

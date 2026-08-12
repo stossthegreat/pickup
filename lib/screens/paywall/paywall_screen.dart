@@ -12,6 +12,7 @@ import '../../services/analytics_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/purchase_service.dart';
 import '../../services/review_prompt_service.dart';
+import '../../services/win_back_service.dart';
 import '../../theme/app_colors.dart';
 
 /// ImHim paywall — "paywall-final" carousel.
@@ -301,9 +302,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
         _snack('No previous purchases found.');
         break;
       case PurchaseOutcome.notConfigured:
-        await LocalStoreService.setSubscribed(true);
-        await LocalStoreService.setOnboarded(true);
-        if (mounted) _forwardOnSuccess();
+        // FAIL CLOSED. This used to unlock the app — permanently, with no
+        // transaction behind it and nothing able to take it back: when the
+        // store isn't configured, _refreshEntitlementCache() never runs
+        // either, so that flag would sit true forever. One failed
+        // Purchases.configure() and that user had the paid app for good.
+        // A store that won't configure is an error to show, not a gift.
+        _snack('Store unavailable right now. Nothing was charged — '
+            'try again in a moment.');
         break;
       case PurchaseOutcome.error:
         // Last chance: the RC listener may have registered the
@@ -350,6 +356,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
   }
 
   void _forwardOnSuccess() {
+    // He paid — the ladder stops immediately and permanently. Nothing
+    // reads worse than being sold something you already bought.
+    // ignore: discarded_futures
+    WinBackService.markConverted();
     final ctx = widget.context;
     if (ctx != null && ctx['afterPurchase'] == '/report') {
       context.go('/report', extra: {
@@ -374,6 +384,12 @@ class _PaywallScreenState extends State<PaywallScreen> {
     HapticFeedback.selectionClick();
     AnalyticsService.paywallDismissed(
         (widget.context?['afterPurchase'] as String?) ?? 'standalone');
+    // THE WALK. He read the whole thing and closed it — the most
+    // recoverable user in the funnel, and the one generic "open the app!"
+    // copy is most wasted on. Arm the win-back ladder with the gate he
+    // bounced off so the first message can name it.
+    await WinBackService.markPaywallWalked(
+        (widget.context?['source'] as String?) ?? 'standalone');
     if (kPaywallDemoUnlock) {
       // DEMO / RECORDING ONLY — pressing X unlocks the app so the paid features
       // can be shown after the paywall. Never true in the submitted build.

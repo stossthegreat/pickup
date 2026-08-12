@@ -73,9 +73,10 @@ class AscendScreen extends StatefulWidget {
   /// Longest daily streak the user has ever reached (StreakService).
   final int longestStreak;
 
-  /// Earned ascension day (total days shown up, 1..60) from
-  /// StreakService.progress via home_screen. Drives the DAY N/60 flame
-  /// ring, the rank ladder, and the final-form unlock.
+  /// Ascension day (0..60) from StreakService.progress via home_screen.
+  /// It is the SAME number as [dayStreak] — the ladder and the flame move
+  /// together, and a day with nothing done sends both to 0. Drives the
+  /// DAY N/60 ring, the rank ladder, and the final-form unlock.
   final int ascensionDay;
 
   /// Rolling 7-day mission-completion consistency (0..100) from

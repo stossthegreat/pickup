@@ -32,6 +32,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   DailyStatus? _s;
   List<LeaderboardEntry> _allTime = const [];
 
+  /// VOICE and TEXT are separate ladders on purpose — see migration
+  /// 0009. Voice ELO moves on voice only; text has its own best-score
+  /// board. Mixing them would let someone grind text to a voice rank.
+  bool _voice = true;
+  List<ChatBoardEntry> _chat = const [];
+
   @override
   void initState() {
     super.initState();
@@ -42,10 +48,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     setState(() => _loading = true);
     final s = await DailyGameService.status();
     final all = await LeaderboardService.global();
+    final chat = await ChatLeaderboardService.global();
     if (!mounted) return;
     setState(() {
       _s = s;
       _allTime = all;
+      _chat = chat;
       _loading = false;
     });
   }
@@ -76,7 +84,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     color: AppColors.red,
                     backgroundColor: AppColors.surface1,
                     onRefresh: _load,
-                    child: _league ? _leagueTable() : _allTimeTable(),
+                    child: !_voice
+                        ? _chatTable()
+                        : _league
+                            ? _leagueTable()
+                            : _allTimeTable(),
                   ),
                 ),
               ]),
@@ -93,19 +105,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               size: 18, color: Colors.white),
         ),
-        // THE BOARD IS ABOUT VOICE. Nothing else on it moves your rank —
-        // real-life missions build the squad's grade, the voice rizz-off
-        // builds YOUR rating. That was never said anywhere, so the two
-        // systems read as one confusing pile. Now the title says it.
+        // TWO LADDERS, named. Voice moves competitive ELO; text has its
+        // own best-score board. Both are real graded numbers now — text
+        // used to pay a flat +50 to everyone who finished, which made a
+        // text board impossible.
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                const Icon(Icons.graphic_eq_rounded,
+                Icon(_voice ? Icons.graphic_eq_rounded : Icons.forum_rounded,
                     size: 13, color: AppColors.red),
                 const SizedBox(width: 6),
-                Text('VOICE RIZZ RANKINGS',
+                Text(_voice ? 'VOICE RANKINGS' : 'CHAT RANKINGS',
                     style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 11.5,
@@ -115,43 +127,29 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               ]),
               const SizedBox(height: 6),
               Row(children: [
-                _tab('THIS WEEK', _league,
-                    () => setState(() => _league = true)),
-                const SizedBox(width: 8),
-                _tab('ALL TIME', !_league,
-                    () => setState(() => _league = false)),
+                _tab('VOICE', _voice, () => setState(() => _voice = true)),
+                const SizedBox(width: 6),
+                _tab('CHAT', !_voice, () => setState(() => _voice = false)),
+                if (_voice) ...[
+                  Container(
+                      width: 1,
+                      height: 16,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      color: Colors.white.withValues(alpha: 0.12)),
+                  _tab('WEEK', _league,
+                      () => setState(() => _league = true)),
+                  const SizedBox(width: 6),
+                  _tab('ALL TIME', !_league,
+                      () => setState(() => _league = false)),
+                ],
               ]),
             ],
           ),
         ),
-        // BATTLES is a whole mode, not a glyph. A bare glove icon in the
-        // corner told nobody what it was — a labelled button does.
-        GestureDetector(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            context.push('/battles');
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.red.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: AppColors.red.withValues(alpha: 0.55)),
-            ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.sports_mma_rounded,
-                  size: 14, color: AppColors.red),
-              const SizedBox(width: 6),
-              Text('BATTLES',
-                  style: GoogleFonts.inter(
-                    color: AppColors.red,
-                    fontSize: 10.5,
-                    letterSpacing: 1.6,
-                    fontWeight: FontWeight.w900,
-                  )),
-            ]),
-          ),
-        ),
+        // BATTLES used to sit here and it never belonged: four pills in
+        // one header, the last one a different mode rather than another
+        // filter, and on a narrow phone it overlapped ALL TIME. It lives
+        // on home now, at full size, where it reads as a way to play.
       ]),
     );
   }
@@ -569,6 +567,61 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   //  ALL TIME (ELO / tiers)
   // ══════════════════════════════════════════════════════════════════
 
+  Widget _chatTable() {
+    if (_chat.isEmpty) {
+      return ListView(children: [
+        const SizedBox(height: 70),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Column(children: [
+              const Icon(Icons.forum_rounded,
+                  size: 30, color: AppColors.textTertiary),
+              const SizedBox(height: 14),
+              Text('No graded conversations yet.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text(
+                  'Text one of the women for a few messages and the '
+                  'grader scores it out of 100. Your best lands here.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                      color: AppColors.textTertiary,
+                      fontSize: 12,
+                      height: 1.5,
+                      fontWeight: FontWeight.w500)),
+            ]),
+          ),
+        ),
+      ]);
+    }
+
+    final me = AuthService.userId;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+      children: [
+        for (final (i, e) in _chat.indexed)
+          _ChatRow(entry: e, position: i + 1, mine: e.userId == me),
+        const SizedBox(height: 16),
+        Text(
+            'Scored 0–100 on opening, relevance, personality, momentum '
+            'and restraint. Ranked on your BEST — one great conversation '
+            'counts, and a bad night can\'t drag you down.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: AppColors.textMuted,
+              fontSize: 11,
+              height: 1.5,
+              fontWeight: FontWeight.w500,
+            )),
+      ],
+    );
+  }
+
   Widget _allTimeTable() {
     if (_allTime.isEmpty) {
       // Empty here means one of two things — nobody has scored yet, OR
@@ -716,5 +769,106 @@ class _Dashes extends StatelessWidget {
         ),
       );
     });
+  }
+}
+
+
+class _ChatRow extends StatelessWidget {
+  final ChatBoardEntry entry;
+  final int position;
+  final bool mine;
+  const _ChatRow(
+      {required this.entry, required this.position, required this.mine});
+
+  @override
+  Widget build(BuildContext context) {
+    final podium = position <= 3;
+    final colour = position == 1
+        ? const Color(0xFFFFD34D)
+        : mine
+            ? AppColors.red
+            : AppColors.textTertiary;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(
+        color: mine ? AppColors.red.withValues(alpha: 0.10) : AppColors.surface1,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: mine
+                ? AppColors.red.withValues(alpha: 0.5)
+                : Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Row(children: [
+        SizedBox(
+          width: 24,
+          child: Text('$position',
+              style: GoogleFonts.inter(
+                color: colour,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              )),
+        ),
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.surface2,
+            border: Border.all(
+                color: podium ? colour : Colors.white24, width: 1.5),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+              (mine ? 'YOU' : (entry.handle ?? 'A'))
+                  .characters
+                  .first
+                  .toUpperCase(),
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              )),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(mine ? 'YOU' : (entry.handle ?? 'ANON'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: mine ? Colors.white : AppColors.textPrimary,
+                    fontSize: 13,
+                    letterSpacing: 0.3,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 1),
+              Text('avg ${entry.average} · ${entry.attempts} graded',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  )),
+            ],
+          ),
+        ),
+        Text('${entry.best}',
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            )),
+        Text(' BEST',
+            style: GoogleFonts.inter(
+              color: AppColors.textMuted,
+              fontSize: 8.5,
+              letterSpacing: 1,
+              fontWeight: FontWeight.w900,
+            )),
+      ]),
+    );
   }
 }

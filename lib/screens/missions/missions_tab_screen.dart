@@ -237,12 +237,18 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(child: _TopBar(xp: _xp, streak: _streak)),
-          // THE BEAT — the reset clock. First thing on home because the
-          // whole product runs on "today matters more than tomorrow".
-          const SliverToBoxAdapter(
+          // THE BEAT — the day, measured against you. First thing on home
+          // because the whole product runs on "today matters more than
+          // tomorrow". It gets the real counts: an instrument that only
+          // knew the time was telling you something your lock screen
+          // already had.
+          SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(20, 2, 20, 6),
-              child: DayBeat(),
+              padding: const EdgeInsets.fromLTRB(20, 2, 20, 6),
+              child: DayBeat(
+                done: _doneCount,
+                total: _missions.isEmpty ? 5 : _missions.length,
+              ),
             ),
           ),
           // THE DAILY — the appointment. Pulsing until today's shot is
@@ -356,6 +362,17 @@ class _TopBar extends StatelessWidget {
               // squad already has its own card further down this very
               // screen — two doors to one room is clutter, and the card
               // carries live state the icon never could.
+              // THE FEAR BUTTON — for the exact second he's frozen and
+              // needs the app to push him through. It gave up its pill to
+              // BATTLES but it can't be buried: the whole point is that
+              // it's one tap away at the worst moment.
+              _IconBtn(
+                  icon: Icons.bolt_rounded,
+                  color: AppColors.red,
+                  onTap: () {
+                    HapticFeedback.heavyImpact();
+                    context.push('/fear');
+                  }),
               _IconBtn(
                   icon: Icons.emoji_events_outlined,
                   onTap: () => context.push('/leaderboard')),
@@ -367,12 +384,15 @@ class _TopBar extends StatelessWidget {
             children: [
               XpBadge(label: _xpLabel),
               const Spacer(),
-              // THE FEAR BUTTON — always in reach. For the exact second
-              // he's frozen and needs the app to push him through.
+              // BATTLES. It used to hang off the leaderboard's header
+              // where it collided with the WEEK / ALL TIME pills and read
+              // as a filter rather than a mode. It's a whole way to play
+              // — you and another man, same woman, both blind — so it
+              // belongs on the first screen, at full size.
               GestureDetector(
                 onTap: () {
                   HapticFeedback.heavyImpact();
-                  context.push('/fear');
+                  context.push('/battles');
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -384,10 +404,10 @@ class _TopBar extends StatelessWidget {
                         color: AppColors.red.withValues(alpha: 0.6)),
                   ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.bolt_rounded,
+                    const Icon(Icons.sports_mma_rounded,
                         size: 15, color: AppColors.red),
                     const SizedBox(width: 5),
-                    Text('BOTTLING IT?',
+                    Text('BATTLES',
                         style: GoogleFonts.inter(
                           color: AppColors.red,
                           fontSize: 10.5,
@@ -408,11 +428,12 @@ class _TopBar extends StatelessWidget {
 class _IconBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const _IconBtn({required this.icon, required this.onTap});
+  final Color? color;
+  const _IconBtn({required this.icon, required this.onTap, this.color});
   @override
   Widget build(BuildContext context) => IconButton(
         onPressed: onTap,
-        icon: Icon(icon, color: AppColors.textSecondary, size: 22),
+        icon: Icon(icon, color: color ?? AppColors.textSecondary, size: 22),
         splashRadius: 22,
       );
 }
