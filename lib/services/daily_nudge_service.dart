@@ -6,6 +6,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'local_store_service.dart';
 import 'notification_service.dart';
 import 'protocol_service.dart';
+import 'win_back_service.dart';
 
 /// THE RETENTION ENGINE — a rolling 14-day notification horizon, two
 /// beats a day, refreshed on every app open.
@@ -111,6 +112,12 @@ class DailyNudgeService {
 
       // 2) One state read; projected forward per day inside the loop.
       final sig = await _readSignals();
+      // The win-back window, if he's read the paywall and walked. When
+      // it's live it TAKES OVER the evening slot rather than adding a
+      // fourth beat: the evening beat is already the loss-framed one, and
+      // a man who just declined to pay does not need two pushes a night.
+      // Costs zero extra pending notifications this way.
+      final winBack = await WinBackService.read();
       final now = tz.TZDateTime.now(tz.local);
 
       // 3) Lay down the horizon. Each slot is a distinct one-shot with its
@@ -131,10 +138,14 @@ class DailyNudgeService {
           await _schedule(_middayBase + d, t, b, middayAt, morning: true);
         }
         // EVENING — streak / loss, escalating with projected dormancy.
+        // Unless he's mid-win-back, in which case the sharper reason wins
+        // the slot: he doesn't need telling to keep a streak he's locked
+        // out of.
         final eveningAt = _slot(now, d, _eveningHour, _eveningMinute);
         if (eveningAt.isAfter(now)) {
-          final state = _stateFor(sig, d);
-          final (t, b) = _streakCopy(state, d);
+          final (t, b) = winBack != null
+              ? WinBackService.ladderCopy(winBack, dayOffset: d)
+              : _streakCopy(_stateFor(sig, d), d);
           await _schedule(_eveningBase + d, t, b, eveningAt, morning: false);
         }
       }
