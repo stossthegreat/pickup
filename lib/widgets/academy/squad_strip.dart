@@ -94,7 +94,7 @@ class _SquadStripState extends State<SquadStrip> {
     return Panel(
       hot: true,
       padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
-      onTap: () => context.push('/squad'),
+      onTap: () => context.push('/today'),
       child: Row(children: [
         Container(
           width: 44,
@@ -187,7 +187,7 @@ class _SquadStripState extends State<SquadStrip> {
       accent: accent,
       hot: !day.won && day.remaining <= 2 && day.live,
       padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
-      onTap: () => context.push('/squad'),
+      onTap: () => context.push('/today'),
       child: Row(children: [
         SquadCrest(name: _squad!.name, accent: accent, size: 44),
         const SizedBox(width: 13),
