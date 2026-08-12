@@ -97,61 +97,60 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   Widget _topBar() {
+    // The four chips (VOICE / CHAT / WEEK / ALL TIME) shared a row with
+    // the back arrow and the title, so on a normal phone the last one ran
+    // off the screen edge. They get the full width now, on their own line
+    // under the arrow, and scroll horizontally as a backstop for a fifth
+    // filter or a wider language.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 2, 18, 8),
-      child: Row(children: [
-        IconButton(
-          onPressed: () => context.pop(),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              size: 18, color: Colors.white),
-        ),
-        // TWO LADDERS, and they are deliberately different shapes.
-        // VOICE is one attempt a day, skill-rated, and the ELO can fall —
-        // it rewards being good. CHAT is unlimited and cumulative, so it
-        // rewards turning up and doing it again. Ranking an uncapped
-        // surface on best-of would have made extra reps worthless.
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Icon(_voice ? Icons.graphic_eq_rounded : Icons.forum_rounded,
-                    size: 13, color: AppColors.red),
+      padding: const EdgeInsets.fromLTRB(10, 2, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            IconButton(
+              onPressed: () => context.pop(),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                  size: 18, color: Colors.white),
+            ),
+            Icon(_voice ? Icons.graphic_eq_rounded : Icons.forum_rounded,
+                size: 13, color: AppColors.red),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(_voice ? 'VOICE RANKINGS' : 'RIZZ CHAT POINTS',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    letterSpacing: 1.8,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(children: [
+              _tab('VOICE', _voice, () => setState(() => _voice = true)),
+              const SizedBox(width: 6),
+              _tab('CHAT', !_voice, () => setState(() => _voice = false)),
+              if (_voice) ...[
+                Container(
+                    width: 1,
+                    height: 16,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    color: Colors.white.withValues(alpha: 0.12)),
+                _tab('WEEK', _league, () => setState(() => _league = true)),
                 const SizedBox(width: 6),
-                Text(_voice ? 'VOICE RANKINGS' : 'RIZZ CHAT POINTS',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 11.5,
-                      letterSpacing: 1.8,
-                      fontWeight: FontWeight.w900,
-                    )),
-              ]),
-              const SizedBox(height: 6),
-              Row(children: [
-                _tab('VOICE', _voice, () => setState(() => _voice = true)),
-                const SizedBox(width: 6),
-                _tab('CHAT', !_voice, () => setState(() => _voice = false)),
-                if (_voice) ...[
-                  Container(
-                      width: 1,
-                      height: 16,
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      color: Colors.white.withValues(alpha: 0.12)),
-                  _tab('WEEK', _league,
-                      () => setState(() => _league = true)),
-                  const SizedBox(width: 6),
-                  _tab('ALL TIME', !_league,
-                      () => setState(() => _league = false)),
-                ],
-              ]),
-            ],
+                _tab('ALL TIME', !_league,
+                    () => setState(() => _league = false)),
+              ],
+            ]),
           ),
-        ),
-        // BATTLES used to sit here and it never belonged: four pills in
-        // one header, the last one a different mode rather than another
-        // filter, and on a narrow phone it overlapped ALL TIME. It lives
-        // on home now, at full size, where it reads as a way to play.
-      ]),
+        ],
+      ),
     );
   }
 
@@ -588,13 +587,33 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               const SizedBox(height: 6),
               Text(
                   'Run a battle, or text one of the women. Every graded '
-                  'conversation adds points and there is no daily cap.',
+                  'conversation adds points and there is no daily cap.\n\n'
+                  'Already had a full conversation and still nothing? The '
+                  'grader lives server-side — run the backend check.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                       color: AppColors.textTertiary,
                       fontSize: 12,
                       height: 1.5,
                       fontWeight: FontWeight.w500)),
+              const SizedBox(height: 10),
+              // Empty here means one of two things and the user can't
+              // tell them apart: nobody has scored, or the chat grader
+              // isn't deployed. Same diagnostic the voice board already
+              // carries, for the same reason.
+              TextButton.icon(
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  context.push('/backend-check');
+                },
+                icon: const Icon(Icons.wifi_tethering_rounded,
+                    size: 15, color: AppColors.textTertiary),
+                label: Text('Run backend check',
+                    style: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+              ),
             ]),
           ),
         ),

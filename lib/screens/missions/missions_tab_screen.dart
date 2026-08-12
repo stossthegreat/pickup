@@ -16,8 +16,6 @@ import '../../services/roster.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
-import '../../widgets/academy/daily_card.dart';
-import '../../widgets/academy/day_beat.dart';
 import '../../widgets/academy/live_toast.dart';
 import '../../widgets/academy/squad_strip.dart';
 import '../../widgets/common/imhim_wordmark.dart';
@@ -282,37 +280,16 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
         slivers: [
           SliverToBoxAdapter(child: _TopBar(xp: _xp, streak: _streak)),
 
-          // ── THE TOP STACK — one gutter, one rhythm ─────────────────
-          // These three used to carry their own padding and had drifted
-          // to three different insets (20 / 24 / 20), with the Daily's
-          // zero bottom margin leaving it 2px off the squad card. Layout
-          // now belongs to the parent, so they line up by construction
-          // and can't drift again. Gutter and gap match the mission list
-          // below (Sp.lg, Sp.sm + 4) so the whole screen is one column.
+          // ── ONE CARD ───────────────────────────────────────────────
+          // Home used to stack three invitations before you reached the
+          // missions: the day gauge, the Daily, and the squad strip. Each
+          // was asking for the same tap and they competed rather than
+          // stacked. There is one card now — your squad — and it opens
+          // TODAY, where the standing and both challenges live together.
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.lg, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // THE BEAT — the day, measured against you. First thing
-                  // on home because the whole product runs on "today
-                  // matters more than tomorrow".
-                  DayBeat(
-                    done: _doneCount,
-                    total: _missions.isEmpty ? 5 : _missions.length,
-                  ),
-                  const SizedBox(height: Sp.sm + 4),
-                  // THE DAILY — the appointment. Pulsing until today's
-                  // shot is taken; carries the league line.
-                  const DailyCard(),
-                  const SizedBox(height: Sp.sm + 4),
-                  // THE SQUAD STRIP — the app's liveness, on the first
-                  // screen. Every open answers "where is everyone at?"
-                  // with zero taps.
-                  const SquadStrip(),
-                ],
-              ),
+              child: const SquadStrip(),
             ),
           ),
 

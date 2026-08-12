@@ -60,6 +60,11 @@ class GirlChatConfig {
   final bool taskMode;
   final int taskGoal;
 
+  /// Which ladder this conversation is graded under. Defaults to
+  /// ordinary practice; the daily chat challenge passes 'daily_chat' so
+  /// DailyChatService can find today's run without a table of its own.
+  final String scoreSurface;
+
   const GirlChatConfig({
     required this.characterId,
     required this.vibeKey,
@@ -72,6 +77,7 @@ class GirlChatConfig {
     this.post,
     this.taskMode = false,
     this.taskGoal = 15,
+    this.scoreSurface = 'roleplay',
   });
 }
 
@@ -285,7 +291,7 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     // ignore: discarded_futures
     ChatScoreService.score(
       transcript: transcript,
-      surface: 'roleplay',
+      surface: widget.config.scoreSurface,
       scenario: widget.config.name,
     );
   }
