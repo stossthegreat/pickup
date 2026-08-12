@@ -378,7 +378,12 @@ class _Line extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final done = mark != null;
+    // Copied to a local first. `mark` is a public field, and Dart won't
+    // promote those to non-null across a check — the field could in
+    // principle be overridden by a getter — so `mark.display` after
+    // `mark != null` is a compile error. A local has no such doubt.
+    final m = mark;
+    final done = m != null;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(children: [
@@ -423,7 +428,7 @@ class _Line extends StatelessWidget {
             ],
           ]),
         ),
-        Text(done ? mark.display : 'MISSING',
+        Text(done ? m.display : 'MISSING',
             style: GoogleFonts.inter(
               color: done ? Colors.white : AppColors.textMuted,
               fontSize: done ? 15 : 9,
