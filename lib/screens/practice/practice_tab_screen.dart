@@ -56,7 +56,13 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
 
   // A girl is locked until her ascension day arrives. Creator mode
   // (owner-only, password-gated) unlocks the whole roster immediately.
-  bool _locked(GirlBrief g) => !_creator && _day < g.unlockDay;
+  //
+  // The ladder day now falls to 0 on a missed day (it tracks the streak),
+  // so the gate is floored at 1: the Day-1 starters are the way back in
+  // and must never lock. Everything above them does drop when you drop —
+  // that's the point of tying the ladder to showing up.
+  bool _locked(GirlBrief g) =>
+      !_creator && (_day < 1 ? 1 : _day) < g.unlockDay;
 
   Future<void> _tap(GirlBrief g) async {
     if (_locked(g)) {

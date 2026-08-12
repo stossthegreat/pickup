@@ -15,12 +15,23 @@ import 'local_store_service.dart';
 ///     freeze/grace — miss a whole day and it resets. It is the same
 ///     number on every masthead (Looks / Rizz / Ascend).
 ///
-///   • ASCENSION DAY — the TOTAL number of distinct days you've ever
-///     shown up. It is earned, never free: it only climbs on days you do
-///     the work, and it NEVER goes backward (a broken streak doesn't cost
-///     you your day). Day thresholds drive the rank ladder (Observer 1,
-///     Initiate 10, Contender 20, Dangerous 30, Magnetic 45, ImHim 60).
-///     Clamped to 1..60 for display.
+///   • ASCENSION DAY — how far up the 60-day ladder you are RIGHT NOW,
+///     and it is the same number as the streak. The two move together:
+///     one zero-day and both go to 0.
+///
+///     It used to be the lifetime count of distinct active days, and it
+///     never went backward — so a man who showed up ten days, vanished
+///     for a month and came back was still "Day 10, Initiate" with a
+///     streak of 0. Two numbers telling opposite stories about the same
+///     person, and the flattering one was the lie: he had not kept
+///     climbing, he had fallen off. The ladder is a claim about who you
+///     are today, so it has to be able to fall. Miss a day and you start
+///     the climb again — which is exactly what makes not missing one
+///     worth something.
+///
+///     Day thresholds drive the rank ladder (Observer 1, Initiate 10,
+///     Contender 20, Dangerous 30, Magnetic 45, ImHim 60). Clamped to
+///     0..60 — 0 is a real state now, not an impossible one.
 ///
 ///   • CONSISTENCY — a rolling 7-day mission-completion rate. Each day
 ///     records how many of the 5 missions you finished; consistency is
@@ -179,9 +190,10 @@ class StreakService {
     final prefs = await SharedPreferences.getInstance();
     final (set, missionsToday) = await _rebuild(prefs);
     final (current, longest) = await _streakPair(prefs, set);
-    // Ascension day = total distinct days shown up, earned + permanent,
-    // clamped to the 1..60 ladder for display.
-    final ascensionDay = set.length.clamp(1, ascensionTotalDays);
+    // Ascension day IS the streak — the ladder and the flame are one
+    // climb, so a zero-day drops both. See the class doc for why the old
+    // never-goes-backward lifetime count had to go.
+    final ascensionDay = current.clamp(0, ascensionTotalDays);
     final consistency = _consistency7d(prefs);
     return AscensionSnapshot(
       streak: current,
@@ -270,7 +282,8 @@ class AscensionSnapshot {
   /// Longest streak ever reached.
   final int longest;
 
-  /// Total distinct days shown up, earned + permanent, clamped 1..60.
+  /// How far up the 60-day ladder you are right now. Identical to
+  /// [streak] — a zero-day resets both. Clamped 0..60.
   final int ascensionDay;
 
   /// Rolling 7-day mission-completion rate, 0..100.
