@@ -40,6 +40,26 @@ class RizzOffReveal extends StatefulWidget {
   final List<SquadMember> roster;
   final List<DailyMark> squadMarks;
 
+  /// SCALE. Voice is stored 0..9999 and read out of 10; chat is stored
+  /// 0..100 and read out of 100. Everything else about the reveal — the
+  /// count-up, the grade slam, the squad cards — is identical, so the
+  /// two challenges share this rather than getting two animations that
+  /// almost match.
+  ///
+  /// [gradeScore] is always on the 0..9999 band the grade thresholds are
+  /// cut against; a chat caller passes score * 99.99.
+  final double divisor;
+  final int decimals;
+  final String suffix;
+  final int? gradeScore;
+  final String kicker;
+
+  /// The rubric's axes, in weighted order, and their labels. Text is
+  /// graded on different things to voice — you can't hear a written
+  /// line's delivery — so the reveal has to be able to say so.
+  final List<String> axes;
+  final Map<String, String> axisLabels;
+
   const RizzOffReveal({
     super.key,
     required this.score,
@@ -50,6 +70,19 @@ class RizzOffReveal extends StatefulWidget {
     required this.girlAccent,
     this.roster = const [],
     this.squadMarks = const [],
+    this.divisor = 999.9,
+    this.decimals = 1,
+    this.suffix = '/ 10',
+    this.gradeScore,
+    this.kicker = 'THE DAILY',
+    this.axes = const ['confidence', 'flow', 'wit', 'recovery', 'close'],
+    this.axisLabels = const {
+      'confidence': 'CONFIDENCE',
+      'flow': 'FLOW',
+      'wit': 'WIT',
+      'recovery': 'RECOVERY',
+      'close': 'CLOSE',
+    },
   });
 
   @override
@@ -69,19 +102,15 @@ class _RizzOffRevealState extends State<RizzOffReveal>
   bool _burst = false;
   final _timers = <Timer>[];
 
-  /// The grader's five axes, in the order they're weighted.
-  static const _axes = ['confidence', 'flow', 'wit', 'recovery', 'close'];
-  static const _labels = {
-    'confidence': 'CONFIDENCE',
-    'flow': 'FLOW',
-    'wit': 'WIT',
-    'recovery': 'RECOVERY',
-    'close': 'CLOSE',
-  };
+  List<String> get _axes => widget.axes;
+  Map<String, String> get _labels => widget.axisLabels;
 
-  RizzGrade get _grade => RizzGrade.of(widget.score);
-  String get _outOfTen =>
-      (widget.score / 999.9).clamp(0, 10).toStringAsFixed(1);
+  RizzGrade get _grade => RizzGrade.of(widget.gradeScore ?? widget.score);
+
+  /// The headline number on its own scale.
+  double get _shown =>
+      (widget.score / widget.divisor).clamp(0, 9999).toDouble();
+  String get _outOfTen => _shown.toStringAsFixed(widget.decimals);
 
   List<DailyMark> get _finished =>
       widget.squadMarks.where((m) => m.finished).toList()
@@ -140,7 +169,7 @@ class _RizzOffRevealState extends State<RizzOffReveal>
               padding: const EdgeInsets.fromLTRB(28, 10, 28, 18),
               child: Column(children: [
                 // ── Kicker ──────────────────────────────────────────
-                Text('THE DAILY · ${widget.girlName.toUpperCase()}',
+                Text('${widget.kicker} · ${widget.girlName.toUpperCase()}',
                         style: GoogleFonts.inter(
                           color: widget.girlAccent,
                           fontSize: 10.5,
@@ -247,7 +276,7 @@ class _RizzOffRevealState extends State<RizzOffReveal>
                   duration: const Duration(milliseconds: 900),
                   curve: Curves.easeOutCubic,
                   builder: (_, v, __) => Text(
-                    v.toStringAsFixed(1),
+                    v.toStringAsFixed(widget.decimals),
                     style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 76,
@@ -262,7 +291,7 @@ class _RizzOffRevealState extends State<RizzOffReveal>
                     ),
                   ),
                 ),
-                Text(' / 10',
+                Text(' ${widget.suffix}',
                     style: GoogleFonts.inter(
                       color: AppColors.textMuted,
                       fontSize: 18,
@@ -327,7 +356,8 @@ class _RizzOffRevealState extends State<RizzOffReveal>
               end: const Offset(1, 1),
               curve: Curves.easeOutBack),
       const SizedBox(height: 4),
-      Text('World average ${(widget.worldAvg / 999.9).toStringAsFixed(1)}',
+      Text('World average '
+          '${(widget.worldAvg / widget.divisor).toStringAsFixed(widget.decimals)}',
               style: GoogleFonts.inter(
                 color: AppColors.textTertiary,
                 fontSize: 11.5,
@@ -373,7 +403,7 @@ class _RizzOffRevealState extends State<RizzOffReveal>
         _SlamRow(
           position: i + 1,
           name: nameOf(d.userId),
-          score: (d.score ?? 0) / 999.9,
+          score: (d.score ?? 0) / widget.divisor,
           mine: d.userId == AuthService.userId,
           delay: (i * 240).ms,
         ),
@@ -402,7 +432,7 @@ class _RizzOffRevealState extends State<RizzOffReveal>
               grade.color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
           icon: Icons.ios_share_rounded,
           onTap: () => Share.share(
-              'THE DAILY on ImHim Rizz: $_outOfTen/10 — grade '
+              '${widget.kicker} on ImHim Rizz: $_outOfTen ${widget.suffix} — grade '
               '${grade.letter}, #${widget.rankToday} in the world today. '
               'One attempt. Same girl for everyone. Your turn.'),
         ),

@@ -177,8 +177,22 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     final squad = await SquadService.joinByCode(code);
     if (!mounted) return;
     if (squad == null) {
-      _explain('Couldn\'t join',
-          SquadService.lastError ?? 'Invalid code — check it with your squad.');
+      // The database raises in its own words; a man typing a code should
+      // read something he can act on. Migration 0011 added the one that
+      // matters — one man, one squad — and that needs an answer, not a
+      // Postgres string.
+      final raw = SquadService.lastError ?? '';
+      final msg = raw.contains('already in a squad')
+          ? 'You\'re already in a squad. Leave that one first — the '
+              'button\'s at the top of the room.'
+          : raw.contains('full')
+              ? 'That squad is full. Five is the most.'
+              : raw.contains('invalid')
+                  ? 'No squad with that code. Check it with your mate.'
+                  : (raw.isEmpty
+                      ? 'Invalid code — check it with your squad.'
+                      : raw);
+      _explain('Couldn\'t join', msg);
       return;
     }
     await SquadService.postEvent(squad.id, 'joined');

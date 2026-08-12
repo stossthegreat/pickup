@@ -151,8 +151,16 @@ class _DailyScreenState extends State<DailyScreen> {
     DailyGameService.armedDaily = false;
     if (!mounted) return;
     final r = DailyGameService.lastResult;
-    if (r != null) {
+    // ONCE A DAY, AND ONCE ONLY. Clearing lastResult wasn't enough: the
+    // submit that sets it is fire-and-forget inside FreeFlowScreen, so it
+    // can land after this read, survive, and re-fire the reveal on the
+    // next return — which is why it kept replaying. The guard is now a
+    // persisted per-day stamp, so the big moment can only happen on the
+    // day it was earned no matter what order the futures settle in.
+    final alreadyRevealed = await DailyGameService.revealShownToday();
+    if (r != null && !alreadyRevealed) {
       DailyGameService.lastResult = null;
+      await DailyGameService.markRevealShown();
       // Pull the squad in for the final slam. Fail-soft: solo users and
       // anyone offline just get the personal reveal, never a stall.
       var roster = <SquadMember>[];
