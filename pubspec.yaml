@@ -1,7 +1,7 @@
 name: charmr
 description: "Charmr — roleplay your way to real confidence."
 publish_to: 'none'
-version: 1.0.0+125
+version: 1.0.0+126
 
 environment:
   sdk: ^3.8.0
@@ -49,7 +49,35 @@ dependencies:
   # Handles subscriptions, one-time IAPs, receipt validation, and
   # restore-purchases. We use it for Mirrorly Pro (monthly/annual) and
   # the 20-credit one-time pack.
-  purchases_flutter: ^8.2.2
+  #
+  # PINNED TO 10.x FOR GOOGLE PLAY BILLING 8. We were on ^8.2.2, which
+  # resolved to 8.11.0 — Play Billing Library 7. Google stops accepting
+  # NEW UPLOADS built on Billing 7 after 31 Aug 2026, so 8.11.0 was a
+  # hard wall on shipping any further Android update, regardless of the
+  # fact that billing itself worked fine on it.
+  #
+  #   purchases_flutter  9.0.0  → Billing Library 8.0
+  #   purchases_flutter 10.0.0  → Billing Library 8.3, Android minSdk 23
+  #
+  # 10.x is the one to be on: 9.x is already a version behind Google's
+  # library and we'd be doing this again. Requirements all satisfied
+  # already — Dart >=3.4 (we're on 3.8), Flutter >=3.22, iOS 13 (we're
+  # on 15.5), Android minSdk 23 (app/build.gradle.kts already 23).
+  #
+  # The only source change the upgrade needed: 9.0.0 changed the return
+  # of Purchases.purchasePackage() from CustomerInfo to PurchaseResult
+  # (CustomerInfo + StoreTransaction). One call site, in
+  # purchase_service.dart. Everything else we touch — configure,
+  # setLogLevel, getOfferings, getCustomerInfo, restorePurchases,
+  # addCustomerInfoUpdateListener, PurchasesErrorHelper and every
+  # PurchasesErrorCode we switch on — is unchanged in 10.8.0.
+  #
+  # NOTE for the RevenueCat dashboard: from 10.0.0 a one-time product
+  # configured as CONSUMABLE can no longer be restored (Billing 8 removed
+  # the query for consumed purchases). `mirrorly_pro_rescue` is a credit
+  # grant, so consumable is correct for it — but any product meant to be
+  # a lifetime unlock must be set to NON-consumable.
+  purchases_flutter: ^10.8.0
   # Firebase Analytics — conversion-funnel telemetry only. Logs the
   # named events in lib/services/analytics_service.dart. No PII, no
   # advertising IDs, no user properties beyond an anonymous app

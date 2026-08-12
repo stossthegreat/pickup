@@ -321,7 +321,13 @@ class PurchaseService {
         _paidAt = DateTime.now();
       }
       // Keep the entitlement read purely for telemetry — never to gate.
-      final entActive = result.entitlements.all[PurchaseConfig.proEntitlementId]
+      //
+      // purchases_flutter 9.0.0 changed purchasePackage's return type from
+      // CustomerInfo to PurchaseResult, which wraps the CustomerInfo
+      // alongside the StoreTransaction. This is the ONLY call site in the
+      // app the Billing 8 upgrade actually breaks.
+      final entActive = result
+          .customerInfo.entitlements.all[PurchaseConfig.proEntitlementId]
           ?.isActive ?? false;
       AnalyticsService.purchaseCompleted(pkg.identifier);
       if (!entActive && !isRescue) {
