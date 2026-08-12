@@ -144,7 +144,17 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     }
     if (!mounted) return;
     final g = girlById(m.girlId!);
-    await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
+    // THE MISSION MUST ACTUALLY BE DONE. This used to call _complete()
+    // on ANY pop — open the chat, hit back, mission ticked. Five taps and
+    // a "5/5 DONE" day with nothing behind it, which makes the streak,
+    // the squad board and the ascension ladder all lies.
+    //
+    // GirlChatScreen already knows when the task genuinely finished — it
+    // sets _taskDone once enough real lines have been traded and shows
+    // the score card. It now pops `true` on that path only, so a back
+    // button returns null and completes nothing.
+    final done = await Navigator.of(context, rootNavigator: true)
+        .push<bool>(MaterialPageRoute(
       builder: (_) => GirlChatScreen(
         config: GirlChatConfig(
           characterId: g.id,
@@ -163,7 +173,28 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
         ),
       ),
     ));
-    await _complete(m);
+    if (done == true) {
+      await _complete(m);
+    } else {
+      _notDone('Not completed — you have to actually run the conversation.');
+    }
+  }
+
+  /// Left without finishing. Say so, or the mission silently stays open
+  /// and the app looks broken rather than strict.
+  void _notDone(String msg) {
+    if (!mounted) return;
+    HapticFeedback.selectionClick();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg,
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600)),
+      backgroundColor: AppColors.toastBg,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(milliseconds: 2600),
+    ));
   }
 
   Future<void> _openVoice(MissionSpec m) async {
@@ -178,10 +209,23 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     }
     if (!mounted) return;
     final g = girlById(m.girlId!);
+    // Same rule for voice, proved a different way. FreeFlowScreen has
+    // several exit paths (X, back, the scored sheet), so rather than
+    // making every one of them return a value we check the durable
+    // record: a scored session appends to the game-score history. One
+    // more entry than we went in with means he actually ran it and got
+    // graded; anything else — including opening it and backing straight
+    // out — leaves the mission open.
+    final before = (await LocalStoreService.loadGameScores()).length;
     await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
       builder: (_) => FreeFlowScreen(initialVibeKey: g.vibeKey),
     ));
-    await _complete(m);
+    final after = (await LocalStoreService.loadGameScores()).length;
+    if (after > before) {
+      await _complete(m);
+    } else {
+      _notDone('Not completed — the voice session has to be scored.');
+    }
   }
 
   Future<void> _openCoach(MissionSpec m) async {

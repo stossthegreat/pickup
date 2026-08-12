@@ -336,7 +336,11 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
         verdict: verdict,
       ),
     );
-    if (mounted) Navigator.of(context).maybePop(); // → Missions auto-completes
+    // Pop with TRUE — this is the only path that proves the task was
+    // genuinely run, and Missions completes on that result alone. Every
+    // other exit (back arrow, swipe) returns null and leaves the mission
+    // open, which is the point: opening a chat is not doing it.
+    if (mounted) Navigator.of(context).pop(true);
   }
 
   Future<void> _send(String raw) async {
