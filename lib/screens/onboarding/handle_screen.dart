@@ -136,7 +136,11 @@ class _HandleScreenState extends State<HandleScreen> {
 
   void _done() {
     if (widget.onboarding) {
-      context.go('/home');
+      // Straight to the squad pitch, not home. He has to know squads
+      // exist before he starts or the whole social layer may as well not
+      // ship — nobody hunts through a menu for something they were never
+      // told about. It's one page and the skip is real.
+      context.go('/onboarding/squad');
     } else {
       context.pop();
     }
