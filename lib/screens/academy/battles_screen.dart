@@ -254,6 +254,8 @@ class _BattlesScreenState extends State<BattlesScreen> {
             // The transcript goes to the duel, which grades it, settles
             // the fight and banks the chat attempt in one call.
             battleId: b.id,
+            // The duel closes on its own reveal against the other man.
+            verdictOnFinish: false,
           ),
         ),
       ),

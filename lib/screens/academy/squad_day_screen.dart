@@ -7,13 +7,18 @@ import '../../services/backend/auth_service.dart';
 import '../../services/backend/daily_chat_service.dart';
 import '../../services/backend/mission_service.dart';
 import '../../services/backend/squad_day.dart';
+import '../../services/backend/squad_history_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
+import '../../services/mirror_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/challenge_card.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
 import '../../widgets/academy/day_beat.dart';
+import '../../widgets/academy/mirror_band.dart';
+import '../../widgets/academy/rolodex_shelf.dart';
 import '../../widgets/academy/squad_chrome.dart';
+import '../../widgets/academy/streak_chain.dart';
 import '../../widgets/academy/your_five.dart' show voiceOutOfTen;
 
 /// TODAY — the whole day on one screen, three cards.
@@ -24,7 +29,7 @@ import '../../widgets/academy/your_five.dart' show voiceOutOfTen;
 /// goes: your standing, then the two challenges, in the order you'd
 /// actually do them.
 ///
-///   01 WHERE YOU'RE AT — the crest, the form, the day's clock
+///   01 THE CHAIN — the streak, the quorum, the armband, the bench
 ///   02 THE VOICE CHALLENGE — out of 10
 ///   03 THE CHAT CHALLENGE  — out of 100
 ///
@@ -47,6 +52,7 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
   Map<String, MissionPulse> _squadStates = const {};
   List<DailyMark> _voice = const [];
   List<ChatMark> _chat = const [];
+  SquadHistory _history = SquadHistory.empty;
 
   @override
   void initState() {
@@ -73,6 +79,10 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
       SquadService.missionPulseToday(ids),
       SquadService.dailyToday(ids, squadId: squad?.id),
       DailyChatService.today(ids),
+      // Thirty days of daily_attempts for this roster. Same table, same
+      // RLS policy dailyToday already reads through — the only
+      // difference is the ymd filter is a range. Nothing to deploy.
+      SquadHistory.load(ids),
     ]);
     if (!mounted) return;
     setState(() {
@@ -82,8 +92,22 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
       _squadStates = results[1] as Map<String, MissionPulse>;
       _voice = results[2] as List<DailyMark>;
       _chat = results[3] as List<ChatMark>;
+      _history = results[4] as SquadHistory;
       _loading = false;
     });
+    // ignore: discarded_futures
+    _mirrorMoment();
+  }
+
+  /// THE MIRROR CHANGING is the app telling him something about himself
+  /// that wasn't true last week. That has to land as an event — a title
+  /// that silently swaps in the band is a label, and a label is not an
+  /// identity. Fires once per change, on the same persisted-stamp
+  /// pattern the armband and the reveal use.
+  Future<void> _mirrorMoment() async {
+    final t = await MirrorService.takeChange();
+    if (t == null || !mounted) return;
+    await showMirrorSheet(context, t, announce: true);
   }
 
   SquadDay get _day => SquadDay(
@@ -133,27 +157,52 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
                     // ── 01 · WHERE YOU'RE AT ────────────────────────
                     _stats(day, accent),
 
+                    // THE SHELF — deliberately not a card. One line of
+                    // faces, most of them still black, sitting above the
+                    // three challenges. It's the only thing on this
+                    // screen that shows him something he OWNS, and the
+                    // only thing that shows him what's missing.
+                    RolodexShelf(
+                      onTap: () async {
+                        await context.push('/rolodex');
+                        if (mounted) _load();
+                      },
+                    ),
+
+                    // THE MIRROR — one line, no card. What the app has
+                    // worked out about him from his own lines. It sits
+                    // directly under the faces because both are answers
+                    // to the same question: who am I in this thing.
+                    const MirrorBand(),
+
                     Padding(
                       padding: const EdgeInsets.fromLTRB(18, 22, 18, 34),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 01 · THE SQUAD. It was a thin link buried at
-                          // the very bottom — the door to the whole room,
-                          // below two full-bleed posters, which is the
-                          // last place anyone looks. It leads now.
+                          // 01 · THE CHAIN. This replaced the squad
+                          // stats card, which reported the same day in
+                          // a weaker form: a percentage nobody can lose.
+                          // The chain is the one thing the squad holds
+                          // jointly and can break, and a thing you can
+                          // lose outperforms a thing you can measure.
                           ChapterMark(
                             index: '01',
-                            title: 'YOUR SQUAD',
-                            sub: 'Where the day stands.',
+                            title: 'THE CHAIN',
+                            sub: 'What the squad can lose.',
                             accent: accent,
                           ),
-                          _SquadStatsCard(
+                          SquadStreakHero(
+                            history: _history,
+                            roster: _roster,
+                            accent: accent,
+                            onRun: _runVoice,
+                          ),
+                          const SizedBox(height: 9),
+                          _RoomDoor(
                             name: _squad?.name ?? 'SOLO',
                             accent: accent,
                             form: day.form,
-                            complete: day.complete,
-                            possible: day.possible,
                             men: _roster.length,
                             hasSquad: _squad != null,
                             onTap: () async {
@@ -286,51 +335,26 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
   }
 }
 
-class _Stat extends StatelessWidget {
-  final String value, label;
-  final Color accent;
-  const _Stat(
-      {required this.value, required this.label, required this.accent});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(children: [
-      Text(value,
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontSize: 24,
-            height: 1,
-            letterSpacing: -1.2,
-            fontWeight: FontWeight.w900,
-          )),
-      const SizedBox(height: 3),
-      Text(label,
-          style: GoogleFonts.inter(
-            color: accent,
-            fontSize: 8.5,
-            letterSpacing: 1.8,
-            fontWeight: FontWeight.w900,
-          )),
-    ]);
-  }
-}
-
-/// 01 — THE SQUAD. The crest, the three numbers that matter, and the
-/// way into the room. One object rather than a stat strip stuck to the
-/// masthead and a thin link stranded at the bottom of the scroll.
-class _SquadStatsCard extends StatelessWidget {
+/// THE DOOR — the way into the room, as one line rather than a card.
+///
+/// This replaced a stats card carrying FORM / MOVES / MEN in three big
+/// numbers. Those numbers were true and nobody could lose any of them,
+/// which is exactly why they never moved anyone; the chain above says
+/// the same thing with a stake attached. What the card was still good
+/// for was being the door, so that's all this is now — and the day
+/// screen carries one less block of visual weight for it.
+class _RoomDoor extends StatelessWidget {
   final String name;
   final Color accent;
-  final int form, complete, possible, men;
+  final int form;
+  final int men;
   final bool hasSquad;
   final VoidCallback onTap;
 
-  const _SquadStatsCard({
+  const _RoomDoor({
     required this.name,
     required this.accent,
     required this.form,
-    required this.complete,
-    required this.possible,
     required this.men,
     required this.hasSquad,
     required this.onTap,
@@ -343,102 +367,34 @@ class _SquadStatsCard extends StatelessWidget {
         HapticFeedback.selectionClick();
         onTap();
       },
+      behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.alphaBlend(
-                  accent.withValues(alpha: 0.14), AppColors.surface2),
-              AppColors.surface1,
-            ],
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: accent.withValues(alpha: 0.45)),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 24,
-                offset: const Offset(0, 12)),
-            BoxShadow(color: accent.withValues(alpha: 0.16), blurRadius: 30),
-          ],
+          color: AppColors.surface1,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
         ),
-        child: Column(children: [
-          Row(children: [
-            SquadCrest(name: name, accent: accent, size: 48),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(hasSquad ? 'THE SQUAD' : 'SOLO RUN',
-                      style: GoogleFonts.inter(
-                        color: accent,
-                        fontSize: 8.5,
-                        letterSpacing: 2.4,
-                        fontWeight: FontWeight.w900,
-                      )),
-                  const SizedBox(height: 3),
-                  Text(name.toUpperCase(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 21,
-                        height: 1.05,
-                        letterSpacing: -0.9,
-                        fontWeight: FontWeight.w900,
-                      )),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded,
-                size: 20, color: AppColors.textTertiary),
-          ]),
-          const SizedBox(height: 16),
-          Row(children: [
-            Expanded(
-                child: _Stat(
-                    value: '$form', label: 'FORM', accent: accent)),
-            Container(
-                width: 1,
-                height: 30,
-                color: Colors.white.withValues(alpha: 0.07)),
-            Expanded(
-                child: _Stat(
-                    value: '$complete/$possible',
-                    label: 'MOVES',
-                    accent: accent)),
-            Container(
-                width: 1,
-                height: 30,
-                color: Colors.white.withValues(alpha: 0.07)),
-            Expanded(
-                child: _Stat(
-                    value: '$men',
-                    label: men == 1 ? 'MAN' : 'MEN',
-                    accent: accent)),
-          ]),
-          const SizedBox(height: 14),
-          Container(height: 1, color: AppColors.divider),
-          const SizedBox(height: 11),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(hasSquad ? Icons.meeting_room_rounded : Icons.group_add_rounded,
-                size: 14, color: accent),
-            const SizedBox(width: 8),
-            Text(
+        child: Row(children: [
+          Icon(hasSquad ? Icons.meeting_room_rounded : Icons.group_add_rounded,
+              size: 15, color: accent),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Text(
                 hasSquad
-                    ? 'OPEN THE ROOM · BOARD, WEEK, PULSE'
-                    : 'START A SQUAD — TWO MEN IS ENOUGH',
+                    ? '${name.toUpperCase()}  ·  $men ${men == 1 ? 'MAN' : 'MEN'}  ·  FORM $form'
+                    : 'START A SQUAD  ·  NOTHING TO LOSE ON YOUR OWN',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  color: accent,
-                  fontSize: 9.5,
-                  letterSpacing: 1.4,
+                  color: hasSquad ? AppColors.textSecondary : accent,
+                  fontSize: 10.5,
+                  letterSpacing: 1.6,
                   fontWeight: FontWeight.w900,
                 )),
-          ]),
+          ),
+          const Icon(Icons.chevron_right_rounded,
+              size: 18, color: AppColors.textTertiary),
         ]),
       ),
     );

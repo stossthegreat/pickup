@@ -88,6 +88,10 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
             opener: girl.opener,
             taskMode: true,
             scoreSurface: DailyChatService.surface,
+            // This screen owns the ending — RizzOffReveal with the squad
+            // slam in it. A verdict on the way out would be a second
+            // full-screen result stacked behind the first.
+            verdictOnFinish: false,
           ),
         ),
       ),

@@ -5,6 +5,7 @@ import '../screens/academy/battles_screen.dart';
 import '../screens/academy/daily_screen.dart';
 import '../screens/academy/fear_button_screen.dart';
 import '../screens/academy/leaderboard_screen.dart';
+import '../screens/academy/rolodex_screen.dart';
 import '../screens/academy/score_reveal_screen.dart';
 import '../screens/academy/daily_chat_screen.dart';
 import '../screens/onboarding/squad_invite_screen.dart';
@@ -121,6 +122,8 @@ final appRouter = GoRouter(
     // The chat Daily — the voice screen's mirror, out of 100.
     GoRoute(path: '/daily-chat', builder: (_, __) => const DailyChatScreen()),
     GoRoute(path: '/squad', builder: (_, __) => const SquadRoomScreen()),
+    // THE ROLODEX — every woman he's won, and every one he hasn't.
+    GoRoute(path: '/rolodex', builder: (_, __) => const RolodexScreen()),
     // The Fear Button — the moment training becomes behaviour.
     GoRoute(path: '/fear', builder: (_, __) => const FearButtonScreen()),
     // Rizz Battles — same scenario, both blind, higher score takes ELO.
