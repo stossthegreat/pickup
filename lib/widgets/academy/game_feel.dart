@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/roster.dart';
+import '../../services/sfx_service.dart';
 import '../../theme/app_colors.dart';
 
 /// GAME FEEL — the two things that make a screen feel like a machine
@@ -134,6 +135,7 @@ class _SlotReelState extends State<SlotReel>
       if (s == AnimationStatus.completed && !_landed) {
         _landed = true;
         Feel.land();
+        Sfx.reelLand();
         widget.onLanded?.call();
       }
     });
@@ -146,7 +148,10 @@ class _SlotReelState extends State<SlotReel>
     final idx = _offset.floor();
     if (idx != _lastTick) {
       _lastTick = idx;
-      if (_c.value < 0.985) Feel.reel();
+      if (_c.value < 0.985) {
+        Feel.reel();
+        Sfx.reelTick();
+      }
     }
     setState(() {});
   }

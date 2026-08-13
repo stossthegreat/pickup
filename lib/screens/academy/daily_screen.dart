@@ -13,6 +13,7 @@ import '../../services/backend/tiers.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
+import '../../widgets/academy/brag_sheet.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/league_crest.dart';
 import '../../widgets/academy/rizz_off_reveal.dart';
@@ -196,6 +197,14 @@ class _DailyScreenState extends State<DailyScreen> {
         transitionBuilder: (ctx, a, __, child) =>
             FadeTransition(opacity: a, child: child),
       );
+      // THE ASK, at the only moment it lands: he's holding a number he
+      // didn't have ninety seconds ago. Fires once ever, and never for a
+      // man who already has a squad.
+      if (mounted) {
+        await BragSheet.maybeShow(context,
+            score: (r.score / 999.9).clamp(0, 10).toStringAsFixed(1),
+            scaleLabel: '/ 10');
+      }
     }
     _load();
   }

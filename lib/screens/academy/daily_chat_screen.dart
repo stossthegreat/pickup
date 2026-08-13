@@ -11,6 +11,7 @@ import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
 import '../../services/roster.dart';
+import '../../widgets/academy/brag_sheet.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/game_feel.dart';
 import '../../widgets/academy/rizz_off_reveal.dart';
@@ -102,6 +103,10 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
       ChatScoreService.lastResult = null;
       await ChatScoreService.markRevealShown();
       await _reveal(r);
+      if (mounted) {
+        await BragSheet.maybeShow(context,
+            score: '${r.score}', scaleLabel: '/ 100');
+      }
     }
     if (mounted) _load();
   }

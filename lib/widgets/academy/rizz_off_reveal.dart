@@ -11,6 +11,7 @@ import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 import 'game_button.dart';
+import '../../services/sfx_service.dart';
 import 'game_feel.dart';
 import 'grade_stamp.dart';
 
@@ -167,12 +168,16 @@ class _RizzOffRevealState extends State<RizzOffReveal>
     // she "decides" for a beat and a half first, with a slow pulse under
     // it, and the axes mean more when they finally start landing.
     const hold = 1500;
+    Sfx.hold();
     at(240, Feel.tick);
     at(820, Feel.tick);
 
     // One tick per axis as it lands — you feel the score being built.
     for (var i = 0; i < _axes.length; i++) {
-      at(hold + 200 + i * 520, Feel.reel);
+      at(hold + 200 + i * 520, () {
+        Feel.reel();
+        Sfx.axis();
+      });
     }
     at(hold, () => setState(() => _stage = 1));
     final axesEnd = hold + 200 + _axes.length * 520;
@@ -181,14 +186,18 @@ class _RizzOffRevealState extends State<RizzOffReveal>
       // The number lands like a thing with weight, then the grade
       // stamps a beat later — two events, not one.
       Feel.land();
+      Sfx.scoreLand();
     });
     at(axesEnd + 900, () {
       // Best-ever and near-miss get their own signatures, so the phone
       // has told him the outcome before his eyes have.
+      Sfx.gradeSlam();
       if (_near != null) {
         Feel.nearMiss();
+        Sfx.nearMiss();
       } else if (const ['S', 'A', 'B'].contains(_grade.letter)) {
         Feel.win();
+        Sfx.win();
       }
     });
     if (_hasSquad) {
