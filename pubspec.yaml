@@ -1,7 +1,7 @@
 name: charmr
 description: "Charmr — roleplay your way to real confidence."
 publish_to: 'none'
-version: 1.0.0+132
+version: 1.0.0+139
 
 environment:
   sdk: ^3.8.0
@@ -179,6 +179,11 @@ flutter:
     # Image.asset with an errorBuilder that falls back to a glyph,
     # so missing files render gracefully. See the README.md inside
     # each folder for the exact filenames and art-direction brief.
+    # Sound cues for the reveal + reel. Declared as a directory so the
+    # build never breaks before the files land; every Sfx call is a
+    # logged no-op until then. See assets/sfx/README.md for the ten
+    # files and the mixing brief.
+    - assets/sfx/
     - assets/characters/lucien/
     - assets/characters/women/
     - assets/game/

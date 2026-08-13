@@ -106,6 +106,13 @@ class BattleService {
     await _invoke({'action': 'leave_queue'});
   }
 
+  /// The last submitted attempt's grade, parked for the reveal.
+  ///
+  /// A duel deserves the same moment as the Daily — the count-up, the
+  /// axes landing one at a time, the grade slam. The grade only exists
+  /// inside this call, so it's held here for the screen that comes back.
+  static BattleResult? lastResult;
+
   /// Submit the caller's attempt transcript. Returns the updated battle.
   static Future<Battle?> submit(String battleId, String transcript) async {
     final d = await _invoke({
@@ -113,6 +120,21 @@ class BattleService {
       'battle_id': battleId,
       'transcript': transcript,
     });
+    if (d != null && d['yourScore'] != null) {
+      final rubric = <String, int>{};
+      final raw = d['rubric'];
+      if (raw is Map) {
+        raw.forEach((k, v) {
+          final n = (v as num?)?.toInt();
+          if (n != null) rubric['$k'] = n;
+        });
+      }
+      lastResult = BattleResult(
+        score: (d['yourScore'] as num).toInt(),
+        rubric: rubric,
+        settled: d['settled'] == true,
+      );
+    }
     final row = d?['battle'];
     return row == null ? null : Battle.fromRow((row as Map).cast());
   }
@@ -154,4 +176,21 @@ class BattleService {
       return const {};
     }
   }
+}
+
+/// One graded duel attempt, on its way to the reveal.
+class BattleResult {
+  /// 0..9999 internally — the same band the voice grader uses, because
+  /// battles share its rubric. The screen divides it down to 0..100.
+  final int score;
+  final Map<String, int> rubric;
+
+  /// True when both men are in and the duel has a winner.
+  final bool settled;
+
+  const BattleResult({
+    required this.score,
+    required this.rubric,
+    required this.settled,
+  });
 }

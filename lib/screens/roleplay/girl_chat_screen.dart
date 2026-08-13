@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import '../../config/auralay_dev_flags.dart';
 import '../../services/analytics_service.dart';
 import '../../services/creator_mode_store.dart';
+import '../../services/backend/battle_service.dart';
 import '../../services/backend/chat_score_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/paywall_gate.dart';
@@ -65,6 +66,12 @@ class GirlChatConfig {
   /// DailyChatService can find today's run without a table of its own.
   final String scoreSurface;
 
+  /// Set when this conversation IS a battle. The transcript then goes to
+  /// the duel rather than the solo grader — battle-action grades it,
+  /// settles the duel, and records the chat attempt itself, so sending
+  /// it both ways would double-count the man's points.
+  final String? battleId;
+
   const GirlChatConfig({
     required this.characterId,
     required this.vibeKey,
@@ -78,6 +85,7 @@ class GirlChatConfig {
     this.taskMode = false,
     this.taskGoal = 15,
     this.scoreSurface = 'roleplay',
+    this.battleId,
   });
 }
 
@@ -278,7 +286,14 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   /// Only submits a conversation with something in it — three lines from
   /// you, minimum. Anything less isn't a performance to judge, and a
   /// board full of two-word attempts would be worthless.
-  void _submitForScoring() {
+  /// AWAITABLE ON PURPOSE. This used to be fire-and-forget from
+  /// dispose(), which meant the grade was requested at the exact moment
+  /// the screen popped — so the caller read ChatScoreService.lastResult
+  /// a microsecond later and always found null. The chat challenge's
+  /// reveal could never fire. _finishTask now awaits it BEFORE popping;
+  /// dispose() still calls it as the backstop for men who leave early,
+  /// and the _submitted guard means it can only ever run once.
+  Future<void> _submitForScoring() async {
     if (_submitted) return;
     _submitted = true;
     final mine = _msgs.where((m) => m.who == 'you').length;
@@ -288,8 +303,17 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
         if (m.who == 'you' || m.who == 'her')
           '${m.who == 'you' ? 'YOU' : 'HER'}: ${m.text}',
     ].join('\n');
-    // ignore: discarded_futures
-    ChatScoreService.score(
+
+    // A battle transcript goes to the duel and nowhere else —
+    // battle-action grades it, settles the fight AND records the chat
+    // attempt, so also calling the solo grader would pay the man twice
+    // for one conversation.
+    final battle = widget.config.battleId;
+    if (battle != null) {
+      await BattleService.submit(battle, transcript);
+      return;
+    }
+    await ChatScoreService.score(
       transcript: transcript,
       surface: widget.config.scoreSurface,
       scenario: widget.config.name,
@@ -331,6 +355,10 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
                 ? 'Solid. You held her attention.'
                 : 'She wasn\'t feeling it. Reset and run it back.';
     if (!mounted) return;
+    // Fire the grade NOW and let it run while he reads the card — by the
+    // time he dismisses it the result is parked, so the caller's reveal
+    // actually has something to show.
+    final grading = _submitForScoring();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -346,6 +374,7 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     // genuinely run, and Missions completes on that result alone. Every
     // other exit (back arrow, swipe) returns null and leaves the mission
     // open, which is the point: opening a chat is not doing it.
+    await grading;
     if (mounted) Navigator.of(context).pop(true);
   }
 

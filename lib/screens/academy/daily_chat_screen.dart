@@ -10,7 +10,10 @@ import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
+import '../../services/roster.dart';
+import '../../widgets/academy/brag_sheet.dart';
 import '../../widgets/academy/game_button.dart';
+import '../../widgets/academy/game_feel.dart';
 import '../../widgets/academy/rizz_off_reveal.dart';
 import '../roleplay/girl_chat_screen.dart';
 
@@ -31,6 +34,10 @@ class DailyChatScreen extends StatefulWidget {
 
 class _DailyChatScreenState extends State<DailyChatScreen> {
   bool _loading = true;
+  /// The reel runs once per screen open, before she's named. It's
+  /// theatre, not chance — see SlotReel — but it's the difference
+  /// between being shown today's woman and watching her land.
+  bool _spun = false;
   ChatMark? _mine;
   List<SquadMember> _roster = const [];
   List<ChatMark> _marks = const [];
@@ -96,6 +103,10 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
       ChatScoreService.lastResult = null;
       await ChatScoreService.markRevealShown();
       await _reveal(r);
+      if (mounted) {
+        await BragSheet.maybeShow(context,
+            score: '${r.score}', scaleLabel: '/ 100');
+      }
     }
     if (mounted) _load();
   }
@@ -176,14 +187,28 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
                 SizedBox(
                   height: 470,
                   child: Stack(fit: StackFit.expand, children: [
-                    Image.asset(
-                      girl.asset,
-                      fit: BoxFit.cover,
-                      alignment: const Alignment(0, -0.08),
-                      errorBuilder: (_, __, ___) => const DecoratedBox(
-                        decoration: BoxDecoration(color: AppColors.surface1),
+                    if (!_spun && !done)
+                      SlotReel(
+                        pool: kRoster,
+                        target: kRoster.indexWhere((g) => g.id == girl.id) < 0
+                            ? 0
+                            : kRoster.indexWhere((g) => g.id == girl.id),
+                        accent: kNeon,
+                        height: 470,
+                        onLanded: () {
+                          if (mounted) setState(() => _spun = true);
+                        },
+                      )
+                    else
+                      Image.asset(
+                        girl.asset,
+                        fit: BoxFit.cover,
+                        alignment: const Alignment(0, -0.08),
+                        errorBuilder: (_, __, ___) => const DecoratedBox(
+                          decoration:
+                              BoxDecoration(color: AppColors.surface1),
+                        ),
                       ),
-                    ),
                     DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -215,6 +240,7 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
                               ),
                             ]),
                             const Spacer(),
+                            if (_spun || done)
                             Padding(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 6),
@@ -308,6 +334,57 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
                             ))
                       else
                         for (final m in _roster) _row(m),
+
+                      // ── WHAT YOU'RE JUDGED ON ────────────────────
+                      // Half this screen was empty black before you'd
+                      // run it, which read as unfinished. It's also the
+                      // one moment a man will actually read the rubric:
+                      // he's about to be given a number and he wants to
+                      // know what moves it. A score you understand is
+                      // worth chasing; one you don't is just a number.
+                      const SizedBox(height: 30),
+                      Text('WHAT SHE\'S JUDGING',
+                          style: GoogleFonts.inter(
+                            color: AppColors.textMuted,
+                            fontSize: 10,
+                            letterSpacing: 2.4,
+                            fontWeight: FontWeight.w900,
+                          )),
+                      const SizedBox(height: 14),
+                      const _Axis(
+                          label: 'OPENING',
+                          body: 'Does the first line earn a reply on its '
+                              'own merit.'),
+                      const _Axis(
+                          label: 'RELEVANCE',
+                          body: 'You engage with what SHE said, not a '
+                              'script you had ready.'),
+                      const _Axis(
+                          label: 'PERSONALITY',
+                          body: 'A specific human is visible. Opinions, '
+                              'humour, a point of view.'),
+                      const _Axis(
+                          label: 'MOMENTUM',
+                          body: 'The thread goes somewhere. Hooks get '
+                              'picked up.'),
+                      const _Axis(
+                          label: 'RESTRAINT',
+                          body: 'Length, neediness, double-texting. '
+                              'Wanting it less reads as wanting it more.'),
+                      const SizedBox(height: 22),
+                      Container(height: 1, color: AppColors.divider),
+                      const SizedBox(height: 14),
+                      Text(
+                          'Fifteen messages ends it. Graded 0–100 on a '
+                          'real-world standard — 50 is a forgettable '
+                          'thread, 70 is genuinely good, 85 is rare. '
+                          'Every point banks into your Rizz Chat total.',
+                          style: GoogleFonts.inter(
+                            color: AppColors.textTertiary,
+                            fontSize: 12,
+                            height: 1.55,
+                            fontWeight: FontWeight.w500,
+                          )),
                     ],
                   ),
                 ),
@@ -361,6 +438,52 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
               letterSpacing: mark != null ? -0.5 : 1.4,
               fontWeight: FontWeight.w900,
             )),
+      ]),
+    );
+  }
+}
+
+/// One rubric axis. Reads as a rule of the game rather than a help
+/// article — short label, one sentence, no hedging.
+class _Axis extends StatelessWidget {
+  final String label, body;
+  const _Axis({required this.label, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 5,
+          height: 5,
+          margin: const EdgeInsets.only(top: 6),
+          decoration: const BoxDecoration(
+              shape: BoxShape.circle, color: kNeon),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: GoogleFonts.inter(
+                    color: kNeon,
+                    fontSize: 10,
+                    letterSpacing: 1.8,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 2),
+              Text(body,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textSecondary,
+                    fontSize: 12.5,
+                    height: 1.4,
+                    fontWeight: FontWeight.w500,
+                  )),
+            ],
+          ),
+        ),
       ]),
     );
   }

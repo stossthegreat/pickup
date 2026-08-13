@@ -13,7 +13,8 @@ import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/game_button.dart';
-import '../game/freeflow/free_flow_screen.dart';
+import '../../widgets/academy/rizz_off_reveal.dart';
+import '../roleplay/girl_chat_screen.dart';
 
 /// RIZZ BATTLES — two men, the same woman, both blind. Higher score
 /// takes the ELO. Every duel is a card with her face on it; every
@@ -145,8 +146,9 @@ class _BattlesScreenState extends State<BattlesScreen> {
                   icon: Icons.ios_share_rounded,
                   onTap: () => Share.share(
                       'I challenge you on ImHim Rizz — ${girl.name}, '
-                      '"${battle.scenarioLabel}". Same AI woman, both '
-                      'blind, higher score wins. Code: ${battle.inviteCode}'),
+                      '"${battle.scenarioLabel}". Same woman, both blind, '
+                      'text only, higher score wins. '
+                      'Code: ${battle.inviteCode}'),
                 ),
               ),
               const SizedBox(height: 10),
@@ -215,23 +217,92 @@ class _BattlesScreenState extends State<BattlesScreen> {
     _load();
   }
 
+  /// BATTLES ARE TEXT NOW, not voice.
+  ///
+  /// Two reasons, and the money one is the smaller of them. Live voice is
+  /// the single most expensive action in the app (OpenAI Realtime audio),
+  /// and a man already gets a voice rep every day from the Daily — paying
+  /// for unlimited duels on top of that is a bill with no ceiling.
+  ///
+  /// The better reason is that duels work in writing. A battle is meant
+  /// to be run whenever you fancy it, in a pub, on a bus, at 1am with
+  /// someone asleep next to you — and none of those are places you talk
+  /// out loud to your phone. Voice stays the once-a-day event that costs
+  /// you something to show up for; text is the thing you can always do.
+  ///
+  /// AND EVERY WOMAN IS UNLOCKED IN HERE. The 60-day ladder gates her in
+  /// Practice and it should — the climb is the product. But a duel isn't
+  /// practice, it's a fight you agreed to, and being handed someone
+  /// twenty days above your level is the point rather than a mistake.
+  /// It also gives the ladder a shop window: you meet her here first and
+  /// then you want to earn her properly.
   Future<void> _run(Battle b) async {
     HapticFeedback.heavyImpact();
-    BattleService.armedBattleId = b.id;
-    await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
-      builder: (_) => FreeFlowScreen(initialVibeKey: b.scenario),
-    ));
-    BattleService.armedBattleId = null;
-    _load();
+    final girl = girlForVibe(b.scenario);
+    await Navigator.of(context, rootNavigator: true).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => GirlChatScreen(
+          config: GirlChatConfig(
+            characterId: girl.id,
+            vibeKey: girl.vibeKey,
+            name: girl.name,
+            archetype: girl.archetype,
+            portraitAsset: girl.asset,
+            accent: girl.accent,
+            opener: girl.opener,
+            taskMode: true,
+            // The transcript goes to the duel, which grades it, settles
+            // the fight and banks the chat attempt in one call.
+            battleId: b.id,
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+
+    // THE DUEL GETS THE SAME MOMENT AS THE DAILY. It used to hand the
+    // number back on a list row — the one event in the app with a named
+    // opponent, and it landed quieter than a solo practice run. Same
+    // count-up, same axes, same grade slam.
+    final r = BattleService.lastResult;
+    if (r != null) {
+      BattleService.lastResult = null;
+      final girl = girlForVibe(b.scenario);
+      await showGeneralDialog<void>(
+        context: context,
+        barrierColor: Colors.black,
+        barrierDismissible: false,
+        barrierLabel: 'battle',
+        transitionDuration: const Duration(milliseconds: 320),
+        pageBuilder: (ctx, _, __) => RizzOffReveal(
+          score: (r.score / 99.99).clamp(0, 100).round(),
+          gradeScore: r.score,
+          rubric: r.rubric,
+          rankToday: 0,
+          worldAvg: 0,
+          girlName: girl.name,
+          girlAccent: girl.accent,
+          divisor: 1,
+          decimals: 0,
+          suffix: '/ 100',
+          kicker: 'BATTLE',
+        ),
+        transitionBuilder: (ctx, a, __, child) =>
+            FadeTransition(opacity: a, child: child),
+      );
+    }
+    if (mounted) _load();
   }
 
   void _shareResult(Battle b) {
     HapticFeedback.selectionClick();
     final vs = _handles[b.opponentId] ?? 'a rival';
     Share.share(b.iWon
-        ? 'WON my Rizz Battle vs $vs — ${b.myScore} to ${b.theirScore} '
+        ? 'WON my Rizz Battle vs $vs — ${battleScore(b.myScore)} to '
+            '${battleScore(b.theirScore)} '
             'on "${b.scenarioLabel}". Who\'s next?'
-        : 'Rizz Battle vs $vs: ${b.myScore} to ${b.theirScore} on '
+        : 'Rizz Battle vs $vs: ${battleScore(b.myScore)} to '
+            '${battleScore(b.theirScore)} on '
             '"${b.scenarioLabel}". Running it back.');
   }
 
@@ -615,7 +686,8 @@ class _BattleCard extends StatelessWidget {
             if (b.settled)
               _verdict(b)
             else if (b.iSubmitted)
-              Text('YOUR ${b.myScore} IS LOCKED IN — WAITING FOR HIM',
+              Text('YOUR ${battleScore(b.myScore)} IS LOCKED IN — '
+                  'WAITING FOR HIM',
                   style: GoogleFonts.inter(
                     color: AppColors.textTertiary,
                     fontSize: 10.5,
@@ -646,7 +718,7 @@ class _BattleCard extends StatelessWidget {
             fontWeight: FontWeight.w900,
           )),
       const SizedBox(height: 3),
-      Text(score?.toString() ?? '—',
+      Text(battleScore(score),
           style: GoogleFonts.inter(
             color: color,
             fontSize: 30,
@@ -740,3 +812,14 @@ class _Portrait extends StatelessWidget {
     );
   }
 }
+
+/// BATTLE SCORES READ OUT OF 100 NOW.
+///
+/// The grader stores full resolution server-side (five axes weighted into
+/// 0..1, then x99.99 → 0..9999) and that number was going straight onto
+/// the card. It looked like an arcade score and, worse, it disagreed with
+/// every other text number in the app: the chat challenge and the Rizz
+/// Points board both speak out of 100. A man who scores 82 in a duel and
+/// 82 on the daily should see the same number twice.
+String battleScore(int? raw) =>
+    raw == null ? '—' : '${(raw / 99.99).clamp(0, 100).round()}';
