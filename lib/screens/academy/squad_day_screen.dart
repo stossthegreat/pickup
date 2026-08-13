@@ -10,16 +10,20 @@ import '../../services/backend/squad_day.dart';
 import '../../services/backend/squad_history_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
+import '../../services/comeback_service.dart';
 import '../../services/mirror_service.dart';
+import '../../services/rolodex_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/challenge_card.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
+import '../../widgets/academy/comeback_sheet.dart';
 import '../../widgets/academy/day_beat.dart';
 import '../../widgets/academy/mirror_band.dart';
 import '../../widgets/academy/rolodex_shelf.dart';
 import '../../widgets/academy/squad_chrome.dart';
 import '../../widgets/academy/streak_chain.dart';
 import '../../widgets/academy/your_five.dart' show voiceOutOfTen;
+import '../roleplay/girl_chat_screen.dart';
 
 /// TODAY — the whole day on one screen, three cards.
 ///
@@ -96,14 +100,57 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
       _loading = false;
     });
     // ignore: discarded_futures
-    _mirrorMoment();
+    _reentry();
   }
 
-  /// THE MIRROR CHANGING is the app telling him something about himself
-  /// that wasn't true last week. That has to land as an event — a title
-  /// that silently swaps in the band is a label, and a label is not an
-  /// identity. Fires once per change, on the same persisted-stamp
-  /// pattern the armband and the reveal use.
+  /// THE FIFTH DAY BACK — the moment retention is actually won or lost,
+  /// and the one almost nobody designs for.
+  ///
+  /// Order matters here. The comeback runs FIRST and, if it fires, the
+  /// mirror waits until next time. A man returning after a lapse gets
+  /// exactly one thing to look at, and it is a woman who noticed he was
+  /// gone — not a stack of sheets telling him what else changed while he
+  /// wasn't here.
+  Future<void> _reentry() async {
+    final offer = await ComebackService.take();
+    if (!mounted) return;
+    if (offer != null) {
+      _offerOpener = offer.opener;
+      await ComebackSheet.show(context, offer, onReply: _openHer);
+      return;
+    }
+    await _mirrorMoment();
+  }
+
+  /// Straight into the conversation, with HER line already sent. The
+  /// whole point of the comeback is that he never has to start anything
+  /// — GirlChatConfig.opener already does exactly this job, so replying
+  /// needs no new chat machinery at all.
+  Future<void> _openHer(NumberCard card) async {
+    final g = card.girl;
+    await Navigator.of(context, rootNavigator: true).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => GirlChatScreen(
+          config: GirlChatConfig(
+            characterId: g.id,
+            vibeKey: g.vibeKey,
+            name: g.name,
+            archetype: g.archetype,
+            portraitAsset: g.asset,
+            accent: g.accent,
+            opener: _offerOpener,
+          ),
+        ),
+      ),
+    );
+    if (mounted) _load();
+  }
+
+  /// Held between the sheet and the push so her exact line survives the
+  /// hop — the chat has to open on the SAME sentence he just read, or
+  /// the illusion that she messaged him breaks on the first frame.
+  String _offerOpener = '';
+
   Future<void> _mirrorMoment() async {
     final t = await MirrorService.takeChange();
     if (t == null || !mounted) return;

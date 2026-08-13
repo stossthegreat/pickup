@@ -13,6 +13,7 @@ import '../../services/analytics_service.dart';
 import '../../services/creator_mode_store.dart';
 import '../../services/backend/battle_service.dart';
 import '../../services/backend/chat_score_service.dart';
+import '../../services/boon_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/mirror_service.dart';
 import '../../services/paywall_gate.dart';
@@ -20,6 +21,7 @@ import '../../services/rolodex_service.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/perfect_line.dart';
+import '../../widgets/academy/the_roll.dart';
 import '../../widgets/academy/verdict.dart';
 import '../../widgets/common/ai_consent_dialog.dart';
 import '../academy/rolodex_screen.dart';
@@ -255,6 +257,28 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     _loadProfile();
     // ignore: discarded_futures
     _loadMemory();
+    // ignore: discarded_futures
+    _takeHeadStart();
+  }
+
+  /// A HEAD START won on the wheel. Applied on open and announced —
+  /// an invisible buff is not a reward, and a number that moved for
+  /// reasons he can't account for makes the whole system feel arbitrary.
+  Future<void> _takeHeadStart() async {
+    if (!await BoonService.takeHeadStart()) return;
+    if (!mounted) return;
+    setState(() {
+      _heat = (_heat + BoonService.headStartPoints).clamp(0, 100).toDouble();
+      if (_heat > _peak) _peak = _heat;
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+          'HEAD START · she opens ${BoonService.headStartPoints} warmer'),
+      backgroundColor: AppColors.toastBg,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(milliseconds: 2600),
+    ));
   }
 
   Future<void> _loadProfile() async {
@@ -434,6 +458,14 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     // watch two result screens in a row to get it.
     if (widget.config.verdictOnFinish) {
       await _showVerdict(girl, ceremony: firstTime, newCard: fresh);
+      // THE ROLL rides on the back of the verdict rather than getting
+      // its own trigger. He's just been told an outcome he couldn't
+      // control; the wheel is the one moment in the app where he gets to
+      // gamble on purpose, and it only ever gives. It cannot pay in
+      // anything earned — see BoonService.
+      if (mounted) {
+        await TheRoll.show(context, accent: girl.accent);
+      }
     }
 
     // Pop with TRUE — this is the only path that proves the task was
