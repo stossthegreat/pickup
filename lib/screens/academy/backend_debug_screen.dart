@@ -111,6 +111,93 @@ class _BackendDebugScreenState extends State<BackendDebugScreen> {
       _add('score-voice function', false, '$e');
     }
 
+    // 7 — THE CHAT LADDER, link by link.
+    //
+    // "The chat score still isn't saving" has been reported three times
+    // and every answer has been "deploy the migrations", which is useless
+    // if it's already been done. This walks the actual chain and names
+    // the first broken link instead of guessing:
+    //
+    //   chat_attempts table  →  migration 0009 has run
+    //   chat_score.points    →  migration 0010 has run
+    //   chat_leaderboard     →  the view exists and is readable
+    //   score-chat function  →  deployed AND has an OPENAI_API_KEY
+    //
+    // Whichever line reads FAIL first is the thing to fix. Nothing below
+    // it can work until it does.
+    try {
+      await BackendService.client.from('chat_attempts').select('id').limit(1);
+      _add('chat_attempts table', true, 'migration 0009 has run');
+    } catch (e) {
+      _add('chat_attempts table', false,
+          'MISSING — run migration 0009. Nothing text-scored can save '
+          'until this exists. ($e)');
+    }
+
+    try {
+      await BackendService.client.from('chat_score').select('points').limit(1);
+      _add('chat_score.points', true, 'migration 0010 has run');
+    } catch (e) {
+      _add('chat_score.points', false,
+          'MISSING — run migration 0010 (Rizz Points). ($e)');
+    }
+
+    try {
+      final rows = await BackendService.client
+          .from('chat_leaderboard')
+          .select()
+          .limit(3);
+      _add('chat_leaderboard view', true,
+          '${rows.length} row(s) — the board reads fine');
+    } catch (e) {
+      _add('chat_leaderboard view', false, 'MISSING or unreadable. ($e)');
+    }
+
+    try {
+      final res = await BackendService.client.functions.invoke(
+        'score-chat',
+        body: {'transcript': 'x', 'surface': 'diagnostic'},
+      );
+      final err = res.data is Map ? (res.data as Map)['error'] : null;
+      // Same trick as score-voice: "too short" is the RIGHT answer — it
+      // proves the function is deployed and authenticated us.
+      final live = err == 'transcript too short';
+      _add('score-chat function', live,
+          live
+              ? 'live + authenticated'
+              : 'NOT DEPLOYED, or it rejected us. Deploy score-chat AND '
+                  'battle-action together — they share roll-chat.ts. '
+                  'Response: ${res.data}');
+    } catch (e) {
+      _add('score-chat function', false,
+          'NOT DEPLOYED — supabase functions deploy score-chat ($e)');
+    }
+
+    // 8 — the grader's key. A deployed function with no OPENAI_API_KEY
+    //     returns 503 and records nothing, which looks EXACTLY like "the
+    //     score isn't saving" from the app side.
+    try {
+      final res = await BackendService.client.functions.invoke(
+        'score-chat',
+        body: {
+          'transcript': 'YOU: hey what are you up to tonight\n'
+              'HER: not much, you?\nYOU: deciding if you are worth '
+              'the effort',
+          'surface': 'diagnostic',
+        },
+      );
+      final d = res.data;
+      final scored = d is Map && d['score'] != null;
+      _add('grader (OPENAI_API_KEY)', scored,
+          scored
+              ? 'scored ${(d as Map)['score']} — the whole chain works'
+              : 'no score came back. If the function is live above, the '
+                  'key is missing: supabase secrets set OPENAI_API_KEY=… '
+                  'Response: $d');
+    } catch (e) {
+      _add('grader (OPENAI_API_KEY)', false, '$e');
+    }
+
     if (mounted) setState(() => _running = false);
   }
 

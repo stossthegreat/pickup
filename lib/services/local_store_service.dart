@@ -93,10 +93,21 @@ class LocalStoreService {
   // chat) is unlimited on purpose: text is cheap and unlimited text is
   // what makes them come back. Voice is the scarce, premium, addictive
   // resource — run out, want more, resubscribe next week.
-  /// Free text-roleplay allowance before the funnel converts. 10 free
-  /// messages with the AI women, then every send opens the paywall. Voice
-  /// stays fully paid (no free allowance) at every _goLive.
-  static const int  kFreeTextMessages    = 10;
+  /// Free text-roleplay allowance before the funnel converts. THREE
+  /// messages with the AI women, then every send opens the paywall.
+  /// Voice stays fully paid (no free allowance) at every _goLive.
+  ///
+  /// Cut from ten. Ten was sized to let a man "feel the roleplay" before
+  /// deciding, but this app has no trial and never intended one — it's a
+  /// paid product with a taste, and ten messages is long enough to have
+  /// a conversation rather than a taste. Three is one opener, her reply,
+  /// and one line back: enough to prove she answers like a person and
+  /// that the thing works, and not enough to be a substitute for paying.
+  ///
+  /// LIFETIME, NOT DAILY. The counter has never reset and shouldn't —
+  /// a daily allowance is a free tier by instalments, and three a day
+  /// forever is more free product than ten once.
+  static const int  kFreeTextMessages    = 3;
   static const int  kScansPerWeek        = 999999; // legacy looks — effectively off
   static const int  kRendersPerWeek      = 999999; // legacy looks — effectively off
   static const int  kScreenshotsPerWeek  = 999999; // rizz screenshots — unlimited

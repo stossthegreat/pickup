@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/backend/squad_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/squad_chrome.dart';
 
@@ -29,12 +30,50 @@ import '../../widgets/academy/squad_chrome.dart';
 /// The three points are the three real reasons, in the order they
 /// persuade: the honest one (you'll quit alone), the fun one (beat your
 /// mates), and the objection-killer (this isn't another feed).
-class SquadInviteScreen extends StatelessWidget {
+class SquadInviteScreen extends StatefulWidget {
   const SquadInviteScreen({super.key});
 
-  void _go(BuildContext context, String route) {
+  @override
+  State<SquadInviteScreen> createState() => _SquadInviteScreenState();
+}
+
+class _SquadInviteScreenState extends State<SquadInviteScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _skipIfAlreadyIn();
+  }
+
+  /// A man who already has a squad has nothing to do here. Reinstalls,
+  /// a re-run onboarding, or an account that joined on another device
+  /// all land on this page with the job already done — so it steps out
+  /// of the way instead of pitching him something he owns.
+  Future<void> _skipIfAlreadyIn() async {
+    try {
+      if (await SquadService.mySquad() == null) return;
+      if (!mounted) return;
+      context.go('/home');
+    } catch (_) {/* offline — show the pitch, it's harmless */}
+  }
+
+  /// PUSH, NOT GO. `go` replaces the whole stack, so the squad room
+  /// opened from onboarding had nothing behind it and the back gesture
+  /// died — a dead end in the one flow a new man cannot escape. Pushing
+  /// keeps this page underneath, and finishing lands him home.
+  Future<void> _openSquad(BuildContext context) async {
     HapticFeedback.mediumImpact();
-    context.go(route);
+    await context.push('/squad');
+    if (!mounted) return;
+    // Came back with a squad → onboarding is done. Came back without one
+    // → he's still on the pitch, which is where he should be.
+    if (await SquadService.mySquad() != null && mounted) {
+      context.go('/home');
+    }
+  }
+
+  void _finish(BuildContext context) {
+    HapticFeedback.mediumImpact();
+    context.go('/home');
   }
 
   @override
@@ -108,13 +147,13 @@ class SquadInviteScreen extends StatelessWidget {
               _Cta(
                 label: 'START A SQUAD',
                 filled: true,
-                onTap: () => _go(context, '/squad'),
+                onTap: () => _openSquad(context),
               ),
               const SizedBox(height: 11),
               _Cta(
                 label: 'I\'VE GOT A CODE',
                 filled: false,
-                onTap: () => _go(context, '/squad'),
+                onTap: () => _openSquad(context),
               ),
               const SizedBox(height: 18),
               // A real skip, not a dark pattern. A man pushed into a squad
@@ -122,7 +161,7 @@ class SquadInviteScreen extends StatelessWidget {
               // only works if he actually cares who's watching.
               Center(
                 child: TextButton(
-                  onPressed: () => _go(context, '/home'),
+                  onPressed: () => _finish(context),
                   child: Text('Not now — I\'ll do it after my first run',
                       style: GoogleFonts.inter(
                         color: AppColors.textTertiary,
