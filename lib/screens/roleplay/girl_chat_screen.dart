@@ -14,10 +14,12 @@ import '../../services/creator_mode_store.dart';
 import '../../services/backend/battle_service.dart';
 import '../../services/backend/chat_score_service.dart';
 import '../../services/local_store_service.dart';
+import '../../services/mirror_service.dart';
 import '../../services/paywall_gate.dart';
 import '../../services/rolodex_service.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/academy/perfect_line.dart';
 import '../../widgets/academy/verdict.dart';
 import '../../widgets/common/ai_consent_dialog.dart';
 import '../academy/rolodex_screen.dart';
@@ -155,6 +157,15 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   /// because he wrote that sentence himself.
   String _bestLine = '';
   double _bestDelta = -999;
+
+  /// Was his last line a stumble? Feeds the mirror's SECOND WIND axis —
+  /// "his best line is the one straight after a bad one" is only
+  /// measurable if you remember the bad one.
+  bool _stumbled = false;
+
+  /// PERFECT LINE fires at most once in a conversation, on top of the
+  /// once-a-day cap. Rare is the entire mechanic.
+  bool _perfectShown = false;
 
   /// The verdict fires exactly once per conversation. She can't hand you
   /// her number twice, and a second showing turns the biggest moment in
@@ -337,6 +348,11 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     if (_submitted) return;
     _submitted = true;
     final mine = _msgs.where((m) => m.who == 'you').length;
+    // SLOW BURN's evidence. Length is the one mirror axis that can only
+    // be known once it's over, and this method is the single place both
+    // exit paths converge on.
+    // ignore: discarded_futures
+    MirrorService.endConversation(mine);
     if (mine < 3) return;
     final transcript = [
       for (final m in _msgs)
@@ -484,6 +500,22 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
         .map((s) => s.trim())
         .where((s) => s.isNotEmpty)
         .toList();
+    // THE MIRROR, fed before the heat moves. `heat` here is her interest
+    // BEFORE this line, which is what makes THE CLOSER mean "strong
+    // while she was already warm" rather than crediting him for the
+    // line that warmed her.
+    final girlTier = girlById(widget.config.characterId).tier;
+    final wasStumble = _stumbled;
+    // ignore: discarded_futures
+    MirrorService.record(
+      turnIndex: _turnIndex,
+      delta: result.delta,
+      heat: _heat,
+      girlTier: girlTier,
+      afterStumble: wasStumble,
+    );
+    _stumbled = result.delta < 0;
+
     setState(() {
       _sending = false;
       _heat = _applyDelta(_heat, result.delta);
@@ -521,6 +553,32 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     }
     _scrollToBottom();
     if (result.strong) HapticFeedback.lightImpact();
+
+    // ── PERFECT LINE ──────────────────────────────────────────────────
+    // The only unscheduled reward in the app. He sent a sentence and
+    // was waiting for her reply; instead the screen takes over and tells
+    // him that sentence was perfect. Fires before her follow-up texts so
+    // it genuinely interrupts rather than politely queueing behind them.
+    //
+    // Rare by construction: an exceptional grade AND once per
+    // conversation AND once per day. A jackpot that pays twice in an
+    // evening is a participation trophy and there's no way back from
+    // that.
+    if (result.strong &&
+        result.delta >= PerfectLine.bar &&
+        !_perfectShown &&
+        await PerfectLine.availableToday()) {
+      _perfectShown = true;
+      if (!mounted) return;
+      await PerfectLine.show(
+        context,
+        line: text,
+        girlName: widget.config.name,
+        accent: widget.config.accent,
+      );
+      if (!mounted) return;
+    }
+
     for (var i = 1; i < bubbles.length; i++) {
       await Future.delayed(Duration(milliseconds: 650 + bubbles[i].length * 22));
       if (!mounted) return;

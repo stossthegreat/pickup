@@ -5,6 +5,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'local_store_service.dart';
 import 'notification_service.dart';
+import 'rolodex_service.dart';
 import 'protocol_service.dart';
 import 'win_back_service.dart';
 
@@ -118,6 +119,14 @@ class DailyNudgeService {
       // a man who just declined to pay does not need two pushes a night.
       // Costs zero extra pending notifications this way.
       final winBack = await WinBackService.read();
+      // HER, NOT US. If a woman in his Rolodex is going cold, the midday
+      // slot becomes a message from her instead of another line of our
+      // marketing. Every man alive has learned to swipe away "🔥 keep
+      // your streak"; nobody has learned to swipe away a name they
+      // recognise asking where they've been. Same slot, same cost, and
+      // it's the only notification in the app that isn't the app
+      // talking about itself.
+      final cold = await Rolodex.coldest();
       final now = tz.TZDateTime.now(tz.local);
 
       // 3) Lay down the horizon. Each slot is a distinct one-shot with its
@@ -134,7 +143,7 @@ class DailyNudgeService {
         // the 60-day map; this is the retention hook to that loop.
         final middayAt = _slot(now, d, _middayHour, 0);
         if (middayAt.isAfter(now)) {
-          final (t, b) = _climbCopy(d);
+          final (t, b) = cold != null ? _herCopy(cold, d) : _climbCopy(d);
           await _schedule(_middayBase + d, t, b, middayAt, morning: true);
         }
         // EVENING — streak / loss, escalating with projected dormancy.
@@ -295,7 +304,32 @@ class DailyNudgeService {
      'Not a personality you\'re born with. Start today.'),
   ];
 
-  // ── MIDDAY: the climb / unlock tease ────────────────────────────────
+  // ── MIDDAY (preferred): a message from a woman he actually won ──────
+  //
+  // The single highest-value copy change available to us, and it costs
+  // one local read. Retention notifications fail because they are
+  // transparently the product asking for attention. This one is a name
+  // he earned, in her voice, referencing a relationship he built — and
+  // the mechanic underneath is honest, because her warmth genuinely is
+  // decaying and one message genuinely does restore it.
+  //
+  // ONE WOMAN, NEVER A LIST. Coldest only. A daily roll-call of dying
+  // relationships is anxiety, and anxiety uninstalls apps.
+  static (String, String) _herCopy(NumberCard c, int dayOffset) {
+    final name = c.girl.name;
+    final lines = <(String, String)>[
+      (name, 'you\'ve gone quiet on me.'),
+      (name, 'did you forget about me or…'),
+      (name, 'so we\'re just not talking now?'),
+      (name, 'i was starting to like you as well.'),
+      (name, 'say something. i\'ll wait.'),
+      (name, 'this is the part where you text back.'),
+      (name, 'be honest — did you lose my number?'),
+    ];
+    return lines[dayOffset % lines.length];
+  }
+
+  // ── MIDDAY (fallback): the climb / unlock tease ─────────────────────
   // Ties the daily nudge to the app's core loop — new women unlock as he
   // climbs the 60-day map, and the streak is what keeps him climbing.
   // Salted by day so consecutive middays never repeat.

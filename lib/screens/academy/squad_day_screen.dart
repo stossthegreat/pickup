@@ -10,10 +10,12 @@ import '../../services/backend/squad_day.dart';
 import '../../services/backend/squad_history_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
+import '../../services/mirror_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/challenge_card.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
 import '../../widgets/academy/day_beat.dart';
+import '../../widgets/academy/mirror_band.dart';
 import '../../widgets/academy/rolodex_shelf.dart';
 import '../../widgets/academy/squad_chrome.dart';
 import '../../widgets/academy/streak_chain.dart';
@@ -93,6 +95,19 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
       _history = results[4] as SquadHistory;
       _loading = false;
     });
+    // ignore: discarded_futures
+    _mirrorMoment();
+  }
+
+  /// THE MIRROR CHANGING is the app telling him something about himself
+  /// that wasn't true last week. That has to land as an event — a title
+  /// that silently swaps in the band is a label, and a label is not an
+  /// identity. Fires once per change, on the same persisted-stamp
+  /// pattern the armband and the reveal use.
+  Future<void> _mirrorMoment() async {
+    final t = await MirrorService.takeChange();
+    if (t == null || !mounted) return;
+    await showMirrorSheet(context, t, announce: true);
   }
 
   SquadDay get _day => SquadDay(
@@ -153,6 +168,12 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
                         if (mounted) _load();
                       },
                     ),
+
+                    // THE MIRROR — one line, no card. What the app has
+                    // worked out about him from his own lines. It sits
+                    // directly under the faces because both are answers
+                    // to the same question: who am I in this thing.
+                    const MirrorBand(),
 
                     Padding(
                       padding: const EdgeInsets.fromLTRB(18, 22, 18, 34),
