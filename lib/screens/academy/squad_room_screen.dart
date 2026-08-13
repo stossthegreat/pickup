@@ -11,6 +11,8 @@ import '../../services/backend/mission_service.dart';
 import '../../services/backend/squad_broadcast.dart';
 import '../../services/backend/squad_day.dart';
 import '../../services/backend/squad_live_service.dart';
+import '../../services/backend/squad_history_service.dart';
+import '../../services/squad_moments_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/live_events.dart';
 import '../../services/backend/tiers.dart';
@@ -23,6 +25,7 @@ import '../../widgets/academy/day_beat.dart';
 import '../../widgets/academy/five_journey.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/squad_chrome.dart';
+import '../../widgets/academy/streak_chain.dart';
 import '../../widgets/academy/squad_grade.dart';
 import '../../widgets/academy/squad_gauge.dart';
 import '../../widgets/academy/today_board.dart';
@@ -50,6 +53,7 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
   Map<String, String> _myStates = const {}; // missionId → committed|completed
   Map<String, MissionPulse> _squadStates = const {};
   List<DailyMark> _daily = const [];
+  SquadHistory _history = SquadHistory.empty;
   RealtimeChannel? _pulseChannel;
   RealtimeChannel? _rosterChannel;
 
@@ -89,6 +93,11 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
       MissionService.todayBoard(count: SquadDay.missionsPerDay),
       SquadService.missionPulseToday(ids),
       SquadService.dailyToday(ids, squadId: squad.id),
+      // Thirty days of daily_attempts for this roster — the chain, the
+      // quorum, the armband and the bench all derive from this one read.
+      // Same table and RLS policy dailyToday already goes through, so
+      // there is nothing to migrate and nothing to switch on.
+      SquadHistory.load(ids),
     ]);
     final board = results[2] as List<Mission>;
     final myStates =
@@ -106,9 +115,47 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
       _board = board;
       _squadStates = results[3] as Map<String, MissionPulse>;
       _daily = results[4] as List<DailyMark>;
+      _history = results[5] as SquadHistory;
       _myStates = myStates;
       _loading = false;
     });
+    // ignore: discarded_futures
+    _moments(ids);
+  }
+
+  /// THE TWO MOMENTS. Fired after the frame that renders them, once per
+  /// occurrence, so the chain banking and the armband changing hands
+  /// land as events rather than as numbers that were already different
+  /// when he looked.
+  Future<void> _moments(List<String> ids) async {
+    final m = await SquadMoments.check(_history, ids);
+    if (!mounted) return;
+    final banked = m.banked;
+    if (banked != null) {
+      HapticFeedback.heavyImpact();
+      _celebrate('CHAIN $banked');
+      return; // one moment at a time — two dialogs is neither
+    }
+    final captain = m.captain;
+    if (captain == null) return;
+    final mine = captain == AuthService.userId;
+    String who() {
+      for (final r in _roster) {
+        if (r.userId == captain) return (r.handle ?? 'SOMEONE').toUpperCase();
+      }
+      return 'SOMEONE';
+    }
+
+    // Losing it is the sharper signal, so it gets the sharper colour.
+    LiveEvents.milestone(
+      mine ? 'YOU TOOK THE ARMBAND' : '${who()} TOOK THE ARMBAND',
+      mine
+          ? 'Most runs in the squad this week.'
+          : m.lostArmband
+              ? 'You had it. Out-run him and take it back.'
+              : 'Most runs in the squad this week.',
+      color: m.lostArmband ? AppColors.red : const Color(0xFFFFD34D),
+    );
   }
 
   /// The single source of truth for every number on this screen.
@@ -555,10 +602,27 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
           _masthead(squad, day, accent),
 
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 20, 18, 30),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 30),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // ── THE CHAIN — the headline, not a chapter ─────────
+                //
+                // The room's complaint was that nothing stood out: seven
+                // numbered sections of near-identical cards, so the eye
+                // had nowhere to land and every section read as equally
+                // important, which means none of them were. This sits
+                // ABOVE the numbering on purpose. It's the only thing on
+                // the screen the squad can lose, and losable beats
+                // measurable every time.
+                SquadStreakHero(
+                  history: _history,
+                  roster: _roster,
+                  accent: accent,
+                  onRun: () => context.push('/daily'),
+                ),
+                const SizedBox(height: 26),
+
                 // ── YOUR FIVE — portraits, arcs, empty seats ────────
                 ChapterMark(
                   index: '01',
