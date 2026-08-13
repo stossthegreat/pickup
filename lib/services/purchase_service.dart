@@ -200,18 +200,20 @@ class PurchaseService {
       }
 
       Package? weekly;
+      Package? monthly;
       Package? rescue;
 
-      // v285 — WEEKLY ONLY. The app sells exactly ONE subscription:
-      // mirrorly_pro_weekly. The legacy monthly/yearly SKUs still
-      // exist in the stores (long-standing subscribers keep their
-      // access via restore/isProLive), but the paywall must NEVER
-      // select or sell them. The v284 "leftovers" fallback is gone —
-      // it could silently claim the monthly/yearly package as
-      // "weekly" and sell the wrong product under a per-week label.
-      // If the weekly package is genuinely missing from the current
-      // offering, the paywall now shows "—" and the CTA surfaces the
-      // diagnose() dialog instead of selling a dead SKU.
+      // TWO SUBSCRIPTIONS AND A PACK. Weekly is the impulse buy;
+      // monthly is the one that matches a sixty-day promise. The legacy
+      // Mirrorly SKUs (mirrorly_pro_monthly / _yearly) still exist in the
+      // stores so long-standing subscribers keep access via restore, but
+      // the paywall must never select or sell them.
+      //
+      // MATCHED ON PRODUCT ID, NOT ON THE WORD. The old rule banned
+      // anything containing "month", which is exactly the kind of guess
+      // that silently kills a product you deliberately re-launch — the
+      // new imhim_pro_monthly would have been dropped on the floor by
+      // the very code meant to protect it.
       for (final pkg in current.availablePackages) {
         final pkgId = pkg.identifier.toLowerCase();
         final prodId = pkg.storeProduct.identifier.toLowerCase();
@@ -221,14 +223,19 @@ class PurchaseService {
             || pkgId.contains('rescue')
             || prodId.contains('rescue');
 
-        // Dead SKUs — monthly/yearly must never be matched, even by
-        // the lenient weekly aliases below.
-        final isDeadSku =
-               pkgId.contains('month')  || prodId.contains('month')
-            || pkgId.contains('annual') || prodId.contains('annual')
-            || pkgId.contains('year')   || prodId.contains('year');
+        // Retired SKUs — never matched, by any alias below.
+        const retired = ['mirrorly_pro_yearly', 'mirrorly_pro_monthly'];
+        final isDeadSku = retired.contains(prodId) ||
+            pkgId.contains('annual') ||
+            prodId.contains('annual') ||
+            prodId.contains('year');
 
-        final isWeekly = !isRescue && !isDeadSku && (
+        final isMonthly = !isRescue && !isDeadSku && (
+               pkgId == r'$rc_monthly'
+            || prodId == PurchaseConfig.productIds.monthly
+            || prodId.contains('monthly'));
+
+        final isWeekly = !isRescue && !isDeadSku && !isMonthly && (
                pkgId == r'$rc_weekly'
             || prodId == PurchaseConfig.productIds.weekly
             || pkgId.contains('week')
@@ -238,16 +245,17 @@ class PurchaseService {
 
         if (isRescue && rescue == null) {
           rescue = pkg;
+        } else if (isMonthly && monthly == null) {
+          monthly = pkg;
         } else if (isWeekly && weekly == null) {
           weekly = pkg;
         }
-        // Everything else (monthly, yearly, unknown) is deliberately
-        // dropped on the floor.
       }
 
       _cached = PurchaseOfferings(
         weekly: weekly,
-        annual: null, // voided — never populated, never purchasable
+        monthly: monthly,
+        annual: null, // retired — never populated, never purchasable
         rescue: rescue,
       );
       return _cached!;
@@ -278,15 +286,22 @@ class PurchaseService {
       lastErrorMessage = 'Store not configured.';
       return PurchaseOutcome.notConfigured;
     }
-    // v285 HARD BLOCK — monthly/yearly are dead SKUs. loadOfferings()
-    // already never surfaces them, but this is the last line of
-    // defence: no code path may ever charge a user for them again.
+    // RETIRED SKUs — annual and the legacy Mirrorly monthly. The block
+    // stays because old offerings can still surface them and no code
+    // path may charge a user for a plan we no longer honour.
+    //
+    // MONTHLY IS BACK AND IS NOT ONE OF THEM. The v285 block matched on
+    // the substring "month", which would now catch imhim_pro_monthly
+    // too — so it matches the retired product IDS explicitly instead of
+    // guessing from a word. A substring ban is exactly the kind of rule
+    // that silently kills a product you deliberately re-launch.
     final blockPkg  = pkg.identifier.toLowerCase();
     final blockProd = pkg.storeProduct.identifier.toLowerCase();
-    final isDeadSku =
-           blockPkg.contains('month')  || blockProd.contains('month')
-        || blockPkg.contains('annual') || blockProd.contains('annual')
-        || blockPkg.contains('year')   || blockProd.contains('year');
+    const retired = ['mirrorly_pro_yearly', 'mirrorly_pro_monthly'];
+    final isDeadSku = retired.contains(blockProd) ||
+        blockPkg.contains('annual') ||
+        blockProd.contains('annual') ||
+        blockProd.contains('year');
     if (isDeadSku) {
       lastErrorMessage = 'This plan is no longer available.';
       AnalyticsService.purchaseFailed(pkg.identifier, 'dead_sku_blocked');
@@ -312,6 +327,12 @@ class PurchaseService {
                  PurchaseConfig.offering.rescuePackage.toLowerCase()
           || pkg.identifier.toLowerCase().contains('rescue')
           || pkg.storeProduct.identifier.toLowerCase().contains('rescue');
+      if (isRescue) {
+        // The pack is voice minutes, not Pro. It tops up the one
+        // resource with a real marginal cost and touches nothing ranked.
+        await LocalStoreService.grantVoiceMinutes(
+            PurchaseConfig.voiceMinutesPerPack);
+      }
       if (!isRescue) {
         await LocalStoreService.setSubscribed(true);
         // Start the lag grace. RevenueCat can take a beat to publish the
@@ -650,16 +671,25 @@ enum PurchaseOutcome { success, cancelled, error, noPriorPurchases, notConfigure
 /// shows a dash for that slot until RC delivers it.
 class PurchaseOfferings {
   final Package? weekly;
+
+  /// The plan that matches the promise. A sixty-day product sold on a
+  /// seven-day term asks a man to re-decide eight times during the thing
+  /// you told him takes two months.
+  final Package? monthly;
+
   final Package? annual;
+
+  /// The voice-minute pack. Never a tier, never a way past a one-shot.
   final Package? rescue;
 
   const PurchaseOfferings({
     required this.weekly,
+    this.monthly,
     required this.annual,
     required this.rescue,
   });
 
   factory PurchaseOfferings.empty() => const PurchaseOfferings(
-    weekly: null, annual: null, rescue: null,
+    weekly: null, monthly: null, annual: null, rescue: null,
   );
 }

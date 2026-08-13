@@ -620,6 +620,9 @@ class LocalStoreService {
   /// Add to the voice elapsed-ms bucket for THIS window. Caller
   /// passes the duration of the just-completed session segment; the
   /// bucket auto-resets if the user's 7-day window rolled over.
+  /// Records used voice time and, once he's past the weekly allowance,
+  /// eats the overflow out of any bought minutes — so a pack is spent
+  /// exactly once rather than re-granting itself every Monday.
   static Future<void> addVoiceMs(int deltaMs) async {
     if (deltaMs <= 0) return;
     final prefs = await SharedPreferences.getInstance();
@@ -628,8 +631,16 @@ class LocalStoreService {
     final base = stored == bucket
         ? (prefs.getInt(_kVoiceWeekMs) ?? 0)
         : 0;
+    final next = base + deltaMs;
     await prefs.setInt(_kVoiceWeekBucket, bucket);
-    await prefs.setInt(_kVoiceWeekMs,     base + deltaMs);
+    await prefs.setInt(_kVoiceWeekMs,     next);
+
+    // Overflow past the weekly allowance is paid for out of the bank.
+    final weekly = kVoiceMinutesPerWeek * 60 * 1000;
+    if (next > weekly) {
+      final overflowNow = next - (base > weekly ? base : weekly);
+      if (overflowNow > 0) await _spendVoiceBonus(overflowNow);
+    }
   }
 
   /// Creator mode (password-gated in Settings → CREATOR). Mirrors the
@@ -642,12 +653,55 @@ class LocalStoreService {
     return prefs.getBool('creator_unchained_active') ?? false;
   }
 
-  /// True when the Pro user has used up their weekly voice allowance.
-  /// Creator mode lifts the cap entirely (owner-only, password-gated).
+  // ── BOUGHT VOICE MINUTES ───────────────────────────────────────────
+  //
+  // Voice is the one thing in this app with a real marginal cost —
+  // everything else is effectively free to serve, and OpenAI Realtime
+  // audio is not. So the weekly cap exists for unit economics, not to be
+  // annoying, and a man who wants more should be able to buy more.
+  //
+  // A BANK, NOT A SUBSCRIPTION TIER. Bought minutes persist across the
+  // weekly reset and deplete only when he actually goes past his
+  // allowance — otherwise a single pack would silently re-grant itself
+  // every Monday forever.
+  static const _kVoiceBonusMs = 'caps.voice.bonus_ms.v1';
+
+  static Future<int> voiceBonusMs() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_kVoiceBonusMs) ?? 0;
+  }
+
+  /// Grant bought minutes. Called on a successful credit-pack purchase.
+  static Future<void> grantVoiceMinutes(int minutes) async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = prefs.getInt(_kVoiceBonusMs) ?? 0;
+    await prefs.setInt(_kVoiceBonusMs, now + minutes * 60 * 1000);
+  }
+
+  static Future<void> _spendVoiceBonus(int ms) async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = prefs.getInt(_kVoiceBonusMs) ?? 0;
+    await prefs.setInt(_kVoiceBonusMs, (now - ms).clamp(0, 1 << 40));
+  }
+
+  /// True when the Pro user has used up their weekly voice allowance AND
+  /// any minutes he's bought on top. Creator mode lifts it entirely
+  /// (owner-only, password-gated).
   static Future<bool> voiceCapReached() async {
     if (await isCreatorActive()) return false; // creator → unlimited minutes
     final ms = await voiceMsThisWeek();
-    return ms >= kVoiceMinutesPerWeek * 60 * 1000;
+    final weekly = kVoiceMinutesPerWeek * 60 * 1000;
+    if (ms < weekly) return false;
+    return (ms - weekly) >= await voiceBonusMs();
+  }
+
+  /// Minutes left before he's stopped — weekly remainder plus the bank.
+  static Future<int> voiceMinutesLeft() async {
+    final ms = await voiceMsThisWeek();
+    final weekly = kVoiceMinutesPerWeek * 60 * 1000;
+    final bonus = await voiceBonusMs();
+    final left = (weekly + bonus) - ms;
+    return (left / 60000).floor().clamp(0, 99999);
   }
 
   /// True when the Pro user has used up their weekly screenshot rizz

@@ -55,7 +55,7 @@ class PaywallScreen extends StatefulWidget {
 // Weekly is the only sellable tier now. Annual + rescue remain in the
 // enum so the offerings plumbing / analytics stay intact, but the UI
 // only ever surfaces and purchases weekly.
-enum _Tier { weekly, annual, rescue }
+enum _Tier { weekly, monthly, annual, rescue }
 
 // Per-panel header copy — (headline, subhead). 1:1 with the mock.
 const List<(String, String)> _copy = [
@@ -210,6 +210,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   Package? _packageFor(_Tier t) => switch (t) {
         _Tier.weekly => _offerings.weekly,
+        _Tier.monthly => _offerings.monthly,
         _Tier.annual => _offerings.annual,
         _Tier.rescue => _offerings.rescue,
       };
