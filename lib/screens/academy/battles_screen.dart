@@ -13,7 +13,7 @@ import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/game_button.dart';
-import '../game/freeflow/free_flow_screen.dart';
+import '../roleplay/girl_chat_screen.dart';
 
 /// RIZZ BATTLES — two men, the same woman, both blind. Higher score
 /// takes the ELO. Every duel is a card with her face on it; every
@@ -145,8 +145,9 @@ class _BattlesScreenState extends State<BattlesScreen> {
                   icon: Icons.ios_share_rounded,
                   onTap: () => Share.share(
                       'I challenge you on ImHim Rizz — ${girl.name}, '
-                      '"${battle.scenarioLabel}". Same AI woman, both '
-                      'blind, higher score wins. Code: ${battle.inviteCode}'),
+                      '"${battle.scenarioLabel}". Same woman, both blind, '
+                      'text only, higher score wins. '
+                      'Code: ${battle.inviteCode}'),
                 ),
               ),
               const SizedBox(height: 10),
@@ -215,14 +216,48 @@ class _BattlesScreenState extends State<BattlesScreen> {
     _load();
   }
 
+  /// BATTLES ARE TEXT NOW, not voice.
+  ///
+  /// Two reasons, and the money one is the smaller of them. Live voice is
+  /// the single most expensive action in the app (OpenAI Realtime audio),
+  /// and a man already gets a voice rep every day from the Daily — paying
+  /// for unlimited duels on top of that is a bill with no ceiling.
+  ///
+  /// The better reason is that duels work in writing. A battle is meant
+  /// to be run whenever you fancy it, in a pub, on a bus, at 1am with
+  /// someone asleep next to you — and none of those are places you talk
+  /// out loud to your phone. Voice stays the once-a-day event that costs
+  /// you something to show up for; text is the thing you can always do.
+  ///
+  /// AND EVERY WOMAN IS UNLOCKED IN HERE. The 60-day ladder gates her in
+  /// Practice and it should — the climb is the product. But a duel isn't
+  /// practice, it's a fight you agreed to, and being handed someone
+  /// twenty days above your level is the point rather than a mistake.
+  /// It also gives the ladder a shop window: you meet her here first and
+  /// then you want to earn her properly.
   Future<void> _run(Battle b) async {
     HapticFeedback.heavyImpact();
-    BattleService.armedBattleId = b.id;
-    await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
-      builder: (_) => FreeFlowScreen(initialVibeKey: b.scenario),
-    ));
-    BattleService.armedBattleId = null;
-    _load();
+    final girl = girlForVibe(b.scenario);
+    await Navigator.of(context, rootNavigator: true).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => GirlChatScreen(
+          config: GirlChatConfig(
+            characterId: girl.id,
+            vibeKey: girl.vibeKey,
+            name: girl.name,
+            archetype: girl.archetype,
+            portraitAsset: girl.asset,
+            accent: girl.accent,
+            opener: girl.opener,
+            taskMode: true,
+            // The transcript goes to the duel, which grades it, settles
+            // the fight and banks the chat attempt in one call.
+            battleId: b.id,
+          ),
+        ),
+      ),
+    );
+    if (mounted) _load();
   }
 
   void _shareResult(Battle b) {
