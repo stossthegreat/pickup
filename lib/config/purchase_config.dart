@@ -75,39 +75,11 @@ class PurchaseConfig {
   ///   mirrorly_pro_rescue    →  Rescue one-time IAP (Android only;
   ///                             iOS rescue product is not yet
   ///                             approved on App Store Connect)
-  /// THREE PRODUCTS, EACH WITH A DIFFERENT JOB.
-  ///
-  ///   weekly   impulse. The man who wants to try it this week.
-  ///   monthly  the real one. This is a 60-DAY product — selling a
-  ///            sixty-day transformation on a seven-day plan asks a man
-  ///            to re-decide eight times during the thing you told him
-  ///            takes two months, and weekly plans churn hardest at
-  ///            exactly the point the habit hasn't formed yet. The term
-  ///            should match the promise.
-  ///   pack     bought voice minutes. NOT a tier and never a way past
-  ///            the one-shot — see [voiceMinutesPerPack].
   static const productIds = (
-    weekly:  'imhim_pro_weekly',
-    monthly: 'imhim_pro_monthly',
-    yearly:  'mirrorly_pro_yearly',   // retired; kept so old receipts parse
-    rescue:  'mirrorly_pro_rescue',   // the voice-minute pack
+    weekly:  'imhim_pro_weekly',   // ImHim weekly sub (primary)
+    yearly:  'mirrorly_pro_yearly',
+    rescue:  'mirrorly_pro_rescue',
   );
-
-  /// How many extra voice minutes one pack grants.
-  ///
-  /// Voice is the ONLY thing in the app with a real marginal cost, so
-  /// this pack exists for unit economics: a heavy user should fund his
-  /// own usage. Sized against the 14-minute weekly allowance so a pack
-  /// is a meaningful top-up rather than a token.
-  ///
-  /// IT BUYS PRACTICE MINUTES AND NOTHING ELSE. It can never buy another
-  /// attempt at the Daily, a battle re-run, or any ranked surface. The
-  /// entire worth of a score on this app's boards is that everyone got
-  /// exactly one shot at the same woman on the same day — the moment a
-  /// number can be bought, every number becomes worthless, including the
-  /// honest ones. Selling practice is selling the thing that costs us
-  /// money. Selling a retry would be selling the leaderboard.
-  static const int voiceMinutesPerPack = 30;
 
   /// RevenueCat package identifiers inside the current Offering.
   /// RevenueCat has built-in slot names (\$rc_weekly, \$rc_annual)
@@ -117,7 +89,6 @@ class PurchaseConfig {
   /// row shows `mirrorly_pro_rescue:rescue`).
   static const offering = (
     weeklyPackage:  '\$rc_weekly',
-    monthlyPackage: '\$rc_monthly',
     annualPackage:  '\$rc_annual',
     rescuePackage:  'rescue',
   );
