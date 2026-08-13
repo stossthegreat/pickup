@@ -13,6 +13,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/academy/challenge_card.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
 import '../../widgets/academy/day_beat.dart';
+import '../../widgets/academy/rolodex_shelf.dart';
 import '../../widgets/academy/squad_chrome.dart';
 import '../../widgets/academy/your_five.dart' show voiceOutOfTen;
 
@@ -132,6 +133,18 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
                   children: [
                     // ── 01 · WHERE YOU'RE AT ────────────────────────
                     _stats(day, accent),
+
+                    // THE SHELF — deliberately not a card. One line of
+                    // faces, most of them still black, sitting above the
+                    // three challenges. It's the only thing on this
+                    // screen that shows him something he OWNS, and the
+                    // only thing that shows him what's missing.
+                    RolodexShelf(
+                      onTap: () async {
+                        await context.push('/rolodex');
+                        if (mounted) _load();
+                      },
+                    ),
 
                     Padding(
                       padding: const EdgeInsets.fromLTRB(18, 22, 18, 34),
