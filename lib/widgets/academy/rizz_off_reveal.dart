@@ -11,6 +11,7 @@ import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 import 'game_button.dart';
+import 'game_feel.dart';
 import 'grade_stamp.dart';
 
 /// THE RIZZ-OFF REVEAL — the daily dopamine moment, staged properly.
@@ -118,6 +119,40 @@ class _RizzOffRevealState extends State<RizzOffReveal>
 
   bool get _hasSquad => widget.roster.length > 1;
 
+  /// THE NEAR MISS — the line that brings him back tomorrow.
+  ///
+  /// Computed against the man directly above him on today's board. We
+  /// don't manufacture it the way a machine would; there genuinely is
+  /// someone 0.2 ahead, and saying so out loud turns a score into a
+  /// grudge. Null when nothing is close enough to be worth naming —
+  /// crying "so close" over a wide gap is how a screen loses credibility.
+  String? get _near {
+    final ranked = _finished;
+    if (ranked.length < 2) return null;
+    final me = AuthService.userId;
+    final i = ranked.indexWhere((m) => m.userId == me);
+    if (i <= 0) return null; // not on the board, or already top
+    final above = ranked[i - 1];
+    final mine = (ranked[i].score ?? 0) / widget.divisor;
+    final his = (above.score ?? 0) / widget.divisor;
+    String nameOf(String id) {
+      for (final m in widget.roster) {
+        if (m.userId == id) return m.handle ?? 'him';
+      }
+      return 'him';
+    }
+
+    // "Close" scales with the board: a tenth of a point out of 10, or
+    // four points out of 100.
+    final within = (100 / widget.divisor) * 0.04;
+    return nearMissLine(
+      mine: mine,
+      above: his,
+      aboveName: nameOf(above.userId),
+      closeWithin: within < 0.2 ? 0.2 : within,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -126,17 +161,40 @@ class _RizzOffRevealState extends State<RizzOffReveal>
           if (mounted) fn();
         }));
 
+    // THE HOLD. The dopamine is not in the number, it's in the gap
+    // between committing and knowing — which is the only thing a slot
+    // machine actually sells. We used to spend that gap in 700ms. Now
+    // she "decides" for a beat and a half first, with a slow pulse under
+    // it, and the axes mean more when they finally start landing.
+    const hold = 1500;
+    at(240, Feel.tick);
+    at(820, Feel.tick);
+
     // One tick per axis as it lands — you feel the score being built.
     for (var i = 0; i < _axes.length; i++) {
-      at(900 + i * 520, HapticFeedback.selectionClick);
+      at(hold + 200 + i * 520, Feel.reel);
     }
-    at(700, () => setState(() => _stage = 1));
-    at(900 + _axes.length * 520, () => setState(() => _stage = 2));
+    at(hold, () => setState(() => _stage = 1));
+    final axesEnd = hold + 200 + _axes.length * 520;
+    at(axesEnd, () {
+      setState(() => _stage = 2);
+      // The number lands like a thing with weight, then the grade
+      // stamps a beat later — two events, not one.
+      Feel.land();
+    });
+    at(axesEnd + 900, () {
+      // Best-ever and near-miss get their own signatures, so the phone
+      // has told him the outcome before his eyes have.
+      if (_near != null) {
+        Feel.nearMiss();
+      } else if (const ['S', 'A', 'B'].contains(_grade.letter)) {
+        Feel.win();
+      }
+    });
     if (_hasSquad) {
-      at(900 + _axes.length * 520 + 2600, () => setState(() => _stage = 3));
+      at(axesEnd + 2600, () => setState(() => _stage = 3));
     }
-    at(900 + _axes.length * 520 + (_hasSquad ? 4200 : 2400),
-        () => setState(() => _stage = 4));
+    at(axesEnd + (_hasSquad ? 4200 : 2400), () => setState(() => _stage = 4));
   }
 
   @override
@@ -189,6 +247,31 @@ class _RizzOffRevealState extends State<RizzOffReveal>
                   ),
                 ),
 
+                // THE NEAR MISS. Placed under the squad slam because it
+                // only means anything once you've seen whose name is
+                // above yours — and the screen flinches when it lands.
+                if (_stage >= 3 && _near != null)
+                  Flinch(
+                    active: true,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.trending_up_rounded,
+                              size: 14, color: AppColors.red),
+                          const SizedBox(width: 8),
+                          Text(_near!.toUpperCase(),
+                              style: GoogleFonts.inter(
+                                color: AppColors.red,
+                                fontSize: 12,
+                                letterSpacing: 2,
+                                fontWeight: FontWeight.w900,
+                              )),
+                        ],
+                      ),
+                    ),
+                  ),
                 if (_stage >= 3 && _hasSquad) _squadSlam(),
                 if (_stage >= 4) _actions(grade),
               ]),
@@ -217,22 +300,38 @@ class _RizzOffRevealState extends State<RizzOffReveal>
 
   /// Stage 0 — one slow pulse on black. You've just spoken to her; the
   /// silence before the verdict is the whole point.
+  /// Stage 0 — THE HOLD. A dot breathing in the dark and three words.
+  /// Naming the wait is what converts dead time into tension: silence
+  /// reads as a spinner, "she's deciding" reads as a verdict coming.
   Widget _breath() {
-    return Container(
-      width: 12,
-      height: 12,
-      decoration: BoxDecoration(
-        color: widget.girlAccent,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-              color: widget.girlAccent.withValues(alpha: 0.6), blurRadius: 24)
-        ],
-      ),
-    )
-        .animate(onPlay: (c) => c.repeat(reverse: true))
-        .scaleXY(begin: 0.7, end: 1.5, duration: 700.ms)
-        .fade(begin: 0.4, end: 1);
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          color: widget.girlAccent,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+                color: widget.girlAccent.withValues(alpha: 0.6),
+                blurRadius: 24)
+          ],
+        ),
+      )
+          .animate(onPlay: (c) => c.repeat(reverse: true))
+          .scaleXY(begin: 0.7, end: 1.5, duration: 700.ms)
+          .fade(begin: 0.4, end: 1),
+      const SizedBox(height: 26),
+      Text('SHE\'S DECIDING',
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 11,
+                letterSpacing: 4.5,
+                fontWeight: FontWeight.w900,
+              ))
+          .animate(onPlay: (c) => c.repeat(reverse: true))
+          .fade(begin: 0.35, end: 1, duration: 900.ms),
+    ]);
   }
 
   /// Stage 1 — the axes land one at a time, each sliding in from the

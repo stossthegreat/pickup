@@ -10,7 +10,9 @@ import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
+import '../../services/roster.dart';
 import '../../widgets/academy/game_button.dart';
+import '../../widgets/academy/game_feel.dart';
 import '../../widgets/academy/rizz_off_reveal.dart';
 import '../roleplay/girl_chat_screen.dart';
 
@@ -31,6 +33,10 @@ class DailyChatScreen extends StatefulWidget {
 
 class _DailyChatScreenState extends State<DailyChatScreen> {
   bool _loading = true;
+  /// The reel runs once per screen open, before she's named. It's
+  /// theatre, not chance — see SlotReel — but it's the difference
+  /// between being shown today's woman and watching her land.
+  bool _spun = false;
   ChatMark? _mine;
   List<SquadMember> _roster = const [];
   List<ChatMark> _marks = const [];
@@ -176,14 +182,28 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
                 SizedBox(
                   height: 470,
                   child: Stack(fit: StackFit.expand, children: [
-                    Image.asset(
-                      girl.asset,
-                      fit: BoxFit.cover,
-                      alignment: const Alignment(0, -0.08),
-                      errorBuilder: (_, __, ___) => const DecoratedBox(
-                        decoration: BoxDecoration(color: AppColors.surface1),
+                    if (!_spun && !done)
+                      SlotReel(
+                        pool: kRoster,
+                        target: kRoster.indexWhere((g) => g.id == girl.id) < 0
+                            ? 0
+                            : kRoster.indexWhere((g) => g.id == girl.id),
+                        accent: kNeon,
+                        height: 470,
+                        onLanded: () {
+                          if (mounted) setState(() => _spun = true);
+                        },
+                      )
+                    else
+                      Image.asset(
+                        girl.asset,
+                        fit: BoxFit.cover,
+                        alignment: const Alignment(0, -0.08),
+                        errorBuilder: (_, __, ___) => const DecoratedBox(
+                          decoration:
+                              BoxDecoration(color: AppColors.surface1),
+                        ),
                       ),
-                    ),
                     DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -215,6 +235,7 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
                               ),
                             ]),
                             const Spacer(),
+                            if (_spun || done)
                             Padding(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 6),
