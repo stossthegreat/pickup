@@ -13,6 +13,7 @@ import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/game_button.dart';
+import '../../widgets/academy/rizz_off_reveal.dart';
 import '../roleplay/girl_chat_screen.dart';
 
 /// RIZZ BATTLES — two men, the same woman, both blind. Higher score
@@ -257,6 +258,39 @@ class _BattlesScreenState extends State<BattlesScreen> {
         ),
       ),
     );
+    if (!mounted) return;
+
+    // THE DUEL GETS THE SAME MOMENT AS THE DAILY. It used to hand the
+    // number back on a list row — the one event in the app with a named
+    // opponent, and it landed quieter than a solo practice run. Same
+    // count-up, same axes, same grade slam.
+    final r = BattleService.lastResult;
+    if (r != null) {
+      BattleService.lastResult = null;
+      final girl = girlForVibe(b.scenario);
+      await showGeneralDialog<void>(
+        context: context,
+        barrierColor: Colors.black,
+        barrierDismissible: false,
+        barrierLabel: 'battle',
+        transitionDuration: const Duration(milliseconds: 320),
+        pageBuilder: (ctx, _, __) => RizzOffReveal(
+          score: (r.score / 99.99).clamp(0, 100).round(),
+          gradeScore: r.score,
+          rubric: r.rubric,
+          rankToday: 0,
+          worldAvg: 0,
+          girlName: girl.name,
+          girlAccent: girl.accent,
+          divisor: 1,
+          decimals: 0,
+          suffix: '/ 100',
+          kicker: 'BATTLE',
+        ),
+        transitionBuilder: (ctx, a, __, child) =>
+            FadeTransition(opacity: a, child: child),
+      );
+    }
     if (mounted) _load();
   }
 
