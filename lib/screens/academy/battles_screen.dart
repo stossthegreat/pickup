@@ -264,9 +264,11 @@ class _BattlesScreenState extends State<BattlesScreen> {
     HapticFeedback.selectionClick();
     final vs = _handles[b.opponentId] ?? 'a rival';
     Share.share(b.iWon
-        ? 'WON my Rizz Battle vs $vs — ${b.myScore} to ${b.theirScore} '
+        ? 'WON my Rizz Battle vs $vs — ${battleScore(b.myScore)} to '
+            '${battleScore(b.theirScore)} '
             'on "${b.scenarioLabel}". Who\'s next?'
-        : 'Rizz Battle vs $vs: ${b.myScore} to ${b.theirScore} on '
+        : 'Rizz Battle vs $vs: ${battleScore(b.myScore)} to '
+            '${battleScore(b.theirScore)} on '
             '"${b.scenarioLabel}". Running it back.');
   }
 
@@ -650,7 +652,8 @@ class _BattleCard extends StatelessWidget {
             if (b.settled)
               _verdict(b)
             else if (b.iSubmitted)
-              Text('YOUR ${b.myScore} IS LOCKED IN — WAITING FOR HIM',
+              Text('YOUR ${battleScore(b.myScore)} IS LOCKED IN — '
+                  'WAITING FOR HIM',
                   style: GoogleFonts.inter(
                     color: AppColors.textTertiary,
                     fontSize: 10.5,
@@ -681,7 +684,7 @@ class _BattleCard extends StatelessWidget {
             fontWeight: FontWeight.w900,
           )),
       const SizedBox(height: 3),
-      Text(score?.toString() ?? '—',
+      Text(battleScore(score),
           style: GoogleFonts.inter(
             color: color,
             fontSize: 30,
@@ -775,3 +778,14 @@ class _Portrait extends StatelessWidget {
     );
   }
 }
+
+/// BATTLE SCORES READ OUT OF 100 NOW.
+///
+/// The grader stores full resolution server-side (five axes weighted into
+/// 0..1, then x99.99 → 0..9999) and that number was going straight onto
+/// the card. It looked like an arcade score and, worse, it disagreed with
+/// every other text number in the app: the chat challenge and the Rizz
+/// Points board both speak out of 100. A man who scores 82 in a duel and
+/// 82 on the daily should see the same number twice.
+String battleScore(int? raw) =>
+    raw == null ? '—' : '${(raw / 99.99).clamp(0, 100).round()}';

@@ -308,6 +308,57 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
                             ))
                       else
                         for (final m in _roster) _row(m),
+
+                      // ── WHAT YOU'RE JUDGED ON ────────────────────
+                      // Half this screen was empty black before you'd
+                      // run it, which read as unfinished. It's also the
+                      // one moment a man will actually read the rubric:
+                      // he's about to be given a number and he wants to
+                      // know what moves it. A score you understand is
+                      // worth chasing; one you don't is just a number.
+                      const SizedBox(height: 30),
+                      Text('WHAT SHE\'S JUDGING',
+                          style: GoogleFonts.inter(
+                            color: AppColors.textMuted,
+                            fontSize: 10,
+                            letterSpacing: 2.4,
+                            fontWeight: FontWeight.w900,
+                          )),
+                      const SizedBox(height: 14),
+                      const _Axis(
+                          label: 'OPENING',
+                          body: 'Does the first line earn a reply on its '
+                              'own merit.'),
+                      const _Axis(
+                          label: 'RELEVANCE',
+                          body: 'You engage with what SHE said, not a '
+                              'script you had ready.'),
+                      const _Axis(
+                          label: 'PERSONALITY',
+                          body: 'A specific human is visible. Opinions, '
+                              'humour, a point of view.'),
+                      const _Axis(
+                          label: 'MOMENTUM',
+                          body: 'The thread goes somewhere. Hooks get '
+                              'picked up.'),
+                      const _Axis(
+                          label: 'RESTRAINT',
+                          body: 'Length, neediness, double-texting. '
+                              'Wanting it less reads as wanting it more.'),
+                      const SizedBox(height: 22),
+                      Container(height: 1, color: AppColors.divider),
+                      const SizedBox(height: 14),
+                      Text(
+                          'Fifteen messages ends it. Graded 0–100 on a '
+                          'real-world standard — 50 is a forgettable '
+                          'thread, 70 is genuinely good, 85 is rare. '
+                          'Every point banks into your Rizz Chat total.',
+                          style: GoogleFonts.inter(
+                            color: AppColors.textTertiary,
+                            fontSize: 12,
+                            height: 1.55,
+                            fontWeight: FontWeight.w500,
+                          )),
                     ],
                   ),
                 ),
@@ -361,6 +412,52 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
               letterSpacing: mark != null ? -0.5 : 1.4,
               fontWeight: FontWeight.w900,
             )),
+      ]),
+    );
+  }
+}
+
+/// One rubric axis. Reads as a rule of the game rather than a help
+/// article — short label, one sentence, no hedging.
+class _Axis extends StatelessWidget {
+  final String label, body;
+  const _Axis({required this.label, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 5,
+          height: 5,
+          margin: const EdgeInsets.only(top: 6),
+          decoration: const BoxDecoration(
+              shape: BoxShape.circle, color: kNeon),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: GoogleFonts.inter(
+                    color: kNeon,
+                    fontSize: 10,
+                    letterSpacing: 1.8,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 2),
+              Text(body,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textSecondary,
+                    fontSize: 12.5,
+                    height: 1.4,
+                    fontWeight: FontWeight.w500,
+                  )),
+            ],
+          ),
+        ),
       ]),
     );
   }
