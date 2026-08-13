@@ -265,6 +265,28 @@ class StreakService {
     return best;
   }
 
+  /// The raw active-day set. Exposed for StreakRescue, which needs to
+  /// see the shape of a break before it can offer to fix one.
+  static Future<Set<int>> activeDays() async {
+    final prefs = await SharedPreferences.getInstance();
+    final (set, _) = await _rebuild(prefs);
+    return set;
+  }
+
+  /// Force one day into the active set.
+  ///
+  /// The ONLY caller is StreakRescue. Everything else earns its days by
+  /// doing the work, and this exists so a bought day can reconnect a run
+  /// — see StreakRescue for why that door exists and why it's capped.
+  /// The rescue records separately which days were bought, so nothing
+  /// downstream has to trust this set to be entirely earned.
+  static Future<void> markDayActive(int ymd) async {
+    final prefs = await SharedPreferences.getInstance();
+    final days = {...(prefs.getStringList(_kActiveDays) ?? const <String>[])};
+    days.add('$ymd');
+    await prefs.setStringList(_kActiveDays, days.toList()..sort());
+  }
+
   /// Read-only current streak (still rebuilds the log as a side effect).
   static Future<int> current() async {
     final (cur, _) = await refresh();

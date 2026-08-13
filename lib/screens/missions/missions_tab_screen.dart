@@ -13,10 +13,12 @@ import '../../services/mission_catalog.dart';
 import '../../services/mission_engine.dart';
 import '../../services/paywall_gate.dart';
 import '../../services/roster.dart';
+import '../../services/streak_rescue_service.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/live_toast.dart';
+import '../../widgets/academy/rescue_sheet.dart';
 import '../../widgets/academy/squad_strip.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/streak_badge.dart';
@@ -52,6 +54,19 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     // WHILE YOU WERE GONE — a returning user never opens to a static
     // screen. Runs after the first frame so it lands on top of home.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // THE RESCUE GOES FIRST. A man opening the app to a dead 12-day run
+      // is the single biggest churn moment there is, and it has to be the
+      // first thing he sees — not queued behind a catch-up summary of the
+      // squad's week. Silent no-op unless a run genuinely stopped
+      // yesterday.
+      final offer = await StreakRescue.check();
+      if (!mounted) return;
+      if (offer != null) {
+        final saved = await RescueSheet.show(context, offer);
+        if (!mounted) return;
+        if (saved) await _load();
+        return; // one heavy moment per open; the catch-up can wait
+      }
       final events = await CatchUpService.collect();
       if (!mounted || events.isEmpty) return;
       await CatchUpSheet.show(context, events);
