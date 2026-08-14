@@ -79,7 +79,40 @@ class PurchaseConfig {
     weekly:  'imhim_pro_weekly',   // ImHim weekly sub (primary)
     yearly:  'mirrorly_pro_yearly',
     rescue:  'mirrorly_pro_rescue',
+    extra10: 'imhim_extra_10',     // 10 voice minutes, consumable
+    extra20: 'imhim_extra_20',     // 20 voice minutes, consumable
   );
+
+  // ── EXTRA — voice-minute packs ──────────────────────────────────────
+  //
+  // MATCHED BY EXACT PRODUCT ID, NEVER BY SUBSTRING. The weekly matcher
+  // above uses lenient `contains` checks because it has to survive an
+  // offering where the package slot was named inconsistently, and it
+  // needs three separate dead-SKU guards to stop it selling the wrong
+  // thing. That's a pattern to contain, not to copy: a fuzzy match on a
+  // paid product is a bug that charges people. These are exact.
+  //
+  // The map IS the source of truth for how many minutes a purchase
+  // grants, so no call site can decide that for itself and get it
+  // wrong. PurchaseService reads it directly and grants inside the
+  // transaction handler.
+  //
+  // `mirrorly_pro_rescue` is the legacy Android-only consumable — it's
+  // already approved on Play, so it stays recognised and maps to 20
+  // minutes. iOS has no approved consumable yet; until the two new ones
+  // are created in App Store Connect the packs simply don't appear and
+  // the sheet says so rather than showing a dead button.
+  static const extraMinutes = <String, int>{
+    'imhim_extra_10': 10,
+    'imhim_extra_20': 20,
+    'mirrorly_pro_rescue': 20,
+  };
+
+  /// Minutes a product grants, or 0 if it isn't an EXTRA pack.
+  static int minutesFor(String productId) =>
+      extraMinutes[productId.toLowerCase()] ?? 0;
+
+  static bool isExtra(String productId) => minutesFor(productId) > 0;
 
   /// RevenueCat package identifiers inside the current Offering.
   /// RevenueCat has built-in slot names (\$rc_weekly, \$rc_annual)
@@ -91,6 +124,8 @@ class PurchaseConfig {
     weeklyPackage:  '\$rc_weekly',
     annualPackage:  '\$rc_annual',
     rescuePackage:  'rescue',
+    extra10Package: 'extra10',
+    extra20Package: 'extra20',
   );
 
   /// Convenience — true only when RevenueCat is [enabled] AND keys are
