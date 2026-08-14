@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/backend/leaderboard_service.dart';
+import '../../services/backend/tiers.dart';
+import '../../services/economy.dart';
 import '../../theme/app_colors.dart';
 
 /// The clean streak flame pill — the exact look used on the Progress
@@ -73,6 +76,87 @@ class XpBadge extends StatelessWidget {
                 letterSpacing: 0.3,
                 fontWeight: FontWeight.w800,
               )),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// RANK — the second of the two pills, and the other half of who he is.
+///
+/// A man in this app carries TWO standings and they measure different
+/// things: his personal ladder (OBSERVER → HIM, moved by battles) and
+/// his squad's. Both were being shown in the wrong places — the personal
+/// tier was buried in the corner of the Battles card, where it read as a
+/// property of battles rather than of him.
+///
+/// So it comes out of that card and sits next to XP, in the same pill,
+/// at the same height. Two badges side by side is the whole of "who am
+/// I here": what I've earned (XP) and where I stand (rank). The squad's
+/// standing lives in the squad's own hero, where it belongs.
+///
+/// Self-loading so the masthead doesn't have to know about the ladder.
+class RankBadge extends StatefulWidget {
+  const RankBadge({super.key});
+
+  @override
+  State<RankBadge> createState() => _RankBadgeState();
+}
+
+class _RankBadgeState extends State<RankBadge> {
+  LeaderboardEntry? _me;
+
+  @override
+  void initState() {
+    super.initState();
+    // ignore: discarded_futures
+    _load();
+  }
+
+  Future<void> _load() async {
+    final me = await LeaderboardService.me();
+    if (mounted) setState(() => _me = me);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final me = _me;
+    final tier = me == null ? kTiers.first : tierFor(me.rating);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: tier.color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(99),
+        border:
+            Border.all(color: tier.color.withValues(alpha: 0.5), width: 0.8),
+        boxShadow: tier.glow
+            ? [BoxShadow(color: tier.color.withValues(alpha: 0.3), blurRadius: 14)]
+            : null,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.shield_rounded, color: tier.color, size: 15),
+          const SizedBox(width: 5),
+          Text(tier.name,
+              style: GoogleFonts.inter(
+                color: tier.color,
+                fontSize: 13,
+                height: 1,
+                letterSpacing: 0.3,
+                fontWeight: FontWeight.w800,
+              )),
+          if (me != null) ...[
+            const SizedBox(width: 6),
+            Text(Economy.commas(me.rating),
+                style: GoogleFonts.inter(
+                  color: tier.color.withValues(alpha: 0.75),
+                  fontSize: 11.5,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                )),
+          ],
         ],
       ),
     );

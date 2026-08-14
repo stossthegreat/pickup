@@ -20,6 +20,7 @@ import '../../theme/app_typography.dart';
 import '../../widgets/academy/live_toast.dart';
 import '../../widgets/academy/rescue_sheet.dart';
 import '../../widgets/academy/battle_strip.dart';
+import '../../widgets/academy/game_button.dart' show Burst;
 import '../../widgets/academy/squad_strip.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/streak_badge.dart';
@@ -454,7 +455,15 @@ class _TopBar extends StatelessWidget {
           // where two real men run the same woman blind. It's a
           // standing system, not a toggle, so it's a full card below the
           // squad now. Removing it also gives the masthead its air back.
-          Row(children: [XpBadge(label: _xpLabel)]),
+          // TWO PILLS, ONE ROW: what he's earned, and where he stands.
+          // The personal tier used to sit in the corner of the Battles
+          // card, which read as a property of battles rather than of
+          // him. It's his, so it lives next to his XP.
+          Row(children: [
+            XpBadge(label: _xpLabel),
+            const SizedBox(width: 8),
+            const RankBadge(),
+          ]),
         ],
       ),
     );
@@ -474,7 +483,7 @@ class _IconBtn extends StatelessWidget {
       );
 }
 
-class _Heading extends StatelessWidget {
+class _Heading extends StatefulWidget {
   final int done;
   final int total;
   /// THE FEAR BUTTON, rehoused. It lived in the masthead and squashed
@@ -484,8 +493,68 @@ class _Heading extends StatelessWidget {
   final VoidCallback onPanic;
   const _Heading(
       {required this.done, required this.total, required this.onPanic});
+
+  @override
+  State<_Heading> createState() => _HeadingState();
+}
+
+class _HeadingState extends State<_Heading> {
+  /// FIVE OF FIVE gets confetti, once, on the transition.
+  ///
+  /// Not on every rebuild — a celebration that fires whenever the
+  /// screen happens to repaint stops being one, and this app has been
+  /// bitten by exactly that before. It fires on the frame the fifth
+  /// mission lands and never again that session.
+  bool _burst = false;
+  bool _celebrated = false;
+
+  void _maybeCelebrate(int done, int total) {
+    if (total <= 0 || done < total || _celebrated) return;
+    _celebrated = true;
+    HapticFeedback.heavyImpact();
+    setState(() => _burst = true);
+    Future<void>.delayed(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => _burst = false);
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // A man who opens the app already finished shouldn't get confetti
+    // for arriving — only for the move that completed it.
+    _celebrated = widget.total > 0 && widget.done >= widget.total;
+  }
+
+  @override
+  void didUpdateWidget(covariant _Heading old) {
+    super.didUpdateWidget(old);
+    if (widget.done > old.done) _maybeCelebrate(widget.done, widget.total);
+    // Reset at the day roll so tomorrow's fifth still lands.
+    if (widget.done < old.done) _celebrated = false;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final done = widget.done;
+    final total = widget.total;
+    final onPanic = widget.onPanic;
+    return Stack(clipBehavior: Clip.none, children: [
+      if (_burst)
+        Positioned(
+          left: 0,
+          right: 0,
+          top: -60,
+          height: 260,
+          child: IgnorePointer(
+              child: Burst(color: AppColors.signalGreen, pieces: 48)),
+        ),
+      _body(context, done, total, onPanic),
+    ]);
+  }
+
+  Widget _body(
+      BuildContext context, int done, int total, VoidCallback onPanic) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -493,13 +562,6 @@ class _Heading extends StatelessWidget {
           children: [
             Text('TODAY', style: AppTypography.label),
             const Spacer(),
-            if (total > 0)
-              Text('$done / $total DONE',
-                  style: AppTypography.label.copyWith(
-                      color: done == total && total > 0
-                          ? AppColors.signalGreen
-                          : AppColors.textTertiary)),
-            const SizedBox(width: 10),
             GestureDetector(
               onTap: onPanic,
               child: Container(
@@ -524,14 +586,42 @@ class _Heading extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        Text('Today\'s Mission',
-            style: GoogleFonts.inter(
-              color: AppColors.textPrimary,
-              fontSize: 30,
-              height: 1.1,
-              letterSpacing: -1,
-              fontWeight: FontWeight.w900,
-            )),
+        // THE COUNT SITS WITH THE TITLE, not in a caption above it. It
+        // was a separate line of small caps saying the same thing twice;
+        // as a number beside the headline it's the one thing on the
+        // screen that changes while he works, which is exactly what a
+        // progress figure should be.
+        Row(crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+          Text('Today\'s Mission',
+              style: GoogleFonts.inter(
+                color: AppColors.textPrimary,
+                fontSize: 30,
+                height: 1.1,
+                letterSpacing: -1,
+                fontWeight: FontWeight.w900,
+              )),
+          if (total > 0) ...[
+            const SizedBox(width: 12),
+            Text('$done/$total',
+                style: GoogleFonts.inter(
+                  color: done >= total
+                      ? AppColors.signalGreen
+                      : AppColors.textTertiary,
+                  fontSize: 20,
+                  height: 1.1,
+                  letterSpacing: -0.5,
+                  fontWeight: FontWeight.w900,
+                  shadows: done >= total
+                      ? [
+                          const Shadow(
+                              color: AppColors.signalGreen, blurRadius: 18)
+                        ]
+                      : null,
+                )),
+          ],
+        ]),
         const SizedBox(height: 6),
         Text('Practice on AI. Then prove it in real life.',
             style: AppTypography.bodySmall

@@ -52,6 +52,51 @@ class _FearButtonScreenState extends State<FearButtonScreen> {
     "Hey. No line. I just wanted to meet you. I'm …",
   ];
 
+
+  // ── WHY HE HASN'T MOVED ─────────────────────────────────────────────
+  //
+  // The screen used to open with "Shoulders back. Breathe out slow." —
+  // body-language advice for a problem that isn't in the body. A man
+  // standing there with his phone out is not under-oxygenated. He's
+  // running a specific piece of reasoning, and until that reasoning is
+  // named and taken apart he will keep standing there.
+  //
+  // So each of these is a REAL reason men don't approach, said out loud,
+  // followed by the thing that dismantles it. Not encouragement —
+  // encouragement is what he's already given himself six times in the
+  // last ten minutes and it didn't move him. An argument might.
+  //
+  // Rotates per open, paired with a fresh opener, so the button never
+  // says the same thing twice in a row to the same man.
+  static const _truths = <(String, String)>[
+    ("You're not scared of her.\nYou're scared of being watched trying.",
+        'Nobody in this room will remember by the time they\'re in the car. '
+        'You will remember it for years. That is the whole trade.'),
+    ('While you haven\'t asked,\nshe might have said yes.',
+        'That\'s what you\'re protecting. A maybe that isn\'t real. It is '
+        'worth nothing and it is costing you everything.'),
+    ('You\'re not scared of a no.\nYou\'re scared of what it means.',
+        'It means nothing. One person, one mood, one Tuesday. It is not a '
+        'verdict on you and it never was.'),
+    ('The scene in your head\ndoesn\'t happen.',
+        'The laugh, the friends turning round — that isn\'t how it goes. '
+        'What happens is a short, polite answer and you walk. Every time.'),
+    ('Doing nothing feels free\nbecause the bill comes later.',
+        'You have paid it a hundred times already and called it a normal '
+        'night. This is the cheaper option.'),
+    ('You don\'t need a better line.',
+        'You have had a good enough line for twenty minutes. What you are '
+        'doing now is called waiting, and it does not end on its own.'),
+    ('She forgets you in four minutes.',
+        'You would have carried this one for four years. That asymmetry is '
+        'the only argument you need.'),
+    ('Every man you\'d swap places with\nhas been told no more than you.',
+        'More times than you have opened your mouth. That is the entire '
+        'difference between you and him. Not looks. Reps.'),
+  ];
+
+  late final (String, String) _truth;
+
   late final String _line;
   _Phase _phase = _Phase.armed;
   int _count = 10;
@@ -61,7 +106,9 @@ class _FearButtonScreenState extends State<FearButtonScreen> {
   @override
   void initState() {
     super.initState();
-    _line = _lines[Random().nextInt(_lines.length)];
+    final r = Random();
+    _line = _lines[r.nextInt(_lines.length)];
+    _truth = _truths[r.nextInt(_truths.length)];
     HapticFeedback.heavyImpact();
   }
 
@@ -154,16 +201,41 @@ class _FearButtonScreenState extends State<FearButtonScreen> {
             letterSpacing: 3.2,
             fontWeight: FontWeight.w900,
           )).animate().fadeIn(duration: 250.ms),
-      const SizedBox(height: 14),
-      Text('Shoulders back.\nBreathe out slow.\nSay this:',
+      const SizedBox(height: 16),
+      // THE REASON, named.
+      Text(_truth.$1,
           style: GoogleFonts.inter(
             color: AppColors.textPrimary,
-            fontSize: 30,
-            height: 1.15,
-            letterSpacing: -0.8,
+            fontSize: 27,
+            height: 1.12,
+            letterSpacing: -0.9,
             fontWeight: FontWeight.w900,
           )).animate().fadeIn(delay: 150.ms, duration: 350.ms),
-      const SizedBox(height: 26),
+      const SizedBox(height: 12),
+      // And the thing that takes it apart.
+      Text(_truth.$2,
+          style: GoogleFonts.inter(
+            color: AppColors.textSecondary,
+            fontSize: 15,
+            height: 1.5,
+            fontWeight: FontWeight.w500,
+          )).animate().fadeIn(delay: 320.ms, duration: 400.ms),
+      const SizedBox(height: 22),
+      Row(children: [
+        Text('SAY THIS',
+            style: GoogleFonts.inter(
+              color: AppColors.red,
+              fontSize: 9,
+              letterSpacing: 3.4,
+              fontWeight: FontWeight.w900,
+            )),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Container(
+              height: 1, color: AppColors.red.withValues(alpha: 0.28)),
+        ),
+      ]).animate().fadeIn(delay: 440.ms),
+      const SizedBox(height: 12),
       Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
