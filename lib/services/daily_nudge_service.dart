@@ -148,7 +148,7 @@ class DailyNudgeService {
       if (retreat != null) {
         final at = tz.TZDateTime.now(tz.local).add(const Duration(hours: 2));
         await _schedule(
-            _eveningBase, retreat.\$1, retreat.\$2, at, morning: false);
+            _eveningBase, retreat.$1, retreat.$2, at, morning: false);
         return; // and NOTHING else for the blackout window
       }
       if (await RetentionService.isQuiet()) return;

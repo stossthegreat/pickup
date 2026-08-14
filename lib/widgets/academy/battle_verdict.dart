@@ -15,6 +15,8 @@ import '../../theme/app_colors.dart';
 import '../share/rizz_card.dart';
 import 'game_button.dart';
 import 'game_feel.dart';
+// ImpactShake lives here, not in game_feel.dart.
+import 'grade_stamp.dart';
 import 'rank_emblem.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
