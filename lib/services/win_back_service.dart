@@ -49,6 +49,10 @@ class WinBackService {
   /// horizon's existing evening slot.
   static const hotId = 9400;
 
+  /// The second beat, two hours out. See _scheduleHot for why the
+  /// ladder is 30m / 2h / next day rather than one push at three hours.
+  static const warmId = 9401;
+
   static const _kWalkedMs = 'winback.walked.ms';
   static const _kRound = 'winback.round'; // how many times he's walked
   static const _kSource = 'winback.source';
@@ -95,6 +99,7 @@ class WinBackService {
       await prefs.remove(_kSource);
       await prefs.setInt(_kRound, 0);
       await _plugin.cancel(hotId);
+      await _plugin.cancel(warmId);
     } catch (e) {
       debugPrint('WinBackService.markConverted failed: $e');
     }
@@ -109,6 +114,7 @@ class WinBackService {
       await prefs.setBool(_kMuted, true);
       await prefs.remove(_kWalkedMs);
       await _plugin.cancel(hotId);
+      await _plugin.cancel(warmId);
     } catch (e) {
       debugPrint('WinBackService.mute failed: $e');
     }
@@ -179,13 +185,21 @@ class WinBackService {
     required int round,
   }) async {
     await _plugin.cancel(hotId);
+    // THIRTY MINUTES, NOT THREE HOURS.
+    //
+    // The trial-to-paid consensus is a three-touchpoint structure, and
+    // the first touch has to land while the decision is still warm. At
+    // three hours he has moved on and forgotten what he was looking at;
+    // at thirty minutes he is still the man who was thinking about it.
+    // The second beat (2h) and third (next day) are laid down by the
+    // cold ladder below.
     final now = tz.TZDateTime.now(tz.local);
-    var at = now.add(const Duration(hours: 3));
+    var at = now.add(const Duration(minutes: 30));
     if (at.hour >= 22 || at.hour < 9) {
       final base = at.hour < 9 ? at : at.add(const Duration(days: 1));
       at = tz.TZDateTime(tz.local, base.year, base.month, base.day, 9, 30);
     }
-    if (!at.isAfter(now)) at = now.add(const Duration(minutes: 90));
+    if (!at.isAfter(now)) at = now.add(const Duration(minutes: 10));
 
     final (title, body) = hotCopy(source: source, round: round);
     await _plugin.zonedSchedule(
@@ -214,6 +228,64 @@ class WinBackService {
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
+
+    // ── BEAT TWO, two hours out ──────────────────────────────────────
+    // Different job to beat one. The 30-minute push catches the man who
+    // was still deciding; this one catches the man who genuinely got
+    // pulled away, and it must NAME THE SPECIFIC THING rather than say
+    // "your trial is ending" — the strongest finding in the whole
+    // trial-to-paid literature is that specificity beats countdown.
+    var warm = now.add(const Duration(hours: 2));
+    if (warm.hour >= 22 || warm.hour < 9) {
+      final base = warm.hour < 9 ? warm : warm.add(const Duration(days: 1));
+      warm = tz.TZDateTime(tz.local, base.year, base.month, base.day, 9, 45);
+    }
+    if (warm.isAfter(now)) {
+      final (wt, wb) = warmCopy(round: round);
+      await _plugin.zonedSchedule(
+        warmId,
+        wt,
+        wb,
+        warm,
+        const NotificationDetails(
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+          android: AndroidNotificationDetails(
+            'winback',
+            'Unlock reminders',
+            channelDescription:
+                'Occasional reminders about the full version, after you\'ve '
+                'looked at it. Stops on its own.',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    }
+  }
+
+  /// BEAT TWO. Names what he'd actually get, never the transaction.
+  /// "Your trial ends" is about us; "her voice, out loud, tonight" is
+  /// about him, and only one of those has ever been opened.
+  static (String, String) warmCopy({required int round}) {
+    const pool = <(String, String)>[
+      ('Her voice. Out loud. 🎙',
+          'Not typing — actually talking to her, and getting told exactly '
+          'where you lost her. That\'s the bit that changes Saturday.'),
+      ('You were one tap off',
+          'Unlimited women, the daily rizz-off, and a squad who can see '
+          'whether you showed up. Still there when you are.'),
+      ('The part you didn\'t see 👀',
+          'Every conversation scored on five things, so you find out what '
+          'you actually do wrong. Most men never find out.'),
+    ];
+    return pool[(round - 1).clamp(0, pool.length - 1)];
   }
 
   // ══════════════════════════════════════════════════════════════════
