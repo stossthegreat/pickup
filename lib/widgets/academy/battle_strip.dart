@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/battle_service.dart';
 import '../../services/backend/leaderboard_service.dart';
-import '../../services/backend/tiers.dart';
 import '../../services/economy.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
@@ -107,7 +106,6 @@ class _BattleStripState extends State<BattleStrip> {
     final turn = _yourTurn;
     final urgent = turn > 0;
     final me = _me;
-    final tier = me == null ? kTiers.first : tierFor(me.rating);
     final rec = _record;
 
     return GestureDetector(
@@ -198,19 +196,13 @@ class _BattleStripState extends State<BattleStrip> {
                         letterSpacing: 2.6,
                         fontWeight: FontWeight.w900,
                       )),
+                  // THE TIER USED TO SIT HERE and it read as a property
+                  // of Battles rather than of him. A man carries two
+                  // standings — his own ladder and his squad's — and
+                  // neither belongs in the corner of a feature card. His
+                  // is a pill beside XP in the masthead now; the squad's
+                  // is in the squad's own hero.
                   const Spacer(),
-                  Text(tier.name,
-                      style: GoogleFonts.inter(
-                        color: tier.color,
-                        fontSize: 9.5,
-                        letterSpacing: 1.8,
-                        fontWeight: FontWeight.w900,
-                        shadows: [
-                          Shadow(
-                              color: Colors.black.withValues(alpha: 0.9),
-                              blurRadius: 8)
-                        ],
-                      )),
                 ]),
 
                 // THE PITCH. Four words that explain the whole mode.
