@@ -16,38 +16,47 @@ import '../../services/mirror_service.dart';
 import '../../services/rolodex_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/battle_card.dart';
-import '../../widgets/academy/challenge_card.dart';
+import '../../widgets/academy/challenge_row.dart';
+import '../../widgets/academy/five_board.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
 import '../../widgets/academy/comeback_sheet.dart';
-import '../../widgets/academy/day_beat.dart';
 import '../../widgets/academy/mirror_band.dart';
 import '../../widgets/academy/rolodex_shelf.dart';
-import '../../widgets/academy/squad_chrome.dart';
+import '../../widgets/academy/squad_hero.dart';
 import '../../widgets/academy/streak_chain.dart';
-import '../../widgets/academy/your_five.dart' show voiceOutOfTen;
 import '../roleplay/girl_chat_screen.dart';
 
-/// TODAY — the whole day on one screen, three cards.
+/// SQUAD HOME — not a menu for squad features.
 ///
-/// Home used to stack the day gauge, the Daily and the squad strip on
-/// top of each other, which meant three competing invitations before you
-/// reached the missions. It's one card there now, and this is where it
-/// goes: your standing, then the two challenges, in the order you'd
-/// actually do them.
+/// The screen you land on after tapping your squad used to be a
+/// contents page: numbered chapters, a door to the room, a link to the
+/// board. Nobody opens a squad to browse. The job of this screen is one
+/// sentence:
 ///
-///   01 THE CHAIN — the streak, the quorum, the armband, the bench
-///   02 THE VOICE CHALLENGE — AI Score, out of 100
-///   03 THE CHAT CHALLENGE  — AI Score, out of 100
-///   04 BATTLES — the only thing that moves RIZZ RATING
+///     MAKE THE FIVE OF THEM PUSH EACH OTHER THROUGH TODAY.
 ///
-/// The spine every screen should be legible against, and the reason
-/// these four sit in this order:  TRAIN → PROVE → COMPETE. See
-/// lib/services/economy.dart for the law the numbers obey.
+/// Everything on it either competes, completes, or pressures somebody
+/// else to complete. In that order:
 ///
-/// Both challenges are the SAME woman on the same day for the whole
-/// squad and the whole world, so a score means something next to
-/// someone else's. Under each one sits every man in the squad: his mark,
-/// or the fact he hasn't shown up, and a trophy on whoever's leading.
+///   1  HOW ARE WE DOING   score, level bar, chain, active today
+///   2  THE FIVE           who's done today's programme — behind first
+///   3  THE CHALLENGES     voice + message, everyone's marks on the face
+///   4  THE CHAIN          the thing they can lose
+///   5  BATTLES            the thing that moves his rating
+///
+/// Deeper things live behind the two badged icons top-right, so the
+/// activity feed stops competing with the challenges for attention.
+///
+/// ── THE DIFFERENT-STAGES PROBLEM ──────────────────────────────────
+/// Two men at different points on the 60-day map get different
+/// missions, so comparing WHICH missions they did would be nonsense and
+/// would punish the man who's further on for having harder work.
+///
+/// So nothing here compares mission identity. The Five compares MOVES
+/// MADE OUT OF FIVE — everyone has exactly five a day whatever their
+/// stage. The two things that ARE identical for everybody, the daily
+/// voice and chat challenges (same woman worldwide), are compared on
+/// SCORE. Effort where the work differs, score where it doesn't.
 class SquadDayScreen extends StatefulWidget {
   const SquadDayScreen({super.key});
 
@@ -64,6 +73,20 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
   List<DailyMark> _voice = const [];
   List<ChatMark> _chat = const [];
   SquadHistory _history = SquadHistory.empty;
+  List<SquadEvent> _pulse = const [];
+
+  /// Things the squad did today. The badge number — an icon says "there
+  /// is a thing here", a badged icon says "three things happened while
+  /// you were gone", and only one of those gets tapped.
+  int get _unseenPulse {
+    final now = DateTime.now();
+    var n = 0;
+    for (final e in _pulse) {
+      final d = e.createdAt.toLocal();
+      if (d.year == now.year && d.month == now.month && d.day == now.day) n++;
+    }
+    return n > 99 ? 99 : n;
+  }
 
   @override
   void initState() {
@@ -94,6 +117,9 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
       // RLS policy dailyToday already reads through — the only
       // difference is the ymd filter is a range. Nothing to deploy.
       SquadHistory.load(ids),
+      squad == null
+          ? Future<List<SquadEvent>>.value(const [])
+          : SquadService.pulse(squad.id),
     ]);
     if (!mounted) return;
     setState(() {
@@ -104,6 +130,7 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
       _voice = results[2] as List<DailyMark>;
       _chat = results[3] as List<ChatMark>;
       _history = results[4] as SquadHistory;
+      _pulse = results[5] as List<SquadEvent>;
       _loading = false;
     });
     // ignore: discarded_futures
@@ -177,163 +204,150 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
   }
 
   Future<void> _runChat() async {
-    // Goes to the poster, not straight into the conversation. The voice
-    // challenge gets a screen that sets it up before you commit and the
-    // chat one was dropping you into a keyboard — same event, so it gets
-    // the same run-up and the same reveal on the way out.
     await context.push('/daily-chat');
     if (mounted) _load();
+  }
+
+  /// A nudge is squad-visible, never a private DM. The point isn't that
+  /// Tyler gets told — it's that the room watched you tell him.
+  Future<void> _nudge(SquadMember m) async {
+    final s = _squad;
+    if (s == null) return;
+    HapticFeedback.mediumImpact();
+    await SquadService.postEvent(s.id, 'nudge', {
+      'target': m.userId,
+      'handle': m.handle ?? 'ANON',
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Nudged ${m.handle ?? 'them'}. The squad saw it.'),
+      backgroundColor: AppColors.toastBg,
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     final girl = girlForVibe(scenarioOfToday());
     final day = _day;
-    final accent = day.won ? kNeon : AppColors.red;
 
     return Scaffold(
       backgroundColor: AppColors.base,
-      body: SafeArea(
-        child: _loading
-            ? const Center(
-                child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppColors.red)))
-            : RefreshIndicator(
-                color: AppColors.red,
-                backgroundColor: AppColors.surface1,
-                onRefresh: _load,
-                child: ListView(
+      body: _loading
+          ? const Center(
+              child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: AppColors.red)))
+          : RefreshIndicator(
+              color: AppColors.red,
+              backgroundColor: AppColors.surface1,
+              onRefresh: _load,
+              child: Stack(children: [
+                ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    // ── 01 · WHERE YOU'RE AT ────────────────────────
-                    _stats(day, accent),
-
-                    // THE SHELF — deliberately not a card. One line of
-                    // faces, most of them still black, sitting above the
-                    // three challenges. It's the only thing on this
-                    // screen that shows him something he OWNS, and the
-                    // only thing that shows him what's missing.
-                    RolodexShelf(
-                      onTap: () async {
-                        await context.push('/rolodex');
-                        if (mounted) _load();
-                      },
+                    // ══ 1 · HOW ARE WE DOING ════════════════════════
+                    // One number, one bar, two facts. Nobody opens a
+                    // squad to browse a menu; they open it to find out
+                    // how the five of them are doing and whether
+                    // they're the one holding it up.
+                    SquadHero(
+                      name: _squad?.name ?? 'SOLO',
+                      history: _history,
+                      memberCount: _roster.length,
                     ),
 
-                    // THE MIRROR — one line, no card. What the app has
-                    // worked out about him from his own lines. It sits
-                    // directly under the faces because both are answers
-                    // to the same question: who am I in this thing.
-                    const MirrorBand(),
-
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 22, 18, 34),
+                      padding: const EdgeInsets.fromLTRB(18, 4, 18, 34),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 01 · THE CHAIN. This replaced the squad
-                          // stats card, which reported the same day in
-                          // a weaker form: a percentage nobody can lose.
-                          // The chain is the one thing the squad holds
-                          // jointly and can break, and a thing you can
-                          // lose outperforms a thing you can measure.
-                          ChapterMark(
-                            index: '01',
-                            title: 'THE CHAIN',
-                            sub: 'What the squad can lose.',
-                            accent: accent,
-                          ),
-                          SquadStreakHero(
-                            history: _history,
+                          // ══ 2 · THE FIVE ══════════════════════════
+                          // The functional heart. Behind-first ordering
+                          // so the man holding it up can't be missed,
+                          // and every face is a door to nudging him.
+                          FiveBoard(
+                            day: day,
                             roster: _roster,
-                            accent: accent,
-                            onRun: _runVoice,
-                          ),
-                          const SizedBox(height: 9),
-                          _RoomDoor(
-                            name: _squad?.name ?? 'SOLO',
-                            accent: accent,
-                            form: day.form,
-                            men: _roster.length,
-                            hasSquad: _squad != null,
-                            onTap: () async {
-                              await context.push('/squad');
-                              if (mounted) _load();
-                            },
+                            onNudge: _nudge,
                           ),
                           const SizedBox(height: 26),
 
-                          ChapterMark(
-                            index: '02',
-                            title: 'THE VOICE CHALLENGE',
-                            sub: 'Out loud. One attempt.',
-                            accent: accent,
-                          ),
-                          ChallengeCard(
-                            kicker: 'VOICE · TODAY',
+                          // ══ 3 · TODAY'S CHALLENGES ════════════════
+                          // Rows, not posters. Her face is a fact about
+                          // today, not a headline — the big version is
+                          // earned by a tap rather than forced on him
+                          // twice a day. Everyone's score sits on the
+                          // face of the card, hidden until he's run it.
+                          Text('TODAY\'S CHALLENGES',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 13,
+                                letterSpacing: 3.4,
+                                fontWeight: FontWeight.w900,
+                              )),
+                          const SizedBox(height: 14),
+                          ChallengeRow(
+                            kicker: 'VOICE RIZZ-OFF',
                             icon: Icons.graphic_eq_rounded,
                             accent: AppColors.red,
                             girl: girl,
                             roster: _roster,
-                            scaleLabel: Economy.aiScaleLabel,
                             marks: [
                               for (final v in _voice)
                                 if (v.finished)
-                                  ChallengeMark(
+                                  RowMark(
                                     userId: v.userId,
-                                    raw: v.score ?? 0,
-                                    display: voiceOutOfTen(v.score ?? 0),
+                                    score: Economy.aiScoreFromVoice(
+                                        v.score ?? 0),
                                   ),
                             ],
                             onRun: _runVoice,
                           ),
-                          const SizedBox(height: 26),
-
-                          ChapterMark(
-                            index: '03',
-                            title: 'THE CHAT CHALLENGE',
-                            sub: 'Same woman, in writing.',
-                            accent: accent,
-                          ),
-                          ChallengeCard(
-                            kicker: 'CHAT · TODAY',
+                          const SizedBox(height: 11),
+                          ChallengeRow(
+                            kicker: 'MESSAGE BATTLE',
                             icon: Icons.forum_rounded,
                             accent: kNeon,
                             girl: girl,
                             roster: _roster,
-                            scaleLabel: Economy.aiScaleLabel,
                             marks: [
                               for (final c in _chat)
-                                ChallengeMark(
-                                  userId: c.userId,
-                                  raw: c.score,
-                                  display: '${c.score}',
-                                ),
+                                RowMark(
+                                    userId: c.userId,
+                                    score: Economy.aiScoreFromChat(c.score)),
                             ],
                             onRun: _runChat,
                           ),
                           const SizedBox(height: 26),
 
-                          // 04 · COMPETE. Battles lived as a rounded
-                          // pill beside the XP badge — the same visual
-                          // weight as a filter, for the one mode where
-                          // two real men run the same woman blind. It's
-                          // the end of the spine (TRAIN → PROVE →
-                          // COMPETE) and the only thing that moves RIZZ
-                          // RATING, so it gets a card and it carries the
-                          // number it moves.
-                          ChapterMark(
-                            index: '04',
-                            title: 'BATTLES',
-                            sub: 'Another man. Same woman. Both blind.',
-                            accent: accent,
+                          // ══ 4 · WHAT THE SQUAD CAN LOSE ═══════════
+                          SquadStreakHero(
+                            history: _history,
+                            roster: _roster,
+                            accent: day.won ? kNeon : AppColors.red,
+                            onRun: _runVoice,
                           ),
+                          const SizedBox(height: 26),
+
+                          // ══ 5 · COMPETE ═══════════════════════════
                           BattleCard(
                             onOpen: () async {
                               await context.push('/battles');
+                              if (mounted) _load();
+                            },
+                          ),
+                          const SizedBox(height: 22),
+
+                          // Personal things, kept small and last — this
+                          // screen belongs to the five, not to him.
+                          const MirrorBand(),
+                          const SizedBox(height: 6),
+                          RolodexShelf(
+                            onTap: () async {
+                              await context.push('/rolodex');
                               if (mounted) _load();
                             },
                           ),
@@ -342,99 +356,58 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
                     ),
                   ],
                 ),
-              ),
-      ),
-    );
-  }
 
-  /// 01 — the crest, the standing, the clock. The badge card he asked
-  /// for: one look tells you who you are and how today is going.
-  Widget _stats(SquadDay day, Color accent) {
-    final name = _squad?.name ?? 'SOLO';
-    return Stack(children: [
-      Positioned.fill(child: SquadAtmosphere(accent: accent)),
-      Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(6, 0, 12, 0),
-          child: Row(children: [
-            IconButton(
-              onPressed: () => context.pop(),
-              icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 18, color: Colors.white),
+                // ══ TOP RIGHT · TWO DOORS ═══════════════════════════
+                // Everything deeper lives behind these. The activity
+                // feed used to run down the bottom of the screen where
+                // it competed with the challenges for attention and won;
+                // as a badged icon it says the same thing in 20 square
+                // points and stays out of the way.
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 6,
+                  left: 6,
+                  right: 6,
+                  child: Row(children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(Icons.arrow_back_rounded,
+                          color: Colors.white),
+                    ),
+                    const Spacer(),
+                    _TopIcon(
+                      icon: Icons.wifi_tethering_rounded,
+                      count: _unseenPulse,
+                      onTap: () async {
+                        await context.push('/squad');
+                        if (mounted) _load();
+                      },
+                    ),
+                    _TopIcon(
+                      icon: Icons.show_chart_rounded,
+                      count: 0,
+                      onTap: () async {
+                        await context.push('/squad');
+                        if (mounted) _load();
+                      },
+                    ),
+                  ]),
+                ),
+              ]),
             ),
-            const Spacer(),
-            IconButton(
-              onPressed: () {
-                HapticFeedback.selectionClick();
-                context.push('/leaderboard');
-              },
-              icon: const Icon(Icons.emoji_events_outlined,
-                  size: 20, color: AppColors.textSecondary),
-            ),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 0, 18, 0),
-          child: Column(children: [
-            SquadCrest(name: name, accent: accent, size: 84),
-            const SizedBox(height: 14),
-            Text(_squad == null ? 'TODAY' : 'YOUR SQUAD',
-                style: GoogleFonts.inter(
-                  color: accent,
-                  fontSize: 9,
-                  letterSpacing: 3.4,
-                  fontWeight: FontWeight.w900,
-                )),
-            const SizedBox(height: 5),
-            Text(name.toUpperCase(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 30,
-                  height: 1,
-                  letterSpacing: -1.4,
-                  fontWeight: FontWeight.w900,
-                  shadows: [
-                    Shadow(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        blurRadius: 18)
-                  ],
-                )),
-            const SizedBox(height: 16),
-            DayBeat(day: _squad == null ? null : day),
-            const SizedBox(height: 8),
-          ]),
-        ),
-      ]),
-    ]);
+    );
   }
 }
 
-/// THE DOOR — the way into the room, as one line rather than a card.
-///
-/// This replaced a stats card carrying FORM / MOVES / MEN in three big
-/// numbers. Those numbers were true and nobody could lose any of them,
-/// which is exactly why they never moved anyone; the chain above says
-/// the same thing with a stake attached. What the card was still good
-/// for was being the door, so that's all this is now — and the day
-/// screen carries one less block of visual weight for it.
-class _RoomDoor extends StatelessWidget {
-  final String name;
-  final Color accent;
-  final int form;
-  final int men;
-  final bool hasSquad;
+/// A top-right door with a red count on it. The number is the whole
+/// point — an icon says "there is a thing here", a badged icon says
+/// "three things happened while you were gone", and only one of those
+/// gets tapped.
+class _TopIcon extends StatelessWidget {
+  final IconData icon;
+  final int count;
   final VoidCallback onTap;
-
-  const _RoomDoor({
-    required this.name,
-    required this.accent,
-    required this.form,
-    required this.men,
-    required this.hasSquad,
-    required this.onTap,
-  });
+  const _TopIcon(
+      {required this.icon, required this.count, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -444,33 +417,44 @@ class _RoomDoor extends StatelessWidget {
         onTap();
       },
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-        decoration: BoxDecoration(
-          color: AppColors.surface1,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-        ),
-        child: Row(children: [
-          Icon(hasSquad ? Icons.meeting_room_rounded : Icons.group_add_rounded,
-              size: 15, color: accent),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Text(
-                hasSquad
-                    ? '${name.toUpperCase()}  ·  $men ${men == 1 ? 'MAN' : 'MEN'}  ·  FORM $form'
-                    : 'START A SQUAD  ·  NOTHING TO LOSE ON YOUR OWN',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  color: hasSquad ? AppColors.textSecondary : accent,
-                  fontSize: 10.5,
-                  letterSpacing: 1.6,
-                  fontWeight: FontWeight.w900,
-                )),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Stack(clipBehavior: Clip.none, children: [
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.black.withValues(alpha: 0.45),
+              border:
+                  Border.all(color: Colors.white.withValues(alpha: 0.12)),
+            ),
+            child: Icon(icon, size: 17, color: Colors.white),
           ),
-          const Icon(Icons.chevron_right_rounded,
-              size: 18, color: AppColors.textTertiary),
+          if (count > 0)
+            Positioned(
+              right: -2,
+              top: -2,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                constraints: const BoxConstraints(minWidth: 17),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.red,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: AppColors.base, width: 2),
+                ),
+                child: Text(count > 9 ? '9+' : '$count',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 9,
+                      height: 1.1,
+                      fontWeight: FontWeight.w900,
+                    )),
+              ),
+            ),
         ]),
       ),
     );

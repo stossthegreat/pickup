@@ -286,7 +286,79 @@ class SquadHistory {
     );
   }
 
-  /// A ymd as "12 Aug" for the copy.
+  // ── THE SQUAD SCORE ─────────────────────────────────────────────────
+  //
+  // One number the five of them are building together, derived from the
+  // same daily_attempts read everything else here uses — no migration,
+  // no new table, live the moment the build lands.
+  //
+  // TWO INPUTS, DELIBERATELY:
+  //   · every scored attempt by any member  → 20   (individual effort)
+  //   · every day the quorum banked         → 100  (the collective act)
+  //
+  // The banked day is worth five attempts on purpose. A squad where
+  // everyone grinds alone and nobody coordinates should score lower
+  // than one where they turn up together, because turning up together
+  // is the entire product. The score is the reason to drag Tyler back.
+
+  /// Points per individual scored attempt.
+  static const ptsPerAttempt = 20;
+
+  /// Points per day the quorum landed.
+  static const ptsPerBankedDay = 100;
+
+  int get score {
+    var attempts = 0, banks = 0;
+    for (final d in days) {
+      attempts += whoRan(d).length;
+      if (banked(d)) banks++;
+    }
+    return attempts * ptsPerAttempt + banks * ptsPerBankedDay;
+  }
+
+  /// What today has put on the board so far — the "▲ 620 TODAY" line.
+  /// A total that never visibly moves is wallpaper; the delta is what
+  /// makes a man run one more mission before midnight.
+  int get scoreToday {
+    final a = ranToday * ptsPerAttempt;
+    return a + (todayBanked ? ptsPerBankedDay : 0);
+  }
+
+  /// SQUAD LEVEL. Same shape as the personal one in economy.dart —
+  /// shallow at the start so a new squad sees movement in week one,
+  /// steepening after, so a level means more the higher it goes.
+  static const _lvlBase = 500.0;
+  static const _lvlStep = 1.18;
+
+  int get level {
+    var lvl = 1, guard = 0;
+    var cost = _lvlBase, spent = 0.0;
+    final s = score;
+    while (s >= spent + cost && guard++ < 200) {
+      spent += cost;
+      cost *= _lvlStep;
+      lvl++;
+    }
+    return lvl;
+  }
+
+  /// 0..1 through the current level.
+  double get levelProgress {
+    var guard = 0;
+    var cost = _lvlBase, spent = 0.0;
+    final s = score;
+    while (s >= spent + cost && guard++ < 200) {
+      spent += cost;
+      cost *= _lvlStep;
+    }
+    return ((s - spent) / cost).clamp(0.0, 1.0);
+  }
+
+  /// Members who have run today. "4/5 ACTIVE" is the line that tells
+  /// him whether he's the one holding it up.
+  int get activeToday => ranToday;
+
+    /// A ymd as "12 Aug" for the copy.
   static String pretty(int ymd) {
     const months = [
       '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
