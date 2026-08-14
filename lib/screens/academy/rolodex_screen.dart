@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../services/backend/tiers.dart';
 import '../../services/rolodex_service.dart';
+import '../../services/share_service.dart';
+import '../../widgets/share/rizz_card.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/game_feel.dart';
@@ -124,9 +125,27 @@ class _RolodexScreenState extends State<RolodexScreen> {
             tooltip: 'Share',
             onPressed: won == 0
                 ? null
-                : () => Share.share(
-                    'ImHim Rizz — $won of $total numbers. '
-                    'Every one earned. Come try and beat that.'),
+                : () => ShareService.shareRizzCard(
+                      context: context,
+                      data: RizzShareData(
+                        kicker: 'THE ROLODEX',
+                        hero: '$won',
+                        heroSub: 'OF $total NUMBERS',
+                        line: 'Every one earned. None of them given.',
+                        // The collection is SHOWN, not described — a row
+                        // that's mostly silhouette is the whole ask.
+                        faces: [
+                          for (final g in kRoster)
+                            (asset: g.asset, owned: _cardFor(g.id) != null),
+                        ],
+                        stats: [
+                          (label: 'WON', value: '$won'),
+                          (label: 'LEFT', value: '${total - won}'),
+                        ],
+                      ),
+                      text: '$won of $total numbers on ImHim Rizz. '
+                          'Every one earned.',
+                    ),
             icon: const Icon(Icons.ios_share_rounded,
                 color: AppColors.textTertiary, size: 20),
           ),
@@ -568,9 +587,20 @@ class _CardSheet extends StatelessWidget {
           child: TextButton(
             onPressed: () {
               Feel.tick();
-              Share.share(
-                  'Got ${g.name}\'s number on ImHim Rizz — she hit '
-                  '${card.score}. The line that did it: "${card.line}"');
+              ShareService.shareRizzCard(
+                context: context,
+                data: RizzShareData(
+                  kicker: '${g.name.toUpperCase()} · ${card.rarity.label}',
+                  hero: '${card.score}',
+                  heroSub: 'SHE HIT',
+                  quote: card.line.isEmpty ? null : card.line,
+                  line: 'That\'s the line that got her number.',
+                  accent: tint,
+                  faces: [(asset: g.asset, owned: true)],
+                ),
+                text: 'Got ${g.name}\'s number on ImHim Rizz — '
+                    'she hit ${card.score}.',
+              );
             },
             child: Text('SHARE THE CARD',
                 style: GoogleFonts.inter(

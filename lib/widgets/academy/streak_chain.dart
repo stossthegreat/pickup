@@ -8,6 +8,8 @@ import '../../services/backend/auth_service.dart';
 import '../../services/backend/squad_history_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
+import '../../services/share_service.dart';
+import '../share/rizz_card.dart';
 import '../../theme/app_colors.dart';
 
 /// THE CHAIN — the squad's one shared, losable thing.
@@ -119,7 +121,7 @@ class SquadStreakHero extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        _quorumLine(h, banked),
+        _quorumLine(context, h, banked),
         _armband(h),
         _bench(h),
         _memory(h, alive),
@@ -197,8 +199,30 @@ class SquadStreakHero extends StatelessWidget {
     ]);
   }
 
+  /// A banked chain is the app's best recruitment poster: a streak
+  /// nobody can see is a private number, and a streak with SQUADS OF 2
+  /// TO 5 printed under it is an invitation. Tap the secured row.
+  void _share(BuildContext context, SquadHistory h) {
+    ShareService.shareRizzCard(
+      context: context,
+      data: RizzShareData(
+        kicker: 'CHAIN SECURED',
+        hero: '${h.streak}',
+        heroSub: h.streak == 1 ? 'DAY' : 'DAYS STRAIGHT',
+        line: '${h.quorum} of us have to show up every single day.\n'
+            'Nobody has missed.',
+        accent: kNeon,
+        stats: [
+          (label: 'BEST', value: '${h.best}'),
+          (label: 'SQUAD', value: '${h.memberCount}'),
+        ],
+      ),
+      text: '${h.streak} days and the chain hasn\'t broken once.',
+    );
+  }
+
   // ── The price of today ──────────────────────────────────────────────
-  Widget _quorumLine(SquadHistory h, bool banked) {
+  Widget _quorumLine(BuildContext context, SquadHistory h, bool banked) {
     if (h.memberCount < 2) {
       return Text('One more man and the chain starts.',
           style: GoogleFonts.inter(
@@ -208,12 +232,19 @@ class SquadStreakHero extends StatelessWidget {
           ));
     }
     if (banked) {
-      return Row(children: [
+      return GestureDetector(
+        onTap: h.streak > 0 ? () => _share(context, h) : null,
+        behavior: HitTestBehavior.opaque,
+        child: Row(children: [
         const Icon(Icons.verified_rounded, size: 15, color: kNeon),
         const SizedBox(width: 8),
         Expanded(
+          // Named, not tallied. "3 of 4 ran it" is a report; "CHAIN
+          // SECURED · DAY 14" is the thing he'll screenshot.
           child: Text(
-              'TODAY IS BANKED · ${h.ranToday} OF ${h.memberCount} RAN IT',
+              h.streak > 0
+                  ? 'CHAIN SECURED · DAY ${h.streak}'
+                  : 'CHAIN SECURED · ${h.ranToday} OF ${h.memberCount} RAN IT',
               style: GoogleFonts.inter(
                 color: kNeon,
                 fontSize: 10.5,
@@ -221,11 +252,20 @@ class SquadStreakHero extends StatelessWidget {
                 fontWeight: FontWeight.w900,
               )),
         ),
-      ]);
+        if (h.streak > 0)
+          const Icon(Icons.ios_share_rounded, size: 14, color: kNeon),
+      ]),
+      );
     }
 
     final short = h.shortToday;
     final waiting = h.missingToday(_ids);
+    // IS HE ONE OF THE MISSING? "2 more men bank today" is a status
+    // report about other people. "Your squad is waiting on you" is a
+    // debt. Same data; only one of them gets a man off the sofa, and
+    // it's never the one written in the passive voice.
+    final mine = !h.whoRan(h.todayYmd).contains(AuthService.userId) &&
+        !h.benched(AuthService.userId ?? '');
     return GestureDetector(
       onTap: onRun,
       behavior: HitTestBehavior.opaque,
@@ -235,9 +275,11 @@ class SquadStreakHero extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-                short == 1
-                    ? 'ONE MORE MAN BANKS TODAY'
-                    : '$short MORE MEN BANK TODAY',
+                mine
+                    ? 'YOU HAVEN\'T BANKED TODAY'
+                    : short == 1
+                        ? '1 MAN LEFT TO SAVE THE CHAIN'
+                        : '$short MEN LEFT TO SAVE THE CHAIN',
                 style: GoogleFonts.inter(
                   color: AppColors.red,
                   fontSize: 10.5,
@@ -248,7 +290,19 @@ class SquadStreakHero extends StatelessWidget {
         ])
             .animate(onPlay: (c) => c.repeat(reverse: true))
             .fade(begin: 0.62, end: 1, duration: 1100.ms),
-        if (waiting.isNotEmpty) ...[
+        if (mine) ...[
+          const SizedBox(height: 5),
+          Padding(
+            padding: const EdgeInsets.only(left: 23),
+            child: Text('YOUR SQUAD IS WAITING ON YOU',
+                style: GoogleFonts.inter(
+                  color: AppColors.textSecondary,
+                  fontSize: 9.5,
+                  letterSpacing: 1.6,
+                  fontWeight: FontWeight.w800,
+                )),
+          ),
+        ] else if (waiting.isNotEmpty) ...[
           const SizedBox(height: 5),
           // NAMED, AS FACT. This single line does more work than any
           // reward in the app — and it stays effective only while it

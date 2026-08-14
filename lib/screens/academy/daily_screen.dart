@@ -11,6 +11,7 @@ import '../../services/backend/squad_broadcast.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../services/roster.dart';
+import '../../services/economy.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/brag_sheet.dart';
@@ -202,8 +203,8 @@ class _DailyScreenState extends State<DailyScreen> {
       // man who already has a squad.
       if (mounted) {
         await BragSheet.maybeShow(context,
-            score: (r.score / 999.9).clamp(0, 10).toStringAsFixed(1),
-            scaleLabel: '/ 10');
+            score: '${Economy.aiScoreFromVoice(r.score)}',
+            scaleLabel: '/ 100');
       }
     }
     _load();

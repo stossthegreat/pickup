@@ -8,6 +8,7 @@ import '../../services/backend/mission_service.dart';
 import '../../services/backend/squad_day.dart';
 import '../../services/backend/tiers.dart';
 import '../../services/roster.dart';
+import '../../services/economy.dart';
 import '../../theme/app_colors.dart';
 
 /// THE FIVE — one journey, not five identical cards.
@@ -477,5 +478,5 @@ class _RizzOffNode extends StatelessWidget {
 String voiceScoreOf(dynamic mark) {
   final s = mark?.score as int?;
   if (s == null) return '—';
-  return (s / 999.9).clamp(0, 10).toStringAsFixed(1);
+  return '${Economy.aiScoreFromVoice(s)}';
 }

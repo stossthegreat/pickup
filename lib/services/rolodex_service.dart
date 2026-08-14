@@ -270,6 +270,34 @@ class Rolodex {
     if (changed) await _write(cards);
   }
 
+  /// WARMTH SHIELD — buy her [days] of not cooling.
+  ///
+  /// Implemented by pushing `lastTouchedMs` into the future rather than
+  /// adding a shield field, so the model doesn't change and there's
+  /// nothing to migrate on-device. Warmth is derived from elapsed time,
+  /// so a timestamp ahead of now simply reads as 100 until the clock
+  /// catches up. Additive on purpose: two shields stack, because a man
+  /// who won two should get two.
+  static Future<void> shield(String girlId, {required int days}) async {
+    final cards = await all();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var changed = false;
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].girlId != girlId) continue;
+      final c = cards[i];
+      final from = c.lastTouchedMs > now ? c.lastTouchedMs : now;
+      cards[i] = NumberCard(
+        girlId: c.girlId,
+        wonAtMs: c.wonAtMs,
+        line: c.line,
+        score: c.score,
+        lastTouchedMs: from + days * 86400000,
+      );
+      changed = true;
+    }
+    if (changed) await _write(cards);
+  }
+
   /// The coldest card he still owns, or null. This is what a "she's going
   /// cold" nudge should name — one woman, never a list.
   static Future<NumberCard?> coldest() async {

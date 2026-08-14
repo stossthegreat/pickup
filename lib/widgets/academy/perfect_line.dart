@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../services/backend/tiers.dart';
 import '../../services/sfx_service.dart';
+import '../../services/share_service.dart';
+import '../share/rizz_card.dart';
 import '../../theme/app_colors.dart';
 import 'game_button.dart';
 import 'game_feel.dart';
@@ -240,10 +241,19 @@ class _PerfectActState extends State<_PerfectAct> {
                     TextButton(
                       onPressed: () {
                         Feel.tick();
-                        Share.share(
-                            'Perfect line on ImHim Rizz:\n\n'
-                            '"${widget.line}"\n\n'
-                            '${widget.girlName} didn\'t see it coming.');
+                        ShareService.shareRizzCard(
+                          context: context,
+                          data: RizzShareData(
+                            kicker: 'PERFECT LINE',
+                            hero: '100',
+                            heroSub: 'AI SCORE',
+                            quote: widget.line,
+                            line: '${widget.girlName} didn\'t see it coming.',
+                            accent: kNeon,
+                          ),
+                          text: 'Perfect line on ImHim Rizz. '
+                              '${widget.girlName} didn\'t see it coming.',
+                        );
                       },
                       child: Text('SHARE IT',
                           style: GoogleFonts.inter(
