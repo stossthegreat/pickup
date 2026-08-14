@@ -52,7 +52,7 @@ class SquadHero extends StatelessWidget {
     final accent = banked ? kNeon : AppColors.red;
 
     return SizedBox(
-      height: 302,
+      height: 372,
       child: Stack(children: [
         const Positioned.fill(child: SquadAtmosphere(accent: AppColors.red)),
         Positioned.fill(
@@ -62,7 +62,7 @@ class SquadHero extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [Colors.transparent, AppColors.base],
-                stops: const [0.55, 1],
+                stops: const [0.6, 1],
               ),
             ),
           ),
@@ -70,16 +70,15 @@ class SquadHero extends StatelessWidget {
         SafeArea(
           bottom: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 52, 20, 14),
+            padding: const EdgeInsets.fromLTRB(20, 50, 20, 12),
             child: Column(children: [
-              // ── Identity ────────────────────────────────────────
               Text(name.toUpperCase(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     color: Colors.white,
-                    fontSize: 20,
-                    letterSpacing: 4.5,
+                    fontSize: 19,
+                    letterSpacing: 5,
                     fontWeight: FontWeight.w900,
                     shadows: [
                       Shadow(
@@ -88,7 +87,7 @@ class SquadHero extends StatelessWidget {
                     ],
                   )),
               if (globalRank != null) ...[
-                const SizedBox(height: 5),
+                const SizedBox(height: 4),
                 Text('#$globalRank GLOBAL',
                     style: GoogleFonts.inter(
                       color: AppColors.textTertiary,
@@ -97,64 +96,107 @@ class SquadHero extends StatelessWidget {
                       fontWeight: FontWeight.w900,
                     )),
               ],
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
-              // ── The number ──────────────────────────────────────
-              Text('SQUAD SCORE',
-                  style: GoogleFonts.inter(
-                    color: accent,
-                    fontSize: 8.5,
-                    letterSpacing: 4.2,
-                    fontWeight: FontWeight.w900,
-                  )),
-              const SizedBox(height: 6),
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: h.score.toDouble()),
-                duration: const Duration(milliseconds: 1100),
-                curve: Curves.easeOutCubic,
-                builder: (_, v, __) => Text(_commas(v.round()),
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 58,
-                      height: 1,
-                      letterSpacing: -3,
-                      fontWeight: FontWeight.w900,
-                      shadows: [
-                        Shadow(
-                            color: accent.withValues(alpha: 0.5),
-                            blurRadius: 40)
-                      ],
-                    )),
+              // ── THE EMBLEM ────────────────────────────────────────
+              // The level was a flat progress bar under a flat number:
+              // two rectangles, no weight, nothing to want. It's a ring
+              // now — the score sits inside the level, the arc IS the
+              // progress, and the whole thing reads as one object a
+              // squad owns rather than two stats stacked up.
+              SizedBox(
+                width: 208,
+                height: 208,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 1300),
+                  curve: Curves.easeOutCubic,
+                  builder: (_, t, __) => CustomPaint(
+                    painter: _EmblemPainter(
+                      progress: h.levelProgress * t,
+                      accent: accent,
+                      banked: banked,
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('SQUAD SCORE',
+                              style: GoogleFonts.inter(
+                                color: accent,
+                                fontSize: 8,
+                                letterSpacing: 3.6,
+                                fontWeight: FontWeight.w900,
+                              )),
+                          const SizedBox(height: 4),
+                          Text(_commas((h.score * t).round()),
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 52,
+                                height: 1,
+                                letterSpacing: -2.6,
+                                fontWeight: FontWeight.w900,
+                                shadows: [
+                                  Shadow(
+                                      color: accent.withValues(alpha: 0.6),
+                                      blurRadius: 34)
+                                ],
+                              )),
+                          const SizedBox(height: 6),
+                          // The level lives INSIDE the ring that shows
+                          // it. One object, one meaning.
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: accent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                  color: accent.withValues(alpha: 0.5)),
+                            ),
+                            child: Text('LEVEL ${h.level}',
+                                style: GoogleFonts.inter(
+                                  color: accent,
+                                  fontSize: 9.5,
+                                  letterSpacing: 2.4,
+                                  fontWeight: FontWeight.w900,
+                                )),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(height: 6),
+
+              const SizedBox(height: 12),
+
+              // ── THE LINE THAT MAKES HIM MOVE ─────────────────────
+              // Not a status report. The delta if there is one, the ask
+              // if there isn't. Either way it names the next thing.
               if (h.scoreToday > 0)
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.arrow_upward_rounded, size: 13, color: accent),
-                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_upward_rounded, size: 14, color: accent),
+                  const SizedBox(width: 5),
                   Text('${_commas(h.scoreToday)} TODAY',
                       style: GoogleFonts.inter(
                         color: accent,
-                        fontSize: 11,
-                        letterSpacing: 2,
+                        fontSize: 13,
+                        letterSpacing: 2.2,
                         fontWeight: FontWeight.w900,
                       )),
-                ]).animate().fadeIn(delay: 700.ms, duration: 400.ms)
+                ]).animate().fadeIn(delay: 800.ms, duration: 400.ms)
               else
-                Text('NOBODY HAS MOVED TODAY',
+                Text('BE THE FIRST NAME ON TODAY',
                     style: GoogleFonts.inter(
-                      color: AppColors.textMuted,
-                      fontSize: 10,
-                      letterSpacing: 2.4,
+                      color: Colors.white,
+                      fontSize: 13,
+                      letterSpacing: 2.6,
                       fontWeight: FontWeight.w900,
-                    )),
+                    )).animate(onPlay: (c) => c.repeat(reverse: true)).fade(
+                    begin: 0.5, end: 1, duration: 1300.ms),
 
               const Spacer(),
-
-              // ── The level bar ───────────────────────────────────
-              _LevelBar(level: h.level, progress: h.levelProgress),
-              const SizedBox(height: 13),
-
-              // ── Two facts, and nothing else ─────────────────────
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 _fact(
                   h.streak > 0 ? '${h.streak} DAY CHAIN' : 'NO CHAIN YET',
@@ -197,59 +239,119 @@ class SquadHero extends StatelessWidget {
   }
 }
 
-/// LEVEL 14 ███████░░ LEVEL 15.
+/// THE EMBLEM — the level as a ring around the score.
 ///
-/// Bounded progress next to an unbounded score. The score says how much
-/// they've done ever; the bar says how close the next thing is, and a
-/// near-full bar is worth more effort at 11pm than any total.
-class _LevelBar extends StatelessWidget {
-  final int level;
+/// A progress bar is a measurement. A ring with the number sitting
+/// inside it is a crest, and men want crests. Same data, and the second
+/// one is the difference between a screen you check and a screen you
+/// want to fill.
+///
+/// Three passes, outermost first: a dim track so the unfilled part is
+/// still an object, the lit arc for progress with a glow under it, and
+/// tick marks at the quarters so the arc has somewhere to be going.
+class _EmblemPainter extends CustomPainter {
   final double progress;
-  const _LevelBar({required this.level, required this.progress});
+  final Color accent;
+  final bool banked;
+  const _EmblemPainter(
+      {required this.progress,
+      required this.accent,
+      required this.banked});
 
   @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      _cap('LVL $level', Colors.white),
-      const SizedBox(width: 10),
-      Expanded(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: Stack(children: [
-            Container(height: 7, color: Colors.white.withValues(alpha: 0.08)),
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: progress),
-              duration: const Duration(milliseconds: 1200),
-              curve: Curves.easeOutCubic,
-              builder: (_, v, __) => FractionallySizedBox(
-                widthFactor: v.clamp(0.02, 1.0),
-                child: Container(
-                  height: 7,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: [AppColors.redDim, AppColors.red]),
-                    boxShadow: [
-                      BoxShadow(
-                          color: AppColors.red.withValues(alpha: 0.7),
-                          blurRadius: 12)
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ]),
-        ),
-      ),
-      const SizedBox(width: 10),
-      _cap('LVL ${math.min(level + 1, 99)}', AppColors.textMuted),
-    ]);
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = size.width / 2 - 12;
+
+    // The unfilled track.
+    canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 8
+          ..color = Colors.white.withValues(alpha: 0.055));
+
+    // Quarter ticks — the arc needs somewhere to be going.
+    for (var i = 0; i < 4; i++) {
+      final a = -math.pi / 2 + i * math.pi / 2;
+      final p1 = c + Offset(math.cos(a), math.sin(a)) * (r + 8);
+      final p2 = c + Offset(math.cos(a), math.sin(a)) * (r + 13);
+      canvas.drawLine(
+          p1,
+          p2,
+          Paint()
+            ..strokeWidth = 2
+            ..strokeCap = StrokeCap.round
+            ..color = Colors.white.withValues(alpha: 0.16));
+    }
+
+    if (progress > 0.001) {
+      final rect = Rect.fromCircle(center: c, radius: r);
+      const start = -math.pi / 2;
+      final sweep = math.pi * 2 * progress.clamp(0.0, 1.0);
+
+      // Glow under the lit arc.
+      canvas.drawArc(
+          rect,
+          start,
+          sweep,
+          false,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 14
+            ..strokeCap = StrokeCap.round
+            ..color = accent.withValues(alpha: 0.28)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
+
+      canvas.drawArc(
+          rect,
+          start,
+          sweep,
+          false,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 8
+            ..strokeCap = StrokeCap.round
+            ..shader = SweepGradient(
+              startAngle: start,
+              endAngle: start + math.pi * 2,
+              colors: [AppColors.redDim, accent, accent],
+              stops: const [0, 0.6, 1],
+              transform: GradientRotation(start),
+            ).createShader(rect));
+
+      // The head of the arc — a bright cap so progress has a leading
+      // edge rather than just ending.
+      final head = start + sweep;
+      canvas.drawCircle(
+          c + Offset(math.cos(head), math.sin(head)) * r,
+          5,
+          Paint()..color = Colors.white);
+      canvas.drawCircle(
+          c + Offset(math.cos(head), math.sin(head)) * r,
+          9,
+          Paint()
+            ..color = accent.withValues(alpha: 0.55)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8));
+    }
+
+    // A banked day rings the whole emblem — the one visual that says
+    // "today is safe" without a word on it.
+    if (banked) {
+      canvas.drawCircle(
+          c,
+          r + 17,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.2
+            ..color = accent.withValues(alpha: 0.5));
+    }
   }
 
-  Widget _cap(String s, Color c) => Text(s,
-      style: GoogleFonts.inter(
-        color: c,
-        fontSize: 9,
-        letterSpacing: 1.8,
-        fontWeight: FontWeight.w900,
-      ));
+  @override
+  bool shouldRepaint(covariant _EmblemPainter old) =>
+      old.progress != progress ||
+      old.accent != accent ||
+      old.banked != banked;
 }

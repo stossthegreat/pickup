@@ -21,6 +21,7 @@ import '../../widgets/academy/five_board.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
 import '../../widgets/academy/comeback_sheet.dart';
 import '../../widgets/academy/mirror_band.dart';
+import '../../widgets/academy/pulse_sheet.dart';
 import '../../widgets/academy/rolodex_shelf.dart';
 import '../../widgets/academy/squad_hero.dart';
 import '../../widgets/academy/streak_chain.dart';
@@ -374,13 +375,16 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
                           color: Colors.white),
                     ),
                     const Spacer(),
+                    // THE PULSE opens HERE, as a sheet. It used to
+                    // push into the squad room, which was the wrong
+                    // door twice over: the room is a different screen
+                    // with its own job, and the feed was buried at the
+                    // bottom of it.
                     _TopIcon(
                       icon: Icons.wifi_tethering_rounded,
                       count: _unseenPulse,
-                      onTap: () async {
-                        await context.push('/squad');
-                        if (mounted) _load();
-                      },
+                      onTap: () => PulseSheet.show(context,
+                          events: _pulse, roster: _roster),
                     ),
                     _TopIcon(
                       icon: Icons.show_chart_rounded,
