@@ -5,12 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../services/backend/battle_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../services/roster.dart';
 import '../../services/economy.dart';
+import '../../services/share_service.dart';
+import '../../widgets/share/rizz_card.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/game_button.dart';
@@ -145,11 +146,21 @@ class _BattlesScreenState extends State<BattlesScreen> {
                 child: GameButton(
                   label: 'SEND THE CHALLENGE',
                   icon: Icons.ios_share_rounded,
-                  onTap: () => Share.share(
-                      'I challenge you on ImHim Rizz — ${girl.name}, '
-                      '"${battle.scenarioLabel}". Same woman, both blind, '
-                      'text only, higher score wins. '
-                      'Code: ${battle.inviteCode}'),
+                  onTap: () => ShareService.shareRizzCard(
+                    context: context,
+                    data: RizzShareData(
+                      kicker: 'CHALLENGE',
+                      hero: battle.inviteCode ?? '',
+                      heroSub: 'ENTER THIS CODE',
+                      line: '${girl.name}. Same woman, both blind, '
+                          'text only. Higher AI Score takes the RR.',
+                      accent: girl.accent,
+                      faces: [(asset: girl.asset, owned: true)],
+                    ),
+                    text: 'I challenge you on ImHim Rizz — ${girl.name}. '
+                        'Same woman, both blind, higher score wins. '
+                        'Code: ${battle.inviteCode}',
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -300,13 +311,28 @@ class _BattlesScreenState extends State<BattlesScreen> {
   void _shareResult(Battle b) {
     HapticFeedback.selectionClick();
     final vs = _handles[b.opponentId] ?? 'a rival';
-    Share.share(b.iWon
-        ? 'WON my Rizz Battle vs $vs — ${battleScore(b.myScore)} to '
-            '${battleScore(b.theirScore)} '
-            'on "${b.scenarioLabel}". Who\'s next?'
-        : 'Rizz Battle vs $vs: ${battleScore(b.myScore)} to '
-            '${battleScore(b.theirScore)} on '
-            '"${b.scenarioLabel}". Running it back.');
+    final girl = girlForVibe(b.scenario);
+    ShareService.shareRizzCard(
+      context: context,
+      data: RizzShareData(
+        kicker: b.iWon ? 'VICTORY' : 'BATTLE',
+        hero: '${battleScore(b.myScore)} — ${battleScore(b.theirScore)}',
+        heroSub: 'YOU  ·  ${vs.toUpperCase()}',
+        line: 'Same woman. Both blind. '
+            '${girl.name} didn\'t know either of us was being scored.',
+        accent: b.iWon ? kNeon : AppColors.red,
+        faces: [(asset: girl.asset, owned: true)],
+        stats: [
+          (label: 'YOU', value: battleScore(b.myScore)),
+          (label: vs.toUpperCase(), value: battleScore(b.theirScore)),
+        ],
+      ),
+      text: b.iWon
+          ? 'Won my Rizz Battle vs $vs — ${battleScore(b.myScore)} to '
+              '${battleScore(b.theirScore)}. Who\'s next?'
+          : 'Rizz Battle vs $vs: ${battleScore(b.myScore)} to '
+              '${battleScore(b.theirScore)}. Running it back.',
+    );
   }
 
   // ── Build ───────────────────────────────────────────────────────────

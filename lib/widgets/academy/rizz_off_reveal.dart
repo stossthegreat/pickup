@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/squad_service.dart';
@@ -12,6 +11,8 @@ import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 import 'game_button.dart';
 import '../../services/sfx_service.dart';
+import '../../services/share_service.dart';
+import '../share/rizz_card.dart';
 import 'game_feel.dart';
 import 'grade_stamp.dart';
 
@@ -539,10 +540,23 @@ class _RizzOffRevealState extends State<RizzOffReveal>
           textColor:
               grade.color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
           icon: Icons.ios_share_rounded,
-          onTap: () => Share.share(
-              '${widget.kicker} on ImHim Rizz: $_outOfTen ${widget.suffix} — grade '
-              '${grade.letter}, #${widget.rankToday} in the world today. '
-              'One attempt. Same girl for everyone. Your turn.'),
+          onTap: () => ShareService.shareRizzCard(
+            context: context,
+            data: RizzShareData(
+              kicker: widget.kicker,
+              hero: _outOfTen,
+              heroSub: 'AI SCORE · ${widget.girlName.toUpperCase()}',
+              line: 'One attempt. Same woman for everyone today.',
+              accent: grade.color,
+              stats: [
+                (label: 'GRADE', value: grade.letter),
+                if (widget.rankToday > 0)
+                  (label: 'WORLD', value: '#${widget.rankToday}'),
+              ],
+            ),
+            text: '${widget.kicker} on ImHim Rizz: $_outOfTen '
+                '${widget.suffix}, grade ${grade.letter}. Your turn.',
+          ),
         ),
       ),
       const SizedBox(height: 8),

@@ -8,6 +8,8 @@ import '../../services/backend/auth_service.dart';
 import '../../services/backend/squad_history_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
+import '../../services/share_service.dart';
+import '../share/rizz_card.dart';
 import '../../theme/app_colors.dart';
 
 /// THE CHAIN — the squad's one shared, losable thing.
@@ -119,7 +121,7 @@ class SquadStreakHero extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        _quorumLine(h, banked),
+        _quorumLine(context, h, banked),
         _armband(h),
         _bench(h),
         _memory(h, alive),
@@ -197,8 +199,30 @@ class SquadStreakHero extends StatelessWidget {
     ]);
   }
 
+  /// A banked chain is the app's best recruitment poster: a streak
+  /// nobody can see is a private number, and a streak with SQUADS OF 2
+  /// TO 5 printed under it is an invitation. Tap the secured row.
+  void _share(BuildContext context, SquadHistory h) {
+    ShareService.shareRizzCard(
+      context: context,
+      data: RizzShareData(
+        kicker: 'CHAIN SECURED',
+        hero: '${h.streak}',
+        heroSub: h.streak == 1 ? 'DAY' : 'DAYS STRAIGHT',
+        line: '${h.quorum} of us have to show up every single day.\n'
+            'Nobody has missed.',
+        accent: kNeon,
+        stats: [
+          (label: 'BEST', value: '${h.best}'),
+          (label: 'SQUAD', value: '${h.memberCount}'),
+        ],
+      ),
+      text: '${h.streak} days and the chain hasn\'t broken once.',
+    );
+  }
+
   // ── The price of today ──────────────────────────────────────────────
-  Widget _quorumLine(SquadHistory h, bool banked) {
+  Widget _quorumLine(BuildContext context, SquadHistory h, bool banked) {
     if (h.memberCount < 2) {
       return Text('One more man and the chain starts.',
           style: GoogleFonts.inter(
@@ -208,7 +232,10 @@ class SquadStreakHero extends StatelessWidget {
           ));
     }
     if (banked) {
-      return Row(children: [
+      return GestureDetector(
+        onTap: h.streak > 0 ? () => _share(context, h) : null,
+        behavior: HitTestBehavior.opaque,
+        child: Row(children: [
         const Icon(Icons.verified_rounded, size: 15, color: kNeon),
         const SizedBox(width: 8),
         Expanded(
@@ -225,7 +252,10 @@ class SquadStreakHero extends StatelessWidget {
                 fontWeight: FontWeight.w900,
               )),
         ),
-      ]);
+        if (h.streak > 0)
+          const Icon(Icons.ios_share_rounded, size: 14, color: kNeon),
+      ]),
+      );
     }
 
     final short = h.shortToday;
