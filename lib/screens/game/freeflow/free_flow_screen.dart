@@ -22,6 +22,8 @@ import '../../../services/language_service.dart';
 import '../../../services/creator_mode_store.dart';
 import '../../../services/local_store_service.dart';
 import '../../../services/paywall_gate.dart';
+import '../../../services/extra_service.dart';
+import '../../paywall/extra_sheet.dart';
 import '../../../services/realtime_session.dart';
 import '../../../services/daily_nudge_service.dart';
 import '../../../services/review_prompt_service.dart';
@@ -1439,13 +1441,34 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
           // ignore: discarded_futures
           AnalyticsService.freeflowVoiceCapHit();
           HapticFeedback.mediumImpact();
-          // Pro user out of weekly minutes — nothing to sell, so no
-          // paywall trip. Clear white-text notice with the renewal.
-          _capNotice('Weekly roleplay minutes used. They renew at the '
-              'start of your next billing week.');
+          // This used to read "nothing to sell, so no paywall trip" and
+          // send him away until next week. It is the highest-intent
+          // moment the product has — he is mid-conversation and wants
+          // more — and it was being spent on an apology. Now there's
+          // something to sell, and if he declines he still gets the
+          // honest renewal notice.
+          final bought = await ExtraSheet.show(context, remainingMinutes: 0);
+          if (!mounted) return;
+          if (bought) {
+            _beginHold();
+          } else {
+            _capNotice('Weekly roleplay minutes used. They renew at the '
+                'start of your next billing week.');
+          }
           return;
         }
         if (!mounted) return;
+        // THE SOFT NUDGE — offered before the wall, not at it.
+        // A man with three minutes left is still enjoying himself and
+        // can say no without resentment; the same offer at zero is an
+        // interruption. Once a day, and never if he already has a bank.
+        if (await extraNudgeDue()) {
+          await ExtraService.markNudged();
+          if (!mounted) return;
+          await ExtraSheet.show(
+              context, remainingMinutes: await voiceMinutesLeft());
+          if (!mounted) return;
+        }
         _beginHold();
         return;
       }
@@ -1553,10 +1576,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         // ignore: discarded_futures
         AnalyticsService.freeflowVoiceCapHit();
         HapticFeedback.mediumImpact();
-        // Pro user out of weekly minutes — readable notice, no paywall.
-        _capNotice('Weekly roleplay minutes used. They renew at the '
-            'start of your next billing week.');
-        return;
+        final bought = await ExtraSheet.show(context, remainingMinutes: 0);
+        if (!mounted) return;
+        if (!bought) {
+          _capNotice('Weekly roleplay minutes used. They renew at the '
+              'start of your next billing week.');
+          return;
+        }
       }
     } else {
       // v228 — Lucien step-in is now paywalled for EVERY free user,

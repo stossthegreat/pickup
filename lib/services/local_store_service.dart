@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'extra_service.dart';
 import '../models/scan_record.dart';
 
 /// v279 — active Pro subscription type. Lives here (not in
@@ -631,6 +632,20 @@ class LocalStoreService {
   /// Add to the voice elapsed-ms bucket for THIS window. Caller
   /// passes the duration of the just-completed session segment; the
   /// bucket auto-resets if the user's 7-day window rolled over.
+  /// WEEKLY ALLOWANCE FIRST, THEN THE BANK.
+  ///
+  /// Order matters and it is the whole correctness of paid minutes. The
+  /// tempting version is `allowance = weekly + banked`, which is wrong:
+  /// the weekly bucket resets on the rolling window, so a bank added to
+  /// it would silently re-grant itself every seven days, forever. So the
+  /// bank is a counter that only ever DECREMENTS — this method spends
+  /// the free weekly minutes down to zero and only then draws on minutes
+  /// he actually paid for.
+  ///
+  /// It also means a man who buys EXTRA on Friday still gets his full
+  /// free allowance again on Monday, with his purchase untouched. That's
+  /// the behaviour he'd assume, and billing should never surprise
+  /// someone in the direction of "you got less than you thought".
   static Future<void> addVoiceMs(int deltaMs) async {
     if (deltaMs <= 0) return;
     final prefs = await SharedPreferences.getInstance();
@@ -639,8 +654,24 @@ class LocalStoreService {
     final base = stored == bucket
         ? (prefs.getInt(_kVoiceWeekMs) ?? 0)
         : 0;
+
+    final weeklyCapMs = kVoiceMinutesPerWeek * 60 * 1000;
+    final weeklyLeft = (weeklyCapMs - base).clamp(0, weeklyCapMs);
+    final fromWeekly = deltaMs > weeklyLeft ? weeklyLeft : deltaMs;
+    final fromBank = deltaMs - fromWeekly;
+
     await prefs.setInt(_kVoiceWeekBucket, bucket);
-    await prefs.setInt(_kVoiceWeekMs,     base + deltaMs);
+    await prefs.setInt(_kVoiceWeekMs, base + fromWeekly);
+    if (fromBank > 0) await ExtraService.spend(fromBank);
+  }
+
+  /// Every millisecond he can still speak — free allowance plus bank.
+  static Future<int> voiceMsRemaining() async {
+    if (await isCreatorActive()) return 1 << 30;
+    final used = await voiceMsThisWeek();
+    final weeklyCapMs = kVoiceMinutesPerWeek * 60 * 1000;
+    final weeklyLeft = (weeklyCapMs - used).clamp(0, weeklyCapMs);
+    return weeklyLeft + await ExtraService.bankedMs();
   }
 
   /// Creator mode (password-gated in Settings → CREATOR). Mirrors the
@@ -657,8 +688,10 @@ class LocalStoreService {
   /// Creator mode lifts the cap entirely (owner-only, password-gated).
   static Future<bool> voiceCapReached() async {
     if (await isCreatorActive()) return false; // creator → unlimited minutes
-    final ms = await voiceMsThisWeek();
-    return ms >= kVoiceMinutesPerWeek * 60 * 1000;
+    // Paid minutes count. A man who just bought EXTRA and still got
+    // told he was out of minutes would be the single most damaging bug
+    // this feature could ship with.
+    return (await voiceMsRemaining()) <= 0;
   }
 
   /// True when the Pro user has used up their weekly screenshot rizz

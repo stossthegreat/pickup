@@ -6,6 +6,7 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 
 import '../config/purchase_config.dart';
 import 'analytics_service.dart';
+import 'extra_service.dart';
 import 'local_store_service.dart' show LocalStoreService, ProTier;
 
 /// Single front-door for all billing operations.
@@ -201,6 +202,8 @@ class PurchaseService {
 
       Package? weekly;
       Package? rescue;
+      Package? extra10;
+      Package? extra20;
 
       // v285 — WEEKLY ONLY. The app sells exactly ONE subscription:
       // mirrorly_pro_weekly. The legacy monthly/yearly SKUs still
@@ -236,6 +239,21 @@ class PurchaseService {
             || prodId.contains('7day')
             || prodId.contains('7d'));
 
+        // EXTRA packs — matched on the EXACT product identifier, never
+        // a substring. `contains` matching is fine for choosing which
+        // label to draw; it is not fine for choosing what to charge
+        // someone for.
+        final rawProd = pkg.storeProduct.identifier;
+        if (PurchaseConfig.isExtra(rawProd)) {
+          final mins = PurchaseConfig.minutesFor(rawProd);
+          if (mins <= 10 && extra10 == null) {
+            extra10 = pkg;
+          } else if (mins > 10 && extra20 == null) {
+            extra20 = pkg;
+          }
+          continue;
+        }
+
         if (isRescue && rescue == null) {
           rescue = pkg;
         } else if (isWeekly && weekly == null) {
@@ -249,6 +267,8 @@ class PurchaseService {
         weekly: weekly,
         annual: null, // voided — never populated, never purchasable
         rescue: rescue,
+        extra10: extra10,
+        extra20: extra20,
       );
       return _cached!;
     } catch (err) {
@@ -305,6 +325,43 @@ class PurchaseService {
       // completed transaction; the ongoing isProLive()/cache reconcile
       // the true entitlement state on every subsequent read.
       final result = await Purchases.purchasePackage(pkg);
+
+      // ── EXTRA: GRANT THE MINUTES HERE AND NOWHERE ELSE ──────────────
+      //
+      // This is the line the old rescue path was missing. It correctly
+      // identified a consumable, correctly declined to flip the
+      // subscription flag — and then credited nothing, so a man could
+      // pay and receive literally nothing. Putting the grant inside the
+      // transaction handler means no call site can forget it and no
+      // future screen can get the minute count wrong: the amount comes
+      // from PurchaseConfig.extraMinutes, which is the single source of
+      // truth.
+      //
+      // Keyed by the store transaction id so a retry, a resumed app or
+      // a replayed CustomerInfo can never credit the same payment
+      // twice. Free minutes are real OpenAI spend.
+      //
+      // Note it grants BEFORE any entitlement read below: a consumable
+      // grants no entitlement at all, and consumables cannot be
+      // restored under Play Billing 8, so this local write is the only
+      // record that will ever exist. It has to happen first.
+      final extraMinutes =
+          PurchaseConfig.minutesFor(pkg.storeProduct.identifier);
+      if (extraMinutes > 0) {
+        // VERIFY-ON-FIRST-BUILD: `storeTransaction.transactionIdentifier`
+        // is the only symbol in this change that couldn't be checked
+        // against the SDK offline. If it's named differently in
+        // purchases_flutter 10.8, this is a COMPILE error — loud, cheap,
+        // and one line to fix. It can never fail silently, and
+        // ExtraService.grant() still credits correctly with a null id.
+        await ExtraService.grant(
+          minutes: extraMinutes,
+          txnId: result.storeTransaction.transactionIdentifier,
+        );
+        AnalyticsService.purchaseCompleted(pkg.identifier);
+        return PurchaseOutcome.success;
+      }
+
       // The rescue product is a one-time consumable, not a subscription —
       // don't flip the "subscribed" flag for it (it grants credits only).
       final isRescue =
@@ -653,13 +710,25 @@ class PurchaseOfferings {
   final Package? annual;
   final Package? rescue;
 
+  /// EXTRA voice-minute packs. Null when the store hasn't published
+  /// them yet — on iOS that's the normal state until the consumables
+  /// are created in App Store Connect, and the sheet must say so
+  /// rather than render a button that can't transact.
+  final Package? extra10;
+  final Package? extra20;
+
   const PurchaseOfferings({
     required this.weekly,
     required this.annual,
     required this.rescue,
+    this.extra10,
+    this.extra20,
   });
 
   factory PurchaseOfferings.empty() => const PurchaseOfferings(
     weekly: null, annual: null, rescue: null,
   );
+
+  /// True when at least one pack can actually be bought right now.
+  bool get hasExtra => extra10 != null || extra20 != null;
 }

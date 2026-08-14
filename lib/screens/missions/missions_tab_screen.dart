@@ -19,6 +19,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/live_toast.dart';
 import '../../widgets/academy/rescue_sheet.dart';
+import '../../widgets/academy/battle_strip.dart';
 import '../../widgets/academy/squad_strip.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/streak_badge.dart';
@@ -301,10 +302,27 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
           // was asking for the same tap and they competed rather than
           // stacked. There is one card now — your squad — and it opens
           // TODAY, where the standing and both challenges live together.
+          // ── THE TWO PERMANENT SYSTEMS ──────────────────────────
+          // Home reads top to bottom as: who you are (masthead + XP),
+          // the SOCIAL system (squad), the COMPETITIVE system
+          // (battles), then today's work (the five). Squad and Battles
+          // are standing modes and belong together above the fold;
+          // missions are what you do today and belong below the rule.
+          //
+          // Deliberately not two identical rectangles — that's how a
+          // home screen becomes a list. The squad is a crest on a flat
+          // panel; battles is full-bleed photography gone almost black.
+          // Same footprint, opposite texture.
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.lg, 0),
               child: const SquadStrip(),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(Sp.lg, 9, Sp.lg, 0),
+              child: BattleStrip(onTap: () => context.push('/battles')),
             ),
           ),
 
@@ -431,45 +449,12 @@ class _TopBar extends StatelessWidget {
             ],
           ),
           const SizedBox(height: Sp.md),
-          Row(
-            children: [
-              XpBadge(label: _xpLabel),
-              const Spacer(),
-              // BATTLES. It used to hang off the leaderboard's header
-              // where it collided with the WEEK / ALL TIME pills and read
-              // as a filter rather than a mode. It's a whole way to play
-              // — you and another man, same woman, both blind — so it
-              // belongs on the first screen, at full size.
-              GestureDetector(
-                onTap: () {
-                  HapticFeedback.heavyImpact();
-                  context.push('/battles');
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 13, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.red.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                        color: AppColors.red.withValues(alpha: 0.6)),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.sports_mma_rounded,
-                        size: 15, color: AppColors.red),
-                    const SizedBox(width: 5),
-                    Text('BATTLES',
-                        style: GoogleFonts.inter(
-                          color: AppColors.red,
-                          fontSize: 10.5,
-                          letterSpacing: 1.6,
-                          fontWeight: FontWeight.w900,
-                        )),
-                  ]),
-                ),
-              ),
-            ],
-          ),
+          // BATTLES USED TO BE A PILL HERE. A rounded chip beside the XP
+          // badge — the visual weight of a filter, for the one mode
+          // where two real men run the same woman blind. It's a
+          // standing system, not a toggle, so it's a full card below the
+          // squad now. Removing it also gives the masthead its air back.
+          Row(children: [XpBadge(label: _xpLabel)]),
         ],
       ),
     );
