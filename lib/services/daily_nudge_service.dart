@@ -5,6 +5,8 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'local_store_service.dart';
 import 'notification_service.dart';
+import 'retention_service.dart';
+import 'streak_service.dart';
 import 'rolodex_service.dart';
 import 'protocol_service.dart';
 import 'win_back_service.dart';
@@ -84,6 +86,11 @@ class DailyNudgeService {
   // ── Event marks — call these wherever the user does the thing. ───────
 
   static Future<void> markAppOpened() async {
+    // Opening the app IS the answer to every push we sent. This zeroes
+    // the ignore counter that the trust stop measures, and feeds the
+    // histogram that decides what hour we send at.
+    // ignore: discarded_futures
+    RetentionService.noteOpen();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kLastAppOpenKey, DateTime.now().millisecondsSinceEpoch);
     await reschedule();
@@ -127,6 +134,38 @@ class DailyNudgeService {
       // it's the only notification in the app that isn't the app
       // talking about itself.
       final cold = await Rolodex.coldest();
+
+      // ── THE TRUST STOP ──────────────────────────────────────────
+      // Duolingo's most copied notification is the passive-aggressive
+      // owl. Their most VALUABLE one is the retreat — "these reminders
+      // don't seem to be working, we're going to stop" — and almost
+      // nobody copies it, because it costs sends. It's what protects
+      // the channel: a notification permission is a trust balance,
+      // every ignored push is a withdrawal, and an app that keeps
+      // shouting past the point of being heard gets switched off at the
+      // OS level, which is unrecoverable.
+      final retreat = await RetentionService.trustStopDue();
+      if (retreat != null) {
+        final at = tz.TZDateTime.now(tz.local).add(const Duration(hours: 2));
+        await _schedule(
+            _eveningBase, retreat.\$1, retreat.\$2, at, morning: false);
+        return; // and NOTHING else for the blackout window
+      }
+      if (await RetentionService.isQuiet()) return;
+
+      // ── SEND-TIME ───────────────────────────────────────────────
+      // Reported ~40% better open rates for sending inside a user's own
+      // active window vs a fixed hour for everyone. Null until there's
+      // real evidence — a histogram built from three opens is noise,
+      // and guessing wrong costs more than not guessing.
+      final learned = await RetentionService.bestHour();
+      final eveningHour = learned ?? _eveningHour;
+
+      final away = await RetentionService.daysSinceOpen();
+      final (streak, _) = await StreakService.refresh();
+      final tone =
+          await RetentionService.tone(streak: streak, daysAway: away);
+
       final now = tz.TZDateTime.now(tz.local);
 
       // 3) Lay down the horizon. Each slot is a distinct one-shot with its
@@ -150,14 +189,33 @@ class DailyNudgeService {
         // Unless he's mid-win-back, in which case the sharper reason wins
         // the slot: he doesn't need telling to keep a streak he's locked
         // out of.
-        final eveningAt = _slot(now, d, _eveningHour, _eveningMinute);
+        final eveningAt = _slot(now, d, eveningHour, _eveningMinute);
         if (eveningAt.isAfter(now)) {
+          // LUCIEN TAKES THE EVENING when there's no win-back running.
+          //
+          // Every retention push in this app was the product asking for
+          // attention — "New women unlock as you climb", "Keep your
+          // streak". Men have been trained for a decade to swipe those
+          // away unread, and no amount of copywriting fixes a message
+          // whose sender is a piece of software. Lucien is the coach,
+          // the man already knows his name, and a notification from a
+          // character you have a relationship with is a different
+          // object to one from a brand. That's the whole of why the owl
+          // works, and the owl is an owl.
+          //
+          // Tone follows engagement: loss framing on a man with no
+          // streak is threatening him with nothing.
           final (t, b) = winBack != null
               ? WinBackService.ladderCopy(winBack, dayOffset: d)
-              : _streakCopy(_stateFor(sig, d), d);
+              : Lucien.forTone(tone, d * 7 + tone.index);
           await _schedule(_eveningBase + d, t, b, eveningAt, morning: false);
         }
       }
+      // Tally what we just laid down. The trust stop measures pushes
+      // sent since his last open; RetentionService.noteOpen() zeroes it
+      // the moment he shows up, so this only ever accumulates while
+      // he's ignoring us.
+      await RetentionService.noteSent(_horizonDays);
     } catch (e) {
       debugPrint('DailyNudgeService.reschedule failed: $e');
     }

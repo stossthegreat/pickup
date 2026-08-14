@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/battle_service.dart';
 import '../../services/backend/leaderboard_service.dart';
+import '../../services/battle_meta_service.dart';
+import '../../services/division.dart';
 import '../../services/economy.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
@@ -51,6 +53,7 @@ class BattleStrip extends StatefulWidget {
 class _BattleStripState extends State<BattleStrip> {
   List<Battle> _battles = const [];
   LeaderboardEntry? _me;
+  int _streak = 0;
 
   @override
   void initState() {
@@ -62,10 +65,12 @@ class _BattleStripState extends State<BattleStrip> {
   Future<void> _load() async {
     final battles = await BattleService.myBattles();
     final me = await LeaderboardService.me();
+    final standing = await BattleMeta.standing();
     if (!mounted) return;
     setState(() {
       _battles = battles;
       _me = me;
+      _streak = standing.streak;
     });
   }
 
@@ -235,13 +240,23 @@ class _BattleStripState extends State<BattleStrip> {
                         .animate(onPlay: (c) => c.repeat(reverse: true))
                         .fade(begin: 0.55, end: 1, duration: 950.ms)
                   else
+                    // A LIVE STREAK OUTRANKS A RATING HERE. His standing
+                    // is a pill in the masthead and doesn't belong back
+                    // on this card — but a run he could lose tonight is
+                    // not a standing, it's a reason to tap, and it's the
+                    // only line on Home with anything at stake in it.
                     Text(
-                        me == null
-                            ? 'HIGHER AI SCORE TAKES THE ${Economy.rrShort}'
-                            : '${Economy.commas(me.rating)} ${Economy.rrShort}'
-                                '${rec.won + rec.lost == 0 ? '' : '  ·  ${rec.won}W—${rec.lost}L'}',
+                        _streak >= 2
+                            ? '${Streaks.emoji(_streak)} $_streak '
+                                '${Streaks.title(_streak)} — ON THE LINE'
+                            : me == null
+                                ? 'HIGHER AI SCORE TAKES THE ${Economy.rrShort}'
+                                : '${Economy.commas(me.rating)} ${Economy.rrShort}'
+                                    '${rec.won + rec.lost == 0 ? '' : '  ·  ${rec.won}W—${rec.lost}L'}',
                         style: GoogleFonts.inter(
-                          color: AppColors.textSecondary,
+                          color: _streak >= 2
+                              ? AppColors.signalAmber
+                              : AppColors.textSecondary,
                           fontSize: 10,
                           letterSpacing: 1.6,
                           fontWeight: FontWeight.w900,
