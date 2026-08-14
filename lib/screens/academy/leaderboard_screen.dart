@@ -8,6 +8,7 @@ import '../../services/backend/auth_service.dart';
 import '../../services/backend/daily_game_service.dart';
 import '../../services/backend/leaderboard_service.dart';
 import '../../services/backend/tiers.dart';
+import '../../services/economy.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/academy_style.dart';
@@ -33,7 +34,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   List<LeaderboardEntry> _allTime = const [];
 
   /// VOICE and TEXT are separate ladders on purpose — see migration
-  /// 0009. Voice ELO moves on voice only; text has its own best-score
+  /// 0009. Voice RR moves on voice only; text has its own best-score
   /// board. Mixing them would let someone grind text to a voice rank.
   bool _voice = true;
   List<ChatBoardEntry> _chat = const [];
@@ -298,14 +299,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           accent: AppColors.red,
           hot: true,
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('How you earn points',
+            Text('How you earn ${Economy.xpShort}',
                 style: AppTypography.h3
                     .copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             Text(
-                'Every roleplay you run, every daily you take and every '
-                'battle you win adds points. You don\'t have to opt in — '
-                'just use the app and you\'re on the table.',
+                'Every roleplay, every daily and every battle adds XP. '
+                'XP is the effort board — it only ever goes up. Your '
+                'RIZZ RATING is separate and moves on battles alone.',
                 style: AppTypography.bodySmall),
             const SizedBox(height: 14),
             GameButton(
@@ -520,7 +521,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               fontWeight: FontWeight.w900,
             )),
         const SizedBox(width: 4),
-        Text('PTS',
+        Text(Economy.xpShort,
             style: GoogleFonts.inter(
               color: AppColors.textMuted,
               fontSize: 9,
@@ -544,7 +545,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           )),
       const SizedBox(height: 8),
       Text('Take today\'s shot and you\'re on the table.\n'
-          'Every session, mission and battle adds points.',
+          'Every session, mission and battle adds XP.',
           textAlign: TextAlign.center,
           style: GoogleFonts.inter(
             color: AppColors.textTertiary,
@@ -564,7 +565,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   // ══════════════════════════════════════════════════════════════════
-  //  ALL TIME (ELO / tiers)
+  //  ALL TIME (RIZZ RATING / tiers)
   // ══════════════════════════════════════════════════════════════════
 
   Widget _chatTable() {
@@ -587,7 +588,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               const SizedBox(height: 6),
               Text(
                   'Run a battle, or text one of the women. Every graded '
-                  'conversation adds points and there is no daily cap.\n\n'
+                  'conversation adds XP and there is no daily cap.\n\n'
                   'Already had a full conversation and still nothing? The '
                   'grader lives server-side — run the backend check.',
                   textAlign: TextAlign.center,
@@ -866,7 +867,7 @@ class _ChatRow extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   )),
               const SizedBox(height: 1),
-              // The credibility line. 400 points off 40 battles reads
+              // The credibility line. 400 XP off 40 battles reads
               // very differently to 400 off four, so the board says
               // which it is rather than showing a bare total.
               Text(
@@ -890,7 +891,7 @@ class _ChatRow extends StatelessWidget {
               letterSpacing: -0.5,
               fontWeight: FontWeight.w900,
             )),
-        Text(' PTS',
+        Text(' ${Economy.xpShort}',
             style: GoogleFonts.inter(
               color: AppColors.textMuted,
               fontSize: 8.5,

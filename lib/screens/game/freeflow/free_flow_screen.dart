@@ -2718,7 +2718,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                       )),
                   Padding(
                     padding: const EdgeInsets.only(bottom: 24),
-                    child: Text(' / 10',
+                    child: Text(' / 100',
                         style: AppTypography.label.copyWith(
                           color: AppColors.textTertiary,
                           fontSize: 18,

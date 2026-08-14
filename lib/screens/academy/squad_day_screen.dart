@@ -11,9 +11,11 @@ import '../../services/backend/squad_history_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../services/comeback_service.dart';
+import '../../services/economy.dart';
 import '../../services/mirror_service.dart';
 import '../../services/rolodex_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/academy/battle_card.dart';
 import '../../widgets/academy/challenge_card.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
 import '../../widgets/academy/comeback_sheet.dart';
@@ -34,8 +36,13 @@ import '../roleplay/girl_chat_screen.dart';
 /// actually do them.
 ///
 ///   01 THE CHAIN — the streak, the quorum, the armband, the bench
-///   02 THE VOICE CHALLENGE — out of 10
-///   03 THE CHAT CHALLENGE  — out of 100
+///   02 THE VOICE CHALLENGE — AI Score, out of 100
+///   03 THE CHAT CHALLENGE  — AI Score, out of 100
+///   04 BATTLES — the only thing that moves RIZZ RATING
+///
+/// The spine every screen should be legible against, and the reason
+/// these four sit in this order:  TRAIN → PROVE → COMPETE. See
+/// lib/services/economy.dart for the law the numbers obey.
 ///
 /// Both challenges are the SAME woman on the same day for the whole
 /// squad and the whole world, so a score means something next to
@@ -271,7 +278,7 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
                             accent: AppColors.red,
                             girl: girl,
                             roster: _roster,
-                            scaleLabel: 'OUT OF 10',
+                            scaleLabel: Economy.aiScaleLabel,
                             marks: [
                               for (final v in _voice)
                                 if (v.finished)
@@ -297,7 +304,7 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
                             accent: kNeon,
                             girl: girl,
                             roster: _roster,
-                            scaleLabel: 'OUT OF 100',
+                            scaleLabel: Economy.aiScaleLabel,
                             marks: [
                               for (final c in _chat)
                                 ChallengeMark(
@@ -307,6 +314,28 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
                                 ),
                             ],
                             onRun: _runChat,
+                          ),
+                          const SizedBox(height: 26),
+
+                          // 04 · COMPETE. Battles lived as a rounded
+                          // pill beside the XP badge — the same visual
+                          // weight as a filter, for the one mode where
+                          // two real men run the same woman blind. It's
+                          // the end of the spine (TRAIN → PROVE →
+                          // COMPETE) and the only thing that moves RIZZ
+                          // RATING, so it gets a card and it carries the
+                          // number it moves.
+                          ChapterMark(
+                            index: '04',
+                            title: 'BATTLES',
+                            sub: 'Another man. Same woman. Both blind.',
+                            accent: accent,
+                          ),
+                          BattleCard(
+                            onOpen: () async {
+                              await context.push('/battles');
+                              if (mounted) _load();
+                            },
                           ),
                         ],
                       ),

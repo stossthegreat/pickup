@@ -9,6 +9,7 @@ import '../../services/backend/auth_service.dart';
 import '../../services/backend/squad_day.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
+import '../../services/economy.dart';
 import '../../theme/app_colors.dart';
 
 /// YOUR FIVE — the roster as portrait cards, not a Discord member list.
@@ -273,7 +274,7 @@ class _YourFiveState extends State<YourFive> {
                   fontSize: 15,
                   fontWeight: FontWeight.w900,
                 )),
-            Text(' / 10',
+            Text(' / 100',
                 style: GoogleFonts.inter(
                   color: AppColors.textMuted,
                   fontSize: 10,
@@ -312,14 +313,17 @@ class _YourFiveState extends State<YourFive> {
   }
 }
 
-/// Voice scores are shown out of 10, because a human reads 8.7
-/// instantly and 8,742 not at all.
+/// Voice scores on the ONE scale — see lib/services/economy.dart rule 2.
 ///
-/// The grader keeps full resolution server-side: five axes scored 0–100,
-/// weighted into 0–100, then stored as `weighted * 99.99` → 0–9999.
-/// Dividing by 999.9 puts it back on the scale people actually think in.
-String voiceOutOfTen(int raw) =>
-    (raw / 999.9).clamp(0, 10).toStringAsFixed(1);
+/// This used to render out of 10 while chat rendered out of 100 and
+/// battles leaked the raw four-digit grade. Three scales for one concept
+/// meant a man could see 2,450, 8.7 and 84 in a single session with no
+/// way to know they were the same kind of number. The grader still
+/// stores 0–9999 for resolution; that never reaches a screen again.
+///
+/// Name kept so every existing call site keeps compiling — what it
+/// returns is what changed, and it changed in exactly one place.
+String voiceOutOfTen(int raw) => '${Economy.aiScoreFromVoice(raw)}';
 
 class _Bar extends StatelessWidget {
   final String label;
