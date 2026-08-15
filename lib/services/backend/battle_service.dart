@@ -106,6 +106,23 @@ class BattleService {
     await _invoke({'action': 'leave_queue'});
   }
 
+  /// Bin an open challenge nobody took.
+  ///
+  /// A minted code used to be permanent — the card sat on the Battles
+  /// screen forever and there was no way to remove it, so codes piled up
+  /// and pushed the one button that matters further down the page every
+  /// time.
+  ///
+  /// It goes through the Edge Function because RLS gives clients
+  /// read-only access to `battles`; a direct delete from the phone is
+  /// denied, which is correct — the server decides who may destroy a
+  /// duel. Only the creator, only while it's still open, only if nobody
+  /// has joined.
+  static Future<bool> cancelChallenge(String battleId) async {
+    final d = await _invoke({'action': 'cancel', 'battle_id': battleId});
+    return d?['ok'] == true;
+  }
+
   /// The last submitted attempt's grade, parked for the reveal.
   ///
   /// A duel deserves the same moment as the Daily — the count-up, the
