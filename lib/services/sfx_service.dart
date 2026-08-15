@@ -8,12 +8,23 @@ import 'package:flutter/foundation.dart';
 /// thing felt like a very good chart rather than a machine. Nothing else
 /// on the polish list moves the felt quality this much per hour.
 ///
-/// SHIPS SILENT AND STAYS CORRECT. Every cue is a named file under
-/// assets/sfx/ and every play is wrapped — a missing file logs in debug
-/// and is a no-op in release, exactly the way the character portraits
-/// already fall back to a glyph. So this can land now, the app is no
-/// worse without the files, and dropping them in later is the entire
-/// remaining step. See assets/sfx/README.md for the list and the brief.
+/// IT SHIPPED SILENT FOR EIGHT BUILDS. Every cue below was wired, every
+/// reveal called them, and `git ls-files assets/sfx/` returned exactly
+/// one file: the README describing the sounds nobody had made. The whole
+/// app was a silent film.
+///
+/// The ten cues now exist and are SYNTHESISED, not sourced — see
+/// tools/make_sfx.py, which generates all of them deterministically from
+/// the Python standard library. UI sound is not music: it's short,
+/// synthetic and entirely describable in maths, so commissioning it was
+/// never the right move. Re-running that script rebuilds them
+/// byte-identically, and the levels come straight off the mixing table
+/// in assets/sfx/README.md.
+///
+/// WAV, not MP3: there's no encoder in the build environment and
+/// audioplayers handles both on iOS and Android. Every play is still
+/// wrapped, so a missing or corrupt file is a logged no-op rather than a
+/// crash.
 ///
 /// Two rules the mixing has to respect:
 ///   · Cues are SHORT. Anything over ~600ms collides with the next beat
@@ -45,37 +56,37 @@ class Sfx {
   /// One face passing. Fires ~25 times in under three seconds, so this
   /// is the cue most likely to become irritating — keep it under 60ms
   /// and well below the others in level.
-  static void reelTick() => _play(_tickPool, 'reel_tick.mp3');
+  static void reelTick() => _play(_tickPool, 'reel_tick.wav');
 
   /// The reel stopping. A physical clunk, not a chime.
-  static void reelLand() => _play(_pool, 'reel_land.mp3');
+  static void reelLand() => _play(_pool, 'reel_land.wav');
 
   // ── The reveal ──────────────────────────────────────────────────────
   /// Under SHE'S DECIDING. The only cue allowed to be longer — a low
   /// rising tone that resolves the instant the axes start.
-  static void hold() => _play(_pool, 'hold.mp3');
+  static void hold() => _play(_pool, 'hold.wav');
 
   /// One axis landing. Five of these in a row build the score, so they
   /// want to be identical and rhythmic rather than musical.
-  static void axis() => _play(_tickPool, 'axis.mp3');
+  static void axis() => _play(_tickPool, 'axis.wav');
 
   /// The number arriving. The biggest sound in the app.
-  static void scoreLand() => _play(_pool, 'score_land.mp3');
+  static void scoreLand() => _play(_pool, 'score_land.wav');
 
   /// The grade stamping a beat later. Separate cue on purpose — two
   /// events, two sounds, or the moment reads as one thing.
-  static void gradeSlam() => _play(_pool, 'grade_slam.mp3');
+  static void gradeSlam() => _play(_pool, 'grade_slam.wav');
 
   // ── Outcomes ────────────────────────────────────────────────────────
-  static void win() => _play(_pool, 'win.mp3');
-  static void personalBest() => _play(_pool, 'best.mp3');
+  static void win() => _play(_pool, 'win.wav');
+  static void personalBest() => _play(_pool, 'best.wav');
 
   /// The near miss. Must NOT sound like failure — it's the cue that has
   /// to make him want to run it back, so it wants tension, not a buzzer.
-  static void nearMiss() => _play(_pool, 'near_miss.mp3');
+  static void nearMiss() => _play(_pool, 'near_miss.wav');
 
   /// A streak or a day lost. The one cue in the app allowed to be bleak.
-  static void lost() => _play(_pool, 'lost.mp3');
+  static void lost() => _play(_pool, 'lost.wav');
 
   static Future<void> dispose() async {
     await _pool.dispose();

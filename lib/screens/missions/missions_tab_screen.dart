@@ -18,6 +18,7 @@ import '../../services/achievements.dart';
 import '../../services/milestone_service.dart';
 import '../../services/rewards.dart';
 import '../../services/standing.dart';
+import '../academy/payout_screen.dart';
 import '../../widgets/academy/ascend_reveal.dart';
 import '../../widgets/academy/trophy.dart';
 import '../../theme/app_colors.dart';
@@ -162,6 +163,12 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
       rankRung: Standing.rungFor(days),
       rankLabel: rank.label,
     );
+    if (!mounted) return;
+    // THE PAYOUT FIRST. Home is also the safety net: a grant made
+    // somewhere that has no natural end screen — practice, for one —
+    // is still parked in memory and gets counted out here rather than
+    // vanishing.
+    await PayoutScreen.showIfEarned(context);
     if (!mounted) return;
     await AscendReveal.drain(
       context,

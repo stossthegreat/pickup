@@ -20,7 +20,7 @@ import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/brag_sheet.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/league_crest.dart';
-import '../../widgets/academy/ascend_reveal.dart';
+import 'payout_screen.dart';
 import '../../widgets/academy/rizz_off_reveal.dart';
 import '../game/freeflow/free_flow_screen.dart';
 
@@ -213,7 +213,7 @@ class _DailyScreenState extends State<DailyScreen> {
       if (ai >= 90) {
         MilestoneService.pushTrophies(await Achievements.bump(Stat.nineties));
       }
-      if (mounted) await AscendReveal.settle(context);
+      if (mounted) await PayoutScreen.cashOut(context);
 
       // THE ASK, at the only moment it lands: he's holding a number he
       // didn't have ninety seconds ago. Fires once ever, and never for a

@@ -14,7 +14,7 @@ import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday
 import '../../services/milestone_service.dart';
 import '../../services/rewards.dart';
 import '../../services/roster.dart';
-import '../../widgets/academy/ascend_reveal.dart';
+import 'payout_screen.dart';
 import '../../widgets/academy/brag_sheet.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/game_feel.dart';
@@ -181,7 +181,7 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
     if (r.score >= 90) {
       MilestoneService.pushTrophies(await Achievements.bump(Stat.nineties));
     }
-    if (mounted) await AscendReveal.settle(context);
+    if (mounted) await PayoutScreen.cashOut(context);
   }
 
   @override

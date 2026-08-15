@@ -111,6 +111,19 @@ abstract final class Rewards {
   /// source — the grant is trimmed to whatever's left rather than
   /// refused outright, because "you've earned 4 of your 60" beats a
   /// silent zero.
+  /// The last grant, parked for the payout screen.
+  ///
+  /// Duolingo's end-of-lesson screen is the single most-copied thing in
+  /// mobile and the reason is that it shows FOUR bars moving off ONE
+  /// action — XP, streak, league, achievement — in one frame. Ours had
+  /// the four systems and no moment where they moved together, so a man
+  /// finished a daily and saw a score, then maybe a toast, then nothing.
+  ///
+  /// This is stashed rather than returned because the reward is granted
+  /// deep inside a flow that has no business knowing about a screen, and
+  /// the screen is shown at the surface. See payout_screen.dart.
+  static Grant? lastGrant;
+
   static Future<int> grant(
     int amount,
     String label, {
@@ -123,7 +136,21 @@ abstract final class Rewards {
     }
     if (pay <= 0) return 0;
 
+    final before = await LocalStoreService.xpTotal();
     await LocalStoreService.addXp(pay);
+    final after = before + pay;
+
+    // Accumulate within one flow. A battle grants XP for fighting AND
+    // the conversation counts — he should see one number, not two
+    // payout screens back to back.
+    final prev = lastGrant;
+    lastGrant = Grant(
+      amount: prev == null ? pay : prev.amount + pay,
+      label: prev == null ? label : prev.label,
+      xpBefore: prev?.xpBefore ?? before,
+      xpAfter: after,
+    );
+
     LiveEvents.xp(pay, label);
     await _settle();
     return pay;
@@ -220,4 +247,18 @@ abstract final class Rewards {
       grant(numberWon, '$girlName gave you her number');
 
   static Future<int> line() => grant(perfectLine, 'Perfect line');
+}
+
+/// What one flow paid out, from the first grant to the last.
+class Grant {
+  final int amount;
+  final String label;
+  final int xpBefore;
+  final int xpAfter;
+  const Grant({
+    required this.amount,
+    required this.label,
+    required this.xpBefore,
+    required this.xpAfter,
+  });
 }
