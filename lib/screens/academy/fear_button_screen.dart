@@ -8,7 +8,11 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../services/achievements.dart';
+import '../../services/milestone_service.dart';
+import '../../services/rewards.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/academy/ascend_reveal.dart';
 
 /// THE FEAR BUTTON — for the exact second training has to become
 /// behaviour. He's frozen. He knows what he should do. This screen
@@ -157,6 +161,21 @@ class _FearButtonScreenState extends State<FearButtonScreen> {
       // Count the rep — fuel for a future "fear reps" surface.
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('fear_reps', (prefs.getInt('fear_reps') ?? 0) + 1);
+
+      // THE BIGGEST HOLE IN THE WHOLE APP WAS HERE.
+      //
+      // A man walked up to a stranger in real life — the hardest thing
+      // this product ever asks of anyone, and the thing every AI
+      // conversation in here is practice FOR — and the app incremented
+      // a private counter and gave him nothing. No XP, no badge, no
+      // ceremony. He got more for ticking a box on the missions tab.
+      //
+      // It now pays the largest single grant in the economy (see
+      // rewards.dart) and drives the one badge family that measures
+      // what the product actually promises.
+      await Rewards.realApproach();
+      MilestoneService.pushTrophies(
+          await Achievements.bump(Stat.approaches));
     }
     if (mounted) setState(() => _phase = _Phase.done);
   }
@@ -475,9 +494,14 @@ class _FearButtonScreenState extends State<FearButtonScreen> {
       SizedBox(
         height: 58,
         child: ElevatedButton(
-          onPressed: () {
+          onPressed: () async {
             HapticFeedback.selectionClick();
-            context.pop();
+            // The ceremony plays HERE, not the instant he taps the
+            // answer — this screen's own words ("THAT'S THE REP") are
+            // the point of the moment and a medal landing on top of
+            // them would step on it. He reads it, then he's paid.
+            await AscendReveal.settle(context);
+            if (context.mounted) context.pop();
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.surface2,

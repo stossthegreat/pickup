@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/achievements.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/chat_score_service.dart';
 import '../../services/backend/daily_chat_service.dart';
@@ -10,7 +11,10 @@ import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
+import '../../services/milestone_service.dart';
+import '../../services/rewards.dart';
 import '../../services/roster.dart';
+import '../../widgets/academy/ascend_reveal.dart';
 import '../../widgets/academy/brag_sheet.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/game_feel.dart';
@@ -168,6 +172,16 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
       transitionBuilder: (ctx, a, __, child) =>
           FadeTransition(opacity: a, child: child),
     );
+
+    // Same fix as the voice Daily: this graded a real conversation and
+    // paid nothing. Chat already scores 0–100 so it needs no conversion.
+    await Rewards.daily(r.score);
+    MilestoneService.pushTrophies(await Achievements.bump(Stat.dailies));
+    MilestoneService.pushTrophies(await Achievements.bump(Stat.talks));
+    if (r.score >= 90) {
+      MilestoneService.pushTrophies(await Achievements.bump(Stat.nineties));
+    }
+    if (mounted) await AscendReveal.settle(context);
   }
 
   @override

@@ -6,15 +6,19 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/achievements.dart';
 import '../../services/backend/battle_service.dart';
 import '../../services/backend/leaderboard_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../services/battle_meta_service.dart';
 import '../../services/division.dart';
 import '../../services/economy.dart';
+import '../../services/milestone_service.dart';
+import '../../services/rewards.dart';
 import '../../services/roster.dart';
 import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/academy/ascend_reveal.dart';
 import '../../widgets/academy/battle_verdict.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/game_button.dart';
@@ -111,15 +115,15 @@ class _BattlesScreenState extends State<BattlesScreen> {
       for (final b in battles)
         if (b.opponentId != null) b.opponentId!,
     };
-    final ratings = <String, int>{};
-    if (ids.isNotEmpty) {
-      for (final e in await LeaderboardService.forUsers(ids.toList())) {
-        ratings[e.userId] = e.rating;
-      }
-    }
+    // RR, not the voice rating. See leaderboard_service.dart — these two
+    // numbers were one column until migration 0012 and this screen is
+    // the one that most needed them apart.
+    final ratings = ids.isEmpty
+        ? const <String, int>{}
+        : await LeaderboardService.battleRatings(ids.toList());
 
-    final me = await LeaderboardService.me();
-    if (me != null) await BattleMeta.seedRating(me.rating);
+    final mine = await LeaderboardService.myBattleRating();
+    if (mine != null) await BattleMeta.seedRating(mine);
 
     final settled = battles.where((b) => b.settled).toList();
     await _catchUp(settled);
@@ -130,7 +134,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
       _battles = battles;
       _handles = handles;
       _oppRatings = ratings;
-      _rating = me?.rating;
+      _rating = mine;
       _standing = standing;
       _loading = false;
     });
@@ -197,8 +201,8 @@ class _BattlesScreenState extends State<BattlesScreen> {
     // RR movement is only attributable when ONE duel settled. Two at
     // once and the delta belongs to both, so we show the verdict without
     // a number rather than assigning the whole swing to one fight.
-    final me = await LeaderboardService.me();
-    final move = me == null ? null : await BattleMeta.noteRating(me.rating);
+    final rr = await LeaderboardService.myBattleRating();
+    final move = rr == null ? null : await BattleMeta.noteRating(rr);
     final attributable = fresh.length == 1;
 
     if (!mounted) return;
@@ -516,7 +520,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
     // The rating BEFORE, so the movement afterwards is measured rather
     // than predicted. The server owns the Elo maths; this screen only
     // reports what it did.
-    final before = (await LeaderboardService.me())?.rating;
+    final before = await LeaderboardService.myBattleRating();
     if (!mounted) return;
 
     await Navigator.of(context, rootNavigator: true).push<bool>(
@@ -548,6 +552,10 @@ class _BattlesScreenState extends State<BattlesScreen> {
     final r = BattleService.lastResult;
     if (r != null) {
       BattleService.lastResult = null;
+      // The conversation happened whether or not the other man has
+      // answered yet, so it counts toward the talking families now
+      // rather than waiting on someone else to open the app.
+      MilestoneService.pushTrophies(await Achievements.bump(Stat.talks));
       await showGeneralDialog<void>(
         context: context,
         barrierColor: Colors.black,
@@ -585,9 +593,19 @@ class _BattlesScreenState extends State<BattlesScreen> {
         if (settled != null && settled.settled) {
           await BattleMeta.record(won: settled.iWon, tie: settled.tie);
           await BattleMeta.markSeen([settled.id]);
-          final after = (await LeaderboardService.me())?.rating;
+          // A DUEL PAID NOTHING IN XP. He fought another human on the
+          // same woman and his level didn't move. Losing pays too — a
+          // ladder where defeat costs RR *and* pays zero is one men stop
+          // queueing on after two bad nights.
+          await Rewards.battle(won: settled.iWon);
+          MilestoneService.pushTrophies(await Achievements.bump(Stat.duels));
+          if (settled.iWon) {
+            MilestoneService.pushTrophies(await Achievements.bump(Stat.wins));
+          }
+          final after = await LeaderboardService.myBattleRating();
           if (!mounted) return;
-          final move = after == null ? null : await BattleMeta.noteRating(after);
+          final move =
+              after == null ? null : await BattleMeta.noteRating(after);
           if (!mounted) return;
           await _playVerdict(
             settled,
@@ -598,6 +616,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
       }
     }
     if (mounted) await _load();
+    if (mounted) await AscendReveal.settle(context);
   }
 
   void _shareResult(Battle b) {
@@ -787,13 +806,18 @@ class _BattlesScreenState extends State<BattlesScreen> {
     );
   }
 
-  /// The hero. Emblem, division, rating, the gap to the next rung — and
-  /// underneath it, in small type, the tier name the paywall sells, so
-  /// he can see with his own eyes that BRONZE II and OBSERVER are the
-  /// same climb read at two zoom levels rather than two competing
-  /// scoreboards. (See the long note in division.dart.)
+  /// The hero. Emblem, division, rating, the gap to the next rung.
+  ///
+  /// IT USED TO PRINT AN IDENTITY TIER UNDER THIS — "OBSERVER TIER" — on
+  /// the theory that showing both zoom levels would prove they were one
+  /// climb. It proved the opposite. A man read INITIATE on Home and
+  /// OBSERVER here and concluded, correctly, that the app didn't know
+  /// what it was measuring.
+  ///
+  /// So this surface now speaks ONE vocabulary and it's the competitive
+  /// one: BRONZE III → LEGEND I, moved by duels. His identity rank is on
+  /// Home, earned in days, and never appears here. See standing.dart.
   Widget _hero(Rank rank) {
-    final tier = tierFor(rank.rating);
     final streakTitle = Streaks.title(_standing.streak);
 
     return Column(children: [
@@ -833,9 +857,11 @@ class _BattlesScreenState extends State<BattlesScreen> {
       const SizedBox(height: 10),
       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         _Chip(
-          label: '${tier.name} TIER',
-          color: tier.color,
-          icon: Icons.shield_rounded,
+          label: _standing.played == 0
+              ? 'NO DUELS YET'
+              : '${_standing.line} RECORD',
+          color: AppColors.textTertiary,
+          icon: Icons.sports_mma_rounded,
         ),
         if (streakTitle != null) ...[
           const SizedBox(width: 8),

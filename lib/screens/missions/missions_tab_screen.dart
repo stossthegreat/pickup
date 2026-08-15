@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/analytics_service.dart';
 import '../../services/backend/catch_up_service.dart';
 import '../../services/backend/squad_broadcast.dart';
-import '../../services/live_events.dart';
 import '../../services/local_store_service.dart';
 import '../../services/mission_catalog.dart';
 import '../../services/mission_engine.dart';
@@ -15,6 +14,12 @@ import '../../services/paywall_gate.dart';
 import '../../services/roster.dart';
 import '../../services/streak_rescue_service.dart';
 import '../../services/streak_service.dart';
+import '../../services/achievements.dart';
+import '../../services/milestone_service.dart';
+import '../../services/rewards.dart';
+import '../../services/standing.dart';
+import '../../widgets/academy/ascend_reveal.dart';
+import '../../widgets/academy/trophy.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/live_toast.dart';
@@ -70,8 +75,12 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
         return; // one heavy moment per open; the catch-up can wait
       }
       final events = await CatchUpService.collect();
-      if (!mounted || events.isEmpty) return;
-      await CatchUpSheet.show(context, events);
+      if (mounted && events.isNotEmpty) {
+        await CatchUpSheet.show(context, events);
+      }
+      // Last, and only if nothing heavier ran: a rank earned on
+      // yesterday's fifth mission still deserves its moment today.
+      if (mounted) await _milestones();
     });
   }
 
@@ -106,18 +115,61 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
   Future<void> _complete(MissionSpec m) async {
     if (_done[m.id] == true) return;
     await LocalStoreService.markMissionDone(m.id);
-    await LocalStoreService.addXp(m.xp);
+    // ONE DOOR. Rewards is the only thing that grants XP now — it holds
+    // the rates, the daily caps and the milestone check, so a new source
+    // can't be added without them. See rewards.dart.
+    await Rewards.mission(m.xp, m.title);
     await LocalStoreService.bumpDimensions(_dimBump(m));
     if (m.isReal) await LocalStoreService.markRealMissionDoneToday();
     // ignore: discarded_futures
     AnalyticsService.missionCompleted(kind: m.kind.name, title: m.title, xp: m.xp);
     HapticFeedback.mediumImpact();
-    // The live layer replaces the grey snackbar — a real celebration
-    // that lands over any screen, and the squad hears about it too.
-    LiveEvents.xp(m.xp, m.title);
+    // A REAL-WORLD MISSION IS AN APPROACH. It is the single most
+    // valuable thing anyone does in this product and it was counting
+    // toward nothing.
+    if (m.isReal) {
+      MilestoneService.pushTrophies(await Achievements.bump(Stat.approaches));
+    }
     // ignore: discarded_futures
     SquadBroadcast.completed(m.title, xp: m.xp, girlId: m.girlId);
     await _load();
+    // THE MOMENT. Finishing a mission is the only time XP moves, so it
+    // is the only time a level can land — and it used to land silently
+    // in a pill he wasn't looking at. See milestone_service.dart.
+    await _milestones();
+  }
+
+  /// HOME OWNS TWO LADDERS: his LEVEL and his RANK. Both are read from
+  /// local state — total XP and earned days — so this costs nothing and
+  /// can run on every completion.
+  ///
+  /// It owns those two and no others on purpose. The battle verdict
+  /// celebrates a DIVISION promotion because that's where one happens,
+  /// and squad home celebrates a SQUAD LEVEL because that's where the
+  /// squad's numbers already are. One owner per ladder; anything else
+  /// and two screens race to congratulate him for the same thing.
+  Future<void> _milestones() async {
+    final xp = await LocalStoreService.xpTotal();
+    final snap = await StreakService.progress();
+    final days = snap.ascensionDay;
+    final rank = Standing.rankFor(days);
+    // The streak badge family is a PEAK, not a tally — a broken run
+    // never takes back ONE WEEK, because he did earn it.
+    MilestoneService.pushTrophies(
+        await Achievements.raiseTo(Stat.streakPeak, snap.streak));
+    await MilestoneService.check(
+      level: Standing.levelFor(xp),
+      rankRung: Standing.rungFor(days),
+      rankLabel: rank.label,
+    );
+    if (!mounted) return;
+    await AscendReveal.drain(
+      context,
+      accentOf: ascendTint,
+      footnoteOf: (m) => m.kind == MilestoneKind.rank
+          ? '${rank.tagline}\n\n${rank.unlock}'
+          : null,
+    );
   }
 
   // ignore: unused_element
@@ -464,6 +516,17 @@ class _TopBar extends StatelessWidget {
             const SizedBox(width: 8),
             const RankBadge(),
           ]),
+          const SizedBox(height: Sp.md),
+          // THE NEXT BADGE. One named target with a number under it, on
+          // the screen he already opens every day.
+          //
+          // A trophy cabinet gets browsed once and then never again; a
+          // single line saying HE JUST GOES · 8/10 gets acted on. That's
+          // the whole reason the badge families are tiered — there is
+          // always a next rung on something he is already doing, and it
+          // is always visible without opening anything. See the rules at
+          // the top of achievements.dart.
+          NextBadgeStrip(onTap: () => context.push('/trophies')),
         ],
       ),
     );
