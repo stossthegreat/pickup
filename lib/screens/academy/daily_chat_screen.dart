@@ -12,7 +12,9 @@ import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
 import '../../services/milestone_service.dart';
+import '../../services/mission_catalog.dart';
 import '../../services/rewards.dart';
+import '../../services/today_targets.dart';
 import '../../services/roster.dart';
 import 'payout_screen.dart';
 import '../../widgets/academy/brag_sheet.dart';
@@ -176,6 +178,9 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
     // Same fix as the voice Daily: this graded a real conversation and
     // paid nothing. Chat already scores 0–100 so it needs no conversion.
     await Rewards.daily(r.score);
+    // Same stone, the writing half: the message battle IS his AI text
+    // mission rather than a second one under another name.
+    await TodayTargets.credit(MissionKind.aiText);
     MilestoneService.pushTrophies(await Achievements.bump(Stat.dailies));
     MilestoneService.pushTrophies(await Achievements.bump(Stat.talks));
     if (r.score >= 90) {

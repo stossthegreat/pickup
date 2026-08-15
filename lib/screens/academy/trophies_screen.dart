@@ -101,6 +101,7 @@ class _TrophiesScreenState extends State<TrophiesScreen> {
                   )),
             ]),
           ),
+          if (!_loading) _hero(got, total),
           if (_loading)
             const Expanded(
               child: Center(
@@ -141,6 +142,114 @@ class _TrophiesScreenState extends State<TrophiesScreen> {
         ]),
       ),
     );
+  }
+
+  /// THE CASE.
+  ///
+  /// The screen opened straight onto a grid of small grey discs, which
+  /// is the exact failure the whole system was designed to avoid: a
+  /// wall of things he hasn't done. So the first thing on it is now the
+  /// three metals he HAS won, counted out, with the gold total lit.
+  ///
+  /// Counting by metal rather than by total is deliberate. "7 / 30" is a
+  /// completion percentage and completion percentages are depressing at
+  /// the start. "2 GOLD" is a boast.
+  Widget _hero(int got, int total) {
+    var bronze = 0, silver = 0, gold = 0;
+    for (final t in Achievements.all) {
+      if (!_earned.contains(t.id)) continue;
+      switch (t.tier) {
+        case Tier.bronze:
+          bronze++;
+        case Tier.silver:
+          silver++;
+        case Tier.gold:
+          gold++;
+      }
+    }
+    final pct = total == 0 ? 0.0 : got / total;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              const Color(0xFFFFC53D).withValues(alpha: gold > 0 ? 0.16 : 0.06),
+              AppColors.surface1,
+              AppColors.base,
+            ],
+            stops: const [0, 0.55, 1],
+          ),
+          border: Border.all(
+              color: const Color(0xFFFFC53D)
+                  .withValues(alpha: gold > 0 ? 0.4 : 0.14)),
+          boxShadow: gold > 0
+              ? [
+                  BoxShadow(
+                      color: const Color(0xFFFFC53D).withValues(alpha: 0.16),
+                      blurRadius: 30)
+                ]
+              : null,
+        ),
+        child: Column(children: [
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            _Metal(count: bronze, tier: Tier.bronze),
+            const SizedBox(width: 26),
+            _Metal(count: silver, tier: Tier.silver),
+            const SizedBox(width: 26),
+            _Metal(count: gold, tier: Tier.gold),
+          ]),
+          const SizedBox(height: 18),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: Stack(children: [
+              Container(height: 5, color: Colors.white.withValues(alpha: 0.07)),
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: pct),
+                duration: const Duration(milliseconds: 900),
+                curve: Curves.easeOutCubic,
+                builder: (_, v, __) => FractionallySizedBox(
+                  widthFactor: v.clamp(0.0, 1.0),
+                  child: Container(
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFC53D),
+                      boxShadow: [
+                        BoxShadow(
+                            color: const Color(0xFFFFC53D)
+                                .withValues(alpha: 0.6),
+                            blurRadius: 10)
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 10),
+          Text(
+              got == 0
+                  ? 'THE CASE IS EMPTY. THE FIRST ONE IS CHEAP.'
+                  : got == total
+                      ? 'EVERY BADGE IN THE APP. NOBODY ELSE HAS THIS.'
+                      : '$got OF $total CLAIMED',
+              style: GoogleFonts.inter(
+                color: AppColors.textTertiary,
+                fontSize: 9.5,
+                letterSpacing: 2.6,
+                fontWeight: FontWeight.w900,
+              )),
+        ]),
+      ),
+    )
+        .animate()
+        .fadeIn(duration: 400.ms)
+        .slideY(begin: 0.2, end: 0, curve: Curves.easeOutCubic);
   }
 
   Widget _row(Stat s) {
@@ -349,5 +458,43 @@ class _Medal extends StatelessWidget {
             )),
       ]),
     );
+  }
+}
+
+/// One metal, counted. Big number, small word, the medal behind it —
+/// so the three of them read as a trophy case rather than a stat line.
+class _Metal extends StatelessWidget {
+  final int count;
+  final Tier tier;
+  const _Metal({required this.count, required this.tier});
+
+  @override
+  Widget build(BuildContext context) {
+    final has = count > 0;
+    return Column(children: [
+      Text('$count',
+          style: GoogleFonts.inter(
+            color: has ? tier.color : AppColors.textMuted,
+            fontSize: 34,
+            height: 1,
+            letterSpacing: -1.5,
+            fontWeight: FontWeight.w900,
+            shadows: has
+                ? [
+                    Shadow(
+                        color: tier.color.withValues(alpha: 0.55),
+                        blurRadius: 22)
+                  ]
+                : null,
+          )),
+      const SizedBox(height: 5),
+      Text(tier.label,
+          style: GoogleFonts.inter(
+            color: has ? tier.color.withValues(alpha: 0.8) : AppColors.textMuted,
+            fontSize: 8.5,
+            letterSpacing: 2.4,
+            fontWeight: FontWeight.w900,
+          )),
+    ]);
   }
 }

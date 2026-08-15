@@ -14,7 +14,9 @@ import '../../services/roster.dart';
 import '../../services/achievements.dart';
 import '../../services/economy.dart';
 import '../../services/milestone_service.dart';
+import '../../services/mission_catalog.dart';
 import '../../services/rewards.dart';
+import '../../services/today_targets.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/brag_sheet.dart';
@@ -208,6 +210,10 @@ class _DailyScreenState extends State<DailyScreen> {
       // single biggest hole in the economy.
       final ai = Economy.aiScoreFromVoice(r.score);
       await Rewards.daily(ai);
+      // TWO BIRDS. He only has minutes for one voice conversation a day,
+      // so this one ticks his AI voice mission too rather than leaving
+      // it sitting on Home unticked. Idempotent — see today_targets.dart.
+      await TodayTargets.credit(MissionKind.aiVoice);
       MilestoneService.pushTrophies(await Achievements.bump(Stat.dailies));
       MilestoneService.pushTrophies(await Achievements.bump(Stat.talks));
       if (ai >= 90) {

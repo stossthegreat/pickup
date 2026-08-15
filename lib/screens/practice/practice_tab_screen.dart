@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../services/local_store_service.dart';
 import '../../services/roster.dart';
+import '../../services/economy.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/common/mirrorly_components.dart';
+import '../../widgets/common/streak_badge.dart';
 import '../game/freeflow/free_flow_screen.dart';
 import '../roleplay/girl_chat_screen.dart';
 
@@ -28,6 +30,13 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
   int _day = 1; // earned ascension day — gates who's unlocked
   bool _creator = false; // owner creator mode → every girl unlocked
 
+  /// Practice carried no standing at all — no XP, no streak, no rank.
+  /// It's the tab a man spends the most minutes on and the only one
+  /// that never told him where he was, so the work he did here felt
+  /// like it happened outside the game.
+  int _xp = 0;
+  int _streak = 0;
+
   @override
   void initState() {
     super.initState();
@@ -45,11 +54,15 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
       day = (await StreakService.progress()).ascensionDay;
     } catch (_) {/* default day 1 → only the starters unlocked */}
     final creator = await LocalStoreService.isCreatorActive();
+    final xp = await LocalStoreService.xpTotal();
+    final streak = await StreakService.current();
     if (mounted) {
       setState(() {
         _stages = s;
         _day = day;
         _creator = creator;
+        _xp = xp;
+        _streak = streak;
       });
     }
   }
@@ -84,6 +97,12 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
   }
 
   GirlChatConfig _configFor(GirlBrief g) => GirlChatConfig(
+        // PRACTICE IS THE ONE PLACE THE COACH LIVES. It scores
+        // nothing anyone else can see and feeds no ladder, so being
+        // shown a good line here is teaching rather than cheating.
+        // Every graded surface defaults to false — see the note on
+        // GirlChatConfig.coachAllowed.
+        coachAllowed: true,
         characterId: g.id,
         vibeKey: g.vibeKey,
         name: g.name,
@@ -102,7 +121,11 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
 
   void _openVoice(GirlBrief g) {
     Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(builder: (_) => FreeFlowScreen(initialVibeKey: g.vibeKey)),
+      MaterialPageRoute(
+          // The one surface that keeps the coach — see the note on
+          // FreeFlowScreen.coachAllowed.
+          builder: (_) =>
+              FreeFlowScreen(initialVibeKey: g.vibeKey, coachAllowed: true)),
     );
   }
 
@@ -144,7 +167,10 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.md, Sp.lg, Sp.md),
+              // Sp.sm at the top, matching the Missions and Progress
+              // mastheads exactly — this tab sat Sp.md lower than the
+              // other two, so switching tabs nudged the whole page.
+              padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.lg, Sp.md),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -180,6 +206,18 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                     style: AppTypography.bodySmall.copyWith(
                         color: AppColors.red),
                   ),
+                  const SizedBox(height: Sp.md),
+                  // THE SAME TWO PILLS THE OTHER TABS CARRY. Practice is
+                  // where most of the minutes go and it was the one tab
+                  // that never showed him a standing — so the hours he
+                  // put in here read as happening outside the game.
+                  Row(children: [
+                    XpBadge(label: Economy.commas(_xp) + ' XP'),
+                    const SizedBox(width: 8),
+                    if (_streak > 0) StreakBadge(days: _streak),
+                    if (_streak > 0) const SizedBox(width: 8),
+                    const RankBadge(),
+                  ]),
                 ],
               ),
             ),

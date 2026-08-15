@@ -265,6 +265,61 @@ class _BattlesScreenState extends State<BattlesScreen> {
     await _run(battle);
   }
 
+  /// Bin an open challenge. Confirmed, because a code he's already sent
+  /// to a mate disappearing on a mis-tap is worse than the clutter.
+  Future<void> _cancel(Battle b) async {
+    HapticFeedback.selectionClick();
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface1,
+        title: Text('BIN THIS CHALLENGE?',
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 14,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w900,
+            )),
+        content: Text(
+            'Code ${b.inviteCode ?? ''} stops working. If you\'ve already '
+            'sent it to someone, they won\'t be able to take the fight.',
+            style: GoogleFonts.inter(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              height: 1.45,
+              fontWeight: FontWeight.w500,
+            )),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('KEEP IT',
+                style: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                )),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('BIN IT',
+                style: GoogleFonts.inter(
+                  color: AppColors.red,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                )),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    final ok = await BattleService.cancelChallenge(b.id);
+    if (!mounted) return;
+    if (!ok) {
+      _toast('Couldn\'t bin it — someone may have already taken it.');
+    }
+    await _load();
+  }
+
   Future<void> _challenge() async {
     HapticFeedback.mediumImpact();
     final battle = await BattleService.createChallenge();
@@ -753,6 +808,11 @@ class _BattlesScreenState extends State<BattlesScreen> {
                         oppRating: _oppRatings[b.opponentId],
                         myRating: _rating,
                         onRun: () => _run(b),
+                        // Only an unclaimed challenge can be binned —
+                        // once a rival is in, it's his fight too.
+                        onCancel: b.opponentId == null && b.state == 'open'
+                            ? () => _cancel(b)
+                            : null,
                       ).animate().fadeIn(
                           delay: (60 * i).clamp(0, 300).ms, duration: 260.ms),
                     const SizedBox(height: 10),
@@ -1161,12 +1221,17 @@ class _LiveDuel extends StatelessWidget {
   final int? oppRating;
   final int? myRating;
   final VoidCallback onRun;
+
+  /// Null unless this is an open challenge he minted and nobody took.
+  final VoidCallback? onCancel;
+
   const _LiveDuel({
     required this.battle,
     required this.opponent,
     required this.oppRating,
     required this.myRating,
     required this.onRun,
+    this.onCancel,
   });
 
   @override
@@ -1248,6 +1313,28 @@ class _LiveDuel extends StatelessWidget {
                           letterSpacing: 2,
                           fontWeight: FontWeight.w900,
                         )),
+                  ),
+                // THE BIN. Deliberately small and to the right of the
+                // code — it's the rarely-wanted action on a card whose
+                // whole job is the button underneath it.
+                if (onCancel != null)
+                  GestureDetector(
+                    onTap: onCancel,
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black.withValues(alpha: 0.45),
+                        ),
+                        child: const Icon(Icons.close_rounded,
+                            size: 14, color: Colors.white),
+                      ),
+                    ),
                   ),
               ]),
             ),

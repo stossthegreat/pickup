@@ -377,6 +377,32 @@ Deno.serve(async (req) => {
       return Response.json({ queued: true });
     }
 
+    // CANCEL — bin an open challenge you minted and nobody took.
+    //
+    // A code duel used to be permanent: mint one, and the card sat on
+    // the Battles screen forever with no way to get rid of it. Codes
+    // pile up, the screen turns into a graveyard, and the one button
+    // that matters gets pushed further down every time.
+    //
+    // Only the man who created it, only while it is still OPEN, and
+    // only if nobody has joined — once a rival is in, it is his fight
+    // too and one player does not get to delete it.
+    case "cancel": {
+      const bid = body.battle_id as string | undefined;
+      if (!bid) return Response.json({ error: "battle_id required" }, { status: 400 });
+      const { data: row } = await admin.from("battles")
+        .select("id, player_a, player_b, state").eq("id", bid).single();
+      if (!row) return Response.json({ error: "not found" }, { status: 404 });
+      if (row.player_a !== uid) {
+        return Response.json({ error: "not yours" }, { status: 403 });
+      }
+      if (row.state !== "open" || row.player_b) {
+        return Response.json({ error: "already claimed" }, { status: 409 });
+      }
+      await admin.from("battles").delete().eq("id", bid);
+      return Response.json({ ok: true });
+    }
+
     case "leave_queue": {
       await admin.from("battle_queue").delete().eq("user_id", uid);
       return Response.json({ left: true });

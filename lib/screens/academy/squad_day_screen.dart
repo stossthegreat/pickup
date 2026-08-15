@@ -14,6 +14,8 @@ import '../../services/comeback_service.dart';
 import '../../services/economy.dart';
 import '../../services/achievements.dart';
 import '../../services/milestone_service.dart';
+import '../../services/local_store_service.dart';
+import '../../services/mission_engine.dart';
 import '../../services/mirror_service.dart';
 import '../../services/rolodex_service.dart';
 import '../../theme/app_colors.dart';
@@ -77,6 +79,13 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
   List<DailyMark> _voice = const [];
   List<ChatMark> _chat = const [];
   SquadHistory _history = SquadHistory.empty;
+
+  /// How many of today's five HOME missions he's ticked. See the
+  /// note on SquadDay.myMoves — the squad board reads the server's
+  /// mission table, which Home never writes to, so his own ring sat
+  /// at 0/5 no matter how much work he did.
+  int _myMoves = 0;
+
   List<SquadEvent> _pulse = const [];
 
   /// Things the squad did today. The badge number — an icon says "there
@@ -137,6 +146,9 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
       _pulse = results[5] as List<SquadEvent>;
       _loading = false;
     });
+    // Cheap and local — read after the frame rather than blocking it.
+    final mine = await _localMoves();
+    if (mounted) setState(() => _myMoves = mine);
     // ignore: discarded_futures
     _squadMilestone();
     // ignore: discarded_futures
@@ -226,11 +238,28 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
     await showMirrorSheet(context, t, announce: true);
   }
 
+  /// Count today's completed Home missions, plus the daily if he's run
+  /// it — the same five moves the squad board is trying to describe.
+  Future<int> _localMoves() async {
+    try {
+      final missions = await MissionEngine.loadToday();
+      var n = 0;
+      for (final m in missions) {
+        if (await LocalStoreService.isMissionDoneToday(m.id)) n++;
+      }
+      return n;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   SquadDay get _day => SquadDay(
         roster: _roster,
         board: _board,
         squadStates: _squadStates,
         daily: _voice,
+        myMoves: _myMoves,
+        myUserId: AuthService.userId,
       );
 
   Future<void> _runVoice() async {

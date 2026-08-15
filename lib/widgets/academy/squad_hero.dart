@@ -51,9 +51,20 @@ class SquadHero extends StatelessWidget {
     final banked = h.todayBanked;
     final accent = banked ? kNeon : AppColors.red;
 
-    return SizedBox(
-      height: 372,
-      child: Stack(children: [
+    // NO FIXED HEIGHT.
+    //
+    // This was `SizedBox(height: 372)`. The content inside it — title,
+    // a 208pt emblem, the delta line, the facts row and 62pt of padding
+    // — comes to roughly 353pt BEFORE the SafeArea inset, and a notched
+    // phone adds another ~47. So on every modern handset the column was
+    // ~30pt taller than its box and spilled straight over the section
+    // underneath it: "BE THE FIRST NAME ON TODAY" printed on top of the
+    // FiveBoard's header.
+    //
+    // The Stack now takes its size from the Column (the two Positioned
+    // .fill layers are backgrounds and don't contribute), so the hero is
+    // exactly as tall as what's in it on every device.
+    return Stack(children: [
         const Positioned.fill(child: SquadAtmosphere(accent: AppColors.red)),
         Positioned.fill(
           child: DecoratedBox(
@@ -71,7 +82,7 @@ class SquadHero extends StatelessWidget {
           bottom: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 50, 20, 12),
-            child: Column(children: [
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
               Text(name.toUpperCase(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -196,7 +207,9 @@ class SquadHero extends StatelessWidget {
                     )).animate(onPlay: (c) => c.repeat(reverse: true)).fade(
                     begin: 0.5, end: 1, duration: 1300.ms),
 
-              const Spacer(),
+              // Was a Spacer, which needed the old fixed height to have
+              // anything to push against.
+              const SizedBox(height: 14),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 _fact(
                   h.streak > 0 ? '${h.streak} DAY CHAIN' : 'NO CHAIN YET',
@@ -216,8 +229,7 @@ class SquadHero extends StatelessWidget {
             ]),
           ),
         ),
-      ]),
-    );
+    ]);
   }
 
   Widget _fact(String s, Color c) => Text(s,

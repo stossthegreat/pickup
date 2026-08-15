@@ -78,10 +78,25 @@ class FreeFlowScreen extends StatefulWidget {
   /// 'ice_then_fire', 'sweet'); an unknown key falls back to the first.
   final String? initialVibeKey;
 
+  /// ══════════════════════════════════════════════════════════════════
+  ///  THE COACH IS OFF BY DEFAULT — same rule as the text side.
+  /// ══════════════════════════════════════════════════════════════════
+  ///
+  /// This screen is BOTH the practice room and the graded Daily. The
+  /// Daily produces the number on the world leaderboard and the squad
+  /// Rizz-Off, and "COACH — STEP IN" hands the man his next line. One
+  /// button, and the entire voice ladder measures who pressed it.
+  ///
+  /// False unless a caller says otherwise, so the Daily, an AI mission
+  /// and anything written later are safe without their author knowing
+  /// this rule exists. Practice — and only Practice — passes true.
+  final bool coachAllowed;
+
   const FreeFlowScreen({
     super.key,
     this.tabMode = false,
     this.initialVibeKey,
+    this.coachAllowed = false,
   });
 
   @override
@@ -1557,6 +1572,9 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       s.replaceAll(_cueRe, '').replaceAll(RegExp(r'\s{2,}'), ' ').trim();
 
   Future<void> _lucienStepIn() async {
+    // The rule made true rather than merely invisible — nothing can
+    // reach the coach round the back of the hidden button.
+    if (!widget.coachAllowed) return;
     if (_phase != _Phase.live) return;
     // ignore: discarded_futures
     AnalyticsService.freeflowLucienTapped(
@@ -2515,6 +2533,10 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
               // (which is also when the clock starts) flips the
               // button live. Resets on session end / new persona.
               Builder(builder: (_) {
+                // GRADED SURFACES DON'T GET HIM AT ALL. Absent, not
+                // greyed — a permanently dead button is a promise the
+                // app can't keep. See FreeFlowScreen.coachAllowed.
+                if (!widget.coachAllowed) return const SizedBox.shrink();
                 final lucienReady = _phase == _Phase.live && _clockStarted;
                 return Material(
                   color: Colors.transparent,
@@ -2882,7 +2904,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                           Navigator.of(context, rootNavigator: true)
                               .pushReplacement(MaterialPageRoute(
                             builder: (_) =>
-                                FreeFlowScreen(initialVibeKey: _vibe?.key),
+                                FreeFlowScreen(
+                                    initialVibeKey: _vibe?.key,
+                                    // Carry the permission across a
+                                    // restart — a practice session
+                                    // that respawns is still practice.
+                                    coachAllowed: widget.coachAllowed),
                           ));
                         }
                       },

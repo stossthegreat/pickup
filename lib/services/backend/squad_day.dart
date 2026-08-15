@@ -40,11 +40,36 @@ class SquadDay {
   final Map<String, MissionPulse> squadStates;
   final List<DailyMark> daily;
 
+  /// MY OWN MISSIONS, COUNTED FROM THE PHONE.
+  ///
+  /// THE BUG THIS FIXES: a man finished all five of today's missions on
+  /// Home and his ring on the squad board still read 0/5.
+  ///
+  /// It was reading `mission_progress` — the SERVER-side squad board,
+  /// written only by MissionService.complete, which only the squad room
+  /// screen ever calls. Home's missions are a different system entirely:
+  /// local ids from MissionEngine, ticked into SharedPreferences. Two
+  /// mission systems, no bridge, so the work he actually did was
+  /// invisible to the one screen built to show it.
+  ///
+  /// The honest bridge without a migration: Home already knows how many
+  /// of today's five he's done, so that number is passed in and used for
+  /// HIM. Everyone else still comes off the server, which is all we can
+  /// see of them — so the board never invents a number for another man,
+  /// it only stops under-reporting this one.
+  final int? myMoves;
+
+  /// Who "mine" is. Kept explicit rather than reading AuthService here
+  /// so the model stays testable and has no service dependency.
+  final String? myUserId;
+
   const SquadDay({
     required this.roster,
     required this.board,
     required this.squadStates,
     required this.daily,
+    this.myMoves,
+    this.myUserId,
   });
 
   /// Moves this member has banked today, 0..5.
@@ -54,6 +79,14 @@ class SquadDay {
       if (squadStates[m.id]?.completed.contains(userId) ?? false) n++;
     }
     if (_daily(userId)?.finished ?? false) n++;
+
+    // The higher of what the server saw and what his phone knows he
+    // did. Never the lower — a man is not made to look worse by whichever
+    // of the two systems happened to miss something.
+    if (myUserId != null && userId == myUserId && myMoves != null) {
+      final mine = myMoves!.clamp(0, movesPerMember);
+      if (mine > n) return mine;
+    }
     return n;
   }
 
