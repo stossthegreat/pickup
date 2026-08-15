@@ -1687,11 +1687,12 @@ class _PulseRow extends StatelessWidget {
           '$who scored ${event.payload['score'] ?? '—'}',
           Colors.white
         ),
-      'rankup' => (
-          Icons.trending_up_rounded,
-          '$who ranked up to ${event.payload['tier'] ?? ''}',
-          kNeon
-        ),
+      // Same fix as squad_live_service: the `tier` in this payload was
+      // one of the five identity words derived from a voice rating, so
+      // the room was told a man had "ranked up to INITIATE" because he'd
+      // had a good practice session. Identity is earned in days now and
+      // announced by its own ceremony. See standing.dart.
+      'rankup' => (Icons.trending_up_rounded, '$who levelled up', kNeon),
       // A nudge is public on purpose — being called out in front of the
       // room is the whole point, so it reads as an event, not a DM.
       'nudge' => (

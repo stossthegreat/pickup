@@ -19,7 +19,7 @@
 // ═════════════════════════════════════════════════════════════════════
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { gradeTranscript, tierFor } from "../_shared/grade.ts";
+import { gradeTranscript } from "../_shared/grade.ts";
 import { addLeaguePoints } from "../_shared/league.ts";
 import { rollChatStanding } from "../_shared/roll-chat.ts";
 
@@ -204,29 +204,44 @@ Deno.serve(async (req) => {
         if (aScore !== bScore) {
           const aWon = aScore > bScore;
           patch.winner = aWon ? b.player_a : b.player_b;
+          // RR LIVES IN ITS OWN COLUMN — see migration 0012.
+          //
+          // This used to write `rating`, the same column score-voice
+          // drifts by up to ±40 on every solo practice session. One
+          // number moved by two unrelated systems means a duel win could
+          // be wiped out by a mediocre daily an hour later, and a man who
+          // never fought anyone still climbed the competitive ladder.
+          //
+          // battle_rating is moved by duels and nothing else. That is the
+          // whole point of a ladder: it has to be unfarmable by anything
+          // except the thing it claims to measure.
           const { data: elos } = await admin.from("rizz_elo")
-            .select("user_id, rating, peak")
+            .select(
+              "user_id, battle_rating, battle_peak, battles_won, battles_lost",
+            )
             .in("user_id", [b.player_a, b.player_b]);
           const ea = elos?.find((e) => e.user_id === b.player_a);
           const eb = elos?.find((e) => e.user_id === b.player_b);
           const { newA, newB } = eloExchange(
-            ea?.rating ?? 1000,
-            eb?.rating ?? 1000,
+            ea?.battle_rating ?? 1000,
+            eb?.battle_rating ?? 1000,
             aWon,
           );
           await admin.from("rizz_elo").upsert([
             {
               user_id: b.player_a,
-              rating: newA,
-              tier: tierFor(newA),
-              peak: Math.max(ea?.peak ?? 1000, newA),
+              battle_rating: newA,
+              battle_peak: Math.max(ea?.battle_peak ?? 1000, newA),
+              battles_won: (ea?.battles_won ?? 0) + (aWon ? 1 : 0),
+              battles_lost: (ea?.battles_lost ?? 0) + (aWon ? 0 : 1),
               updated_at: new Date().toISOString(),
             },
             {
               user_id: b.player_b,
-              rating: newB,
-              tier: tierFor(newB),
-              peak: Math.max(eb?.peak ?? 1000, newB),
+              battle_rating: newB,
+              battle_peak: Math.max(eb?.battle_peak ?? 1000, newB),
+              battles_won: (eb?.battles_won ?? 0) + (aWon ? 0 : 1),
+              battles_lost: (eb?.battles_lost ?? 0) + (aWon ? 1 : 0),
               updated_at: new Date().toISOString(),
             },
           ]);

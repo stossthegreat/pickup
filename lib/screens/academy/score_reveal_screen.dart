@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/backend/tiers.dart';
+import '../../services/division.dart';
 import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/game_button.dart';
@@ -89,8 +90,11 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen>
 
   @override
   Widget build(BuildContext context) {
-    final tier = tierFor(p.newRating);
-    final next = nextTier(p.newRating);
+    // The daily moves the VOICE rating. It is not his identity rank
+    // (that's earned days) and it is not his battle division — it is
+    // how well he speaks, and the only honest thing to print beside
+    // it is the number. See standing.dart.
+    final tier = Rank.of(p.newRating);
     final grade = _grade;
     // The GRADE drives the palette now, not the ELO sign — an S-rank
     // that happens to lose a point of rating should still read gold.
@@ -237,35 +241,32 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen>
                     color: AppColors.surface1,
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
-                        color: tier.color.withValues(alpha: 0.35)),
+                        color: tier.div.color.withValues(alpha: 0.35)),
                   ),
                   child: Row(children: [
-                    LeagueCrest(division: _divisionForTier(tier), size: 44),
+                    LeagueCrest(division: _crestFor(tier), size: 44),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(tier.name,
+                          Text(tier.label,
                               style: GoogleFonts.inter(
-                                color: tier.color,
+                                color: tier.div.color,
                                 fontSize: 15,
                                 letterSpacing: 2.2,
                                 fontWeight: FontWeight.w900,
-                                shadows: tier.glow
+                                shadows: tier.div.glows
                                     ? [
                                         Shadow(
-                                            color: tier.color
+                                            color: tier.div.color
                                                 .withValues(alpha: 0.6),
                                             blurRadius: 16)
                                       ]
                                     : null,
                               )),
                           const SizedBox(height: 2),
-                          Text(
-                              next == null
-                                  ? 'TOP OF THE LADDER'
-                                  : '${next.min - p.newRating} TO ${next.name}',
+                          Text(tier.toNext ?? 'TOP OF THE LADDER',
                               style: GoogleFonts.inter(
                                 color: AppColors.textTertiary,
                                 fontSize: 10.5,
@@ -301,10 +302,10 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen>
                             curve: Curves.easeOutBack),
                     const SizedBox(width: 10),
                     ProgressRing(
-                      value: tierProgress(p.newRating),
+                      value: tier.progress,
                       size: 44,
                       stroke: 4.5,
-                      color: tier.color,
+                      color: tier.div.color,
                       center: Text('${p.newRating}',
                           style: GoogleFonts.inter(
                             color: Colors.white,
@@ -374,10 +375,12 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen>
     );
   }
 
-  /// Map the five ELO tiers onto the five crest designs.
-  int _divisionForTier(RizzTier t) {
-    final i = kTiers.indexOf(t);
-    return (i < 0 ? 0 : i) + 1;
+  /// Map a division onto one of the five crest designs. Seven divisions,
+  /// five crests — the top three share the best one, which is correct:
+  /// the crest is a picture of "how high", not a unique ID.
+  int _crestFor(Rank r) {
+    final i = r.div.index;
+    return (i > 4 ? 4 : i) + 1;
   }
 }
 

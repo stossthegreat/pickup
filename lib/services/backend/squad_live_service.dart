@@ -92,9 +92,14 @@ class SquadLiveService {
           LiveEvents.squad(who, 'joined the squad');
           break;
         case 'rankup':
-          LiveEvents.milestone(
-              who, 'ranked up to ${payload['tier'] ?? ''}',
-              route: '/leaderboard');
+          // The payload used to carry a `tier` string written by
+          // score-voice — one of the five identity words, derived from a
+          // rating that moves on every solo practice run. Broadcasting
+          // it told four other men he'd "ranked up to INITIATE" on the
+          // back of a good daily. See standing.dart: the identity ladder
+          // is earned in days and is announced by the ascend ceremony,
+          // not by a toast off someone else's voice score.
+          LiveEvents.milestone(who, 'levelled up', route: '/leaderboard');
           break;
       }
     } catch (e) {

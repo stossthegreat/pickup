@@ -15,6 +15,9 @@ import '../../services/paywall_gate.dart';
 import '../../services/roster.dart';
 import '../../services/streak_rescue_service.dart';
 import '../../services/streak_service.dart';
+import '../../services/milestone_service.dart';
+import '../../services/standing.dart';
+import '../../widgets/academy/ascend_reveal.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/live_toast.dart';
@@ -70,8 +73,12 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
         return; // one heavy moment per open; the catch-up can wait
       }
       final events = await CatchUpService.collect();
-      if (!mounted || events.isEmpty) return;
-      await CatchUpSheet.show(context, events);
+      if (mounted && events.isNotEmpty) {
+        await CatchUpSheet.show(context, events);
+      }
+      // Last, and only if nothing heavier ran: a rank earned on
+      // yesterday's fifth mission still deserves its moment today.
+      if (mounted) await _milestones();
     });
   }
 
@@ -118,6 +125,39 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     // ignore: discarded_futures
     SquadBroadcast.completed(m.title, xp: m.xp, girlId: m.girlId);
     await _load();
+    // THE MOMENT. Finishing a mission is the only time XP moves, so it
+    // is the only time a level can land — and it used to land silently
+    // in a pill he wasn't looking at. See milestone_service.dart.
+    await _milestones();
+  }
+
+  /// HOME OWNS TWO LADDERS: his LEVEL and his RANK. Both are read from
+  /// local state — total XP and earned days — so this costs nothing and
+  /// can run on every completion.
+  ///
+  /// It owns those two and no others on purpose. The battle verdict
+  /// celebrates a DIVISION promotion because that's where one happens,
+  /// and squad home celebrates a SQUAD LEVEL because that's where the
+  /// squad's numbers already are. One owner per ladder; anything else
+  /// and two screens race to congratulate him for the same thing.
+  Future<void> _milestones() async {
+    final xp = await LocalStoreService.xpTotal();
+    final snap = await StreakService.progress();
+    final days = snap.ascensionDay;
+    final rank = Standing.rankFor(days);
+    await MilestoneService.check(
+      level: Standing.levelFor(xp),
+      rankRung: Standing.rungFor(days),
+      rankLabel: rank.label,
+    );
+    if (!mounted) return;
+    await AscendReveal.drain(
+      context,
+      accentOf: (m) => ascendTint(m.kind),
+      footnoteOf: (m) => m.kind == MilestoneKind.rank
+          ? '${rank.tagline}\n\n${rank.unlock}'
+          : null,
+    );
   }
 
   // ignore: unused_element

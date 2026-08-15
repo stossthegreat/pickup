@@ -7,7 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/daily_game_service.dart';
 import '../../services/backend/leaderboard_service.dart';
-import '../../services/backend/tiers.dart';
+import '../../services/division.dart';
 import '../../services/economy.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
@@ -27,16 +27,38 @@ class LeaderboardScreen extends StatefulWidget {
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
 
+/// THREE BOARDS, not one with a toggle bolted to it.
+///
+/// A man asked for four — voice, chat, battle-voice, battle-chat. There
+/// are three, and the missing one isn't an oversight: BATTLES ARE TEXT.
+/// That was a deliberate call (see battles_screen.dart) — live voice is
+/// the most expensive thing the app does and a duel has to be runnable
+/// on a bus, in a pub, at 1am. There is no battle-voice board because
+/// there is no battle-voice.
+enum Board {
+  /// The daily and practice, ranked on the voice rating.
+  voice,
+
+  /// Rizz Points — cumulative, from graded text conversations.
+  chat,
+
+  /// Duels won. Same rows as chat, ranked on the fight record instead
+  /// of the points total, because "most points" and "best fighter" are
+  /// genuinely different men and the board should be able to say so.
+  battles,
+}
+
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
-  bool _league = true; // league table vs all-time
+  /// THE TIME FILTER lives on its own line above the boards, because
+  /// four chips on one row ran off the edge of a normal phone and
+  /// because WEEK/ALL-TIME answers a different question to which board
+  /// you're looking at. Two axes, two rows.
+  bool _week = true;
+  Board _board = Board.voice;
+
   bool _loading = true;
   DailyStatus? _s;
   List<LeaderboardEntry> _allTime = const [];
-
-  /// VOICE and TEXT are separate ladders on purpose — see migration
-  /// 0009. Voice RR moves on voice only; text has its own best-score
-  /// board. Mixing them would let someone grind text to a voice rank.
-  bool _voice = true;
   List<ChatBoardEntry> _chat = const [];
 
   @override
@@ -85,11 +107,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     color: AppColors.red,
                     backgroundColor: AppColors.surface1,
                     onRefresh: _load,
-                    child: !_voice
-                        ? _chatTable()
-                        : _league
-                            ? _leagueTable()
-                            : _allTimeTable(),
+                    child: switch (_board) {
+                      Board.chat => _chatTable(),
+                      Board.battles => _battleTable(),
+                      Board.voice =>
+                        _week ? _leagueTable() : _allTimeTable(),
+                    },
                   ),
                 ),
               ]),
@@ -98,11 +121,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   Widget _topBar() {
-    // The four chips (VOICE / CHAT / WEEK / ALL TIME) shared a row with
-    // the back arrow and the title, so on a normal phone the last one ran
-    // off the screen edge. They get the full width now, on their own line
-    // under the arrow, and scroll horizontally as a backstop for a fifth
-    // filter or a wider language.
+    // ROW 1  back + what you're looking at
+    // ROW 2  WHEN — this week or all time (voice only; the points and
+    //        duel boards are cumulative and have no weekly form)
+    // ROW 3  WHICH BOARD — the actual choice, given the most weight
+    //
+    // The time chips deliberately do NOT share a line with the boards.
+    // They used to, and four chips plus a back arrow plus a title ran
+    // off the right edge of a normal phone — but the real problem was
+    // that a row of five buttons where two mean "when" and three mean
+    // "what" reads as one undifferentiated wall of options.
+    final supportsWeek = _board == Board.voice;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 2, 10, 8),
       child: Column(
@@ -114,11 +143,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   size: 18, color: Colors.white),
             ),
-            Icon(_voice ? Icons.graphic_eq_rounded : Icons.forum_rounded,
-                size: 13, color: AppColors.red),
+            Icon(_boardIcon, size: 13, color: AppColors.red),
             const SizedBox(width: 6),
             Expanded(
-              child: Text(_voice ? 'VOICE RANKINGS' : 'RIZZ CHAT POINTS',
+              child: Text(_boardTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
@@ -128,29 +156,90 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     fontWeight: FontWeight.w900,
                   )),
             ),
+            // WHEN — small, quiet, right-aligned. A filter, not a
+            // destination, and sized like one.
+            if (supportsWeek) ...[
+              _timeChip('WEEK', _week, () => setState(() => _week = true)),
+              const SizedBox(width: 5),
+              _timeChip('ALL TIME', !_week, () => setState(() => _week = false)),
+            ] else
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                // Not a dead button. This board has one time window and
+                // the screen says which rather than offering a chip that
+                // does nothing.
+                child: Text('ALL TIME',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textMuted,
+                      fontSize: 9,
+                      letterSpacing: 1.6,
+                      fontWeight: FontWeight.w900,
+                    )),
+              ),
           ]),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+          const SizedBox(height: 10),
+          // WHICH BOARD — full width, equal thirds, the real choice.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Row(children: [
-              _tab('VOICE', _voice, () => setState(() => _voice = true)),
+              Expanded(
+                  child: _tab('VOICE', _board == Board.voice,
+                      () => setState(() => _board = Board.voice))),
               const SizedBox(width: 6),
-              _tab('CHAT', !_voice, () => setState(() => _voice = false)),
-              if (_voice) ...[
-                Container(
-                    width: 1,
-                    height: 16,
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    color: Colors.white.withValues(alpha: 0.12)),
-                _tab('WEEK', _league, () => setState(() => _league = true)),
-                const SizedBox(width: 6),
-                _tab('ALL TIME', !_league,
-                    () => setState(() => _league = false)),
-              ],
+              Expanded(
+                  child: _tab('CHAT', _board == Board.chat,
+                      () => setState(() => _board = Board.chat))),
+              const SizedBox(width: 6),
+              Expanded(
+                  child: _tab('BATTLES', _board == Board.battles,
+                      () => setState(() => _board = Board.battles))),
             ]),
           ),
         ],
+      ),
+    );
+  }
+
+  IconData get _boardIcon => switch (_board) {
+        Board.voice => Icons.graphic_eq_rounded,
+        Board.chat => Icons.forum_rounded,
+        Board.battles => Icons.sports_mma_rounded,
+      };
+
+  String get _boardTitle => switch (_board) {
+        Board.voice => 'VOICE RANKINGS',
+        Board.chat => 'RIZZ CHAT POINTS',
+        Board.battles => 'DUELS WON',
+      };
+
+  /// The quiet one. Deliberately smaller and greyer than a board tab —
+  /// if the filter looks like the choice, it becomes the choice.
+  Widget _timeChip(String label, bool active, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: active
+              ? Colors.white.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+              color: active
+                  ? Colors.white.withValues(alpha: 0.35)
+                  : AppColors.surface3),
+        ),
+        child: Text(label,
+            style: GoogleFonts.inter(
+              color: active ? Colors.white : AppColors.textTertiary,
+              fontSize: 9,
+              letterSpacing: 1.4,
+              fontWeight: FontWeight.w900,
+            )),
       ),
     );
   }
@@ -163,7 +252,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: active ? AppColors.red : AppColors.surface1,
           borderRadius: BorderRadius.circular(999),
@@ -643,6 +733,90 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
+  // ══════════════════════════════════════════════════════════════════
+  //  THE DUEL BOARD
+  // ══════════════════════════════════════════════════════════════════
+
+  /// Ranked on WINS, then win rate, then points.
+  ///
+  /// Same rows as the chat board — chat_leaderboard already carries
+  /// `battles` and `wins` per man (migration 0010) — but ordered by the
+  /// fight record instead of the points total, because "most points"
+  /// and "best fighter" are different men and a board that can only
+  /// name one of them is only half a board.
+  ///
+  /// Wins before win rate on purpose. A man who is 3–0 has a perfect
+  /// record and has proved nothing; rate-first boards get topped by
+  /// whoever has played least, which is the opposite of what a
+  /// competitive ladder is supposed to reward.
+  Widget _battleTable() {
+    final fought = [
+      for (final e in _chat)
+        if (e.battles > 0) e
+    ]..sort((a, b) {
+        final w = b.wins.compareTo(a.wins);
+        if (w != 0) return w;
+        final ra = a.battles == 0 ? 0 : (a.wins * 1000) ~/ a.battles;
+        final rb = b.battles == 0 ? 0 : (b.wins * 1000) ~/ b.battles;
+        final r = rb.compareTo(ra);
+        return r != 0 ? r : b.points.compareTo(a.points);
+      });
+
+    if (fought.isEmpty) {
+      return ListView(children: [
+        const SizedBox(height: 70),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 34),
+            child: Text(
+                'Nobody has settled a duel yet. Same woman, both blind — '
+                'the first man to win one owns this board.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 13,
+                    height: 1.5,
+                    fontWeight: FontWeight.w600)),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: SizedBox(
+            width: 220,
+            child: GameButton(
+              label: 'FIND A RIVAL',
+              icon: Icons.radar_rounded,
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                context.push('/battles');
+              },
+            ),
+          ),
+        ),
+      ]);
+    }
+
+    final me = AuthService.userId;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+      children: [
+        for (final (i, e) in fought.indexed)
+          _DuelRow(entry: e, position: i + 1, mine: e.userId == me),
+        const SizedBox(height: 16),
+        Text(
+            'Ranked on duels won. A win takes RIZZ RATING off the man you '
+            'beat — that is the only thing in this app that moves it.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: AppColors.textMuted,
+              fontSize: 11,
+              height: 1.5,
+              fontWeight: FontWeight.w500,
+            )),
+      ],
+    );
+  }
+
   Widget _allTimeTable() {
     if (_allTime.isEmpty) {
       // Empty here means one of two things — nobody has scored yet, OR
@@ -703,7 +877,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               const SizedBox(width: 8),
               _Avatar(
                 label: e.userId == me ? 'YOU' : (e.handle ?? 'A'),
-                ring: tierFor(e.rating).color,
+                ring: Rank.of(e.rating).div.color,
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -718,9 +892,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                           fontSize: 14,
                           fontWeight: FontWeight.w800,
                         )),
-                    Text(tierFor(e.rating).name,
+                    // THE DIVISION, not an identity word. This row used
+                    // to print INITIATE / CONTENDER — the same five words
+                    // the 60-day rank ladder uses — off a rating that
+                    // moves on every voice session. Same man, two
+                    // meanings, one vocabulary. See standing.dart.
+                    Text(Rank.of(e.rating).label,
                         style: GoogleFonts.inter(
-                          color: tierFor(e.rating).color,
+                          color: Rank.of(e.rating).div.color,
                           fontSize: 9,
                           letterSpacing: 1.6,
                           fontWeight: FontWeight.w900,
@@ -896,6 +1075,92 @@ class _ChatRow extends StatelessWidget {
               color: AppColors.textMuted,
               fontSize: 8.5,
               letterSpacing: 1,
+              fontWeight: FontWeight.w900,
+            )),
+      ]),
+    );
+  }
+}
+
+
+/// One fighter. The record is the headline; the points total is context
+/// underneath it, so the two boards can share rows without ever looking
+/// like the same board.
+class _DuelRow extends StatelessWidget {
+  final ChatBoardEntry entry;
+  final int position;
+  final bool mine;
+  const _DuelRow({
+    required this.entry,
+    required this.position,
+    required this.mine,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final e = entry;
+    final lost = e.battles - e.wins;
+    final rate = e.battles == 0 ? 0 : ((e.wins / e.battles) * 100).round();
+    final gold = position == 1;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: mine ? AppColors.surface2 : AppColors.surface1,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: mine
+              ? AppColors.red
+              : gold
+                  ? const Color(0xFFFFC53D).withValues(alpha: 0.45)
+                  : Colors.white.withValues(alpha: 0.05),
+          width: mine ? 1.5 : 1,
+        ),
+      ),
+      child: Row(children: [
+        SizedBox(
+          width: 26,
+          child: Text('$position',
+              style: GoogleFonts.inter(
+                color: gold ? const Color(0xFFFFC53D) : AppColors.textTertiary,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              )),
+        ),
+        const SizedBox(width: 6),
+        _Avatar(
+          label: mine ? 'YOU' : (e.handle ?? 'A'),
+          ring: gold ? const Color(0xFFFFC53D) : AppColors.textTertiary,
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(mine ? 'YOU' : (e.handle ?? 'ANON'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  )),
+              Text('$rate% · ${Economy.commas(e.points)} PTS',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 9.5,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ],
+          ),
+        ),
+        // The record, read the way every fighter reads one.
+        Text('${e.wins}–$lost',
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 16,
               fontWeight: FontWeight.w900,
             )),
       ]),

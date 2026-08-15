@@ -71,6 +71,60 @@ class LeaderboardService {
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════
+  //  RIZZ RATING — the OTHER column
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // `rating` above is the VOICE rating: how well he speaks, moved by
+  // score-voice on every practice session, and it ranks the voice board.
+  //
+  // `battle_rating` is RR: moved by duels and nothing else, and it is
+  // what the BRONZE III → LEGEND I divisions are cut against. Migration
+  // 0012 adds it and explains why one column could never be both.
+  //
+  // THESE READS DEGRADE ON PURPOSE. If 0012 hasn't been run the column
+  // doesn't exist and the select throws — so they return null and every
+  // caller falls back to an unrated 1000 rather than showing a division
+  // derived from a voice score, which is the exact bug 0012 exists to
+  // end. A missing ladder is recoverable; a lying one isn't.
+
+  /// The caller's RR, or null when the column isn't there yet.
+  static Future<int?> myBattleRating() async {
+    final uid = AuthService.userId;
+    if (uid == null || !BackendService.enabled) return null;
+    try {
+      final r = await _sb
+          .from('rizz_elo')
+          .select('battle_rating')
+          .eq('user_id', uid)
+          .single();
+      return (r['battle_rating'] as num?)?.toInt();
+    } catch (e) {
+      debugPrint('LeaderboardService.myBattleRating: $e');
+      return null;
+    }
+  }
+
+  /// RR for a set of men — the opponent emblems on the Battles screen.
+  /// Empty when unavailable; callers show an unranked opponent rather
+  /// than inventing one.
+  static Future<Map<String, int>> battleRatings(List<String> ids) async {
+    if (!BackendService.enabled || ids.isEmpty) return const {};
+    try {
+      final rows = await _sb
+          .from('rizz_elo')
+          .select('user_id, battle_rating')
+          .inFilter('user_id', ids);
+      return {
+        for (final r in rows)
+          r['user_id'] as String: (r['battle_rating'] as num?)?.toInt() ?? 1000,
+      };
+    } catch (e) {
+      debugPrint('LeaderboardService.battleRatings: $e');
+      return const {};
+    }
+  }
+
   /// The signed-in user's own rating row (rank ladder chip, profile).
   static Future<LeaderboardEntry?> me() async {
     final uid = AuthService.userId;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/backend/tiers.dart';
+import '../../services/division.dart';
 import '../../theme/app_colors.dart';
 
 /// The Academy share card — the brag that recruits.
@@ -51,7 +52,7 @@ class RizzScoreShareCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tier = tierFor(rating);
+    final tier = Rank.of(rating);
     return Container(
       color: AppColors.base,
       padding: const EdgeInsets.fromLTRB(72, 110, 72, 90),
@@ -119,18 +120,18 @@ class RizzScoreShareCard extends StatelessWidget {
                 const EdgeInsets.symmetric(horizontal: 44, vertical: 18),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: tier.color, width: 3),
-              boxShadow: tier.glow
+              border: Border.all(color: tier.div.color, width: 3),
+              boxShadow: tier.div.glows
                   ? [
                       BoxShadow(
-                          color: tier.color.withValues(alpha: 0.4),
+                          color: tier.div.color.withValues(alpha: 0.4),
                           blurRadius: 60)
                     ]
                   : null,
             ),
-            child: Text(tier.name,
+            child: Text(tier.label,
                 style: GoogleFonts.inter(
-                  color: tier.color,
+                  color: tier.div.color,
                   fontSize: 40,
                   letterSpacing: 10,
                   fontWeight: FontWeight.w900,

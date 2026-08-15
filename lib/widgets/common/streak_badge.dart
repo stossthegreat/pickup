@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../services/backend/leaderboard_service.dart';
-import '../../services/backend/tiers.dart';
-import '../../services/economy.dart';
+import '../../services/standing.dart';
+import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 
 /// The clean streak flame pill — the exact look used on the Progress
@@ -83,20 +82,25 @@ class XpBadge extends StatelessWidget {
 }
 
 
-/// RANK — the second of the two pills, and the other half of who he is.
+/// RANK — the second of the two pills, and the one that broke.
 ///
-/// A man in this app carries TWO standings and they measure different
-/// things: his personal ladder (OBSERVER → HIM, moved by battles) and
-/// his squad's. Both were being shown in the wrong places — the personal
-/// tier was buried in the corner of the Battles card, where it read as a
-/// property of battles rather than of him.
+/// THE BUG. This used to print `tierFor(rizz_elo.rating).name`, which
+/// meant a man read INITIATE on Home while every ascension surface in
+/// the app still called him OBSERVER. Both were right. The app had three
+/// ladders sharing five words, and rizz_elo.rating — the thing driving
+/// this one — moves up to ±40 on every solo voice session, so two good
+/// dailies promoted his identity. Ten days of work and two lucky
+/// conversations produced the same word.
 ///
-/// So it comes out of that card and sits next to XP, in the same pill,
-/// at the same height. Two badges side by side is the whole of "who am
-/// I here": what I've earned (XP) and where I stand (rank). The squad's
-/// standing lives in the squad's own hero, where it belongs.
+/// THE FIX. RANK is now EARNED DAYS and nothing else: ten days a rung,
+/// OBSERVER → BECOME HIM, the same ladder the paywall sells and the
+/// 60-day map draws. It cannot be rushed, it cannot jump, and it agrees
+/// with every other screen because there is now exactly one source for
+/// it. See standing.dart for the full table of who owns what.
 ///
-/// Self-loading so the masthead doesn't have to know about the ladder.
+/// The rating that used to live here hasn't gone anywhere — it's the
+/// battle DIVISION, on the Battles screen, in its own vocabulary
+/// (BRONZE III → LEGEND I) so the two can never be confused again.
 class RankBadge extends StatefulWidget {
   const RankBadge({super.key});
 
@@ -105,7 +109,7 @@ class RankBadge extends StatefulWidget {
 }
 
 class _RankBadgeState extends State<RankBadge> {
-  LeaderboardEntry? _me;
+  int _days = 0;
 
   @override
   void initState() {
@@ -115,43 +119,57 @@ class _RankBadgeState extends State<RankBadge> {
   }
 
   Future<void> _load() async {
-    final me = await LeaderboardService.me();
-    if (mounted) setState(() => _me = me);
+    final snap = await StreakService.progress();
+    if (mounted) setState(() => _days = snap.ascensionDay);
+  }
+
+  /// Gold is RANK's colour and RANK's alone — see ascend_reveal.dart.
+  /// It deepens as he climbs so the pill itself is evidence.
+  Color get _tone {
+    final rung = Standing.rungFor(_days);
+    if (rung >= 5) return const Color(0xFFFFC53D);
+    if (rung >= 3) return const Color(0xFFE0A82E);
+    if (rung >= 1) return AppColors.textPrimary;
+    return AppColors.textTertiary;
   }
 
   @override
   Widget build(BuildContext context) {
-    final me = _me;
-    final tier = me == null ? kTiers.first : tierFor(me.rating);
+    final rank = Standing.rankFor(_days);
+    final tone = _tone;
+    final glow = Standing.rungFor(_days) >= 3;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: tier.color.withValues(alpha: 0.14),
+        color: tone.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(99),
-        border:
-            Border.all(color: tier.color.withValues(alpha: 0.5), width: 0.8),
-        boxShadow: tier.glow
-            ? [BoxShadow(color: tier.color.withValues(alpha: 0.3), blurRadius: 14)]
+        border: Border.all(color: tone.withValues(alpha: 0.5), width: 0.8),
+        boxShadow: glow
+            ? [BoxShadow(color: tone.withValues(alpha: 0.3), blurRadius: 14)]
             : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.shield_rounded, color: tier.color, size: 15),
+          Icon(Icons.shield_rounded, color: tone, size: 15),
           const SizedBox(width: 5),
-          Text(tier.name,
+          Text(rank.label,
               style: GoogleFonts.inter(
-                color: tier.color,
+                color: tone,
                 fontSize: 13,
                 height: 1,
                 letterSpacing: 0.3,
                 fontWeight: FontWeight.w800,
               )),
-          if (me != null) ...[
+          if (_days > 0) ...[
             const SizedBox(width: 6),
-            Text(Economy.commas(me.rating),
+            // The day count, because RANK is days. Printing the unit
+            // beside the word is what stops him wondering where it came
+            // from — which is the entire failure this pill is fixing.
+            Text('D$_days',
                 style: GoogleFonts.inter(
-                  color: tier.color.withValues(alpha: 0.75),
+                  color: tone.withValues(alpha: 0.75),
                   fontSize: 11.5,
                   height: 1,
                   fontWeight: FontWeight.w900,

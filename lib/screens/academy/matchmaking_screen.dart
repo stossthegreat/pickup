@@ -149,8 +149,9 @@ class _MatchmakingScreenState extends State<MatchmakingScreen>
       }));
 
   Future<void> _boot() async {
-    final me = await LeaderboardService.me();
-    if (mounted && me != null) setState(() => _myRating = me.rating);
+    // RR — the duel ladder. Never the voice rating; see migration 0012.
+    final rr = await LeaderboardService.myBattleRating();
+    if (mounted && rr != null) setState(() => _myRating = rr);
 
     // The readout scrolls through the band around his own rating. It is
     // a scanner display, not a queue of men being rejected — which is
@@ -196,8 +197,8 @@ class _MatchmakingScreenState extends State<MatchmakingScreen>
     // His real rating, so the stakes on screen are the real stakes.
     final id = b.opponentId;
     if (id != null) {
-      final rows = await LeaderboardService.forUsers([id]);
-      if (rows.isNotEmpty) _oppRating = rows.first.rating;
+      final rows = await LeaderboardService.battleRatings([id]);
+      _oppRating = rows[id];
     }
     if (!mounted) return;
 

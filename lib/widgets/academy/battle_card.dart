@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/battle_service.dart';
 import '../../services/backend/leaderboard_service.dart';
-import '../../services/backend/tiers.dart';
+import '../../services/division.dart';
 import '../../services/economy.dart';
 import '../../theme/app_colors.dart';
 import 'game_button.dart';
@@ -42,7 +42,7 @@ class BattleCard extends StatefulWidget {
 
 class _BattleCardState extends State<BattleCard> {
   List<Battle> _battles = const [];
-  LeaderboardEntry? _me;
+  int? _rr;
   bool _ready = false;
 
   @override
@@ -54,11 +54,11 @@ class _BattleCardState extends State<BattleCard> {
 
   Future<void> _load() async {
     final battles = await BattleService.myBattles();
-    final me = await LeaderboardService.me();
+    final rr = await LeaderboardService.myBattleRating();
     if (!mounted) return;
     setState(() {
       _battles = battles;
-      _me = me;
+      _rr = rr;
       _ready = true;
     });
   }
@@ -99,10 +99,13 @@ class _BattleCardState extends State<BattleCard> {
   Widget build(BuildContext context) {
     final turn = _yourTurn;
     final rec = _record;
-    final me = _me;
-    final tier = me == null ? kTiers.first : tierFor(me.rating);
+    // DIVISION off the BATTLE rating. This card used to print the same
+    // five words the 60-day identity ladder uses, off a rating that
+    // moved on every solo voice session — two different bugs stacked on
+    // each other. See standing.dart and migration 0012.
+    final tier = Rank.of(_rr ?? 0);
     final urgent = turn > 0;
-    final tone = urgent ? AppColors.red : tier.color;
+    final tone = urgent ? AppColors.red : tier.div.color;
 
     return GestureDetector(
       onTap: () {
@@ -159,7 +162,7 @@ class _BattleCardState extends State<BattleCard> {
                     const SizedBox(width: 6),
                     Text(Economy.rrShort,
                         style: GoogleFonts.inter(
-                          color: tier.color,
+                          color: tier.div.color,
                           fontSize: 11,
                           letterSpacing: 2.2,
                           fontWeight: FontWeight.w900,
@@ -168,16 +171,16 @@ class _BattleCardState extends State<BattleCard> {
             ]),
             const Spacer(),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text(tier.name,
+              Text(tier.label,
                   style: GoogleFonts.inter(
-                    color: tier.color,
+                    color: tier.div.color,
                     fontSize: 12,
                     letterSpacing: 2.2,
                     fontWeight: FontWeight.w900,
-                    shadows: tier.glow
+                    shadows: tier.div.glows
                         ? [
                             Shadow(
-                                color: tier.color.withValues(alpha: 0.6),
+                                color: tier.div.color.withValues(alpha: 0.6),
                                 blurRadius: 20)
                           ]
                         : null,

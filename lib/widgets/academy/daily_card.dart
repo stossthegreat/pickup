@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/backend/daily_game_service.dart';
-import '../../services/backend/tiers.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';

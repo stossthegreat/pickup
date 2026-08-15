@@ -12,6 +12,7 @@ import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../services/comeback_service.dart';
 import '../../services/economy.dart';
+import '../../services/milestone_service.dart';
 import '../../services/mirror_service.dart';
 import '../../services/rolodex_service.dart';
 import '../../theme/app_colors.dart';
@@ -20,6 +21,7 @@ import '../../widgets/academy/challenge_row.dart';
 import '../../widgets/academy/five_board.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe, scenarioOfToday;
 import '../../widgets/academy/comeback_sheet.dart';
+import '../../widgets/academy/ascend_reveal.dart';
 import '../../widgets/academy/mirror_band.dart';
 import '../../widgets/academy/pulse_sheet.dart';
 import '../../widgets/academy/rolodex_shelf.dart';
@@ -135,7 +137,34 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
       _loading = false;
     });
     // ignore: discarded_futures
+    _squadMilestone();
+    // ignore: discarded_futures
     _reentry();
+  }
+
+  /// SQUAD HOME OWNS ONE LADDER: the squad's level.
+  ///
+  /// It owns it because the squad's score is already loaded here and
+  /// nowhere else, and because a squad level is the one number in the
+  /// app he did not earn on his own — celebrating it on Home, away from
+  /// the four men who paid for it, would be the wrong room.
+  ///
+  /// Passing only [squadLevel] means the other three ladders are left
+  /// entirely to their owners (Home does level and rank, the battle
+  /// verdict does division) and two screens can never race to
+  /// congratulate him for the same thing.
+  Future<void> _squadMilestone() async {
+    if (_squad == null) return;
+    await MilestoneService.check(
+      // Only the squad's. Level, rank and division are other screens'
+      // and are deliberately not passed — see the note on check().
+      squadLevel: _history.level,
+    );
+    if (!mounted) return;
+    await AscendReveal.drain(
+      context,
+      accentOf: (m) => ascendTint(m.kind),
+    );
   }
 
   /// THE FIFTH DAY BACK — the moment retention is actually won or lost,

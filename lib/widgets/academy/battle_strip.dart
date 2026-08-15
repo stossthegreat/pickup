@@ -52,7 +52,7 @@ class BattleStrip extends StatefulWidget {
 
 class _BattleStripState extends State<BattleStrip> {
   List<Battle> _battles = const [];
-  LeaderboardEntry? _me;
+  int? _rr;
   int _streak = 0;
 
   @override
@@ -64,12 +64,12 @@ class _BattleStripState extends State<BattleStrip> {
 
   Future<void> _load() async {
     final battles = await BattleService.myBattles();
-    final me = await LeaderboardService.me();
+    final rr = await LeaderboardService.myBattleRating();
     final standing = await BattleMeta.standing();
     if (!mounted) return;
     setState(() {
       _battles = battles;
-      _me = me;
+      _rr = rr;
       _streak = standing.streak;
     });
   }
@@ -110,7 +110,7 @@ class _BattleStripState extends State<BattleStrip> {
     final girl = girlForVibe(scenarioOfToday());
     final turn = _yourTurn;
     final urgent = turn > 0;
-    final me = _me;
+    final rr = _rr;
     final rec = _record;
 
     return GestureDetector(
@@ -249,9 +249,9 @@ class _BattleStripState extends State<BattleStrip> {
                         _streak >= 2
                             ? '${Streaks.emoji(_streak)} $_streak '
                                 '${Streaks.title(_streak)} — ON THE LINE'
-                            : me == null
+                            : rr == null
                                 ? 'HIGHER AI SCORE TAKES THE ${Economy.rrShort}'
-                                : '${Economy.commas(me.rating)} ${Economy.rrShort}'
+                                : '${Economy.commas(rr)} ${Economy.rrShort}'
                                     '${rec.won + rec.lost == 0 ? '' : '  ·  ${rec.won}W—${rec.lost}L'}',
                         style: GoogleFonts.inter(
                           color: _streak >= 2
