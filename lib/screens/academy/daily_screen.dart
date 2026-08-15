@@ -11,12 +11,16 @@ import '../../services/backend/squad_broadcast.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../services/roster.dart';
+import '../../services/achievements.dart';
 import '../../services/economy.dart';
+import '../../services/milestone_service.dart';
+import '../../services/rewards.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/brag_sheet.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/league_crest.dart';
+import '../../widgets/academy/ascend_reveal.dart';
 import '../../widgets/academy/rizz_off_reveal.dart';
 import '../game/freeflow/free_flow_screen.dart';
 
@@ -198,13 +202,24 @@ class _DailyScreenState extends State<DailyScreen> {
         transitionBuilder: (ctx, a, __, child) =>
             FadeTransition(opacity: a, child: child),
       );
+      // THE DAILY PAID NOTHING. A live voice conversation with a woman,
+      // graded on five axes, the flagship event of the day — and the
+      // progression bar did not move. See rewards.dart; this was the
+      // single biggest hole in the economy.
+      final ai = Economy.aiScoreFromVoice(r.score);
+      await Rewards.daily(ai);
+      MilestoneService.pushTrophies(await Achievements.bump(Stat.dailies));
+      MilestoneService.pushTrophies(await Achievements.bump(Stat.talks));
+      if (ai >= 90) {
+        MilestoneService.pushTrophies(await Achievements.bump(Stat.nineties));
+      }
+      if (mounted) await AscendReveal.settle(context);
+
       // THE ASK, at the only moment it lands: he's holding a number he
       // didn't have ninety seconds ago. Fires once ever, and never for a
       // man who already has a squad.
       if (mounted) {
-        await BragSheet.maybeShow(context,
-            score: '${Economy.aiScoreFromVoice(r.score)}',
-            scaleLabel: '/ 100');
+        await BragSheet.maybeShow(context, score: '$ai', scaleLabel: '/ 100');
       }
     }
     _load();

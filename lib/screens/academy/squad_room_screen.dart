@@ -7,6 +7,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
 
 import '../../services/backend/auth_service.dart';
+import '../../services/achievements.dart';
+import '../../services/milestone_service.dart';
+import '../../services/rewards.dart';
 import '../../services/backend/mission_service.dart';
 import '../../services/backend/squad_broadcast.dart';
 import '../../services/backend/squad_day.dart';
@@ -182,6 +185,9 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
   Future<void> _nudge(SquadMember m) async {
     final s = _squad;
     if (s == null) return;
+    // Nudging is the one purely social act in the app and it had no
+    // reward attached at all — see the NUDGES family in achievements.
+    MilestoneService.pushTrophies(await Achievements.bump(Stat.nudges));
     await SquadService.postEvent(s.id, 'nudge', {
       'target': m.userId,
       'handle': m.handle ?? 'ANON',
@@ -272,7 +278,11 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
     HapticFeedback.heavyImpact();
     if (await MissionService.complete(m.id)) {
       await SquadService.postEvent(s.id, 'completed', {'mission': m.title});
-      LiveEvents.xp(100, 'Mission complete');
+      // THIS WAS A LIE. It fired a toast reading "+100 XP" and never
+      // called addXp — the app told him he'd been paid and paid him
+      // nothing. It now grants a real mission's worth through the one
+      // door, and the toast is the receipt rather than the whole event.
+      await Rewards.squad(m.title);
       if (!mounted) return;
       _celebrate(m.title);
       _load();

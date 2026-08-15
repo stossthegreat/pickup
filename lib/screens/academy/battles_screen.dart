@@ -6,15 +6,19 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/achievements.dart';
 import '../../services/backend/battle_service.dart';
 import '../../services/backend/leaderboard_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../services/battle_meta_service.dart';
 import '../../services/division.dart';
 import '../../services/economy.dart';
+import '../../services/milestone_service.dart';
+import '../../services/rewards.dart';
 import '../../services/roster.dart';
 import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/academy/ascend_reveal.dart';
 import '../../widgets/academy/battle_verdict.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/game_button.dart';
@@ -548,6 +552,10 @@ class _BattlesScreenState extends State<BattlesScreen> {
     final r = BattleService.lastResult;
     if (r != null) {
       BattleService.lastResult = null;
+      // The conversation happened whether or not the other man has
+      // answered yet, so it counts toward the talking families now
+      // rather than waiting on someone else to open the app.
+      MilestoneService.pushTrophies(await Achievements.bump(Stat.talks));
       await showGeneralDialog<void>(
         context: context,
         barrierColor: Colors.black,
@@ -585,6 +593,15 @@ class _BattlesScreenState extends State<BattlesScreen> {
         if (settled != null && settled.settled) {
           await BattleMeta.record(won: settled.iWon, tie: settled.tie);
           await BattleMeta.markSeen([settled.id]);
+          // A DUEL PAID NOTHING IN XP. He fought another human on the
+          // same woman and his level didn't move. Losing pays too — a
+          // ladder where defeat costs RR *and* pays zero is one men stop
+          // queueing on after two bad nights.
+          await Rewards.battle(won: settled.iWon);
+          MilestoneService.pushTrophies(await Achievements.bump(Stat.duels));
+          if (settled.iWon) {
+            MilestoneService.pushTrophies(await Achievements.bump(Stat.wins));
+          }
           final after = await LeaderboardService.myBattleRating();
           if (!mounted) return;
           final move =
@@ -599,6 +616,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
       }
     }
     if (mounted) await _load();
+    if (mounted) await AscendReveal.settle(context);
   }
 
   void _shareResult(Battle b) {

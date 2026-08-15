@@ -17,6 +17,9 @@ import '../../services/boon_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/mirror_service.dart';
 import '../../services/paywall_gate.dart';
+import '../../services/achievements.dart';
+import '../../services/milestone_service.dart';
+import '../../services/rewards.dart';
 import '../../services/rolodex_service.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
@@ -452,6 +455,13 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
         ? await Rolodex.win(
             girlId: girl.id, line: _bestLine, score: _heat.round())
         : false;
+    // A NUMBER IS A CLOSE. It was banking a card and paying nothing —
+    // the one outcome in the app that maps directly to the real thing
+    // it's training, and it wasn't worth a single point.
+    if (fresh) {
+      await Rewards.number(girl.name);
+      MilestoneService.pushTrophies(await Achievements.bump(Stat.numbers));
+    }
     if (!mounted) return;
     // The daily challenge and battles close on their own full reveal.
     // The card is still banked above — he keeps the win, he just doesn't
@@ -650,6 +660,10 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       line: _bestLine,
       score: _heat.round(),
     );
+    if (fresh) {
+      await Rewards.number(girl.name);
+      MilestoneService.pushTrophies(await Achievements.bump(Stat.numbers));
+    }
     if (!mounted) return;
     await _showVerdict(girl, ceremony: true, newCard: fresh);
   }

@@ -6,12 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/achievements.dart';
 import '../../services/milestone_service.dart';
 import '../../services/sfx_service.dart';
 import '../../theme/app_colors.dart';
 import 'game_button.dart';
 import 'game_feel.dart';
 import 'grade_stamp.dart';
+import 'trophy.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
 ///  THE ASCEND — one ceremony, three ladders
@@ -112,6 +114,14 @@ class AscendReveal extends StatefulWidget {
       );
     }
   }
+
+  /// The one line every screen calls after it has banked a reward.
+  ///
+  /// Rewards and Achievements queue silently — they have no context and
+  /// no business owning one. This is where the queue gets played, and
+  /// it lives on the widget so no screen has to remember two calls.
+  static Future<void> settle(BuildContext context) =>
+      drain(context, accentOf: ascendTint);
 
   @override
   State<AscendReveal> createState() => _AscendRevealState();
@@ -238,6 +248,17 @@ class _AscendRevealState extends State<AscendReveal>
                 const Spacer(),
 
                 if (_stage >= 2) ...[
+                  // THE MEDAL, when there is one. A badge that arrives
+                  // as text is a notification; a badge that arrives as a
+                  // struck piece of metal is a thing he screenshots.
+                  if (m.trophy != null) ...[
+                    TrophyMedal(trophy: m.trophy!, size: 116)
+                        .animate()
+                        .fadeIn(duration: 200.ms)
+                        .scaleXY(
+                            begin: 0.3, end: 1, curve: Curves.easeOutBack),
+                    const SizedBox(height: 20),
+                  ],
                   Text(_kicker(m.kind),
                           style: GoogleFonts.inter(
                             color: c.withValues(alpha: 0.9),
@@ -354,6 +375,7 @@ class _AscendRevealState extends State<AscendReveal>
         MilestoneKind.level => 'LEVEL UP',
         MilestoneKind.rank => 'YOU RANKED UP',
         MilestoneKind.squad => 'THE SQUAD LEVELLED',
+        MilestoneKind.badge => 'BADGE UNLOCKED',
       };
 }
 
@@ -363,10 +385,16 @@ class _AscendRevealState extends State<AscendReveal>
 /// Gold is reserved for RANK and nothing else. It's the rarest thing in
 /// the app — six of them across sixty days — and a colour that shows up
 /// for a routine level-up stops meaning "rare" within a week.
-Color ascendTint(MilestoneKind k) => switch (k) {
+/// Takes the whole milestone, not just the kind, because a trophy
+/// arrives in ITS OWN metal — bronze, silver or gold — so the colour is
+/// the rarity before a word has been read.
+Color ascendTint(Milestone m) =>
+    m.trophy?.tier.color ??
+    switch (m.kind) {
       MilestoneKind.level => AppColors.accent,
       MilestoneKind.rank => const Color(0xFFFFC53D),
       MilestoneKind.squad => const Color(0xFF2EE87A),
+      MilestoneKind.badge => const Color(0xFFB9C2CC),
     };
 
 /// Light coming from behind the word. Painted, slow, and deliberately

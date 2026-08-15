@@ -13,7 +13,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../config/dev_flags.dart';
+import '../../../services/achievements.dart';
 import '../../../services/analytics_service.dart';
+import '../../../services/milestone_service.dart';
+import '../../../services/rewards.dart';
 import '../../../services/audio_session.dart';
 import '../../../services/backend/battle_service.dart';
 import '../../../services/backend/daily_game_service.dart';
@@ -1746,6 +1749,17 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
     // v244 — cap matches the timer: every session is 3 minutes.
     final cap = _sessionSeconds;
     final reason = _remaining <= 0 ? 'timer' : 'user';
+
+    // PRACTICE PAID NOTHING. Minutes of live conversation with a woman
+    // and the progression bar didn't move — see rewards.dart. It's the
+    // smallest rate in the economy and the tightest daily cap, because
+    // it's also the easiest thing here to grind.
+    // ignore: discarded_futures
+    Rewards.practice(Duration(seconds: cap - _remaining));
+    if (_transcript.isNotEmpty) {
+      // ignore: discarded_futures
+      Achievements.bump(Stat.talks).then(MilestoneService.pushTrophies);
+    }
     // ignore: discarded_futures
     AnalyticsService.freeflowSessionEnded(
       reason:          reason,

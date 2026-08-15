@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'achievements.dart';
+
 /// ══════════════════════════════════════════════════════════════════════
 ///  MILESTONES — the part that was missing
 /// ══════════════════════════════════════════════════════════════════════
@@ -56,6 +58,27 @@ class MilestoneService {
   static Milestone? take() => _pending.isEmpty ? null : _pending.removeAt(0);
 
   static void clear() => _pending.clear();
+
+  /// Queue earned trophies. Called by whatever bumped the counter — the
+  /// achievement engine returns what it just unlocked and this is where
+  /// those turn into moments.
+  ///
+  /// Trophies go to the FRONT. A badge is the rarest thing a single
+  /// action can produce, and making a man sit through a routine level-up
+  /// before he sees GOLD gets the order of the evening wrong.
+  static void pushTrophies(List<Trophy> earned) {
+    if (earned.isEmpty) return;
+    _pending.insertAll(0, [
+      for (final t in earned)
+        Milestone(
+          kind: MilestoneKind.badge,
+          title: t.name,
+          sub: '${t.tier.label} · ${t.stat.name.toUpperCase()}',
+          value: t.need,
+          trophy: t,
+        )
+    ]);
+  }
 
   // ══════════════════════════════════════════════════════════════════
   //  DETECTION
@@ -154,12 +177,12 @@ class MilestoneService {
   }
 }
 
-/// THREE, NOT FOUR. Division promotions are deliberately absent: the
+/// Division promotions are deliberately absent: the
 /// battle verdict already celebrates one in context, mid-fight, with the
 /// rating climbing and the streak on screen — and a second, thinner
 /// celebration for the same event on the next Home load would cheapen
 /// both. One owner per ladder, and division's owner is the verdict.
-enum MilestoneKind { level, rank, squad }
+enum MilestoneKind { level, rank, squad, badge }
 
 class Milestone {
   final MilestoneKind kind;
@@ -174,16 +197,23 @@ class Milestone {
   /// production to how big a deal this is.
   final int value;
 
+  /// Set only on [MilestoneKind.badge] — the reveal paints the medal
+  /// instead of a word.
+  final Trophy? trophy;
+
   const Milestone({
     required this.kind,
     required this.title,
     required this.sub,
     required this.value,
+    this.trophy,
   });
 
   /// RANK is the rare one — six of them in sixty days — so it gets the
-  /// longest ceremony and the loudest sound. A level-up every couple of
-  /// days cannot hold the screen for six seconds without becoming the
-  /// thing he dreads between missions.
-  bool get isMajor => kind == MilestoneKind.rank;
+  /// longest ceremony and the loudest sound, and a GOLD trophy earns the
+  /// same treatment. A level-up every couple of days cannot hold the
+  /// screen for six seconds without becoming the thing he dreads between
+  /// missions.
+  bool get isMajor =>
+      kind == MilestoneKind.rank || trophy?.tier == Tier.gold;
 }
