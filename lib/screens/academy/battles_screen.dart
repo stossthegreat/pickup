@@ -18,7 +18,7 @@ import '../../services/rewards.dart';
 import '../../services/roster.dart';
 import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/academy/ascend_reveal.dart';
+import 'payout_screen.dart';
 import '../../widgets/academy/battle_verdict.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/game_button.dart';
@@ -616,7 +616,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
       }
     }
     if (mounted) await _load();
-    if (mounted) await AscendReveal.settle(context);
+    if (mounted) await PayoutScreen.cashOut(context);
   }
 
   void _shareResult(Battle b) {

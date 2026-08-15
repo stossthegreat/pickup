@@ -355,8 +355,15 @@ abstract final class Achievements {
     return _write(s, value, stats);
   }
 
+  /// The last counter that moved, parked for the payout screen so the
+  /// badge bar can animate FROM where it was rather than appearing at
+  /// its new value. A bar that jumps is a fact; a bar you watch move is
+  /// a reward.
+  static ({Stat stat, int before, int after})? lastBump;
+
   static Future<List<Trophy>> _write(
       Stat s, int next, Map<String, int> stats) async {
+    lastBump = (stat: s, before: stats[s.name] ?? 0, after: next);
     final p = await SharedPreferences.getInstance();
     stats[s.name] = next;
     await p.setString(_kStats, jsonEncode(stats));

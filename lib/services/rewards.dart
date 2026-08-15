@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'boost_service.dart';
 import 'live_events.dart';
 import 'local_store_service.dart';
 import 'milestone_service.dart';
@@ -111,19 +112,71 @@ abstract final class Rewards {
   /// source — the grant is trimmed to whatever's left rather than
   /// refused outright, because "you've earned 4 of your 60" beats a
   /// silent zero.
+  /// The last grant, parked for the payout screen.
+  ///
+  /// Duolingo's end-of-lesson screen is the single most-copied thing in
+  /// mobile and the reason is that it shows FOUR bars moving off ONE
+  /// action — XP, streak, league, achievement — in one frame. Ours had
+  /// the four systems and no moment where they moved together, so a man
+  /// finished a daily and saw a score, then maybe a toast, then nothing.
+  ///
+  /// This is stashed rather than returned because the reward is granted
+  /// deep inside a flow that has no business knowing about a screen, and
+  /// the screen is shown at the surface. See payout_screen.dart.
+  static Grant? lastGrant;
+
   static Future<int> grant(
     int amount,
     String label, {
     int? cap,
     String? capKey,
+    String? firstKey,
   }) async {
     var pay = amount;
+
+    // ── THE FIRST TIME HE DOES ANYTHING ──────────────────────────────
+    //
+    // A new man's first five minutes decide whether this app is for
+    // him, and the honest way to load that period with wins is to pay
+    // properly for FIRSTS rather than to fake progress he hasn't made.
+    // His first daily, first duel, first practice session and first
+    // approach each pay double, once, forever.
+    var first = false;
+    if (firstKey != null) {
+      first = await _claimFirst(firstKey);
+      if (first) pay *= 2;
+    }
+
+    // ── THE BOOST ────────────────────────────────────────────────────
+    //
+    // Applied BEFORE the cap, deliberately. A boosted hour of practice
+    // still can't beat an unboosted day's ceiling — the window
+    // front-loads what he earns, it doesn't inflate it.
+    final boosted = await BoostService.active;
+    if (boosted) pay *= BoostService.multiplier;
+
     if (cap != null && capKey != null) {
       pay = await _trimToCap(pay, cap, capKey);
     }
     if (pay <= 0) return 0;
 
+    final before = await LocalStoreService.xpTotal();
     await LocalStoreService.addXp(pay);
+    final after = before + pay;
+
+    // Accumulate within one flow. A battle grants XP for fighting AND
+    // the conversation counts — he should see one number, not two
+    // payout screens back to back.
+    final prev = lastGrant;
+    lastGrant = Grant(
+      amount: prev == null ? pay : prev.amount + pay,
+      label: prev == null ? label : prev.label,
+      xpBefore: prev?.xpBefore ?? before,
+      xpAfter: after,
+      firstTime: first || (prev?.firstTime ?? false),
+      boosted: boosted || (prev?.boosted ?? false),
+    );
+
     LiveEvents.xp(pay, label);
     await _settle();
     return pay;
@@ -140,6 +193,15 @@ abstract final class Rewards {
       rankRung: Standing.rungFor(days),
       rankLabel: Standing.rankFor(days).label,
     );
+  }
+
+  /// True exactly once per key, ever.
+  static Future<bool> _claimFirst(String key) async {
+    final p = await SharedPreferences.getInstance();
+    final k = 'rw.first.$key';
+    if (p.getBool(k) == true) return false;
+    await p.setBool(k, true);
+    return true;
   }
 
   static int _ymd() {
@@ -187,12 +249,14 @@ abstract final class Rewards {
   static Future<int> daily(int aiScore) => grant(
         dailyFloor + (aiScore.clamp(0, 100) * dailyPerPoint).round(),
         'The Daily',
+        firstKey: 'daily',
       );
 
   /// A settled duel.
-  static Future<int> battle({required bool won}) =>
-      grant(battleFought + (won ? battleWon : 0),
-          won ? 'Battle won' : 'Battle fought');
+  static Future<int> battle({required bool won}) => grant(
+      battleFought + (won ? battleWon : 0),
+      won ? 'Battle won' : 'Battle fought',
+      firstKey: 'battle');
 
   /// Time actually spent in a live practice conversation. Capped.
   static Future<int> practice(Duration spent) {
@@ -203,6 +267,7 @@ abstract final class Rewards {
       'Practice',
       cap: practiceDailyCap,
       capKey: 'practice',
+      firstKey: 'practice',
     );
   }
 
@@ -212,12 +277,40 @@ abstract final class Rewards {
         'YOU APPROACHED',
         cap: approachDailyCap,
         capKey: 'approach',
+        firstKey: 'approach',
       );
 
   static Future<int> squad(String title) => grant(squadMission, title);
 
   static Future<int> number(String girlName) =>
-      grant(numberWon, '$girlName gave you her number');
+      grant(numberWon, '$girlName gave you her number', firstKey: 'number');
 
   static Future<int> line() => grant(perfectLine, 'Perfect line');
+}
+
+/// What one flow paid out, from the first grant to the last.
+class Grant {
+  final int amount;
+  final String label;
+  final int xpBefore;
+  final int xpAfter;
+
+  /// Something in this flow was a first — the payout says so, because
+  /// "FIRST ONE · DOUBLE" is the difference between a number and a
+  /// moment he remembers.
+  final bool firstTime;
+
+  /// The boost window was open. Also printed, because a multiplier he
+  /// doesn't notice teaches him nothing about coming back inside the
+  /// window next time.
+  final bool boosted;
+
+  const Grant({
+    required this.amount,
+    required this.label,
+    required this.xpBefore,
+    required this.xpAfter,
+    this.firstTime = false,
+    this.boosted = false,
+  });
 }

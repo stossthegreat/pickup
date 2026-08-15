@@ -17,6 +17,7 @@ import 'game_button.dart';
 import 'game_feel.dart';
 // ImpactShake lives here, not in game_feel.dart.
 import 'grade_stamp.dart';
+import 'lucien_says.dart';
 import 'rank_emblem.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
@@ -506,6 +507,20 @@ class _BattleVerdictState extends State<BattleVerdict>
 
   Widget _actions() {
     return Column(children: [
+      // LUCIEN, ON A LOSS ONLY.
+      //
+      // A win doesn't need him — the number, the confetti and the RR
+      // climbing have already said it. A loss is where a man decides
+      // whether to queue again, and the difference between him doing
+      // that and closing the app is whether anything in the room takes
+      // his side. See lucien_says.dart for why he's never insulting.
+      if (!widget.iWon && !widget.tie) ...[
+        LucienSays(
+          line: LucienLines.afterLoss(widget.myScore),
+          delay: const Duration(milliseconds: 150),
+        ),
+        const SizedBox(height: 14),
+      ],
       if (widget.onRunItBack != null)
         SizedBox(
           width: double.infinity,

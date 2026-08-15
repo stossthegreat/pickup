@@ -12,7 +12,7 @@ import '../../services/achievements.dart';
 import '../../services/milestone_service.dart';
 import '../../services/rewards.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/academy/ascend_reveal.dart';
+import 'payout_screen.dart';
 
 /// THE FEAR BUTTON — for the exact second training has to become
 /// behaviour. He's frozen. He knows what he should do. This screen
@@ -500,7 +500,7 @@ class _FearButtonScreenState extends State<FearButtonScreen> {
             // answer — this screen's own words ("THAT'S THE REP") are
             // the point of the moment and a medal landing on top of
             // them would step on it. He reads it, then he's paid.
-            await AscendReveal.settle(context);
+            await PayoutScreen.cashOut(context);
             if (context.mounted) context.pop();
           },
           style: ElevatedButton.styleFrom(
