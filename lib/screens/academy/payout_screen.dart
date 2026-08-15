@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/achievements.dart';
+import '../../services/boost_service.dart';
 import '../../services/economy.dart';
 import '../../services/rewards.dart';
 import '../../services/sfx_service.dart';
@@ -15,6 +16,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/academy/ascend_reveal.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/game_feel.dart';
+import '../../widgets/academy/lucien_says.dart';
 import '../../widgets/academy/trophy.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
@@ -152,6 +154,12 @@ class _PayoutScreenState extends State<PayoutScreen> {
 
     Feel.land();
     Sfx.scoreLand();
+    // THE TRAP AT THE EXIT. Session-end is the biggest churn point any
+    // app has, so the window opens at the exact moment he was about to
+    // put the phone down — see boost_service.dart for why it fires every
+    // time rather than randomly.
+    // ignore: discarded_futures
+    BoostService.start();
     for (var i = 1; i <= 4; i++) {
       at(500 + (i - 1) * 620, () {
         setState(() => _stage = i);
@@ -215,7 +223,19 @@ class _PayoutScreenState extends State<PayoutScreen> {
                   .animate()
                   .fadeIn(duration: 300.ms),
 
-              const Spacer(),
+              // EVERYTHING BETWEEN THE KICKER AND THE BUTTON SCROLLS.
+              //
+              // This screen grew: the number, the boost card, three
+              // progress rows and a badge. On a small phone that stack
+              // is taller than the viewport, and Spacers don't shrink
+              // past zero — the old layout would have overflowed rather
+              // than adapted. A scroll view costs nothing here because
+              // on a normal handset it never scrolls, and on a small one
+              // it degrades instead of breaking.
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(children: [
+              const SizedBox(height: 18),
 
               // ── 1 · WHAT IT WAS WORTH ───────────────────────────────
               Row(
@@ -259,7 +279,39 @@ class _PayoutScreenState extends State<PayoutScreen> {
                   .fadeIn(duration: 260.ms)
                   .scaleXY(begin: 1.5, end: 1, curve: Curves.easeOutBack),
 
-              const Spacer(),
+              // WHY IT WAS THAT BIG. A doubled number he can't account
+              // for teaches him nothing; a doubled number with the
+              // reason printed on it teaches him to come back inside
+              // the window.
+              if (g.firstTime || g.boosted) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: AppColors.signalAmber.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                        color: AppColors.signalAmber.withValues(alpha: 0.55)),
+                  ),
+                  child: Text(
+                      g.firstTime ? 'FIRST ONE · DOUBLE' : 'BOOST · DOUBLE',
+                      style: GoogleFonts.inter(
+                        color: AppColors.signalAmber,
+                        fontSize: 10.5,
+                        letterSpacing: 2.6,
+                        fontWeight: FontWeight.w900,
+                      )),
+                )
+                    .animate()
+                    .fadeIn(delay: 500.ms, duration: 280.ms)
+                    .scaleXY(begin: 0.6, end: 1, curve: Curves.easeOutBack),
+              ],
+
+              const SizedBox(height: 22),
+
+              // ── THE EXIT TRAP ───────────────────────────────────────
+              if (_stage >= 1) const _BoostCard(),
 
               // ── 2 · THE LEVEL BAR ───────────────────────────────────
               if (_stage >= 1) _levelRow(),
@@ -288,13 +340,25 @@ class _PayoutScreenState extends State<PayoutScreen> {
                 _BadgeRow(trophy: b.trophy, had: b.had, have: b.have),
               ],
 
-              const Spacer(),
+                  ]),
+                ),
+              ),
 
               // ── 5 · TOMORROW ────────────────────────────────────────
+              // Pinned below the scroll, so the way out is always on
+              // screen no matter how much landed above it.
               SizedBox(
-                height: 84,
+                height: 156,
                 child: _stage >= 4
                     ? Column(children: [
+                        // LUCIEN. After the number, never over it — he's
+                        // the full stop on the moment, not part of it.
+                        LucienSays(
+                          line: LucienLines.afterPayout(g.amount,
+                              first: g.firstTime),
+                          delay: 200.ms,
+                        ),
+                        const SizedBox(height: 12),
                         Text(
                             Standing.nextRankLine(widget.earnedDays) ??
                                 'YOU HAVE FINISHED THE CLIMB',
@@ -520,5 +584,101 @@ class _BadgeRow extends StatelessWidget {
         .animate()
         .fadeIn(duration: 280.ms)
         .slideY(begin: 0.4, end: 0, curve: Curves.easeOutCubic);
+  }
+}
+
+/// DOUBLE XP, COUNTING DOWN, at the moment he was about to leave.
+///
+/// Fifteen minutes on a live clock. The countdown is the whole design:
+/// a static "2× active" badge is information, a number visibly falling
+/// is a reason to open one more thing right now. See boost_service.dart.
+class _BoostCard extends StatefulWidget {
+  const _BoostCard();
+
+  @override
+  State<_BoostCard> createState() => _BoostCardState();
+}
+
+class _BoostCardState extends State<_BoostCard> {
+  int _left = BoostService.minutes * 60;
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) async {
+      final n = await BoostService.remaining();
+      if (mounted) setState(() => _left = n);
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_left <= 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            colors: [
+              AppColors.signalAmber.withValues(alpha: 0.18),
+              AppColors.surface1,
+            ],
+          ),
+          border: Border.all(
+              color: AppColors.signalAmber.withValues(alpha: 0.5)),
+          boxShadow: [
+            BoxShadow(
+                color: AppColors.signalAmber.withValues(alpha: 0.16),
+                blurRadius: 22)
+          ],
+        ),
+        child: Row(children: [
+          const Icon(Icons.bolt_rounded,
+              size: 20, color: AppColors.signalAmber),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('DOUBLE ${Economy.xpShort} IS LIVE',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 12.5,
+                      letterSpacing: 1.8,
+                      fontWeight: FontWeight.w900,
+                    )),
+                Text('Everything you do now pays twice.',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textTertiary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    )),
+              ],
+            ),
+          ),
+          Text(BoostService.clock(_left),
+                  style: GoogleFonts.inter(
+                    color: AppColors.signalAmber,
+                    fontSize: 19,
+                    letterSpacing: -0.5,
+                    fontWeight: FontWeight.w900,
+                  ))
+              .animate(onPlay: (c) => c.repeat(reverse: true))
+              .fade(begin: 0.65, end: 1, duration: 900.ms),
+        ]),
+      ),
+    )
+        .animate()
+        .fadeIn(duration: 300.ms)
+        .slideY(begin: 0.5, end: 0, curve: Curves.easeOutBack);
   }
 }

@@ -17,6 +17,7 @@ import '../../services/streak_service.dart';
 import '../../services/achievements.dart';
 import '../../services/milestone_service.dart';
 import '../../services/rewards.dart';
+import '../../services/shield_service.dart';
 import '../../services/standing.dart';
 import '../academy/payout_screen.dart';
 import '../../widgets/academy/ascend_reveal.dart';
@@ -25,6 +26,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/live_toast.dart';
 import '../../widgets/academy/rescue_sheet.dart';
+import '../../widgets/academy/shield_sheet.dart';
 import '../../widgets/academy/battle_strip.dart';
 import '../../widgets/academy/game_button.dart' show Burst;
 import '../../widgets/academy/squad_strip.dart';
@@ -62,6 +64,22 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     // WHILE YOU WERE GONE — a returning user never opens to a static
     // screen. Runs after the first frame so it lands on top of home.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // THE SHIELD GOES BEFORE EVERYTHING, including the rescue.
+      //
+      // It has already fired by now (see _load, which runs it before it
+      // reads the streak) — this is only the telling. Order matters: a
+      // run the shield saved has nothing left to rescue, so offering him
+      // a rescue for it would be the app trying to sell him a fix for a
+      // problem it already solved.
+      final saved = await ShieldService.takeUnseenSave();
+      if (!mounted) return;
+      if (saved != null) {
+        await ShieldSheet.show(context, saved);
+        if (!mounted) return;
+        await _load();
+        return; // one heavy moment per open
+      }
+
       // THE RESCUE GOES FIRST. A man opening the app to a dead 12-day run
       // is the single biggest churn moment there is, and it has to be the
       // first thing he sees — not queued behind a catch-up summary of the
@@ -86,6 +104,11 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
   }
 
   Future<void> _load() async {
+    // BEFORE ANYTHING READS THE STREAK. If a live run died yesterday and
+    // there's a shield banked, it spends itself here — no prompt, no
+    // decision, no dialog between a distracted man and his fourteen
+    // days. He is told about it afterwards. See shield_service.dart.
+    await ShieldService.autoSave();
     final missions = await MissionEngine.loadToday();
     final done = <String, bool>{};
     for (final m in missions) {
@@ -93,6 +116,9 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     }
     final xp = await LocalStoreService.xpTotal();
     final streak = await StreakService.current();
+    // Protection accrues from the exact behaviour it protects: one
+    // shield per five consecutive days, capped at two.
+    await ShieldService.accrue(streak);
     if (!mounted) return;
     setState(() {
       _missions = missions;
