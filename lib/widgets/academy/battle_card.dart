@@ -151,7 +151,7 @@ class _BattleCardState extends State<BattleCard> {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Text(me == null ? '—' : Economy.commas(me.rating),
+                    Text(_rr == null ? '—' : Economy.commas(_rr!),
                         style: GoogleFonts.inter(
                           color: Colors.white,
                           fontSize: 34,

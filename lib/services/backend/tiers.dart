@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 /// THE FIVE-WORD LADDER USED TO LIVE HERE. It has been deleted, and
 /// that deletion is the fix.
 ///
@@ -23,6 +21,8 @@ import 'dart:ui';
 ///
 /// See standing.dart for the full table of which ladder owns which word.
 library;
+
+import 'dart:ui';
 
 /// Neon. Kept because half the app's "good" states are painted with it —
 /// the summit of the paywall ladder, a winning duel, a strong rubric

@@ -7,6 +7,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/daily_game_service.dart';
 import '../../services/backend/leaderboard_service.dart';
+// kNeon only — the five-word ladder that used to live in this file
+// is gone (see tiers.dart); the colour it exported is still used
+// by the promotion cut, the league rules and the crest rows.
+import '../../services/backend/tiers.dart' show kNeon;
 import '../../services/division.dart';
 import '../../services/economy.dart';
 import '../../theme/app_colors.dart';
