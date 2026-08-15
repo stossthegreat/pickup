@@ -93,6 +93,32 @@ class GirlChatConfig {
   /// an interrupt he didn't schedule is the whole reason it works.
   final bool verdictOnFinish;
 
+  /// ══════════════════════════════════════════════════════════════════
+  ///  THE COACH IS OFF BY DEFAULT
+  /// ══════════════════════════════════════════════════════════════════
+  ///
+  /// Lucien writes the line for you. That is a fine feature and a fatal
+  /// one on any surface that produces a number other people can see.
+  ///
+  /// A leaderboard where the score can be typed for you is not a
+  /// leaderboard, it's a list of who used the help button most. A duel
+  /// where one man was fed his opener isn't a duel. And an AI mission
+  /// that pays XP for a conversation the coach wrote pays for nothing —
+  /// the man walks away having learnt that the app can talk to women.
+  ///
+  /// DEFAULTS TO FALSE ON PURPOSE. Not "off where it matters" — off
+  /// everywhere, opted back IN by the one surface that should have it.
+  /// A new graded screen written a year from now is safe without its
+  /// author having to know this rule exists; the failure mode of
+  /// forgetting is a missing button, not a corrupted ladder.
+  ///
+  /// PRACTICE KEEPS IT, and keeps it entirely. Practice is where you're
+  /// meant to be shown what a good line looks like — it scores nothing
+  /// anyone else can see, it feeds no ladder, and stripping the coach
+  /// out of it would remove the only place in the app that actually
+  /// teaches.
+  final bool coachAllowed;
+
   const GirlChatConfig({
     required this.characterId,
     required this.vibeKey,
@@ -108,6 +134,7 @@ class GirlChatConfig {
     this.scoreSurface = 'roleplay',
     this.battleId,
     this.verdictOnFinish = true,
+    this.coachAllowed = false,
   });
 }
 
@@ -419,7 +446,12 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     // ignore: discarded_futures
     AnalyticsService.roleplayVoiceHandoff(widget.config.characterId);
     Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
-      builder: (_) => FreeFlowScreen(initialVibeKey: widget.config.vibeKey),
+      // Inherits the permission: hopping from a practice chat into
+      // voice is still practice, and hopping out of a graded one is
+      // still graded. The hop must never be a way round the rule.
+      builder: (_) => FreeFlowScreen(
+          initialVibeKey: widget.config.vibeKey,
+          coachAllowed: widget.config.coachAllowed),
     ));
   }
 
@@ -757,6 +789,9 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
 
   // ── Lucien "Get Help" — on-demand rizz suggestion for the live convo ──
   Future<void> _getHelp() async {
+    // Refuses even if something ever calls it directly. The UI hides
+    // the bar; this makes the rule true rather than merely invisible.
+    if (!widget.config.coachAllowed) return;
     if (_helping || _sending) return;
     if (!await AiConsentDialog.ensure(context)) return;
     if (!mounted) return;
@@ -860,8 +895,13 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
                   ],
                 ),
               ),
-              // Lucien "Get Help" bar — on-demand rizz, no sporadic cut-ins.
-              _HelpBar(busy: _helping || _sending, onTap: _getHelp),
+              // THE COACH, ONLY WHERE HE'S ALLOWED. Graded surfaces —
+              // battles, the daily, AI missions — don't render this at
+              // all. Not disabled, not greyed: absent. A dead button is
+              // a promise the app can't keep and an invitation to keep
+              // pressing it. See GirlChatConfig.coachAllowed.
+              if (widget.config.coachAllowed)
+                _HelpBar(busy: _helping || _sending, onTap: _getHelp),
               _InputBar(
                 controller: _ctrl,
                 sending: _sending,

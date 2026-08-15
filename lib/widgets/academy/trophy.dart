@@ -17,7 +17,7 @@ import '../../theme/app_colors.dart';
 /// The shape is a laurel-less star-cut disc: a circle with a notched rim
 /// and a ribbon notch at the bottom. It reads as a medal at 34pt and at
 /// 120pt, which is the only test that matters.
-class TrophyMedal extends StatelessWidget {
+class TrophyMedal extends StatefulWidget {
   final Trophy trophy;
   final double size;
 
@@ -39,33 +39,12 @@ class TrophyMedal extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(
-        painter: _MedalPainter(
-          tier: trophy.tier,
-          earned: earned,
-          progress: progress,
-        ),
-        child: Center(
-          child: Icon(
-            _glyph(trophy.stat),
-            size: size * 0.34,
-            color: earned
-                ? Colors.white
-                : Colors.white.withValues(alpha: 0.22),
-          ),
-        ),
-      ),
-    );
-  }
+  State<TrophyMedal> createState() => _TrophyMedalState();
 
   /// One glyph per family, all proven elsewhere in the app — there's no
   /// SDK in the build environment to check a new icon constant against,
   /// and a wrong one is a red screen on his phone rather than a warning.
-  static IconData _glyph(Stat s) => switch (s) {
+  static IconData glyph(Stat s) => switch (s) {
         Stat.talks => Icons.forum_rounded,
         Stat.approaches => Icons.directions_walk_rounded,
         Stat.duels => Icons.sports_mma_rounded,
@@ -79,14 +58,90 @@ class TrophyMedal extends StatelessWidget {
       };
 }
 
+class _TrophyMedalState extends State<TrophyMedal>
+    with SingleTickerProviderStateMixin {
+  /// THE SHINE.
+  ///
+  /// An earned medal that sits perfectly still is a sticker. One slow
+  /// band of light crossing it every few seconds is the difference
+  /// between a picture of a trophy and an object with a surface — and
+  /// it's the only reason the eye goes back to a shelf it's already
+  /// seen. Locked medals don't get it: nothing to catch the light on.
+  late final AnimationController _shine = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 3400),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.earned) _shine.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant TrophyMedal old) {
+    super.didUpdateWidget(old);
+    if (widget.earned && !_shine.isAnimating) {
+      _shine.repeat();
+    } else if (!widget.earned && _shine.isAnimating) {
+      _shine.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _shine.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = widget.size;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: AnimatedBuilder(
+        animation: _shine,
+        builder: (_, child) => CustomPaint(
+          painter: _MedalPainter(
+            tier: widget.trophy.tier,
+            earned: widget.earned,
+            progress: widget.progress,
+            // Held at 0 for most of the loop so the sweep is an event
+            // every few seconds rather than a constant shimmer.
+            shine: widget.earned
+                ? ((_shine.value - 0.72) / 0.28).clamp(0.0, 1.0)
+                : 0,
+          ),
+          child: child,
+        ),
+        child: Center(
+          child: Icon(
+            TrophyMedal.glyph(widget.trophy.stat),
+            size: size * 0.34,
+            color: widget.earned
+                ? Colors.white
+                : Colors.white.withValues(alpha: 0.22),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _MedalPainter extends CustomPainter {
   final Tier tier;
   final bool earned;
   final double progress;
+
+  /// 0..1 across one sweep of the light band. 0 = no shine.
+  final double shine;
+
   const _MedalPainter({
     required this.tier,
     required this.earned,
     required this.progress,
+    this.shine = 0,
   });
 
   @override
@@ -146,6 +201,28 @@ class _MedalPainter extends CustomPainter {
       );
       canvas.restore();
 
+      // The band of light crossing the face.
+      if (shine > 0 && shine < 1) {
+        canvas.save();
+        canvas.clipPath(Path()..addOval(Rect.fromCircle(center: c, radius: r)));
+        final x = c.dx - r * 2 + (r * 4) * shine;
+        canvas.translate(x, c.dy);
+        canvas.rotate(0.5);
+        canvas.drawRect(
+          Rect.fromCenter(center: Offset.zero, width: r * 0.42, height: r * 4),
+          Paint()
+            ..shader = LinearGradient(
+              colors: [
+                Colors.white.withValues(alpha: 0),
+                Colors.white.withValues(alpha: 0.45),
+                Colors.white.withValues(alpha: 0),
+              ],
+            ).createShader(Rect.fromCenter(
+                center: Offset.zero, width: r * 0.42, height: r * 4)),
+        );
+        canvas.restore();
+      }
+
       canvas.drawCircle(
         c,
         r,
@@ -188,7 +265,10 @@ class _MedalPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _MedalPainter old) =>
-      old.earned != earned || old.progress != progress || old.tier != tier;
+      old.earned != earned ||
+      old.progress != progress ||
+      old.tier != tier ||
+      old.shine != shine;
 }
 
 /// THE NEXT ONE — a single line, and the highest-value thing this whole
