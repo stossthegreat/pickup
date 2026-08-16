@@ -53,7 +53,14 @@ comment on column public.rizz_elo.battle_rating is
 
 -- The voice board is unchanged and still ranks on `rating`; it is
 -- recreated here only so a fresh database gets it in the right shape.
-create or replace view public.leaderboard_global as
+--
+-- security_invoker IS NOT OPTIONAL HERE. 0001 created this view with it,
+-- and CREATE OR REPLACE VIEW rewrites the view's options as well as its
+-- body — omitting the clause does not inherit the old setting, it resets
+-- it. Without it the view runs as its owner, which is a superuser, and a
+-- board that ignores RLS is the one place a leak actually ships.
+create or replace view public.leaderboard_global
+  with (security_invoker = true) as
   select p.id,
          p.handle,
          p.avatar_url,
@@ -66,7 +73,13 @@ create or replace view public.leaderboard_global as
 -- THE DUEL BOARD. Ranked on wins, then win rate, then RR — wins first
 -- on purpose, because a rate-first board is topped by whoever has
 -- played least, which is the opposite of what a ladder should reward.
-create or replace view public.battle_leaderboard as
+--
+-- Dropped first rather than replaced. This is the newest definition of
+-- this view, so it owns the shape — and a column added here later would
+-- otherwise fail exactly the way 0009 did, with 42P16.
+drop view if exists public.battle_leaderboard;
+create view public.battle_leaderboard
+  with (security_invoker = true) as
   select p.id,
          p.handle,
          p.avatar_url,
@@ -83,4 +96,8 @@ create or replace view public.battle_leaderboard as
                       / (e.battles_won + e.battles_lost) end desc,
             e.battle_rating desc;
 
+-- The grant lets them address the view; RLS on rizz_elo still decides
+-- what comes back, and that table is readable by authenticated only. So
+-- anon can query this board and gets an empty list, which is the right
+-- answer for an app nobody uses signed out.
 grant select on public.battle_leaderboard to anon, authenticated;
