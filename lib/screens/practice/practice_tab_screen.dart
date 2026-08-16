@@ -178,53 +178,32 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title + settings cog, matching Missions / Progress.
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text('Practice until it feels natural.',
-                            style: AppTypography.h1Italic),
-                      ),
-                      const SizedBox(width: 10),
-                      // THE BOARD reaches every tab now — the rankings are
-                      // the point of practising, so they shouldn't only be
-                      // findable from Missions.
-                      // PROGRESS IS AN ICON NOW, on every tab.
-                      if (widget.onGoToTab != null) ...[
-                        _BoardCog(
-                            icon: Icons.local_fire_department_rounded,
-                            onTap: () {
-                              HapticFeedback.selectionClick();
-                              widget.onGoToTab!(3);
-                            }),
-                        const SizedBox(width: 6),
-                      ],
-                      _BoardCog(
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            context.push('/leaderboard');
-                          }),
-                      const SizedBox(width: 6),
-                      _SettingsCog(
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            context.push('/settings');
-                          }),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Voice calls, texts and scenarios that prepare you '
-                    'for real conversations.',
-                    style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.red),
-                  ),
+                  // ONE HEADER SHAPE ACROSS ALL THREE TABS: icons on
+                  // their own line, then the three pills, then the
+                  // title. Practice had the title first and the icons
+                  // beside it, so switching tabs moved everything.
+                  Row(children: [
+                    const Spacer(),
+                    _BoardCog(
+                        icon: Icons.local_fire_department_rounded,
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          widget.onGoToTab?.call(3);
+                        }),
+                    const SizedBox(width: 6),
+                    _BoardCog(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          context.push('/leaderboard');
+                        }),
+                    const SizedBox(width: 6),
+                    _SettingsCog(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          context.push('/settings');
+                        }),
+                  ]),
                   const SizedBox(height: Sp.md),
-                  // THE SAME TWO PILLS THE OTHER TABS CARRY. Practice is
-                  // where most of the minutes go and it was the one tab
-                  // that never showed him a standing — so the hours he
-                  // put in here read as happening outside the game.
                   Row(children: [
                     XpBadge(label: Economy.commas(_xp) + ' XP'),
                     const SizedBox(width: 8),
@@ -232,6 +211,16 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                     if (_streak > 0) const SizedBox(width: 8),
                     const RankBadge(),
                   ]),
+                  const SizedBox(height: Sp.md),
+                  Text('Practice until it feels natural.',
+                      style: AppTypography.h1Italic),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Voice calls, texts and scenarios that prepare you '
+                    'for real conversations.',
+                    style: AppTypography.bodySmall
+                        .copyWith(color: AppColors.red),
+                  ),
                 ],
               ),
             ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/achievements.dart';
+import 'squad_chrome.dart';
 import '../../theme/app_colors.dart';
 
 /// THE MEDAL — painted, not commissioned.
@@ -308,65 +309,80 @@ class _NextBadgeStripState extends State<NextBadgeStrip> {
     final b = n.trophy;
     final frac = (n.have / b.need).clamp(0.0, 1.0);
 
-    return GestureDetector(
+    // SAME OBJECT AS THE SQUAD CARD. It was a flat grey rectangle with a
+    // hairline bar — half the height of everything around it and in a
+    // visual language nothing else on Home spoke. It's a Panel now, with
+    // the medal in the same 44pt disc the squad crest sits in, so the two
+    // cards read as a set instead of a card and an afterthought.
+    return Panel(
+      accent: b.tier.color,
+      hot: frac >= 0.6,
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
       onTap: widget.onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
-        decoration: BoxDecoration(
-          color: AppColors.surface1,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: b.tier.color.withValues(alpha: 0.3)),
+      child: Row(children: [
+        SizedBox(
+          width: 44,
+          height: 44,
+          child: TrophyMedal(
+              trophy: b, size: 44, earned: false, progress: frac),
         ),
-        child: Row(children: [
-          TrophyMedal(trophy: b, size: 40, earned: false, progress: frac),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('NEXT BADGE',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textMuted,
-                      fontSize: 8.5,
-                      letterSpacing: 2.4,
-                      fontWeight: FontWeight.w900,
-                    )),
-                const SizedBox(height: 2),
-                Text(b.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 14,
-                      letterSpacing: 0.6,
-                      fontWeight: FontWeight.w900,
-                    )),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: Stack(children: [
-                    Container(
-                        height: 4,
-                        color: Colors.white.withValues(alpha: 0.07)),
-                    FractionallySizedBox(
-                      widthFactor: frac,
-                      child: Container(height: 4, color: b.tier.color),
-                    ),
-                  ]),
-                ),
-              ],
-            ),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('NEXT BADGE',
+                  style: GoogleFonts.inter(
+                    color: b.tier.color,
+                    fontSize: 9,
+                    letterSpacing: 2.4,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 3),
+              Text(b.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 17,
+                    height: 1.1,
+                    letterSpacing: -0.2,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 2),
+              Text(b.line,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  )),
+            ],
           ),
-          const SizedBox(width: 12),
-          Text('${n.have}/${b.need}',
+        ),
+        const SizedBox(width: 10),
+        Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('${n.have}',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 22,
+                height: 1,
+                letterSpacing: -0.8,
+                fontWeight: FontWeight.w900,
+              )),
+          Text('OF ${b.need}',
               style: GoogleFonts.inter(
                 color: b.tier.color,
-                fontSize: 13,
+                fontSize: 8,
+                letterSpacing: 1.6,
                 fontWeight: FontWeight.w900,
               )),
         ]),
-      ),
+        const SizedBox(width: 6),
+        const Icon(Icons.chevron_right_rounded,
+            size: 18, color: AppColors.textTertiary),
+      ]),
     );
   }
 }
