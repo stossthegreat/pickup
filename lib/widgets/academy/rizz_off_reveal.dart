@@ -9,6 +9,10 @@ import '../../services/backend/auth_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../services/coaching.dart';
+// SkillX (.label) is an extension — Dart extensions are only in
+// scope where their library is imported directly, so importing
+// coaching.dart is not enough.
+import '../../services/tactics.dart';
 import '../../theme/app_colors.dart';
 import 'game_button.dart';
 import '../../services/sfx_service.dart';
