@@ -322,6 +322,48 @@ class _AscendRevealState extends State<AscendReveal>
                       .fadeIn(delay: 460.ms, duration: 300.ms)
                       .slideY(begin: 0.7, end: 0, curve: Curves.easeOutBack),
 
+                  // THE TEACHING, and the whole reason this lands.
+                  //
+                  // He isn't being told a technique — he's being told
+                  // that the thing he ALREADY DID has a name, and shown
+                  // his own sentence back. You never forget a lesson
+                  // you'd already passed before it was taught.
+                  if (m.tactic != null) ...[
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface1,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                            color: c.withValues(alpha: 0.28)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(m.tactic!.what,
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 13.5,
+                                height: 1.4,
+                                fontWeight: FontWeight.w800,
+                              )),
+                          const SizedBox(height: 10),
+                          Text(m.tactic!.why,
+                              style: GoogleFonts.inter(
+                                color: AppColors.textSecondary,
+                                fontSize: 12.5,
+                                height: 1.5,
+                                fontWeight: FontWeight.w500,
+                              )),
+                        ],
+                      ),
+                    )
+                        .animate()
+                        .fadeIn(delay: 700.ms, duration: 320.ms)
+                        .slideY(begin: 0.2, end: 0, curve: Curves.easeOutCubic),
+                  ],
+
                   if (widget.footnote != null) ...[
                     const SizedBox(height: 18),
                     Text(widget.footnote!,
@@ -385,6 +427,7 @@ class _AscendRevealState extends State<AscendReveal>
         MilestoneKind.squad => 'THE SQUAD LEVELLED',
         MilestoneKind.badge => 'BADGE UNLOCKED',
         MilestoneKind.day => 'DAY WON',
+        MilestoneKind.tactic => 'YOU JUST DID SOMETHING',
       };
 }
 
@@ -407,6 +450,9 @@ Color ascendTint(Milestone m) =>
       // Never used — the day is intercepted in drain() and gets its own
       // screen — but the switch has to be exhaustive.
       MilestoneKind.day => AppColors.red,
+      // Tactics arrive in the app's teaching colour — not gold, which is
+      // rank's alone, and not red, which is the streak's.
+      MilestoneKind.tactic => AppColors.measure,
     };
 
 /// Light coming from behind the word. Painted, slow, and deliberately

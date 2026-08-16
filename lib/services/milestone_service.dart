@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'achievements.dart';
+import 'tactics.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
 ///  MILESTONES — the part that was missing
@@ -77,6 +78,25 @@ class MilestoneService {
           sub: '${t.tier.label} · ${t.stat.name.toUpperCase()}',
           value: t.need,
           trophy: t,
+        )
+    ]);
+  }
+
+  /// Queue newly discovered tactics.
+  ///
+  /// Front of the queue, same as trophies: a man who just found out the
+  /// thing he did has a NAME shouldn't have to sit through a level-up
+  /// first. Discovery is the whole teaching mechanic — see tactics.dart.
+  static void pushTactics(List<Tactic> found) {
+    if (found.isEmpty) return;
+    _pending.insertAll(0, [
+      for (final t in found)
+        Milestone(
+          kind: MilestoneKind.tactic,
+          title: t.name,
+          sub: 'TACTIC DISCOVERED',
+          value: 0,
+          tactic: t,
         )
     ]);
   }
@@ -210,7 +230,7 @@ class MilestoneService {
 /// rating climbing and the streak on screen — and a second, thinner
 /// celebration for the same event on the next Home load would cheapen
 /// both. One owner per ladder, and division's owner is the verdict.
-enum MilestoneKind { level, rank, squad, badge, day }
+enum MilestoneKind { level, rank, squad, badge, day, tactic }
 
 class Milestone {
   final MilestoneKind kind;
@@ -229,12 +249,17 @@ class Milestone {
   /// instead of a word.
   final Trophy? trophy;
 
+  /// Set only on [MilestoneKind.tactic] — the reveal shows the mechanic,
+  /// why it works, and the line of his own that unlocked it.
+  final Tactic? tactic;
+
   const Milestone({
     required this.kind,
     required this.title,
     required this.sub,
     required this.value,
     this.trophy,
+    this.tactic,
   });
 
   /// RANK is the rare one — six of them in sixty days — so it gets the
