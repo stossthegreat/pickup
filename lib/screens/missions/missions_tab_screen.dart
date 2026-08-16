@@ -27,7 +27,6 @@ import '../../theme/app_typography.dart';
 import '../../widgets/academy/live_toast.dart';
 import '../../widgets/academy/rescue_sheet.dart';
 import '../../widgets/academy/shield_sheet.dart';
-import '../../widgets/academy/battle_strip.dart';
 import '../../widgets/academy/game_button.dart' show Burst;
 import '../../widgets/academy/squad_strip.dart';
 import '../../widgets/common/imhim_wordmark.dart';
@@ -414,12 +413,10 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
               child: const SquadStrip(),
             ),
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(Sp.lg, 9, Sp.lg, 0),
-              child: BattleStrip(onTap: () => context.push('/battles')),
-            ),
-          ),
+          // BATTLES CAME OFF HOME when it took the third tab. A card
+          // here AND a permanent tab is the same door twice — and the
+          // card was the workaround for it being buried, which it no
+          // longer is.
 
           SliverToBoxAdapter(
             child: Padding(

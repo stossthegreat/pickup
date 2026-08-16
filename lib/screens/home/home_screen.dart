@@ -1423,9 +1423,13 @@ class _NavBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        // NARROWER, like the reference. It was 16pt off each edge, which
+        // on a modern handset is almost edge-to-edge and reads as chrome
+        // rather than a control. A floating pill has to look like it's
+        // sitting ON the screen, not framing it.
+        padding: const EdgeInsets.fromLTRB(52, 0, 52, 10),
         child: Container(
-          padding: const EdgeInsets.all(5),
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: AppColors.surface1,
             borderRadius: BorderRadius.circular(28),
