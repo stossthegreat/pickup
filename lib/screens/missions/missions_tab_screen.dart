@@ -385,7 +385,11 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
       bottom: false,
       child: CustomScrollView(
         slivers: [
-          SliverToBoxAdapter(child: _TopBar(xp: _xp, streak: _streak)),
+          SliverToBoxAdapter(
+              child: _TopBar(
+                  xp: _xp,
+                  streak: _streak,
+                  onGoToTab: widget.onGoToTab)),
 
           // ── ONE CARD ───────────────────────────────────────────────
           // Home used to stack three invitations before you reached the
@@ -482,7 +486,17 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
 class _TopBar extends StatelessWidget {
   final int xp;
   final int streak;
-  const _TopBar({required this.xp, required this.streak});
+
+  /// The tab switcher, for the progress flame. This is a StatelessWidget
+  /// — there is no `widget` here — so the callback has to be handed down
+  /// from the screen that owns it.
+  final ValueChanged<int> onGoToTab;
+
+  const _TopBar({
+    required this.xp,
+    required this.streak,
+    required this.onGoToTab,
+  });
 
   String get _xpLabel {
     final s = xp.toString();
@@ -537,7 +551,7 @@ class _TopBar extends StatelessWidget {
               // the navigation. It's reachable from every tab instead.
               _IconBtn(
                   icon: Icons.local_fire_department_rounded,
-                  onTap: () => widget.onGoToTab(3)),
+                  onTap: () => onGoToTab(3)),
               _IconBtn(
                   icon: Icons.emoji_events_outlined,
                   onTap: () => context.push('/leaderboard')),
