@@ -18,6 +18,8 @@ import '../../services/local_store_service.dart';
 import '../../services/mirror_service.dart';
 import '../../services/paywall_gate.dart';
 import '../../services/achievements.dart';
+import '../../services/coaching.dart' show Coaching;
+import '../../services/tactics.dart';
 import '../../services/milestone_service.dart';
 import '../../services/rewards.dart';
 import '../../services/rolodex_service.dart';
@@ -194,6 +196,26 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   /// "his best line is the one straight after a bad one" is only
   /// measurable if you remember the bad one.
   bool _stumbled = false;
+
+  /// WHERE HE LOST HER. The mirror of _bestLine, and the single most
+  /// useful thing this screen can hand the reveal.
+  ///
+  /// The grader returns five numbers and nothing else — no spans, no
+  /// quotes — so "the line that cost you" could never come from the
+  /// server. But this screen scores EVERY message locally on its way
+  /// past, so it has always known and has always thrown it away.
+  String _worstLine = '';
+  double _worstDelta = 999;
+
+  /// Everything she's said, for callback detection. A callback has to
+  /// reach further back than the message he's answering, or every reply
+  /// would count as one.
+  final List<String> _herLines = [];
+  String _hisPrevious = '';
+
+  /// Tactics this conversation demonstrated, banked at the end so a man
+  /// isn't interrupted mid-flow by a card.
+  final List<String> _tacticsSeen = [];
 
   /// PERFECT LINE fires at most once in a conversation, on top of the
   /// once-a-day cap. Rare is the entire mechanic.
@@ -418,6 +440,18 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     // battle-action grades it, settles the fight AND records the chat
     // attempt, so also calling the solo grader would pay the man twice
     // for one conversation.
+    // ── HAND THE REVEAL WHAT ONLY THIS SCREEN KNOWS ──────────────────
+    // The worst line, and every tactic the conversation demonstrated.
+    // Banked here rather than mid-chat: a card interrupting him at turn
+    // four would be the app talking over the thing it's teaching.
+    Coaching.lastWorstLine = _worstLine;
+    if (_tacticsSeen.isNotEmpty) {
+      final fresh = await Tactics.claim(_tacticsSeen, _bestLine.isEmpty
+          ? _tacticsSeen.first
+          : _bestLine);
+      MilestoneService.pushTactics(fresh);
+    }
+
     final battle = widget.config.battleId;
     if (battle != null) {
       await BattleService.submit(battle, transcript);
@@ -600,6 +634,13 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
         _bestDelta = result.delta;
         _bestLine = text;
       }
+      // The other half. Only counted once the conversation is properly
+      // under way — the opener is allowed to be clumsy and calling it
+      // out would be the app kicking a man for starting.
+      if (_turnIndex >= 2 && result.delta < _worstDelta) {
+        _worstDelta = result.delta;
+        _worstLine = text;
+      }
       if (result.memory.isNotEmpty) _memory = result.memory;
       if (bubbles.isNotEmpty) _msgs.add(_Msg('her', bubbles.first));
     });
@@ -620,6 +661,25 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       // ignore: discarded_futures
       _finishTask();
     }
+    // ── WHAT THAT LINE DEMONSTRATED ───────────────────────────────────
+    // Local, instant, free. See tactics.dart for why detection is rules
+    // rather than a server round-trip, and what that trade costs.
+    // Everything older than the message he's replying to is fair game
+    // for a callback.
+    final reachBack = _herLines.length > 1
+        ? _herLines.sublist(0, _herLines.length - 1)
+        : const <String>[];
+    for (final id in Tactics.detect(
+      line: text,
+      herEarlier: reachBack,
+      hisPrevious: _hisPrevious,
+      delta: result.delta,
+    )) {
+      if (!_tacticsSeen.contains(id)) _tacticsSeen.add(id);
+    }
+    _hisPrevious = text;
+    if (bubbles.isNotEmpty) _herLines.add(bubbles.first);
+
     // A genuinely sharp line nudges The Five — practice moves your score.
     if (result.strong) {
       // ignore: discarded_futures

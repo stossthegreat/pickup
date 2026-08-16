@@ -19,7 +19,11 @@ import '../roleplay/girl_chat_screen.dart';
 /// Tap her and choose how to practise: text her, or take it live on voice.
 /// Both remember you (the memory layer), so you pick up where you left off.
 class PracticeTabScreen extends StatefulWidget {
-  const PracticeTabScreen({super.key});
+  /// 0 Missions · 1 Practice · 2 Battles · 3 Progress. Progress isn't
+  /// in the bottom bar any more — the flame in this header goes to it.
+  final ValueChanged<int>? onGoToTab;
+
+  const PracticeTabScreen({super.key, this.onGoToTab});
 
   @override
   State<PracticeTabScreen> createState() => _PracticeTabScreenState();
@@ -186,6 +190,16 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                       // THE BOARD reaches every tab now — the rankings are
                       // the point of practising, so they shouldn't only be
                       // findable from Missions.
+                      // PROGRESS IS AN ICON NOW, on every tab.
+                      if (widget.onGoToTab != null) ...[
+                        _BoardCog(
+                            icon: Icons.local_fire_department_rounded,
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              widget.onGoToTab!(3);
+                            }),
+                        const SizedBox(width: 6),
+                      ],
                       _BoardCog(
                           onTap: () {
                             HapticFeedback.selectionClick();
@@ -548,7 +562,12 @@ class _SettingsCog extends StatelessWidget {
 
 class _BoardCog extends StatelessWidget {
   final VoidCallback onTap;
-  const _BoardCog({required this.onTap});
+
+  /// Defaults to the board's trophy — the same cog now also carries the
+  /// progress flame, so it takes its glyph rather than hard-coding one.
+  final IconData icon;
+
+  const _BoardCog({required this.onTap, this.icon = Icons.emoji_events_outlined});
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -566,8 +585,7 @@ class _BoardCog extends StatelessWidget {
             border: Border.all(color: AppColors.divider, width: 0.8),
           ),
           alignment: Alignment.center,
-          child: const Icon(Icons.emoji_events_outlined,
-              size: 18, color: AppColors.textSecondary),
+          child: Icon(icon, size: 18, color: AppColors.textSecondary),
         ),
       ),
     );

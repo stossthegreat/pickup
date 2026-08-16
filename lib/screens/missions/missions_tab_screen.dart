@@ -42,7 +42,12 @@ import 'task_chat_screen.dart';
 /// it", with an optional Lucien game-plan first. Everything banks real
 /// XP and feeds The Five — real missions worth far more.
 class MissionsTabScreen extends StatefulWidget {
-  final ValueChanged<int> onGoToTab; // 0 = Missions, 1 = Practice, 2 = Progress
+  /// 0 Missions · 1 Practice · 2 Battles · 3 Progress.
+  ///
+  /// Progress is index 3 and is NOT in the bottom bar — it's a
+  /// destination reached by the flame icon on every tab. See the
+  /// note where that icon is built.
+  final ValueChanged<int> onGoToTab;
   const MissionsTabScreen({super.key, required this.onGoToTab});
 
   @override
@@ -516,10 +521,7 @@ class _TopBar extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              if (streak > 0) ...[
-                StreakBadge(days: streak),
-                const SizedBox(width: 8),
-              ],
+
               // THE BOARD. The squad shield used to sit here too, but the
               // squad already has its own card further down this very
               // screen — two doors to one room is clutter, and the card
@@ -528,6 +530,14 @@ class _TopBar extends StatelessWidget {
               // masthead — the streak flame ended up jammed against the
               // wordmark. It's moved down to the mission heading, which
               // is where you actually are when you bottle it.
+              // PROGRESS IS AN ICON NOW, NOT A TAB. The bottom bar is
+              // three things you DO — missions, practice, battles.
+              // Progress is a thing you LOOK AT, and a destination you
+              // visit once a week doesn't deserve a permanent third of
+              // the navigation. It's reachable from every tab instead.
+              _IconBtn(
+                  icon: Icons.local_fire_department_rounded,
+                  onTap: () => widget.onGoToTab(3)),
               _IconBtn(
                   icon: Icons.emoji_events_outlined,
                   onTap: () => context.push('/leaderboard')),
@@ -544,9 +554,16 @@ class _TopBar extends StatelessWidget {
           // The personal tier used to sit in the corner of the Battles
           // card, which read as a property of battles rather than of
           // him. It's his, so it lives next to his XP.
+          // THREE PILLS, ONE ROW, ONE ORDER EVERYWHERE: what he's
+          // earned, what he's protecting, where he stands. The flame
+          // used to sit up in the wordmark row on this tab and in the
+          // pill row on Practice — same two screens, two different
+          // places for the same object.
           Row(children: [
             XpBadge(label: _xpLabel),
             const SizedBox(width: 8),
+            if (streak > 0) StreakBadge(days: streak),
+            if (streak > 0) const SizedBox(width: 8),
             const RankBadge(),
           ]),
           const SizedBox(height: Sp.md),

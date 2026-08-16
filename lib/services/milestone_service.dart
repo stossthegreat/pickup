@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'achievements.dart';
+import 'tactics.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
 ///  MILESTONES — the part that was missing
@@ -42,6 +43,7 @@ class MilestoneService {
   static const _kLevel = 'ms.level.v1';
   static const _kRung = 'ms.rank_rung.v1';
   static const _kSquad = 'ms.squad_level.v1';
+  static const _kStreak = 'ms.streak.v1';
 
   /// Queue of milestones earned but not yet shown. A man who completes
   /// his fifth mission, banks the chain and ranks up in one tap should
@@ -80,6 +82,25 @@ class MilestoneService {
     ]);
   }
 
+  /// Queue newly discovered tactics.
+  ///
+  /// Front of the queue, same as trophies: a man who just found out the
+  /// thing he did has a NAME shouldn't have to sit through a level-up
+  /// first. Discovery is the whole teaching mechanic — see tactics.dart.
+  static void pushTactics(List<Tactic> found) {
+    if (found.isEmpty) return;
+    _pending.insertAll(0, [
+      for (final t in found)
+        Milestone(
+          kind: MilestoneKind.tactic,
+          title: t.name,
+          sub: 'TACTIC DISCOVERED',
+          value: 0,
+          tactic: t,
+        )
+    ]);
+  }
+
   // ══════════════════════════════════════════════════════════════════
   //  DETECTION
   // ══════════════════════════════════════════════════════════════════
@@ -97,6 +118,7 @@ class MilestoneService {
     int? rankRung,
     String? rankLabel,
     int? squadLevel,
+    int? streak,
   }) async {
     final p = await SharedPreferences.getInstance();
     final found = <Milestone>[];
@@ -141,6 +163,32 @@ class MilestoneService {
       }
     }
 
+    // ── THE DAY ──────────────────────────────────────────────────────
+    //
+    // The strongest mechanic in the app and the least celebrated: the
+    // streak ticked from 6 to 7 inside a pill. It gets its own ceremony
+    // now — see day_won.dart, where the fire is drawn from the run so
+    // day 40 is visibly bigger than day 4.
+    if (streak != null) {
+      final was = p.getInt(_kStreak);
+      if (was == null) {
+        await p.setInt(_kStreak, streak);
+      } else if (streak > was) {
+        await p.setInt(_kStreak, streak);
+        found.add(Milestone(
+          kind: MilestoneKind.day,
+          title: 'DAY $streak',
+          sub: 'ANOTHER ONE BANKED',
+          value: streak,
+        ));
+      } else if (streak < was) {
+        // A broken run. Silent — the rescue and the shield own that
+        // moment, and a "you lost it" ceremony on top of theirs would
+        // be the app kicking a man who already knows.
+        await p.setInt(_kStreak, streak);
+      }
+    }
+
     // ── SQUAD LEVEL — theirs, not his ────────────────────────────────
     if (squadLevel != null) {
       final wasSquad = p.getInt(_kSquad);
@@ -170,7 +218,7 @@ class MilestoneService {
   /// to re-trigger his own ceremonies would make them worthless.
   static Future<void> reset() async {
     final p = await SharedPreferences.getInstance();
-    for (final k in [_kLevel, _kRung, _kSquad]) {
+    for (final k in [_kLevel, _kRung, _kSquad, _kStreak]) {
       await p.remove(k);
     }
     _pending.clear();
@@ -182,7 +230,7 @@ class MilestoneService {
 /// rating climbing and the streak on screen — and a second, thinner
 /// celebration for the same event on the next Home load would cheapen
 /// both. One owner per ladder, and division's owner is the verdict.
-enum MilestoneKind { level, rank, squad, badge }
+enum MilestoneKind { level, rank, squad, badge, day, tactic }
 
 class Milestone {
   final MilestoneKind kind;
@@ -201,12 +249,17 @@ class Milestone {
   /// instead of a word.
   final Trophy? trophy;
 
+  /// Set only on [MilestoneKind.tactic] — the reveal shows the mechanic,
+  /// why it works, and the line of his own that unlocked it.
+  final Tactic? tactic;
+
   const Milestone({
     required this.kind,
     required this.title,
     required this.sub,
     required this.value,
     this.trophy,
+    this.tactic,
   });
 
   /// RANK is the rare one — six of them in sixty days — so it gets the

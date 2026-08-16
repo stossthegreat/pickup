@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
+import '../../services/coaching.dart';
 import '../../theme/app_colors.dart';
 import 'game_button.dart';
 import '../../services/sfx_service.dart';
@@ -530,8 +531,108 @@ class _RizzOffRevealState extends State<RizzOffReveal>
     ]);
   }
 
+  /// ONE COACHING LINE — the highest-value empty space in the product.
+  ///
+  /// He's just done the thing, he's staring at the number, and he is
+  /// already asking why. The app graded him five ways and explained
+  /// none of it for months. See coaching.dart for why it's ONE insight
+  /// and never five.
+  Widget _coaching() {
+    final insight = Coaching.read(widget.rubric);
+    final worst = Coaching.takeWorstLine();
+    if (insight == null && worst == null) return const SizedBox.shrink();
+    final tone = insight?.praise == true ? kNeon : AppColors.measure;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tone.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (insight != null) ...[
+          Row(children: [
+            Text(insight.axis.label,
+                style: GoogleFonts.inter(
+                  color: tone,
+                  fontSize: 10,
+                  letterSpacing: 2.6,
+                  fontWeight: FontWeight.w900,
+                )),
+            const SizedBox(width: 8),
+            Text('${insight.score}',
+                style: GoogleFonts.inter(
+                  color: tone.withValues(alpha: 0.7),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                )),
+          ]),
+          const SizedBox(height: 6),
+          Text(insight.diagnosis,
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 13,
+                height: 1.45,
+                fontWeight: FontWeight.w600,
+              )),
+          if (insight.tactic != null) ...[
+            const SizedBox(height: 10),
+            Text('TRY THIS',
+                style: GoogleFonts.inter(
+                  color: AppColors.textMuted,
+                  fontSize: 8.5,
+                  letterSpacing: 2.4,
+                  fontWeight: FontWeight.w900,
+                )),
+            const SizedBox(height: 4),
+            // The example, not a script to recite — a shape to copy.
+            Text(insight.tactic!.example,
+                style: GoogleFonts.inter(
+                  color: tone,
+                  fontSize: 13.5,
+                  height: 1.4,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w600,
+                )),
+          ],
+        ],
+
+        // WHERE HE LOST HER. His own sentence, quoted back. The grader
+        // could never produce this — the chat screen scores every
+        // message locally and has always known which one hurt.
+        if (worst != null) ...[
+          if (insight != null) const SizedBox(height: 12),
+          Text('WHERE YOU LOST HER',
+              style: GoogleFonts.inter(
+                color: AppColors.red,
+                fontSize: 8.5,
+                letterSpacing: 2.4,
+                fontWeight: FontWeight.w900,
+              )),
+          const SizedBox(height: 4),
+          Text('"$worst"',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 12.5,
+                height: 1.4,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w500,
+              )),
+        ],
+      ]),
+    )
+        .animate()
+        .fadeIn(duration: 340.ms)
+        .slideY(begin: 0.25, end: 0, curve: Curves.easeOutCubic);
+  }
+
   Widget _actions(RizzGrade grade) {
     return Column(children: [
+      _coaching(),
       SizedBox(
         width: double.infinity,
         child: GameButton(

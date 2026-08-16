@@ -63,7 +63,15 @@ import 'matchmaking_screen.dart';
 ///     opens the app the result detonates in his face rather than
 ///     appearing as a row he has to notice — see battle_verdict.dart.
 class BattlesScreen extends StatefulWidget {
-  const BattlesScreen({super.key});
+  /// Set when this is the third TAB rather than a pushed route.
+  ///
+  /// A tab has no "back" — the arrow would pop the whole shell. It gets
+  /// the same header furniture the other two tabs carry instead.
+  final ValueChanged<int>? onGoToTab;
+
+  const BattlesScreen({super.key, this.onGoToTab});
+
+  bool get tabMode => onGoToTab != null;
 
   @override
   State<BattlesScreen> createState() => _BattlesScreenState();
@@ -721,11 +729,14 @@ class _BattlesScreenState extends State<BattlesScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(6, 2, 18, 2),
             child: Row(children: [
-              IconButton(
-                onPressed: () => context.pop(),
-                icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                    size: 18, color: Colors.white),
-              ),
+              if (widget.tabMode)
+                const SizedBox(width: 12)
+              else
+                IconButton(
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                      size: 18, color: Colors.white),
+                ),
               Text('RIZZ BATTLES',
                   style: GoogleFonts.inter(
                     color: Colors.white,
@@ -734,6 +745,20 @@ class _BattlesScreenState extends State<BattlesScreen> {
                     fontWeight: FontWeight.w900,
                   )),
               const Spacer(),
+              // Same flame every other tab carries — progress is an
+              // icon now, not a tab.
+              if (widget.tabMode) ...[
+                IconButton(
+                  onPressed: () => widget.onGoToTab!(3),
+                  icon: const Icon(Icons.local_fire_department_rounded,
+                      size: 20, color: AppColors.textSecondary),
+                ),
+                IconButton(
+                  onPressed: () => context.push('/settings'),
+                  icon: const Icon(Icons.settings_outlined,
+                      size: 20, color: AppColors.textSecondary),
+                ),
+              ],
               if (_standing.played > 0)
                 Text(_standing.line,
                     style: GoogleFonts.inter(

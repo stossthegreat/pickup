@@ -93,6 +93,17 @@ class _TrophiesScreenState extends State<TrophiesScreen> {
                     fontWeight: FontWeight.w900,
                   )),
               const Spacer(),
+              // THE OTHER COLLECTION. The playbook is the teaching half
+              // and it lives beside the badges rather than in a Learn
+              // tab — see tactics_screen.dart for why that matters.
+              IconButton(
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  context.push('/playbook');
+                },
+                icon: const Icon(Icons.auto_awesome_rounded,
+                    size: 19, color: AppColors.measure),
+              ),
               Text('$got / $total',
                   style: GoogleFonts.inter(
                     color: const Color(0xFFFFC53D),

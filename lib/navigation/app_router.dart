@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/academy/account_screen.dart';
 import '../screens/academy/backend_debug_screen.dart';
 import '../screens/academy/battles_screen.dart';
+import '../screens/academy/tactics_screen.dart';
 import '../screens/academy/trophies_screen.dart';
 import '../screens/academy/daily_screen.dart';
 import '../screens/academy/fear_button_screen.dart';
@@ -130,6 +131,7 @@ final appRouter = GoRouter(
     // Rizz Battles — same scenario, both blind, higher score takes ELO.
     GoRoute(path: '/battles', builder: (_, __) => const BattlesScreen()),
     GoRoute(path: '/trophies', builder: (_, __) => const TrophiesScreen()),
+    GoRoute(path: '/playbook', builder: (_, __) => const TacticsScreen()),
     // THE DAILY — one scenario worldwide, one attempt, plus the league.
     GoRoute(path: '/daily', builder: (_, __) => const DailyScreen()),
     // Diagnostic — what exactly is failing between app and Supabase.
