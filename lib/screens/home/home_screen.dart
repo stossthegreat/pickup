@@ -21,6 +21,7 @@ import '../../theme/app_typography.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/mirrorly_components.dart';
 import '../../widgets/report/aspect_protocol_cards.dart';
+import '../academy/battles_screen.dart';
 import '../missions/missions_tab_screen.dart';
 import '../practice/practice_tab_screen.dart';
 import 'ascend_screen.dart';
@@ -121,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // keep working. Legacy deep links with index > 3 fall back to
     // LOOKS so older shortcuts don't crash.
     final t = widget.initialTab ?? 0;
-    _tab = (t >= 0 && t < 3) ? t : 0;
+    _tab = (t >= 0 && t < 4) ? t : 0;
     _reload();
     // No entry wall — users browse the app freely; the paywall fires on
     // actions (see PaywallGate calls in Practice / Missions / Free Flow).
@@ -278,9 +279,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 PracticeTabScreen(                          // 1 · PRACTICE
                   key: ValueKey('practice-$_practiceEpoch'),
+                  onGoToTab: _switchTab,
                 ),
-                // Progress (Ascend) — the daily flame + missions + rank
-                // surface. Now index 2 after the Texts tab was pulled.
+                // 2 · BATTLES. Promoted out of a card and into the bar:
+                // it's one of the two permanent competitive systems and
+                // it was two taps deep behind a strip on Home.
+                BattlesScreen(onGoToTab: _switchTab),
+                // 3 · PROGRESS (Ascend). Still in the stack — it keeps
+                // its long parameter list from this screen's state, so
+                // making it a pushed route would mean re-plumbing all of
+                // it — but it is NO LONGER IN THE BOTTOM BAR. The flame
+                // icon on every tab switches to it.
                 AscendScreen(
                   onJumpToTab:          _switchTab,
                   onRefresh:            _reload,
@@ -1398,9 +1407,12 @@ class _NavBar extends StatelessWidget {
     // pre-existing index map (Looks=0, Game=1, Rizz=2) stays
     // valid for every legacy caller of initialTab + onJumpToTab.
     final items = const <({String label, IconData icon})>[
+      // THREE THINGS YOU DO. Progress was a third of the navigation for
+      // a screen you look at once a week; battles is a live competitive
+      // system that was two taps deep. They swapped.
       (label: 'Missions', icon: Icons.bolt_rounded),
       (label: 'Practice', icon: Icons.graphic_eq_rounded),
-      (label: 'Progress', icon: Icons.local_fire_department_rounded),
+      (label: 'Battles', icon: Icons.sports_mma_rounded),
     ];
     // Modern floating segmented pill (the reference bro sent). A dark
     // rounded bar that sits OFF the screen edges, with the ACTIVE tab
@@ -1433,8 +1445,11 @@ class _NavBar extends StatelessWidget {
                     label: items[i].label,
                     icon: items[i].icon,
                     active: i == index,
-                    showPendingDot:
-                        i == 2 && ascendPending && i != index,
+                    // The pending dot used to ride the Progress tab.
+                    // Progress isn't in the bar any more, so it has
+                    // nothing to sit on here — the flame icon in each
+                    // tab's header is where that signal belongs now.
+                    showPendingDot: false,
                     onTap: () => onTap(i),
                   ),
                 ),

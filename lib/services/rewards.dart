@@ -192,6 +192,7 @@ abstract final class Rewards {
       level: Standing.levelFor(xp),
       rankRung: Standing.rungFor(days),
       rankLabel: Standing.rankFor(days).label,
+      streak: snap.streak,
     );
   }
 

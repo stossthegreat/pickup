@@ -12,6 +12,7 @@ import '../../services/sfx_service.dart';
 import '../../theme/app_colors.dart';
 import 'game_button.dart';
 import 'game_feel.dart';
+import 'day_won.dart';
 import 'grade_stamp.dart';
 import 'trophy.dart';
 
@@ -106,6 +107,13 @@ class AscendReveal extends StatefulWidget {
       final m = MilestoneService.take();
       if (m == null) break;
       if (!context.mounted) return;
+      // THE DAY GETS ITS OWN SCREEN. Every other milestone is a word and
+      // a colour; a streak is a fire that has to be visibly bigger than
+      // it was yesterday, which no shared template can do.
+      if (m.kind == MilestoneKind.day) {
+        await DayWon.show(context, m.value);
+        continue;
+      }
       await show(
         context,
         m,
@@ -376,6 +384,7 @@ class _AscendRevealState extends State<AscendReveal>
         MilestoneKind.rank => 'YOU RANKED UP',
         MilestoneKind.squad => 'THE SQUAD LEVELLED',
         MilestoneKind.badge => 'BADGE UNLOCKED',
+        MilestoneKind.day => 'DAY WON',
       };
 }
 
@@ -395,6 +404,9 @@ Color ascendTint(Milestone m) =>
       MilestoneKind.rank => const Color(0xFFFFC53D),
       MilestoneKind.squad => const Color(0xFF2EE87A),
       MilestoneKind.badge => const Color(0xFFB9C2CC),
+      // Never used — the day is intercepted in drain() and gets its own
+      // screen — but the switch has to be exhaustive.
+      MilestoneKind.day => AppColors.red,
     };
 
 /// Light coming from behind the word. Painted, slow, and deliberately
