@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../config/backend_config.dart';
+import '../../config/dev_flags.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/backend_service.dart';
 import '../../theme/app_colors.dart';
@@ -275,9 +276,13 @@ class _BackendDebugScreenState extends State<BackendDebugScreen> {
   }
 
   void _copy() {
-    final text = _lines
-        .map((l) => '${l.$2 ? "OK  " : "FAIL"}  ${l.$1}: ${l.$3}')
-        .join('\n');
+    // The build tag leads the paste for the same reason it's in the
+    // header — a pasted report with no version can be read against the
+    // wrong code, and has been.
+    final text = [
+      'build: $kBuildTag',
+      ..._lines.map((l) => '${l.$2 ? "OK  " : "FAIL"}  ${l.$1}: ${l.$3}'),
+    ].join('\n');
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
       content: Text('Copied — paste it into chat.'),
@@ -305,6 +310,25 @@ class _BackendDebugScreenState extends State<BackendDebugScreen> {
                   fontWeight: FontWeight.w900,
                 )),
             const Spacer(),
+            // WHICH BUILD PRODUCED THIS REPORT.
+            //
+            // A diagnostic screen with no version on it is a trap. A
+            // fix landed in the probe logic, TestFlight took its time,
+            // and the same two false reds got read as a live backend
+            // failure — twice — because nothing on screen said the
+            // report was coming from the old code. The tag is on the
+            // paywall and in Settings; the one screen people actually
+            // debug from was the one screen without it.
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: Text(kBuildTag,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 10,
+                    letterSpacing: 0.6,
+                    fontWeight: FontWeight.w700,
+                  )),
+            ),
             if (_running)
               const Padding(
                 padding: EdgeInsets.only(right: 16),
