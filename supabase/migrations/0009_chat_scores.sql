@@ -65,10 +65,31 @@ create policy "chat score readable"
 -- ── The board ─────────────────────────────────────────────────────────
 -- security_invoker so it runs as the caller and can't leak anything the
 -- caller couldn't already read.
-create or replace view chat_leaderboard
-  with (security_invoker = true) as
-  select p.id, p.handle, p.avatar_url, c.best, c.attempts, c.average
-  from chat_score c
-  join profiles p on p.id = c.user_id
-  where c.attempts > 0
-  order by c.best desc;
+--
+-- CREATED ONLY IF IT ISN'T THERE, and that guard is the whole point.
+-- 0010 drops this view and rebuilds it on the points ladder with three
+-- extra columns. Postgres CREATE OR REPLACE VIEW can only APPEND columns
+-- — it cannot remove or rename one — so re-running this file against a
+-- database that already has 0010's nine-column view fails with 42P16,
+-- "cannot drop columns from view".
+--
+-- A plain `drop view if exists` here would fix the error and cause a
+-- worse one: it would quietly demote the board back to the six-column
+-- shape and the points ladder would read empty. So the rule is that the
+-- LATEST migration owns the view, and an older one never overwrites a
+-- newer definition — it just steps aside.
+do $chat_board$
+begin
+  if to_regclass('public.chat_leaderboard') is null then
+    execute $v$
+      create view chat_leaderboard
+        with (security_invoker = true) as
+        select p.id, p.handle, p.avatar_url, c.best, c.attempts, c.average
+        from chat_score c
+        join profiles p on p.id = c.user_id
+        where c.attempts > 0
+        order by c.best desc
+    $v$;
+  end if;
+end
+$chat_board$;

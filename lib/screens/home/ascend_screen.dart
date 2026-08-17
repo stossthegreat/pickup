@@ -17,6 +17,8 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/ascend/ascension_map.dart';
 import '../../widgets/charmr/metrics_panel.dart';
+import '../../services/achievements.dart';
+import '../../widgets/academy/trophy.dart';
 import '../../widgets/common/streak_badge.dart';
 
 /// v281 — ASCENSION home tab.
@@ -349,6 +351,18 @@ class _AscendScreenState extends State<AscendScreen> {
               current: widget.dayStreak,
               longest: longestStreak,
             ).animate().fadeIn(delay: 520.ms, duration: 400.ms),
+
+            const SizedBox(height: Sp.lg),
+
+            // ── 6 — THE CABINET. Moved here off Home.
+            //
+            // The next-badge strip lived under the squad card on the
+            // Missions tab, which is the tab you open to WORK. A badge
+            // shelf is something you go and look at, and this is the
+            // screen for looking — it already holds the map, the streak
+            // and the record. Home gets its space back for the five.
+            const _BadgesPanel()
+              .animate().fadeIn(delay: 580.ms, duration: 400.ms),
 
             const SizedBox(height: Sp.lg),
 
@@ -1167,6 +1181,175 @@ class _RankRow extends StatelessWidget {
 //  SECTION 5 — ASCENSION RECORD (timeline)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// ── THE CABINET, ON THE SCREEN FOR LOOKING ──────────────────────────
+///
+/// This panel used to be a bare strip under the squad card on the
+/// Missions tab. Wrong room: Missions is the tab you open to WORK, and
+/// a badge shelf is something you go and admire. Progress already holds
+/// the map, the streak and the record — the badges belong in that set.
+///
+/// It shows two different things on purpose:
+///
+///   THE COUNT — how many of the thirty are his. That's the collection
+///   instinct, and an incomplete set is the oldest hook there is.
+///
+///   THE NEXT ONE — a single named badge with a number under it. The
+///   count gets admired; the next-one line gets ACTED ON, which is why
+///   the families are tiered in the first place. See achievements.dart.
+class _BadgesPanel extends StatefulWidget {
+  const _BadgesPanel();
+
+  @override
+  State<_BadgesPanel> createState() => _BadgesPanelState();
+}
+
+class _BadgesPanelState extends State<_BadgesPanel> {
+  ({Trophy trophy, int have})? _next;
+  ({int earned, int total})? _tally;
+
+  @override
+  void initState() {
+    super.initState();
+    // ignore: discarded_futures
+    _load();
+  }
+
+  Future<void> _load() async {
+    final n = await Achievements.next();
+    final t = await Achievements.tally();
+    if (mounted) setState(() { _next = n; _tally = t; });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _tally;
+    final n = _next;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(Rd.lg),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Rd.lg),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            context.push('/trophies');
+          },
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+            decoration: BoxDecoration(
+              color: AppColors.surface1,
+              borderRadius: BorderRadius.circular(Rd.lg),
+              border: Border.all(
+                  color: AppColors.red.withValues(alpha: 0.14), width: 0.8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionHead(
+                  index: '04',
+                  label: 'BADGES',
+                  trailing: Text(
+                    t == null ? '' : '${t.earned} / ${t.total}',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                      letterSpacing: 1.8,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (n == null)
+                  Text(
+                      'Thirty of them. Every one is a thing you already do '
+                      '— done more times than you have done it.',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 13,
+                        height: 1.5,
+                        fontWeight: FontWeight.w500,
+                      ))
+                else
+                  Row(children: [
+                    SizedBox(
+                      width: 52,
+                      height: 52,
+                      child: TrophyMedal(
+                        trophy: n.trophy,
+                        size: 52,
+                        earned: false,
+                        progress:
+                            (n.have / n.trophy.need).clamp(0.0, 1.0),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('NEXT BADGE',
+                              style: GoogleFonts.inter(
+                                color: n.trophy.tier.color,
+                                fontSize: 9,
+                                letterSpacing: 2.4,
+                                fontWeight: FontWeight.w900,
+                              )),
+                          const SizedBox(height: 4),
+                          Text(n.trophy.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 17,
+                                height: 1.1,
+                                letterSpacing: -0.2,
+                                fontWeight: FontWeight.w900,
+                              )),
+                          const SizedBox(height: 3),
+                          Text(n.trophy.line,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                color: AppColors.textTertiary,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                              )),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text('${n.have}',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 22,
+                            height: 1,
+                            letterSpacing: -0.8,
+                            fontWeight: FontWeight.w900,
+                          )),
+                      Text('OF ${n.trophy.need}',
+                          style: GoogleFonts.inter(
+                            color: n.trophy.tier.color,
+                            fontSize: 8,
+                            letterSpacing: 1.6,
+                            fontWeight: FontWeight.w900,
+                          )),
+                    ]),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right_rounded,
+                        size: 18, color: AppColors.textTertiary),
+                  ]),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RecordTimeline extends StatelessWidget {
   final List<AscendMilestone> milestones;
   const _RecordTimeline({required this.milestones});
@@ -1185,7 +1368,7 @@ class _RecordTimeline extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _SectionHead(index: '04', label: 'ASCENSION RECORD'),
+            const _SectionHead(index: '05', label: 'ASCENSION RECORD'),
             const SizedBox(height: 14),
             if (milestones.isEmpty)
               Text('Your record writes itself the moment you log day one.',
@@ -1429,7 +1612,7 @@ class _FinalFormCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _SectionHead(
-              index: '05',
+              index: '06',
               label: unlocked ? 'UNLOCKED · DAY 60' : 'LOCKED · DAY 60',
               trailing: Icon(
                 unlocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
