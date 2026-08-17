@@ -4,6 +4,7 @@ import 'boost_service.dart';
 import 'live_events.dart';
 import 'local_store_service.dart';
 import 'milestone_service.dart';
+import 'progress_sync.dart';
 import 'standing.dart';
 import 'streak_service.dart';
 
@@ -194,6 +195,10 @@ abstract final class Rewards {
       rankLabel: Standing.rankFor(days).label,
       streak: snap.streak,
     );
+    // MIRROR IT UP. This is the only door XP comes through, so it is the
+    // only place that needs to know progress moved. Debounced and
+    // fire-and-forget — see progress_sync.dart.
+    ProgressSync.schedulePush();
   }
 
   /// True exactly once per key, ever.

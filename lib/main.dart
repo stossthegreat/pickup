@@ -10,6 +10,7 @@ import 'services/analytics_service.dart';
 import 'services/backend/auth_service.dart';
 import 'services/backend/backend_service.dart';
 import 'services/backend/squad_live_service.dart';
+import 'services/progress_sync.dart';
 import 'services/daily_nudge_service.dart';
 import 'services/language_service.dart';
 import 'services/local_store_service.dart';
@@ -48,7 +49,15 @@ void main() async {
       // in the app, not only while the Squad Room is open. This is the
       // difference between an app you inspect and one that talks.
       // ignore: discarded_futures
-      .then((_) => SquadLiveService.start());
+      .then((_) => SquadLiveService.start())
+      // AND PULL HIS RUN BACK. The claim screen restores on sign-in,
+      // but a man who reinstalls and is already claimed never opens it
+      // — the session restores silently and he'd land on day zero with
+      // no way to ask for his streak back. Self-limiting: it reads one
+      // row, finds nothing bigger on the phone he already plays on, and
+      // stops. Fire-and-forget so a cold network never delays launch.
+      // ignore: discarded_futures
+      .then((_) => ProgressSync.restore());
 
   // Roleplay language — hydrated before any voice session can start so
   // the synchronous cache is always right. English default.
