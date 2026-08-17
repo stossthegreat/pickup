@@ -165,10 +165,23 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ONE HEADER SHAPE ACROSS ALL THREE TABS: icons on
-                  // their own line, then the title. Practice had the
-                  // title first and the icons beside it, so switching
-                  // tabs moved everything.
+                  // THE TITLE SITS ON THE ICON LINE.
+                  //
+                  // It had a row to itself and the whole left half of
+                  // the cog row was dead space on every screenful. One
+                  // word in that gap buys back a full row of height and
+                  // pulls the grid up the page.
+                  //
+                  // It's PRACTICE, not the sentence. The sentence is
+                  // the red line underneath — that's what a subtitle is
+                  // for, and running it as the title made a masthead
+                  // that wrapped to two lines and said the same thing
+                  // twice.
+                  //
+                  // FittedBox scaleDown, not ellipsis: on the narrowest
+                  // phone the word shrinks a point rather than turning
+                  // into "PRACTI…", which is the one thing a masthead
+                  // must never do.
                   //
                   // THE XP / STREAK / RANK PILLS ARE NOT HERE ANYMORE.
                   // They belong on Home, where standing IS the subject.
@@ -177,9 +190,19 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                   // content of each tab a hundred points down the page,
                   // and a number you see everywhere is a number you stop
                   // reading. Everything below moves up to fill the gap.
+                  //
                   // ORDER, READ FROM THE RIGHT: settings, progress, board.
                   Row(children: [
-                    const Spacer(),
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text('PRACTICE',
+                            maxLines: 1,
+                            style: AppTypography.mastheadInline),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     _BoardCog(
                         onTap: () {
                           HapticFeedback.selectionClick();
@@ -199,10 +222,7 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                           context.push('/settings');
                         }),
                   ]),
-                  const SizedBox(height: Sp.md),
-                  Text('PRACTICE UNTIL IT FEELS NATURAL',
-                      style: AppTypography.masthead),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Text(
                     'Voice calls, texts and scenarios that prepare you '
                     'for real conversations.',

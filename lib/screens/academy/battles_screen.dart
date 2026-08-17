@@ -743,8 +743,17 @@ class _BattlesScreenState extends State<BattlesScreen> {
                   // to. Missions and Practice both put theirs in the
                   // scroll view. This one does now too.
                   //
-                  // Icons on their own line, then the title and its red
-                  // line. No XP / streak / rank pills — see the note on
+                  // THE TITLE SITS ON THE ICON LINE, same as Practice.
+                  // It had a row to itself and the left half of the cog
+                  // row was empty — one line back for the rank hero,
+                  // which is the thing worth seeing without scrolling.
+                  //
+                  // FittedBox scaleDown rather than ellipsis: RIZZ
+                  // BATTLES is two words beside three 38pt circles, so
+                  // on the narrowest phone it gives up a point of size
+                  // instead of becoming "RIZZ BATT…".
+                  //
+                  // No XP / streak / rank pills — see the note on
                   // Practice: standing lives on Home, and repeating it
                   // on every tab turned it into wallpaper.
                   //
@@ -757,7 +766,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(children: [
-                          if (!widget.tabMode)
+                          if (!widget.tabMode) ...[
                             IconButton(
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
@@ -767,7 +776,18 @@ class _BattlesScreenState extends State<BattlesScreen> {
                                   size: 18,
                                   color: Colors.white),
                             ),
-                          const Spacer(),
+                            const SizedBox(width: 8),
+                          ],
+                          Expanded(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text('RIZZ BATTLES',
+                                  maxLines: 1,
+                                  style: AppTypography.mastheadInline),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
                           // ORDER, READ FROM THE RIGHT: settings,
                           // progress, board.
                           if (widget.tabMode) ...[
@@ -784,9 +804,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
                                 onTap: () => context.push('/settings')),
                           ],
                         ]),
-                        const SizedBox(height: 14),
-                        Text('RIZZ BATTLES', style: AppTypography.masthead),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         Text(
                           'Same woman. Both blind. The better conversation '
                           'takes the rating.',
