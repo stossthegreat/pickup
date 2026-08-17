@@ -39,7 +39,6 @@ import '../../../theme/auralay_app_typography.dart';
 import '../../../widgets/common/ai_consent_dialog.dart';
 import '../../../widgets/common/imhim_wordmark.dart';
 import '../../../widgets/common/mirrorly_components.dart';
-import '../../../widgets/debug_panel.dart';
 import '../../../widgets/safe_close_button.dart';
 
 /// FREE FLOW — live, streaming voice roleplay (OpenAI Realtime API).
@@ -92,11 +91,37 @@ class FreeFlowScreen extends StatefulWidget {
   /// this rule exists. Practice — and only Practice — passes true.
   final bool coachAllowed;
 
+  /// ══════════════════════════════════════════════════════════════════
+  ///  SHE WAS ASSIGNED, NOT CHOSEN — so the day-lock does not apply.
+  /// ══════════════════════════════════════════════════════════════════
+  ///
+  /// The unlock ladder is a PRACTICE mechanic. It exists so a man earns
+  /// his way up the roster and can't jump to the hardest woman on day
+  /// one, and on the Practice grid that is exactly right.
+  ///
+  /// The Daily and the squad Rizz-Off are a different thing entirely.
+  /// The server picks ONE woman for the whole world that day and hands
+  /// her to everybody — there is no choosing, so there is nothing to
+  /// earn past. Running the practice lock over an assigned opponent
+  /// produced the bug: the day's woman came back as SERAPHINA, a man on
+  /// day 3 opened his own squad challenge, and the app told him she
+  /// unlocks on day 30 and threw him out of a task he had been given.
+  ///
+  /// Worse, it broke the premise. A global daily is only a fair contest
+  /// if every man can actually reach the woman — otherwise the board
+  /// silently excludes everyone below her tier and the squad can never
+  /// win a day it was set.
+  ///
+  /// False by default, so any surface where he PICKS still enforces the
+  /// ladder. Only the assigned paths pass true.
+  final bool assigned;
+
   const FreeFlowScreen({
     super.key,
     this.tabMode = false,
     this.initialVibeKey,
     this.coachAllowed = false,
+    this.assigned = false,
   });
 
   @override
@@ -684,7 +709,9 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
     // bypasses it. This is an access pre-check ONLY — it runs before any
     // session / socket / persona / memory work and does not touch the
     // roleplay mechanics below.
-    final needDay = unlockDayForVibe(vibe.key);
+    // `assigned` skips this entirely — see the note on the field. She
+    // was handed to him by the server, so there is no ladder to jump.
+    final needDay = widget.assigned ? 1 : unlockDayForVibe(vibe.key);
     if (needDay > 1 && !await CreatorModeStore.isActive()) {
       int day = 1;
       try {
@@ -2665,24 +2692,14 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
             ),
           ),
 
-        // Live diagnostics — tap to expand. Shows whether OpenAI is
-        // actually sending her response (response.created / audio deltas)
-        // or erroring out.
-        Positioned(
-          left: 0, bottom: 0,
-          child: DebugPanel(
-            kvs: {
-              'phase':    _phase.name,
-              'holding':  _holding ? 'yes' : 'no',
-              'resp':     _responseActive ? 'active' : 'idle',
-              'herAudio': '$_audioDeltaCount',
-              'turns':    '${_transcript.length}',
-              'creator':  _creator ? 'on' : 'off',
-            },
-            events: _events,
-            margin: const EdgeInsets.only(left: 10, bottom: 6),
-          ),
-        ),
+        // THE LIVE DIAGNOSTICS PANEL IS GONE. It sat bottom-left of the
+        // voice screen for every user, ungated — a bug icon that
+        // expanded into OpenAI socket state (response.created, audio
+        // deltas, turn counts) on top of a conversation with a woman.
+        // It earned its keep while the realtime socket was being shaken
+        // out; on a shipping build it is a developer's console left on
+        // the customer's screen. The _events log it read is still
+        // collected, so putting it back is one widget.
       ],
     );
   }

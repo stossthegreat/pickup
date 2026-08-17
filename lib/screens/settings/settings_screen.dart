@@ -31,11 +31,22 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  /// Owner-only surfaces. Currently just the backend diagnostic — see
+  /// where it's used below.
+  bool _creator = false;
+
   @override
   void initState() {
     super.initState();
     // ignore: discarded_futures
     AnalyticsService.settingsScreenViewed();
+    // ignore: discarded_futures
+    _loadCreator();
+  }
+
+  Future<void> _loadCreator() async {
+    final v = await CreatorModeStore.isActive();
+    if (mounted && v != _creator) setState(() => _creator = v);
   }
 
   @override
@@ -82,16 +93,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // toast the tile fires on tap, so the list reads as
               // tall clean rectangles like the reference image.
 
-              // ── Backend check — diagnose 'needs a connection' ─────────
-              _SettingTile(
-                icon: Icons.wifi_tethering_rounded,
-                iconColor: AppColors.measure,
-                title: 'Backend check',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  context.push('/backend-check');
-                },
-              ),
+              // ── Backend check — OWNER ONLY ───────────────────────────
+              //
+              // Kept, not deleted. It's the only thing that catches a
+              // stale Edge Function deploy, and this session lost two
+              // cycles to a problem it would have named instantly. But
+              // it prints the Supabase URL and a raw user id, and a
+              // diagnostic console in a consumer app is a support
+              // ticket waiting to happen — so it lives behind the
+              // password-gated creator mode further down this list.
+              if (_creator)
+                _SettingTile(
+                  icon: Icons.wifi_tethering_rounded,
+                  iconColor: AppColors.measure,
+                  title: 'Backend check',
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    context.push('/backend-check');
+                  },
+                ),
 
               // ── Your identity — handle + Apple/Google claim ───────────
               _SettingTile(
