@@ -284,7 +284,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 // 2 · BATTLES. Promoted out of a card and into the bar:
                 // it's one of the two permanent competitive systems and
                 // it was two taps deep behind a strip on Home.
-                BattlesScreen(onGoToTab: _switchTab),
+                // `active` is load control, not cosmetics. An
+                // IndexedStack builds every child and keeps it alive —
+                // it just doesn't paint the ones you aren't looking at
+                // — so this screen's 20-second poll was firing for
+                // every user with the app open regardless of which tab
+                // they were on. See the note on the timer.
+                BattlesScreen(onGoToTab: _switchTab, active: _tab == 2),
                 // 3 · PROGRESS (Ascend). Still in the stack — it keeps
                 // its long parameter list from this screen's state, so
                 // making it a pushed route would mean re-plumbing all of
