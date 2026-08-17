@@ -13,15 +13,12 @@ import '../../services/backend/tiers.dart';
 import '../../services/battle_meta_service.dart';
 import '../../services/division.dart';
 import '../../services/economy.dart';
-import '../../services/local_store_service.dart';
-import '../../services/streak_service.dart';
 import '../../services/milestone_service.dart';
 import '../../services/rewards.dart';
 import '../../services/roster.dart';
 import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
-import '../../widgets/common/streak_badge.dart';
 import 'payout_screen.dart';
 import '../../widgets/academy/battle_verdict.dart';
 import '../../widgets/academy/daily_card.dart' show girlForVibe;
@@ -89,8 +86,6 @@ class _BattlesScreenState extends State<BattlesScreen> {
   Standing _standing = const Standing(streak: 0, best: 0, won: 0, lost: 0, drawn: 0);
 
   bool _loading = true;
-  int _xp = 0;
-  int _streak = 0;
   bool _showingVerdict = false;
   Timer? _poll;
 
@@ -142,8 +137,6 @@ class _BattlesScreenState extends State<BattlesScreen> {
     final settled = battles.where((b) => b.settled).toList();
     await _catchUp(settled);
     final standing = await BattleMeta.standing();
-    final xp = await LocalStoreService.xpTotal();
-    final streak = await StreakService.current();
 
     if (!mounted) return;
     setState(() {
@@ -152,8 +145,6 @@ class _BattlesScreenState extends State<BattlesScreen> {
       _oppRatings = ratings;
       _rating = mine;
       _standing = standing;
-      _xp = xp;
-      _streak = streak;
       _loading = false;
     });
   }
@@ -736,68 +727,75 @@ class _BattlesScreenState extends State<BattlesScreen> {
       backgroundColor: AppColors.base,
       body: SafeArea(
         child: Column(children: [
-          // THE SAME HEADER AS THE OTHER TWO TABS: icons on their own
-          // line, then the three pills, then the title and its red line.
-          // The 1–1 record used to sit up here beside the title — it's a
-          // stat, not navigation, and it's already on the hero.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 2, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  if (!widget.tabMode)
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: () => context.pop(),
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                          size: 18, color: Colors.white),
-                    ),
-                  const Spacer(),
-                  if (widget.tabMode) ...[
-                    _Cog(
-                        icon: Icons.local_fire_department_rounded,
-                        onTap: () => widget.onGoToTab!(3)),
-                    const SizedBox(width: 6),
-                    _Cog(
-                        icon: Icons.emoji_events_outlined,
-                        onTap: () => context.push('/leaderboard')),
-                    const SizedBox(width: 6),
-                    _Cog(
-                        icon: Icons.settings_outlined,
-                        onTap: () => context.push('/settings')),
-                  ],
-                ]),
-                const SizedBox(height: 14),
-                Row(children: [
-                  XpBadge(label: '${Economy.commas(_xp)} XP'),
-                  const SizedBox(width: 8),
-                  if (_streak > 0) StreakBadge(days: _streak),
-                  if (_streak > 0) const SizedBox(width: 8),
-                  const RankBadge(),
-                ]),
-                const SizedBox(height: 14),
-                Text('Rizz Battles', style: AppTypography.h1Italic),
-                const SizedBox(height: 6),
-                Text(
-                  'Same woman. Both blind. The better conversation takes '
-                  'the rating.',
-                  style: AppTypography.bodySmall
-                      .copyWith(color: AppColors.red),
-                ),
-                const SizedBox(height: 6),
-              ],
-            ),
-          ),
           Expanded(
             child: RefreshIndicator(
               color: AppColors.red,
               backgroundColor: AppColors.surface1,
               onRefresh: _load,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(18, 4, 18, 30),
+                padding: const EdgeInsets.fromLTRB(18, 2, 18, 30),
                 children: [
+                  // ── THE HEADER, INSIDE THE SCROLL ──────────────────
+                  // It was pinned above an Expanded list, so it was the
+                  // one masthead in the app that never moved: on a tab
+                  // with a tall hero and a history below it, a fixed
+                  // header eats the top of every screenful you scroll
+                  // to. Missions and Practice both put theirs in the
+                  // scroll view. This one does now too.
+                  //
+                  // Icons on their own line, then the title and its red
+                  // line. No XP / streak / rank pills — see the note on
+                  // Practice: standing lives on Home, and repeating it
+                  // on every tab turned it into wallpaper.
+                  //
+                  // The 1–1 record used to sit up here beside the title
+                  // — it's a stat, not navigation, and it's already on
+                  // the hero directly below.
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          if (!widget.tabMode)
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => context.pop(),
+                              icon: const Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  size: 18,
+                                  color: Colors.white),
+                            ),
+                          const Spacer(),
+                          if (widget.tabMode) ...[
+                            _Cog(
+                                icon: Icons.trending_up_rounded,
+                                onTap: () => widget.onGoToTab!(3)),
+                            const SizedBox(width: 6),
+                            _Cog(
+                                icon: Icons.emoji_events_outlined,
+                                onTap: () => context.push('/leaderboard')),
+                            const SizedBox(width: 6),
+                            _Cog(
+                                icon: Icons.settings_outlined,
+                                onTap: () => context.push('/settings')),
+                          ],
+                        ]),
+                        const SizedBox(height: 14),
+                        Text('RIZZ BATTLES', style: AppTypography.masthead),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Same woman. Both blind. The better conversation '
+                          'takes the rating.',
+                          style: AppTypography.bodySmall
+                              .copyWith(color: AppColors.red),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
                   // ── THE HERO ────────────────────────────────────────
                   _hero(rank),
                   const SizedBox(height: 20),

@@ -5,12 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../services/local_store_service.dart';
 import '../../services/roster.dart';
-import '../../services/economy.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/common/mirrorly_components.dart';
-import '../../widgets/common/streak_badge.dart';
 import '../game/freeflow/free_flow_screen.dart';
 import '../roleplay/girl_chat_screen.dart';
 
@@ -34,13 +32,6 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
   int _day = 1; // earned ascension day — gates who's unlocked
   bool _creator = false; // owner creator mode → every girl unlocked
 
-  /// Practice carried no standing at all — no XP, no streak, no rank.
-  /// It's the tab a man spends the most minutes on and the only one
-  /// that never told him where he was, so the work he did here felt
-  /// like it happened outside the game.
-  int _xp = 0;
-  int _streak = 0;
-
   @override
   void initState() {
     super.initState();
@@ -58,15 +49,11 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
       day = (await StreakService.progress()).ascensionDay;
     } catch (_) {/* default day 1 → only the starters unlocked */}
     final creator = await LocalStoreService.isCreatorActive();
-    final xp = await LocalStoreService.xpTotal();
-    final streak = await StreakService.current();
     if (mounted) {
       setState(() {
         _stages = s;
         _day = day;
         _creator = creator;
-        _xp = xp;
-        _streak = streak;
       });
     }
   }
@@ -179,13 +166,21 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ONE HEADER SHAPE ACROSS ALL THREE TABS: icons on
-                  // their own line, then the three pills, then the
-                  // title. Practice had the title first and the icons
-                  // beside it, so switching tabs moved everything.
+                  // their own line, then the title. Practice had the
+                  // title first and the icons beside it, so switching
+                  // tabs moved everything.
+                  //
+                  // THE XP / STREAK / RANK PILLS ARE NOT HERE ANYMORE.
+                  // They belong on Home, where standing IS the subject.
+                  // Repeated on all three tabs they became furniture —
+                  // three rows of the same numbers pushing the actual
+                  // content of each tab a hundred points down the page,
+                  // and a number you see everywhere is a number you stop
+                  // reading. Everything below moves up to fill the gap.
                   Row(children: [
                     const Spacer(),
                     _BoardCog(
-                        icon: Icons.local_fire_department_rounded,
+                        icon: Icons.trending_up_rounded,
                         onTap: () {
                           HapticFeedback.selectionClick();
                           widget.onGoToTab?.call(3);
@@ -204,16 +199,8 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                         }),
                   ]),
                   const SizedBox(height: Sp.md),
-                  Row(children: [
-                    XpBadge(label: Economy.commas(_xp) + ' XP'),
-                    const SizedBox(width: 8),
-                    if (_streak > 0) StreakBadge(days: _streak),
-                    if (_streak > 0) const SizedBox(width: 8),
-                    const RankBadge(),
-                  ]),
-                  const SizedBox(height: Sp.md),
-                  Text('Practice until it feels natural.',
-                      style: AppTypography.h1Italic),
+                  Text('PRACTICE UNTIL IT FEELS NATURAL',
+                      style: AppTypography.masthead),
                   const SizedBox(height: 6),
                   Text(
                     'Voice calls, texts and scenarios that prepare you '

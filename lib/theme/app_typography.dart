@@ -35,6 +35,26 @@ abstract final class AppTypography {
     letterSpacing: -0.9, color: AppColors.textPrimary, height: 1.1,
   );
 
+  /// THE TAB MASTHEAD — one object, three tabs.
+  ///
+  /// This is the old RIZZ BATTLES header at twice the size. That header
+  /// was tracked caps at 15pt and it was the best-looking type in the
+  /// app; the other two tabs used a lowercase 32pt sentence, so the
+  /// three mastheads never read as one product.
+  ///
+  /// Size is deliberately double the red line that sits under it —
+  /// [bodySmall] is 13, this is 26. A masthead needs to beat its own
+  /// subtitle by a clear factor or the two argue.
+  ///
+  /// Tracking drops from 0.2em to 0.1em on the way up. Letterspacing is
+  /// optical, not proportional: the value that opens up 15pt caps turns
+  /// 26pt caps into a ransom note, and every display face tightens as it
+  /// grows for exactly this reason.
+  static TextStyle get masthead => GoogleFonts.inter(
+    fontSize: 26, fontWeight: FontWeight.w900,
+    letterSpacing: 2.6, color: AppColors.textPrimary, height: 1.15,
+  );
+
   // ── Sans (body / UI) — Inter ─────────────────────────────────────────────
 
   static TextStyle get h2 => GoogleFonts.inter(

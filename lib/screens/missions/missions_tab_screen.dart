@@ -546,8 +546,13 @@ class _TopBar extends StatelessWidget {
               // Progress is a thing you LOOK AT, and a destination you
               // visit once a week doesn't deserve a permanent third of
               // the navigation. It's reachable from every tab instead.
+              //
+              // A RISING LINE, NOT A FLAME. The flame is the streak —
+              // it's already on the pill two rows down and on the day
+              // ceremony. Using it here as well made one glyph mean two
+              // different things, and the door it opens is a graph.
               _IconBtn(
-                  icon: Icons.local_fire_department_rounded,
+                  icon: Icons.trending_up_rounded,
                   onTap: () => onGoToTab(3)),
               _IconBtn(
                   icon: Icons.emoji_events_outlined,
@@ -715,17 +720,16 @@ class _HeadingState extends State<_Heading> {
         // as a number beside the headline it's the one thing on the
         // screen that changes while he works, which is exactly what a
         // progress figure should be.
+        // ONE MASTHEAD FACE ACROSS THE THREE TABS — tracked caps, see
+        // AppTypography.masthead. This was a lowercase 30pt sentence and
+        // Battles was 15pt tracked caps, so the three tabs never looked
+        // like the same app.
         Row(crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-          Text('Today\'s Mission',
-              style: GoogleFonts.inter(
-                color: AppColors.textPrimary,
-                fontSize: 30,
-                height: 1.1,
-                letterSpacing: -1,
-                fontWeight: FontWeight.w900,
-              )),
+          Flexible(
+            child: Text('TODAY\'S MISSIONS', style: AppTypography.masthead),
+          ),
           if (total > 0) ...[
             const SizedBox(width: 12),
             Text('$done/$total',
