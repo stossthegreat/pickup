@@ -70,7 +70,17 @@ class BattlesScreen extends StatefulWidget {
   /// the same header furniture the other two tabs carry instead.
   final ValueChanged<int>? onGoToTab;
 
-  const BattlesScreen({super.key, this.onGoToTab});
+  /// TRUE only while this tab is the one being looked at.
+  ///
+  /// This is a load switch, not a cosmetic one. An IndexedStack builds
+  /// every child and keeps its State alive — it simply doesn't paint
+  /// the ones off screen — so without this the poll below ran for every
+  /// user with the app open no matter which tab they were on. Defaults
+  /// true so the pushed-route form (which is only ever on screen when
+  /// it's on screen) behaves as before.
+  final bool active;
+
+  const BattlesScreen({super.key, this.onGoToTab, this.active = true});
 
   bool get tabMode => onGoToTab != null;
 
@@ -99,8 +109,29 @@ class _BattlesScreenState extends State<BattlesScreen> {
     // screen and the chat are pushed on top of it and this state object
     // stays alive underneath them, so an unguarded poll would fire a
     // verdict over a conversation in progress.
-    _poll = Timer.periodic(const Duration(seconds: 20), (_) {
-      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? false)) return;
+    //
+    // THREE GUARDS, AND ALL THREE ARE ABOUT LOAD.
+    //
+    // Every tick is three round-trips (battles, handles, opponent
+    // ratings). Multiply that by every install with the app open and
+    // this one timer is the heaviest thing the product does to its own
+    // database, so it earns its keep only when there is genuinely
+    // something that might have changed.
+    //
+    //   isCurrent — a duel or a chat is pushed on top and this state
+    //               stays alive underneath; an unguarded poll would
+    //               fire a verdict over a conversation in progress.
+    //   active    — the IndexedStack keeps this alive on every other
+    //               tab too. See the note on the field.
+    //   pending   — the whole point of polling is catching a rival who
+    //               answered. With nothing unsettled there is no rival
+    //               to catch, and most men are in that state most of
+    //               the time. This guard alone removes the majority of
+    //               the traffic.
+    _poll = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!mounted || !widget.active) return;
+      if (!(ModalRoute.of(context)?.isCurrent ?? false)) return;
+      if (!_battles.any((b) => !b.settled)) return;
       // ignore: discarded_futures
       _load();
     });
