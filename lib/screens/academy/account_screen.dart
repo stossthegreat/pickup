@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../config/backend_config.dart';
 import '../../services/backend/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/academy_modal.dart';
@@ -298,6 +299,21 @@ class _AccountScreenState extends State<AccountScreen> {
                           fontWeight: FontWeight.w800)),
                 ),
               ),
+              // GOOGLE ONLY EXISTS WHEN GOOGLE EXISTS.
+              //
+              // The client IDs in backend_config.dart are empty, so
+              // signInWithGoogle() bails at its own guard and returns
+              // false — and this button sat there fully live, opening a
+              // sheet-less failure and a snackbar saying it isn't
+              // configured. A button that can only fail is worse than no
+              // button: the user reads it as the app being broken, and
+              // on the onboarding pass it's the first thing they touch.
+              //
+              // Gated on the config rather than deleted, so the day the
+              // two IDs are pasted in, the button comes back on its own
+              // with no code change. See the setup steps in
+              // backend_config.dart.
+              if (BackendConfig.googleWebClientId.isNotEmpty) ...[
               const SizedBox(height: 10),
               SizedBox(
                 height: 54,
@@ -324,6 +340,7 @@ class _AccountScreenState extends State<AccountScreen> {
                           fontWeight: FontWeight.w800)),
                 ),
               ),
+              ],
             ],
 
             if (claimed && !widget.onboarding) ...[
