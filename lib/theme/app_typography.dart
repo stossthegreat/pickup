@@ -55,6 +55,25 @@ abstract final class AppTypography {
     letterSpacing: 2.6, color: AppColors.textPrimary, height: 1.15,
   );
 
+  /// THE SAME MASTHEAD, SITTING ON THE ICON LINE.
+  ///
+  /// Practice and Battles put the title level with the cog row instead
+  /// of on a line of its own. That space to the left of three 38pt
+  /// circles was empty on every screenful, and a title parked there
+  /// buys back a whole row of height for the content underneath — the
+  /// grid comes up, the rank hero comes up.
+  ///
+  /// 22 rather than 26 because it has to share the line: the cogs are
+  /// 38pt tall, and type that out-measures the thing beside it stops
+  /// looking like a header and starts looking like a collision.
+  /// Tracking eases with it (2.6 → 2.2) on the same optical rule as
+  /// above. Same family, same weight, same caps — one masthead, two
+  /// sizes.
+  static TextStyle get mastheadInline => GoogleFonts.inter(
+    fontSize: 22, fontWeight: FontWeight.w900,
+    letterSpacing: 2.2, color: AppColors.textPrimary, height: 1.1,
+  );
+
   // ── Sans (body / UI) — Inter ─────────────────────────────────────────────
 
   static TextStyle get h2 => GoogleFonts.inter(
