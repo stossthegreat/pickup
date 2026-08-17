@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../config/backend_config.dart';
 import '../../services/backend/auth_service.dart';
+import '../../services/progress_sync.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/academy_modal.dart';
 
@@ -71,24 +72,35 @@ class _AccountScreenState extends State<AccountScreen> {
     HapticFeedback.mediumImpact();
     setState(() => _busy = true);
     final ok = await flow();
+    // THE CLAIM IS THE RESTORE. This screen promises that rank and
+    // streak survive a lost phone, and this call is the only reason
+    // that sentence is true — it pulls whatever the last device banked
+    // and merges it upward. On the phone he already plays on it finds
+    // nothing bigger and does nothing, which is the common case.
+    final restored = ok && await ProgressSync.restore();
     if (!mounted) return;
     setState(() => _busy = false);
     if (ok) {
       AcademyModal.show(
         context,
-        kicker: 'ACCOUNT CLAIMED',
+        kicker: restored ? 'PROGRESS RESTORED' : 'ACCOUNT CLAIMED',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Your progress is protected.',
+            Text(restored
+                    ? 'We got your run back.'
+                    : 'Your progress is protected.',
                 style: GoogleFonts.inter(
                     color: AppColors.textPrimary,
                     fontSize: 20,
                     fontWeight: FontWeight.w900)),
             const SizedBox(height: 6),
-            Text('Rank, streak and squad now survive a lost phone or a '
-                'reinstall. Signed with $provider.',
+            Text(restored
+                ? 'Your XP and streak are back on this phone, and they '
+                  'survive the next one too. Signed with $provider.'
+                : 'Rank, streak and squad now survive a lost phone or a '
+                  'reinstall. Signed with $provider.',
                 style: GoogleFonts.inter(
                     color: AppColors.textSecondary,
                     fontSize: 13,

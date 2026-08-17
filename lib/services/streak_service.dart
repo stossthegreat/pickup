@@ -175,6 +175,49 @@ class StreakService {
     return (current, best);
   }
 
+  /// GIVE A MAN HIS RUN BACK on a new phone.
+  ///
+  /// Called once, by ProgressSync, after a sign-in restores a bigger
+  /// streak than this device knows about. Everywhere else the day set is
+  /// derived from what actually happened here; this is the one door that
+  /// writes it from outside, and it only ever ADDS days.
+  ///
+  /// ── IT BACKFILLS TO YESTERDAY, NOT TO TODAY ─────────────────────────
+  ///
+  /// A restored 63-day run lands as the 63 days ENDING YESTERDAY. He gets
+  /// every day he earned and still has to show up today to make it 64,
+  /// exactly as if he'd never changed phones. Backfilling through today
+  /// would hand him a free day for reinstalling, which is both a lie and
+  /// a way to farm the streak.
+  ///
+  /// Merged into the existing set rather than replacing it, so a man who
+  /// played offline on the new handset before signing in keeps that too.
+  static Future<void> restoreRun({
+    required int days,
+    required int longest,
+  }) async {
+    if (days <= 0 && longest <= 0) return;
+    final prefs = await SharedPreferences.getInstance();
+
+    if (days > 0) {
+      final set = (prefs.getStringList(_kActiveDays) ?? const <String>[])
+          .map(int.parse)
+          .toSet();
+      final yesterday = DateTime.now().subtract(const Duration(days: 1));
+      for (var i = 0; i < days; i++) {
+        set.add(_ymd(yesterday.subtract(Duration(days: i))));
+      }
+      final kept = set.toList()..sort();
+      await prefs.setStringList(
+          _kActiveDays, kept.map((e) => e.toString()).toList());
+    }
+
+    // Never lower a personal best — the device may hold a bigger one.
+    final have = prefs.getInt(_kLongest) ?? 0;
+    final best = [have, longest, days].reduce((a, b) => a > b ? a : b);
+    if (best > have) await prefs.setInt(_kLongest, best);
+  }
+
   /// Rebuild the log and return the live `(current, longest)` streak.
   /// Safe to call from any masthead load.
   static Future<(int current, int longest)> refresh() async {
