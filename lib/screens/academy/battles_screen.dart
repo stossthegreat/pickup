@@ -768,14 +768,16 @@ class _BattlesScreenState extends State<BattlesScreen> {
                                   color: Colors.white),
                             ),
                           const Spacer(),
+                          // ORDER, READ FROM THE RIGHT: settings,
+                          // progress, board.
                           if (widget.tabMode) ...[
-                            _Cog(
-                                icon: Icons.trending_up_rounded,
-                                onTap: () => widget.onGoToTab!(3)),
-                            const SizedBox(width: 6),
                             _Cog(
                                 icon: Icons.emoji_events_outlined,
                                 onTap: () => context.push('/leaderboard')),
+                            const SizedBox(width: 6),
+                            _Cog(
+                                icon: Icons.trending_up_rounded,
+                                onTap: () => widget.onGoToTab!(3)),
                             const SizedBox(width: 6),
                             _Cog(
                                 icon: Icons.settings_outlined,

@@ -177,19 +177,20 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                   // content of each tab a hundred points down the page,
                   // and a number you see everywhere is a number you stop
                   // reading. Everything below moves up to fill the gap.
+                  // ORDER, READ FROM THE RIGHT: settings, progress, board.
                   Row(children: [
                     const Spacer(),
+                    _BoardCog(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          context.push('/leaderboard');
+                        }),
+                    const SizedBox(width: 6),
                     _BoardCog(
                         icon: Icons.trending_up_rounded,
                         onTap: () {
                           HapticFeedback.selectionClick();
                           widget.onGoToTab?.call(3);
-                        }),
-                    const SizedBox(width: 6),
-                    _BoardCog(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          context.push('/leaderboard');
                         }),
                     const SizedBox(width: 6),
                     _SettingsCog(

@@ -21,7 +21,6 @@ import '../../services/shield_service.dart';
 import '../../services/standing.dart';
 import '../academy/payout_screen.dart';
 import '../../widgets/academy/ascend_reveal.dart';
-import '../../widgets/academy/trophy.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/live_toast.dart';
@@ -551,12 +550,17 @@ class _TopBar extends StatelessWidget {
               // it's already on the pill two rows down and on the day
               // ceremony. Using it here as well made one glyph mean two
               // different things, and the door it opens is a graph.
-              _IconBtn(
-                  icon: Icons.trending_up_rounded,
-                  onTap: () => onGoToTab(3)),
+              //
+              // ORDER, READ FROM THE RIGHT: settings, progress, board.
+              // The thumb lands on the right of this row, so the order
+              // runs outward from there — the two you open often sit
+              // closest, the board furthest.
               _IconBtn(
                   icon: Icons.emoji_events_outlined,
                   onTap: () => context.push('/leaderboard')),
+              _IconBtn(
+                  icon: Icons.trending_up_rounded,
+                  onTap: () => onGoToTab(3)),
               _IconBtn(icon: Icons.settings_outlined, onTap: () => context.push('/settings')),
             ],
           ),
@@ -582,17 +586,12 @@ class _TopBar extends StatelessWidget {
             if (streak > 0) const SizedBox(width: 8),
             const RankBadge(),
           ]),
-          const SizedBox(height: Sp.md),
-          // THE NEXT BADGE. One named target with a number under it, on
-          // the screen he already opens every day.
-          //
-          // A trophy cabinet gets browsed once and then never again; a
-          // single line saying HE JUST GOES · 8/10 gets acted on. That's
-          // the whole reason the badge families are tiered — there is
-          // always a next rung on something he is already doing, and it
-          // is always visible without opening anything. See the rules at
-          // the top of achievements.dart.
-          NextBadgeStrip(onTap: () => context.push('/trophies')),
+          // THE NEXT BADGE MOVED TO PROGRESS. It sat here, under the
+          // pills, on the tab you open to WORK — and the badge shelf is
+          // something you go and LOOK at, which is what the Progress
+          // screen is for. It's section 04 there now, next to the map,
+          // the streak and the record, where the rest of the standing
+          // already lives. Everything below moves up into the gap.
         ],
       ),
     );
