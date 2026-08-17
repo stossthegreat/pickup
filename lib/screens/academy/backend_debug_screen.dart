@@ -34,6 +34,48 @@ class _BackendDebugScreenState extends State<BackendDebugScreen> {
     setState(() => _lines.add((label, ok, detail)));
   }
 
+  /// CALL AN EDGE FUNCTION AND GET ITS ERROR STRING BACK, however it
+  /// arrives.
+  ///
+  /// ── THE BUG THIS EXISTS TO KILL ──────────────────────────────────
+  ///
+  /// Every probe here works by sending a deliberately invalid payload
+  /// and checking for the specific complaint a LIVE function would make
+  /// — "transcript too short" proves the thing is deployed, reachable
+  /// and authenticated us, without grading anything or writing a row.
+  ///
+  /// That was written as `res.data['error']`, which assumes the function
+  /// answers 200 with an error in the body. It doesn't. It answers
+  /// **400**, and the Supabase Dart client turns any non-2xx into a
+  /// thrown FunctionException — so the happy path never ran, every probe
+  /// fell into its catch block, and two perfectly healthy functions were
+  /// reported as NOT DEPLOYED. The proof was printed on screen the whole
+  /// time: the "failure" detail contained the exact string the check was
+  /// looking for.
+  ///
+  /// So this reads both channels. Returned body first; failing that, the
+  /// text of the exception, which carries the same `details` map. Match
+  /// on substring rather than equality, because the thrown form arrives
+  /// wrapped in FunctionException(status:…, details:{…}).
+  Future<({String? error, String raw})> _probe(
+    String fn,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final res = await BackendService.client.functions.invoke(fn, body: body);
+      final d = res.data;
+      final err = d is Map ? d['error']?.toString() : null;
+      return (error: err, raw: '$d');
+    } catch (e) {
+      return (error: '$e', raw: '$e');
+    }
+  }
+
+  /// True when the function answered with the complaint we provoked —
+  /// whichever channel it came back on.
+  bool _said(({String? error, String raw}) r, String want) =>
+      (r.error ?? '').contains(want);
+
   Future<void> _run() async {
     setState(() {
       _lines.clear();
@@ -96,19 +138,15 @@ class _BackendDebugScreenState extends State<BackendDebugScreen> {
 
     // 6 — the scoring function (a deliberate short transcript: we only
     //     want to know whether it's reachable and keyed, not to score).
-    try {
-      final res = await BackendService.client.functions.invoke(
-        'score-voice',
-        body: {'scenario': 'diagnostic', 'transcript': 'x'},
-      );
-      final err = res.data is Map ? (res.data as Map)['error'] : null;
+    {
+      final r = await _probe(
+          'score-voice', {'scenario': 'diagnostic', 'transcript': 'x'});
       // "transcript too short" is the CORRECT answer here — it means the
-      // function is live and authenticated.
-      final reachable = err == 'transcript too short';
+      // function is live and authenticated. It comes back as a 400, so
+      // it arrives as a throw. See _probe.
+      final reachable = _said(r, 'transcript too short');
       _add('score-voice function', reachable,
-          reachable ? 'live + authenticated' : '${res.data}');
-    } catch (e) {
-      _add('score-voice function', false, '$e');
+          reachable ? 'live + authenticated' : r.raw);
     }
 
     // 7 — THE CHAT LADDER, link by link.
@@ -153,29 +191,57 @@ class _BackendDebugScreenState extends State<BackendDebugScreen> {
       _add('chat_leaderboard view', false, 'MISSING or unreadable. ($e)');
     }
 
-    try {
-      final res = await BackendService.client.functions.invoke(
-        'score-chat',
-        body: {'transcript': 'x', 'surface': 'diagnostic'},
-      );
-      final err = res.data is Map ? (res.data as Map)['error'] : null;
+    {
+      final r =
+          await _probe('score-chat', {'transcript': 'x', 'surface': 'diagnostic'});
       // Same trick as score-voice: "too short" is the RIGHT answer — it
       // proves the function is deployed and authenticated us.
-      final live = err == 'transcript too short';
+      final live = _said(r, 'transcript too short');
       _add('score-chat function', live,
           live
               ? 'live + authenticated'
               : 'NOT DEPLOYED, or it rejected us. Deploy score-chat AND '
                   'battle-action together — they share roll-chat.ts. '
-                  'Response: ${res.data}');
-    } catch (e) {
-      _add('score-chat function', false,
-          'NOT DEPLOYED — supabase functions deploy score-chat ($e)');
+                  'Response: ${r.raw}');
+    }
+
+    // 7b — BATTLE-ACTION, AND WHICH VERSION OF IT.
+    //
+    // Deployed-but-stale is the failure nothing else here can see, and
+    // it's the one that matters: the cancel action and the RR columns
+    // both shipped in the same change, so an old copy answers every
+    // call happily while the X on a challenge silently does nothing.
+    //
+    // `cancel` with no battle_id is the probe. It costs nothing and
+    // never touches a row — it fails at the first argument check — but
+    // WHICH complaint comes back names the version:
+    //
+    //   "battle_id required"  → current build, cancel + RR are live
+    //   "unknown action"      → deployed, but before the cancel case
+    {
+      final r = await _probe('battle-action', {'action': 'cancel'});
+      final current = _said(r, 'battle_id required');
+      final stale = _said(r, 'unknown action');
+      _add(
+          'battle-action function',
+          current,
+          current
+              ? 'live + current (cancel and RR are deployed)'
+              : stale
+                  ? 'DEPLOYED BUT STALE — this copy predates the cancel '
+                      'action, so deleting a challenge does nothing and '
+                      'battle_rating never gets written. Redeploy: '
+                      'supabase functions deploy battle-action'
+                  : 'NOT DEPLOYED, or it rejected us. Response: ${r.raw}');
     }
 
     // 8 — the grader's key. A deployed function with no OPENAI_API_KEY
     //     returns 503 and records nothing, which looks EXACTLY like "the
     //     score isn't saving" from the app side.
+    // A missing key answers 503 "grader unavailable", which — like every
+    // other non-2xx here — arrives as a throw rather than a body. Named
+    // explicitly so the one condition this check exists to detect
+    // doesn't get reported as a generic exception.
     try {
       final res = await BackendService.client.functions.invoke(
         'score-chat',
@@ -195,7 +261,14 @@ class _BackendDebugScreenState extends State<BackendDebugScreen> {
                   'key is missing: supabase secrets set OPENAI_API_KEY=… '
                   'Response: $d');
     } catch (e) {
-      _add('grader (OPENAI_API_KEY)', false, '$e');
+      final noKey = '$e'.contains('grader unavailable');
+      _add('grader (OPENAI_API_KEY)', false,
+          noKey
+              ? 'NO KEY. The function is live but has no OPENAI_API_KEY, '
+                  'so it grades nothing and records nothing — which looks '
+                  'exactly like "the score isn\'t saving" from the app. '
+                  'Fix: supabase secrets set OPENAI_API_KEY=sk-…'
+              : '$e');
     }
 
     if (mounted) setState(() => _running = false);
