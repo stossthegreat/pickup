@@ -1,17 +1,49 @@
 # Mirrorly iOS Podfile — pinned to iOS 15.5 for ML Kit compatibility
 platform :ios, '15.5'
 
-# SELF-HEAL the SwiftPM binary-artifact cache on CI. An interrupted build
-# leaves half-written Firebase zips in ~/Library/Caches/org.swift.swiftpm/
-# artifacts, and every later build restored onto that cache fails package
-# resolution with "... already exists in file system" before a single
-# Dart line compiles. Purging the artifacts dir here (pod install runs
-# before xcodebuild's package resolution) forces a clean ~1-min
-# re-download instead of a dead build. CI-only (Codemagic sets
-# CM_BUILD_ID) so local dev machines keep their cache.
+# SELF-HEAL the SwiftPM binary-artifact state on CI.
+#
+# THIS PROJECT DOES NOT USE SWIFT PACKAGE MANAGER. There are zero SPM
+# references in Runner.xcodeproj and every dependency is a pod. SPM only
+# appears because Flutter injects it at build time when the machine has
+# `enable-swift-package-manager` switched on, and it then drags in the
+# whole firebase-ios-sdk package graph — including a gRPC BINARY
+# artifact that CocoaPods never needed, because gRPC belongs to
+# Firestore and this app only uses Analytics.
+#
+# The real fix is one line in the CI pre-build step:
+#
+#     flutter config --no-enable-swift-package-manager
+#
+# Everything below is the fallback for when it's left on. Two different
+# directories can hold a broken artifact and they fail differently:
+#
+#   ~/Library/Caches/org.swift.swiftpm/artifacts
+#       The shared cache. An interrupted build leaves half-written zips
+#       here and the next build fails resolution with "... already
+#       exists in file system".
+#
+#   <project>/build/ios/SourcePackages/artifacts
+#       The per-build checkout. When the shared cache is emptied — by
+#       the purge above, or by a failed download — but this directory
+#       still holds a manifest pointing into it, resolution fails the
+#       OTHER way: "file not found at path: .../grpc-binary/grpc/
+#       grpc.zip". Only the first directory was being cleared, so this
+#       failure survived the self-heal that was written for it.
+#
+# Both go. pod install runs before xcodebuild resolves packages, so this
+# is the last safe moment to do it. CI-only (Codemagic sets CM_BUILD_ID)
+# so local dev machines keep their cache and their ~1-minute re-download.
 if ENV['CI'] || ENV['CM_BUILD_ID']
   require 'fileutils'
   FileUtils.rm_rf(File.expand_path('~/Library/Caches/org.swift.swiftpm/artifacts'))
+  # TWO dot-dots, not one. File.expand_path treats __FILE__ as the base
+  # DIRECTORY, so the first `..` only cancels the `Podfile` filename and
+  # lands back in ios/ — that's why the existing Generated.xcconfig
+  # lookup above uses a single one. Getting to the repo root, where
+  # build/ios/SourcePackages actually lives, takes a second.
+  FileUtils.rm_rf(File.expand_path(
+    File.join('..', '..', 'build', 'ios', 'SourcePackages'), __FILE__))
 end
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
