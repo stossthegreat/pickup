@@ -11,6 +11,13 @@ if (!process.env.OPENAI_API_KEY) {
 
 export const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  // Scale hardening: a hung OpenAI call must never hold one of our
+  // request slots indefinitely. 45s covers the slowest legitimate
+  // completion; one retry keeps transient 5xx recovery without
+  // tripling latency under an OpenAI incident (the SDK default of 2
+  // retries turns a 45s timeout into 135s of held socket).
+  timeout: 45_000,
+  maxRetries: 1,
 });
 
 // Models — pinned so behaviour doesn't drift when OpenAI updates defaults.

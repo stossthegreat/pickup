@@ -45,8 +45,17 @@ export default async function dateRoute(app) {
     const characterId = body.characterId;
     const focus = VALID_FOCUS.includes(body.focus) ? body.focus : 'game';
     const creator = body.creator === true || body.creator === 'true';
-    const text = String(body.text || '').trim();
-    const history = Array.isArray(body.history) ? body.history.slice(-12) : [];
+    // Length caps are cost armour: history is already capped at 12
+    // items, but without per-item caps a client could ship 12 novels
+    // inside the 25MB body limit and turn one turn into a monster
+    // prompt. 600 chars/item and 1000 for the live line are far above
+    // anything a real texting UI produces.
+    const text = String(body.text || '').trim().slice(0, 1000);
+    const history = Array.isArray(body.history)
+      ? body.history.slice(-12).map((h) => (h && h.text
+          ? { ...h, text: String(h.text).slice(0, 600) }
+          : h))
+      : [];
     const userProfile = normaliseProfile(body.userProfile);
     const memory = typeof body.memory === 'string' ? body.memory.slice(0, 400) : '';
     const stage = Number(body.stage) || 1;
