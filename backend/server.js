@@ -94,6 +94,58 @@ await app.register(dateRoute,     { prefix: '/v1/date'     });
 await app.register(coachRoute,    { prefix: '/v1/coach'    });
 await app.register(debugRoute,    { prefix: '/v1/debug'    });
 
+// ── LAST-RESORT ERROR HANDLER ────────────────────────────────────────
+// Any route that throws past its own try/catch lands here instead of
+// leaking a stack trace to the client. The request gets a clean JSON
+// 500, the error gets logged with its route, and the process carries on
+// serving everyone else.
+app.setErrorHandler((err, req, reply) => {
+  // Fastify tags framework-origin errors (body too large, bad JSON,
+  // rate limit) with a statusCode — pass those through untouched.
+  const code = err.statusCode && err.statusCode >= 400 ? err.statusCode : 500;
+  if (code >= 500) {
+    req.log.error({ err, url: req.url }, 'unhandled route error');
+  }
+  reply.code(code).send({ error: code >= 500 ? 'internal' : err.message });
+});
+
+// ── PROCESS-LEVEL ARMOUR ─────────────────────────────────────────────
+// Node kills the entire process on an unhandled promise rejection —
+// one stray .then() without a .catch() anywhere in the codebase and
+// every concurrent user is dropped mid-request. At hundreds of
+// thousands of users that is not a bug report, it is an outage. Log
+// it loudly, keep serving.
+process.on('unhandledRejection', (reason) => {
+  app.log.error({ reason: String(reason) }, 'UNHANDLED REJECTION — survived');
+});
+// A truly uncaught synchronous throw means unknown state: log, close
+// the listener so the platform LB stops routing to us, and exit so
+// Railway restarts a clean instance. In-flight requests get their
+// replies; new ones go to the other replicas.
+process.on('uncaughtException', (err) => {
+  app.log.fatal({ err }, 'UNCAUGHT EXCEPTION — draining and restarting');
+  app.close().finally(() => process.exit(1));
+  // Belt-and-braces: never hang in a broken state.
+  setTimeout(() => process.exit(1), 8_000).unref();
+});
+
+// ── GRACEFUL SHUTDOWN ────────────────────────────────────────────────
+// Railway sends SIGTERM on every deploy and restart. Without this, the
+// old instance is killed mid-request and every user in a voice-session
+// mint or a text turn at that moment gets a dropped connection. With
+// it: stop accepting new sockets, finish what's in flight, then exit.
+let shuttingDown = false;
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    app.log.info(`${sig} — draining in-flight requests, then exiting`);
+    app.close().then(() => process.exit(0), () => process.exit(1));
+    // Hard deadline so a stuck request can't block the deploy forever.
+    setTimeout(() => process.exit(0), 10_000).unref();
+  });
+}
+
 try {
   await app.listen({ port: PORT, host: HOST });
   app.log.info(

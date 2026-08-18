@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:io' show Platform;
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../config/backend_config.dart';
@@ -325,7 +326,12 @@ class _AccountScreenState extends State<AccountScreen> {
               // two IDs are pasted in, the button comes back on its own
               // with no code change. See the setup steps in
               // backend_config.dart.
-              if (BackendConfig.googleWebClientId.isNotEmpty) ...[
+              // …and NEVER on iOS, even once configured. iOS runs the
+              // Apple lane only — one button, zero Google Cloud setup,
+              // and no App-Review questions about a second provider.
+              // Android keeps Google (no Sign in with Apple there).
+              if (!Platform.isIOS &&
+                  BackendConfig.googleWebClientId.isNotEmpty) ...[
               const SizedBox(height: 10),
               SizedBox(
                 height: 54,

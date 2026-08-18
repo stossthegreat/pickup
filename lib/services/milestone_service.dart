@@ -89,16 +89,23 @@ class MilestoneService {
   /// first. Discovery is the whole teaching mechanic — see tactics.dart.
   static void pushTactics(List<Tactic> found) {
     if (found.isEmpty) return;
-    _pending.insertAll(0, [
-      for (final t in found)
+    // ONE celebration per session end, not a gauntlet. A good first
+    // conversation can legitimately demonstrate five tactics at once —
+    // and five full-screen reveals in a row is a punishment, not a
+    // reward (founder got hit with exactly that). Tactics.claim() has
+    // ALREADY banked every discovery into the cabinet, so nothing is
+    // lost: the best one gets the moment, the rest are waiting in the
+    // collection — and undiscovered ones will re-fire on a later
+    // conversation anyway.
+    final t = found.first;
+    _pending.insert(0,
         Milestone(
           kind: MilestoneKind.tactic,
           title: t.name,
           sub: 'TACTIC DISCOVERED',
           value: 0,
           tactic: t,
-        )
-    ]);
+        ));
   }
 
   // ══════════════════════════════════════════════════════════════════

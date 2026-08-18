@@ -9,13 +9,13 @@ import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/common/mirrorly_components.dart';
-import '../game/freeflow/free_flow_screen.dart';
 import '../roleplay/girl_chat_screen.dart';
+import 'dojo_screen.dart';
 
 /// PRACTICE — the relationship hub. A grid of the 10 AI women, each a real
 /// name + her character chip + how far you've gotten with her (her stage).
-/// Tap her and choose how to practise: text her, or take it live on voice.
-/// Both remember you (the memory layer), so you pick up where you left off.
+/// Tap her and you're texting — the 📞 in her chat header takes it live on
+/// voice whenever he wants. She remembers you (the memory layer).
 class PracticeTabScreen extends StatefulWidget {
   /// 0 Missions · 1 Practice · 2 Battles · 3 Progress. Progress isn't
   /// in the bottom bar any more — the flame in this header goes to it.
@@ -79,12 +79,12 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
       ));
       return;
     }
-    // THE FUNNEL — browsing AND opening the choice sheet are free. She's
-    // right there. Choosing TEXT drops them into the chat with 10 free
-    // messages (girl_chat_screen enforces the cap, then paywalls). Choosing
-    // VOICE routes through FreeFlow, which paywalls at _goLive — voice is
-    // never free. So no paywall here: let them in to see everything.
-    _choose(g);
+    // STRAIGHT INTO THE CHAT. The text/voice choice sheet is gone —
+    // it was one tap of friction that asked a question the chat screen
+    // already answers (the 📞 in her header takes it live any time).
+    // Text carries the free-message funnel; voice still paywalls at
+    // _goLive inside FreeFlow. Nothing to choose, so nothing to ask.
+    _openText(g);
   }
 
   GirlChatConfig _configFor(GirlBrief g) => GirlChatConfig(
@@ -108,36 +108,6 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
       MaterialPageRoute(builder: (_) => GirlChatScreen(config: _configFor(g))),
     );
     _load(); // her stage may have moved
-  }
-
-  void _openVoice(GirlBrief g) {
-    Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(
-          // The one surface that keeps the coach — see the note on
-          // FreeFlowScreen.coachAllowed.
-          builder: (_) =>
-              FreeFlowScreen(initialVibeKey: g.vibeKey, coachAllowed: true)),
-    );
-  }
-
-  void _choose(GirlBrief g) {
-    HapticFeedback.selectionClick();
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _ChoiceSheet(
-        girl: g,
-        stage: _stages[g.id] ?? 1,
-        onText: () {
-          Navigator.pop(context);
-          _openText(g);
-        },
-        onVoice: () {
-          Navigator.pop(context);
-          _openVoice(g);
-        },
-      ),
-    );
   }
 
   @override
@@ -203,6 +173,16 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                       ),
                     ),
                     const SizedBox(width: 10),
+                    // THE DOJO — the seduction curriculum, one tap from
+                    // the room where he practises it. A pill, not a cog:
+                    // it's a place, not a setting.
+                    _DojoPill(onTap: () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context, rootNavigator: true).push(
+                        MaterialPageRoute(builder: (_) => const DojoScreen()),
+                      );
+                    }),
+                    const SizedBox(width: 6),
                     _BoardCog(
                         onTap: () {
                           HapticFeedback.selectionClick();
@@ -402,133 +382,6 @@ class _GirlCard extends StatelessWidget {
   }
 }
 
-/// The practice-choice sheet — text or voice, both route to the screens
-/// we built (GirlChatScreen / FreeFlowScreen).
-class _ChoiceSheet extends StatelessWidget {
-  final GirlBrief girl;
-  final int stage;
-  final VoidCallback onText;
-  final VoidCallback onVoice;
-  const _ChoiceSheet({
-    required this.girl,
-    required this.stage,
-    required this.onText,
-    required this.onVoice,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final stageLabel = (stage >= 1 && stage < kRelationshipStages.length)
-        ? kRelationshipStages[stage]
-        : 'Matched';
-    return Container(
-      padding: EdgeInsets.fromLTRB(22, 16, 22, 22 + MediaQuery.of(context).padding.bottom),
-      decoration: const BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border(top: BorderSide(color: AppColors.surface3)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40, height: 4,
-            decoration: BoxDecoration(
-                color: AppColors.surface3, borderRadius: BorderRadius.circular(2)),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Container(
-                width: 52, height: 52,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: girl.accent.withOpacity(0.7), width: 1.4),
-                ),
-                child: ClipOval(
-                  child: Image.asset(girl.asset, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                          color: AppColors.surface2,
-                          child: Icon(Icons.person, color: girl.accent))),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(girl.name, style: AppTypography.h2),
-                    const SizedBox(height: 2),
-                    Text('${girl.type}  ·  $stageLabel'.toUpperCase(),
-                        style: AppTypography.label
-                            .copyWith(color: girl.accent, letterSpacing: 1.4, fontSize: 9.5)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          _choice(context, 'TEXT HER', 'Rizz her over text — she replies in character.',
-              Icons.chat_bubble_rounded, AppColors.red, onText),
-          const SizedBox(height: 10),
-          _choice(context, 'CALL HER · VOICE', 'Take it live on the voice orb.',
-              Icons.call_rounded, AppColors.accent, onVoice),
-        ],
-      ),
-    );
-  }
-
-  Widget _choice(BuildContext context, String label, String sub, IconData icon,
-      Color color, VoidCallback onTap) {
-    return Material(
-      color: color.withOpacity(0.10),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withOpacity(0.4)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 42, height: 42,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.16),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label,
-                        style: AppTypography.label
-                            .copyWith(color: color, letterSpacing: 1.4, fontSize: 12)),
-                    const SizedBox(height: 2),
-                    Text(sub,
-                        style: AppTypography.bodySmall
-                            .copyWith(color: AppColors.textSecondary, fontSize: 12)),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward_rounded, size: 16, color: color),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Settings cog — identical treatment to the Missions + Progress tabs so
-/// the three tabs carry the same top-right control. 38px circle, hairline
-/// border, muted outline-settings glyph. Routes to /settings.
 class _SettingsCog extends StatelessWidget {
   final VoidCallback onTap;
   const _SettingsCog({required this.onTap});
@@ -583,6 +436,48 @@ class _BoardCog extends StatelessWidget {
           ),
           alignment: Alignment.center,
           child: Icon(icon, size: 18, color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+}
+
+/// The DOJO pill — red-edged, all caps, sits in the masthead icon row.
+/// Deliberately the only text pill up there: the cogs are utilities, the
+/// Dojo is a destination, and it should read like a door.
+class _DojoPill extends StatelessWidget {
+  final VoidCallback onTap;
+  const _DojoPill({required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(99),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(99),
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: AppColors.red.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(99),
+            border:
+                Border.all(color: AppColors.red.withValues(alpha: 0.55)),
+          ),
+          alignment: Alignment.center,
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.whatshot_rounded,
+                size: 14, color: AppColors.red),
+            const SizedBox(width: 5),
+            Text('DOJO',
+                style: AppTypography.label.copyWith(
+                  color: AppColors.red,
+                  fontSize: 11,
+                  letterSpacing: 1.6,
+                  fontWeight: FontWeight.w900,
+                )),
+          ]),
         ),
       ),
     );
