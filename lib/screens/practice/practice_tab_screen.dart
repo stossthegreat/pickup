@@ -162,6 +162,12 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                   // reading. Everything below moves up to fill the gap.
                   //
                   // ORDER, READ FROM THE RIGHT: settings, progress, board.
+                  //
+                  // FULL 26pt MASTHEAD, not the inline 22. The DOJO pill
+                  // was wedged into this row and the title had to shrink
+                  // to make room — the masthead paying rent for a button.
+                  // With the pill moved below, PRACTICE at full size and
+                  // three 38pt cogs fit the line with space to spare.
                   Row(children: [
                     Expanded(
                       child: FittedBox(
@@ -169,20 +175,10 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                         alignment: Alignment.centerLeft,
                         child: Text('PRACTICE',
                             maxLines: 1,
-                            style: AppTypography.mastheadInline),
+                            style: AppTypography.masthead),
                       ),
                     ),
                     const SizedBox(width: 10),
-                    // THE DOJO — the seduction curriculum, one tap from
-                    // the room where he practises it. A pill, not a cog:
-                    // it's a place, not a setting.
-                    _DojoPill(onTap: () {
-                      HapticFeedback.selectionClick();
-                      Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => const DojoScreen()),
-                      );
-                    }),
-                    const SizedBox(width: 6),
                     _BoardCog(
                         onTap: () {
                           HapticFeedback.selectionClick();
@@ -208,6 +204,25 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                     'for real conversations.',
                     style: AppTypography.bodySmall
                         .copyWith(color: AppColors.red),
+                  ),
+                  const SizedBox(height: 12),
+                  // ── THE DOJO, ON ITS OWN LINE ────────────────────────
+                  //
+                  // Right-aligned directly above the roster, in the same
+                  // shape as BOTTLING IT on Home. A cog row is
+                  // navigation furniture — board, progress, settings —
+                  // and the DOJO is none of those; it's the one thing on
+                  // this screen that teaches rather than measures, so it
+                  // reads as an offer sitting on top of the women rather
+                  // than a fourth setting.
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _DojoPill(onTap: () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context, rootNavigator: true).push(
+                        MaterialPageRoute(builder: (_) => const DojoScreen()),
+                      );
+                    }),
                   ),
                 ],
               ),
@@ -456,27 +471,28 @@ class _DojoPill extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(99),
+        // BOTTLING IT's exact proportions — see the fear button in
+        // missions_tab_screen. It was 38pt tall because it had to match
+        // the cogs it sat between; off that row it's free to be what it
+        // actually is, and the app already has one shape for "a small
+        // red offer you can take or leave". Two of those in different
+        // sizes is two languages.
         child: Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: AppColors.red.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(99),
+            color: AppColors.red.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
             border:
-                Border.all(color: AppColors.red.withValues(alpha: 0.55)),
+                Border.all(color: AppColors.red.withValues(alpha: 0.5)),
           ),
-          alignment: Alignment.center,
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.whatshot_rounded,
-                size: 14, color: AppColors.red),
-            const SizedBox(width: 5),
-            Text('DOJO',
-                style: AppTypography.label.copyWith(
-                  color: AppColors.red,
-                  fontSize: 11,
-                  letterSpacing: 1.6,
-                  fontWeight: FontWeight.w900,
-                )),
+                size: 12, color: AppColors.red),
+            const SizedBox(width: 4),
+            Text('THE DOJO',
+                style: AppTypography.label
+                    .copyWith(color: AppColors.red, fontSize: 8.5)),
           ]),
         ),
       ),
