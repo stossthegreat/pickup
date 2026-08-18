@@ -911,7 +911,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   ],
                 ),
               ),
-              Text('${e.rating}',
+              // POINTS, not the rating. The number on a board has to be
+              // the one that moves when you play — see 0017. Old rows
+              // (view not yet migrated) fall back to the rating so the
+              // column never reads zero for everyone.
+              Text('${e.voicePoints > 0 ? e.voicePoints : e.rating}',
                   style: GoogleFonts.inter(
                     color: Colors.white,
                     fontSize: 16,

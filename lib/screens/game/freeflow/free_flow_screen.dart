@@ -1900,10 +1900,14 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       }
       // Armed DAILY → this session IS today's one shot. The service
       // parks the result; the Daily screen reveals it on return.
-      if (DailyGameService.armedDaily) {
+      final wasDaily = DailyGameService.armedDaily;
+      if (wasDaily) {
         DailyGameService.armedDaily = false;
-        // ignore: discarded_futures
-        DailyGameService.submit(academyTranscript);
+        // AWAITED for the same reason as the battle submit above: the
+        // Daily screen reads DailyGameService.lastResult the moment this
+        // screen pops, and popping (below) before the grade lands would
+        // hand it null.
+        await DailyGameService.submit(academyTranscript);
       }
       // Blend the five dimension scores into the running total so The Five
       // CLIMBS over the 60 days instead of snapping to the last session.
@@ -1911,6 +1915,21 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         await LocalStoreService.blendDimensionScores(score.dimensions!);
       }
       if (_disposed || !mounted) return;
+
+      // ── ONE CEREMONY PER PERFORMANCE ─────────────────────────────
+      //
+      // An armed session — the Daily or a duel — already has a reveal
+      // waiting on the screen that launched it: the count-up, the rank,
+      // the share card. This scorecard is the SOLO practice ending, and
+      // showing both meant a man got two dramatic score screens
+      // back-to-back for one conversation. The second one reads as a
+      // glitch, and a ceremony that repeats stops being a ceremony.
+      // So an armed session skips the local scorecard and pops straight
+      // back to the reveal that owns the moment.
+      if ((armedBattle != null || wasDaily) && !widget.tabMode) {
+        Navigator.of(context).pop();
+        return;
+      }
       setState(() {
         _result = score;
         _phase = _Phase.scored;

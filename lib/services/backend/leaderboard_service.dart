@@ -10,12 +10,21 @@ class LeaderboardEntry {
   final String? avatarUrl;
   final int rating;
   final String tier;
+
+  /// Cumulative session scores — the voice board's sort key since 0017.
+  /// The rule on every board: higher scores rank higher, and playing
+  /// more catches you up. [rating] stays for divisions and stakes; it's
+  /// a skill estimate, and skill estimates converge, which is exactly
+  /// what a leaderboard must not do.
+  final int voicePoints;
+
   const LeaderboardEntry(
       {required this.userId,
       this.handle,
       this.avatarUrl,
       required this.rating,
-      required this.tier});
+      required this.tier,
+      this.voicePoints = 0});
 }
 
 /// Voice-rizz leaderboard reads. Ratings are written EXCLUSIVELY by the
@@ -38,6 +47,7 @@ class LeaderboardService {
             avatarUrl: r['avatar_url'] as String?,
             rating: (r['rating'] as num).toInt(),
             tier: r['tier'] as String? ?? 'OBSERVER',
+            voicePoints: (r['voice_points'] as num?)?.toInt() ?? 0,
           )
       ];
     } catch (e) {
