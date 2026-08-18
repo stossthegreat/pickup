@@ -199,10 +199,35 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       () => setState(() => _board = Board.battles))),
             ]),
           ),
+          // ONE LINE SAYING HOW THE NUMBER IS MADE. Every board here has
+          // been read as arbitrary at some point, and a man who can't
+          // work out how to move his number stops trying to.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Text(_boardRule,
+                style: GoogleFonts.inter(
+                  color: AppColors.textMuted,
+                  fontSize: 10,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                )),
+          ),
         ],
       ),
     );
   }
+
+  String get _boardRule => switch (_board) {
+        Board.voice =>
+          'Every call you finish is scored out of 100. That score is added '
+              'here — voice duels included.',
+        Board.chat =>
+          'Every chat you finish is scored out of 100. That score is added '
+              'here — text duels included.',
+        Board.battles =>
+          'Wins and losses only. The duel score itself goes to the voice or '
+              'chat board, whichever you fought in.',
+      };
 
   IconData get _boardIcon => switch (_board) {
         Board.voice => Icons.graphic_eq_rounded,
@@ -210,9 +235,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         Board.battles => Icons.sports_mma_rounded,
       };
 
+  /// ONE UNIT ACROSS TWO BOARDS, AND A COUNT ON THE THIRD.
+  ///
+  /// Voice and chat both add up the same thing — the score out of a
+  /// hundred the AI gives you at the end of a run — so they're named the
+  /// same way and can be read against each other. Battles never had a
+  /// points unit that meant anything, because everyone got the same
+  /// number for turning up; it's wins and losses, which is what a fight
+  /// record has always been.
   String get _boardTitle => switch (_board) {
-        Board.voice => 'VOICE RANKINGS',
-        Board.chat => 'RIZZ CHAT POINTS',
+        Board.voice => 'VOICE POINTS',
+        Board.chat => 'CHAT POINTS',
         Board.battles => 'DUELS WON',
       };
 
@@ -754,29 +787,30 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   /// whoever has played least, which is the opposite of what a
   /// competitive ladder is supposed to reward.
   Widget _battleTable() {
-    // ── ONE UNIT ON ALL THREE BOARDS ─────────────────────────────────
+    // ── EACH BOARD MEASURES EXACTLY ONE THING ────────────────────────
     //
-    // This ranked on wins, then WIN RATE, then points — which made the
-    // three tabs mean three different things. VOICE and CHAT both show
-    // points (the sum of your scores); BATTLES showed a percentage, so
-    // a man who fought once and won sat above a man who fought forty
-    // times and won thirty. A ladder that rewards quitting while ahead
-    // is not a ladder.
+    //   VOICE    the scores you got talking
+    //   CHAT     the scores you got writing
+    //   BATTLES  the men you beat
     //
-    // Points, like the other two. Battle wins already bank a bonus into
-    // the same total (see WIN_BONUS in roll-chat.ts), so a man who
-    // fights and wins climbs faster than one who only texts — which is
-    // the thing win-rate was clumsily trying to say. Wins break ties.
+    // WINS, plainly. It used to rank on wins then WIN RATE, which put a
+    // man who fought once and won above a man who fought forty times
+    // and won thirty — a ladder that rewards quitting while ahead. And
+    // I briefly made it rank on points, which was worse in a different
+    // way: it turned the fight board into a second writing board.
     //
-    // The rule is now one sentence and it is true on every tab: the
-    // better you talk the higher you go, and playing more catches you
-    // up.
+    // A duel's SCORE isn't lost — it lands on the voice or chat board
+    // depending on the room it was fought in (see battle-action). This
+    // board answers the only question a fight board should: who has
+    // beaten the most men. Fewest losses breaks a tie, so forty-thirty
+    // beats forty-ten on the same wins.
     final fought = [
       for (final e in _chat)
         if (e.battles > 0) e
     ]..sort((a, b) {
-        final p = b.points.compareTo(a.points);
-        return p != 0 ? p : b.wins.compareTo(a.wins);
+        final w = b.wins.compareTo(a.wins);
+        if (w != 0) return w;
+        return (a.battles - a.wins).compareTo(b.battles - b.wins);
       });
 
     if (fought.isEmpty) {
@@ -1167,12 +1201,8 @@ class _DuelRow extends StatelessWidget {
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                   )),
-              // The record and the rate move DOWN here, as credibility
-              // under the number rather than as the number. 400 points
-              // off forty battles reads differently to 400 off four,
-              // and that context belongs beside the total, not instead
-              // of it.
-              Text('${e.wins}–$lost  ·  $rate%',
+              // The rate is context under the record, not the ranking.
+              Text('$rate% WIN RATE',
                   style: GoogleFonts.inter(
                     color: AppColors.textTertiary,
                     fontSize: 9.5,
@@ -1182,11 +1212,10 @@ class _DuelRow extends StatelessWidget {
             ],
           ),
         ),
-        // THE SAME NUMBER THE OTHER TWO BOARDS SHOW. Voice shows
-        // points, chat shows points, and this showed a W–L record — so
-        // the one column your eye goes to meant something different on
-        // every tab. It is the ranked number everywhere now.
-        Text(Economy.commas(e.points),
+        // THE RANKED NUMBER, same as every other board: the column your
+        // eye lands on is the one the list is sorted by. Here that's the
+        // record, read the way every fighter reads one.
+        Text('${e.wins}–$lost',
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 16,
