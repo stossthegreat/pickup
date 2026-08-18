@@ -1,7 +1,7 @@
 name: charmr
 description: "Charmr — roleplay your way to real confidence."
 publish_to: 'none'
-version: 1.0.0+176
+version: 1.0.0+178
 
 environment:
   sdk: ^3.8.0
@@ -154,6 +154,17 @@ dependency_overrides:
   record_linux: ^1.0.0
 
 flutter:
+  # Disable Swift Package Manager integration FOR THIS PROJECT (Flutter
+  # 3.24+). This is the repo-side equivalent of the machine-level
+  # `flutter config --no-enable-swift-package-manager` the Podfile
+  # recommends — but it travels with the repo, so CI needs no extra
+  # config. Someone tried to get the same effect by appending the
+  # `flutter config` command to Codemagic's iOS build-arguments field,
+  # which concatenated it onto `flutter build ipa ...` and broke the
+  # build outright ("Could not find an option named
+  # --no-enable-swift-package-manager"). With this line in place that
+  # field must contain ONLY the plain build args.
+  disable-swift-package-manager: true
   uses-material-design: true
   assets:
     - assets/icons/appstore.png

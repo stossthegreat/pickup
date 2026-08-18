@@ -39,6 +39,10 @@ import '../../../theme/auralay_app_typography.dart';
 import '../../../widgets/common/ai_consent_dialog.dart';
 import '../../../widgets/common/imhim_wordmark.dart';
 import '../../../widgets/common/mirrorly_components.dart';
+// DebugEvent — the _events diagnostics ring buffer. This import was
+// dropped upstream while the _log()/_events machinery stayed, which
+// killed the iOS archive with "Type 'DebugEvent' not found".
+import '../../../widgets/debug_panel.dart';
 import '../../../widgets/safe_close_button.dart';
 
 /// FREE FLOW — live, streaming voice roleplay (OpenAI Realtime API).
