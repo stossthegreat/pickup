@@ -287,7 +287,12 @@ export default async function villainRoute(app) {
         if (part.fieldname === 'sceneId') sceneId = String(part.value);
         if (part.fieldname === 'creator') creator = String(part.value) === 'true';
         if (part.fieldname === 'history') {
-          try { history = JSON.parse(String(part.value)); } catch {}
+          try {
+            history = JSON.parse(String(part.value));
+            // Cap: unbounded client history = unbounded prompt = cost bomb.
+            if (!Array.isArray(history)) history = [];
+            history = history.slice(-14);
+          } catch {}
         }
         if (part.fieldname === 'memoryBlock') {
           memoryBlock = String(part.value);
@@ -457,7 +462,12 @@ export default async function villainRoute(app) {
       } else if (part.type === 'field') {
         if (part.fieldname === 'creator') creator = String(part.value) === 'true';
         if (part.fieldname === 'history') {
-          try { history = JSON.parse(String(part.value)); } catch {}
+          try {
+            history = JSON.parse(String(part.value));
+            // Cap: unbounded client history = unbounded prompt = cost bomb.
+            if (!Array.isArray(history)) history = [];
+            history = history.slice(-14);
+          } catch {}
         }
         if (part.fieldname === 'memoryBlock') {
           memoryBlock = String(part.value);
@@ -569,7 +579,12 @@ export default async function villainRoute(app) {
       } else if (part.type === 'field') {
         if (part.fieldname === 'creator') creator = String(part.value) === 'true';
         if (part.fieldname === 'history') {
-          try { history = JSON.parse(String(part.value)); } catch {}
+          try {
+            history = JSON.parse(String(part.value));
+            // Cap: unbounded client history = unbounded prompt = cost bomb.
+            if (!Array.isArray(history)) history = [];
+            history = history.slice(-14);
+          } catch {}
         }
         if (part.fieldname === 'memoryBlock') {
           memoryBlock = String(part.value);
@@ -682,7 +697,10 @@ export default async function villainRoute(app) {
 
   // ─── /council — Lucien, open chat ────────────────────────────────────
   app.post('/council', async (req, reply) => {
-    const { text, history = [], memoryBlock = '', creator = false } = req.body || {};
+    const { text, memoryBlock = '', creator = false } = req.body || {};
+    // Same cost armour as the multipart routes: cap the replayed history.
+    const history = Array.isArray(req.body?.history)
+      ? req.body.history.slice(-14) : [];
     if (!text || typeof text !== 'string') {
       return reply.code(400).send({ error: 'text required' });
     }
