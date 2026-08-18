@@ -24,6 +24,7 @@ import '../../widgets/academy/ascend_reveal.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/academy/live_toast.dart';
+import '../../widgets/academy/callout.dart';
 import '../../widgets/academy/rescue_sheet.dart';
 import '../../widgets/academy/shield_sheet.dart';
 import '../../widgets/academy/game_button.dart' show Burst;
@@ -97,6 +98,16 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
         return; // one heavy moment per open; the catch-up can wait
       }
       final events = await CatchUpService.collect();
+      // THE CALLOUT LANDS BEFORE THE FEED. If a squadmate put his name
+      // up while he was away, that's not a row in a summary — it's the
+      // moment he walks into. collect() parks it (see callout.dart);
+      // this is the first screen with a context, so it drains here.
+      final calledBy = Callout.take();
+      if (mounted && calledBy != null) {
+        await CalloutScreen.show(context,
+            who: calledBy, movesLeft: _missions.length - _doneCount);
+        if (!mounted) return;
+      }
       if (mounted && events.isNotEmpty) {
         await CatchUpSheet.show(context, events);
       }

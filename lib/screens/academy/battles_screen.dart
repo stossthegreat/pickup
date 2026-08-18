@@ -27,6 +27,7 @@ import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/rank_emblem.dart';
 import '../../widgets/academy/rizz_off_reveal.dart';
 import '../../widgets/share/rizz_card.dart';
+import '../../widgets/share/duel_card.dart';
 import '../game/freeflow/free_flow_screen.dart';
 import '../roleplay/girl_chat_screen.dart';
 import 'matchmaking_screen.dart';
@@ -95,6 +96,12 @@ class _BattlesScreenState extends State<BattlesScreen> {
   Map<String, String> _handles = const {};
   Map<String, int> _oppRatings = const {};
   int? _rating;
+
+  /// His own handle, for the verdict and the share card. Auto-seeded at
+  /// sign-in (see AuthService._ensureHandle) so this is never null in
+  /// practice; YOU is the offline fallback, not the design.
+  String? _myHandle;
+
   Standing _standing = const Standing(streak: 0, best: 0, won: 0, lost: 0, drawn: 0);
 
   bool _loading = true;
@@ -185,6 +192,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
 
     final mine = await LeaderboardService.myBattleRating();
     if (mine != null) await BattleMeta.seedRating(mine);
+    _myHandle ??= await AuthService.getHandle();
 
     final settled = battles.where((b) => b.settled).toList();
     await _catchUp(settled);
@@ -295,7 +303,8 @@ class _BattlesScreenState extends State<BattlesScreen> {
         theirScore: Economy.aiScoreFromVoice(b.theirScore ?? 0),
         iWon: b.iWon,
         tie: b.tie,
-        opponent: _handles[b.opponentId] ?? 'ANON',
+        opponent: _handles[b.opponentId] ?? 'RIVAL',
+        me: _myHandle ?? 'YOU',
         girl: girlForVibe(b.scenario),
         rank: move.rank,
         delta: delta,
@@ -914,28 +923,31 @@ class _BattlesScreenState extends State<BattlesScreen> {
 
   void _shareResult(Battle b) {
     HapticFeedback.selectionClick();
-    final vs = _handles[b.opponentId] ?? 'a rival';
+    final vs = _handles[b.opponentId] ?? 'RIVAL';
     final girl = girlForVibe(b.scenario);
-    ShareService.shareRizzCard(
+    // battleScore() is the display formatter and returns a String with
+    // an em-dash fallback; the card does its own layout and needs the
+    // real numbers on the 0-100 scale.
+    final my = Economy.aiScoreFromVoice(b.myScore ?? 0);
+    final their = Economy.aiScoreFromVoice(b.theirScore ?? 0);
+    ShareService.shareDuel(
       context: context,
-      data: RizzShareData(
-        kicker: b.iWon ? 'VICTORY' : 'BATTLE',
-        hero: '${battleScore(b.myScore)} — ${battleScore(b.theirScore)}',
-        heroSub: 'YOU  ·  ${vs.toUpperCase()}',
-        line: 'Same woman. Both blind. '
-            '${girl.name} didn\'t know either of us was being scored.',
-        accent: b.iWon ? kNeon : AppColors.red,
-        faces: [(asset: girl.asset, owned: true)],
-        stats: [
-          (label: 'YOU', value: battleScore(b.myScore)),
-          (label: vs.toUpperCase(), value: battleScore(b.theirScore)),
-        ],
+      data: DuelShareData(
+        me: _myHandle ?? 'YOU',
+        opponent: vs,
+        myScore: my,
+        theirScore: their,
+        iWon: b.iWon,
+        tie: b.tie,
+        girlName: girl.name,
+        // Current standing, not the standing at settle time — an old row
+        // shares what he IS, and per-battle deltas aren't stored.
+        rank: _rating == null ? null : Rank.of(_rating!),
+        delta: null,
       ),
       text: b.iWon
-          ? 'Won my Rizz Battle vs $vs — ${battleScore(b.myScore)} to '
-              '${battleScore(b.theirScore)}. Who\'s next?'
-          : 'Rizz Battle vs $vs: ${battleScore(b.myScore)} to '
-              '${battleScore(b.theirScore)}. Running it back.',
+          ? 'Won my Rizz Battle vs $vs \u2014 $my to $their. Who\'s next?'
+          : 'Rizz Battle vs $vs: $my to $their. Running it back.',
     );
   }
 

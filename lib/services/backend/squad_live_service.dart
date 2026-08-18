@@ -6,6 +6,8 @@ import '../roster.dart';
 import 'auth_service.dart';
 import 'backend_service.dart';
 import 'squad_service.dart';
+import '../../widgets/academy/callout.dart';
+import '../../theme/app_colors.dart';
 
 /// GLOBAL SQUAD WATCHER — started once at launch and never stopped.
 ///
@@ -90,6 +92,26 @@ class SquadLiveService {
           break;
         case 'joined':
           LiveEvents.squad(who, 'joined the squad');
+          break;
+        case 'nudge':
+          // THE ONE EVENT WITH A NAMED TARGET. Aimed at me → park the
+          // full-screen callout for the next screen with a context (the
+          // missions tab drains it) and fire a toast so it also lands
+          // right now if he's mid-session. Aimed at someone else → the
+          // squad sees the callout happen, which is half the pressure.
+          if (payload['target'] == AuthService.userId) {
+            Callout.pending = who;
+            LiveEvents.fire(LiveEvent(
+              title: who,
+              subtitle: 'called YOU out. The squad saw it.',
+              icon: Icons.campaign_rounded,
+              color: AppColors.red,
+              route: '/squad',
+            ));
+          } else {
+            LiveEvents.squad(
+                who, 'called out ${payload['handle'] ?? 'a squadmate'}');
+          }
           break;
         case 'rankup':
           // The payload used to carry a `tier` string written by
