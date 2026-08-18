@@ -4,7 +4,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/lucien_mirror.dart';
-import '../../services/tactics.dart';
 import '../../theme/app_colors.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
@@ -56,7 +55,6 @@ class MirrorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = mirror.tactic;
     return Container(
       margin: const EdgeInsets.fromLTRB(8, 4, 8, 12),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
@@ -106,19 +104,44 @@ class MirrorCard extends StatelessWidget {
                 fontWeight: FontWeight.w900,
               )),
           const Spacer(),
-          // THE OFF SWITCH, on the thing itself. A setting buried three
-          // screens away is not a way out of something that just spoke
-          // to you uninvited.
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onSilence();
-            },
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 12),
-              child: Icon(Icons.volume_off_rounded,
-                  size: 15, color: AppColors.textMuted),
+          // THE OFF SWITCH, AND IT LOOKS LIKE ONE.
+          //
+          // This was a bare 15pt speaker glyph and nobody could see it,
+          // which made an uninvited coach feel like something you were
+          // stuck with. A labelled pill with a border reads as a
+          // control at a glance — the word MUTE is doing the work the
+          // icon alone could never do.
+          Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            child: InkWell(
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                onSilence();
+              },
+              borderRadius: BorderRadius.circular(999),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                      color: AppColors.textMuted.withValues(alpha: 0.5)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.volume_off_rounded,
+                      size: 12, color: AppColors.textSecondary),
+                  const SizedBox(width: 5),
+                  Text('MUTE',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textSecondary,
+                        fontSize: 9,
+                        letterSpacing: 1.6,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ]),
+              ),
             ),
           ),
         ]),
@@ -165,7 +188,7 @@ class MirrorCard extends StatelessWidget {
           Container(width: 3, height: 15, color: _gold),
           const SizedBox(width: 8),
           Flexible(
-            child: Text(t.name,
+            child: Text(mirror.move,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
@@ -175,23 +198,17 @@ class MirrorCard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 )),
           ),
-          const SizedBox(width: 8),
-          Text(t.axis.label,
-              style: GoogleFonts.inter(
-                color: AppColors.textMuted,
-                fontSize: 8.5,
-                letterSpacing: 1.8,
-                fontWeight: FontWeight.w900,
-              )),
         ]),
-        const SizedBox(height: 6),
-        Text(t.why,
-            style: GoogleFonts.inter(
-              color: AppColors.textSecondary,
-              fontSize: 12.5,
-              height: 1.5,
-              fontWeight: FontWeight.w500,
-            )),
+        if (mirror.why.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(mirror.why,
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 12.5,
+                height: 1.5,
+                fontWeight: FontWeight.w500,
+              )),
+        ],
 
         const SizedBox(height: 12),
         Text('SAY THIS INSTEAD',
@@ -202,9 +219,10 @@ class MirrorCard extends StatelessWidget {
               fontWeight: FontWeight.w900,
             )),
         const SizedBox(height: 7),
-        _line(t.example),
-        const SizedBox(height: 7),
-        _line(t.example2),
+        for (var i = 0; i < mirror.lines.length; i++) ...[
+          if (i > 0) const SizedBox(height: 7),
+          _line(mirror.lines[i]),
+        ],
 
         // ── The one-off "you can shut me up" ─────────────────────────
         if (showHint) ...[
@@ -221,8 +239,8 @@ class MirrorCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                    'I\'ll do this whenever I see something. Tap the '
-                    'speaker any time and I\'ll shut up.',
+                    'I\'ll speak up when I see something worth saying. '
+                    'Hit MUTE any time and I\'m gone.',
                     style: GoogleFonts.inter(
                       color: AppColors.textTertiary,
                       fontSize: 11,

@@ -722,10 +722,17 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     // ones: it cannot improve the conversation it is commenting on, only
     // the next one. See lucien_mirror.dart.
     if (!_mirrorOff) {
-      final mark = LucienMirror.read_(
+      final mark = await LucienMirror.mark(
         line: text,
         demonstrated: demonstrated,
-        herEarlier: reachBack,
+        transcript: [
+          for (final m in _msgs)
+            if (m.who == 'you' || m.who == 'her')
+              '${m.who == 'you' ? 'HIM' : 'HER'}: ${m.text}',
+        ].join('\n'),
+        herLast: _herLines.isNotEmpty ? _herLines.last : '',
+        girl: widget.config.name,
+        heat: _heat,
         turnIndex: _turnIndex,
         turnsSinceLastMark: _turnIndex - _lastMarkTurn,
         delta: result.delta,

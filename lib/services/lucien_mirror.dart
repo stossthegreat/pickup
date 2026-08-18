@@ -1,3 +1,7 @@
+import 'package:flutter/foundation.dart';
+
+import 'backend/backend_service.dart';
+import 'language_service.dart';
 import 'tactics.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
@@ -18,6 +22,20 @@ import 'tactics.dart';
 /// That one property is what lets the mirror live on EVERY surface,
 /// graded or not. Nothing here can raise the score of the conversation
 /// it is commenting on.
+///
+/// ── LUCIEN IS A MODEL CALL, NOT A LOOKUP TABLE ──────────────────────
+///
+/// The first version of this matched keywords and returned canned
+/// strings, so he said the identical sentence every time a man asked a
+/// question. A coach who repeats himself is not a coach, he is a
+/// tooltip — and seduction is entirely contextual, so the read has to
+/// come from something that actually read the exchange. [mark] calls
+/// the lucien-mirror Edge Function, which sees the transcript, her last
+/// line and her current interest, and answers about THAT.
+///
+/// The rules below survive only as the offline fallback — when the
+/// network is gone or the function isn't deployed, a rotating local
+/// read is better than silence. They are explicitly the cheap version.
 ///
 /// ── IT ONLY SPEAKS WHEN IT HAS SOMETHING ────────────────────────────
 ///
@@ -40,124 +58,169 @@ class LucienMirror {
   /// What he actually said.
   final String hisLine;
 
-  /// The move he should have played.
-  final Tactic tactic;
-
-  /// One sentence naming what his line did — the diagnosis. Never a
-  /// judgement of him, always a description of the line.
+  /// One sentence naming what his line did. Never a judgement of him,
+  /// always a description of the line.
   final String read;
+
+  /// The name of the move, in caps.
+  final String move;
+
+  /// Why it works on an actual human being.
+  final String why;
+
+  /// Two lines he could have sent instead. From the model these are
+  /// written against what SHE actually said; from the fallback they're
+  /// the tactic's stock examples.
+  final List<String> lines;
 
   const LucienMirror({
     required this.hisLine,
-    required this.tactic,
     required this.read,
+    required this.move,
+    required this.why,
+    required this.lines,
   });
 
-  /// Turns since the last mark. Kept on the instance rather than a
-  /// static so a second chat screen can't inherit a stale cooldown.
+  /// Turns that must pass before he speaks again.
   static const cooldownTurns = 2;
 
-  /// Mark a line, or return null to stay quiet.
+  /// ASK LUCIEN TO MARK THE LINE.
   ///
-  /// [demonstrated] is what Tactics.detect() found — a non-empty list
-  /// means he already played a move and the reveal will handle it, so
-  /// the mirror steps back rather than talking over the celebration.
-  static LucienMirror? read_({
+  /// Returns null for silence, which is the common case. The gates are
+  /// checked locally BEFORE the network call so a quiet turn costs
+  /// nothing — at scale this function is the only per-message API spend
+  /// in the app and it must not fire on every line.
+  static Future<LucienMirror?> mark({
     required String line,
     required List<String> demonstrated,
-    required List<String> herEarlier,
+    required String transcript,
+    required String herLast,
+    required String girl,
+    required double heat,
     required int turnIndex,
     required int turnsSinceLastMark,
     required double delta,
-  }) {
+  }) async {
     final t = line.trim();
     if (t.length < 4) return null;
-    if (demonstrated.isNotEmpty) return null;
-    if (turnIndex < 1) return null; // the opener is his, untouched
+    if (demonstrated.isNotEmpty) return null; // the reveal owns that moment
+    if (turnIndex < 1) return null;           // his opener is his own
     if (turnsSinceLastMark < cooldownTurns) return null;
 
+    if (BackendService.enabled) {
+      try {
+        final res = await BackendService.client.functions.invoke(
+          'lucien-mirror',
+          body: {
+            'transcript': transcript,
+            'hisLine': t,
+            'herLast': herLast,
+            'girl': girl,
+            'heat': heat,
+            'language': LanguageService.cachedCode,
+          },
+        ).timeout(const Duration(seconds: 12));
+        final d = res.data;
+        if (d is Map && d['skip'] != true && d['read'] != null) {
+          final raw = (d['lines'] as List?) ?? const [];
+          final lines = [for (final l in raw) l.toString()]
+              .where((l) => l.trim().length > 3)
+              .toList();
+          if (lines.isNotEmpty) {
+            return LucienMirror(
+              hisLine: t,
+              read: d['read'].toString(),
+              move: d['move']?.toString() ?? 'THE MOVE',
+              why: d['why']?.toString() ?? '',
+              lines: lines,
+            );
+          }
+        }
+        // A deliberate skip from Lucien is silence, not a reason to
+        // fall back — he looked and decided the line was fine.
+        if (d is Map && d['skip'] == true) return null;
+      } catch (e) {
+        debugPrint('LucienMirror.mark: $e'); // fall through to local
+      }
+    }
+
+    return _offline(t, delta);
+  }
+
+  /// THE CHEAP VERSION. Network down, or the function not deployed yet.
+  /// Rotates its wording off the line itself so even the fallback isn't
+  /// word-for-word identical twice running.
+  static LucienMirror? _offline(String t, double delta) {
     final low = t.toLowerCase();
     final words = t.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
     final q = t.contains('?');
+    final spin = t.length; // stable per line, varied across lines
 
-    // ── THE READS, most specific first ───────────────────────────────
-    //
-    // Ordered by how badly the mistake costs him, not by how easy it is
-    // to detect. The first match wins, so a line that is both an
-    // interview question AND flat gets marked as the interview — that's
-    // the one killing the conversation.
+    ({Tactic tactic, List<String> reads})? pick;
 
-    // Interviewing. The single most common way a man is boring.
     if (q && words <= 14 && _looksLikeInterview(low)) {
-      return LucienMirror(
-        hisLine: t,
-        tactic: Tactics.byId('assumption')!,
-        read: 'That was a question. Questions make her do the work and '
-            'give her nothing to push against.',
-      );
+      pick = (tactic: Tactics.byId('assumption')!, reads: [
+        'That was a question. Questions make her do the work and give '
+            'her nothing to push against.',
+        'You interviewed her. She can answer that in four words and '
+            'feel nothing doing it.',
+        'A question hands the conversation back to her. Hand her an '
+            'opinion instead.',
+      ]);
+    } else if (!q && words <= 7) {
+      pick = (tactic: Tactics.byId('detail')!, reads: [
+        'That closes the exchange. She now has to restart it on her '
+            'own, and most women just won\'t.',
+        'Nothing in that for her to grab. A closed answer is a door '
+            'shutting politely.',
+        'Short and finished. Leave her something odd to pick up.',
+      ]);
+    } else if (_hedged(low)) {
+      pick = (tactic: Tactics.byId('anchor')!, reads: [
+        'You softened it before she could react to it. The hedge is '
+            'the part she hears.',
+        'You apologised for your own line mid-sentence. Say it and '
+            'leave it standing.',
+        'The qualifier undid the sentence in front of it.',
+      ]);
+    } else if (_agreeing(low) && words <= 12) {
+      pick = (tactic: Tactics.byId('disagree')!, reads: [
+        'You agreed. Agreement is polite and completely frictionless — '
+            'nothing there for her to feel.',
+        'Pure agreement is a dead end. Take the other side for sport.',
+        'You matched her instead of meeting her.',
+      ]);
+    } else if (_complimenting(low)) {
+      pick = (tactic: Tactics.byId('tease')!, reads: [
+        'A compliment early reads as buying her approval. She\'s had a '
+            'hundred of those this week.',
+        'You paid for attention you could have earned in one line.',
+        'Praise is cheap from a stranger. Make her want it first.',
+      ]);
+    } else if (delta < -1.5) {
+      pick = (tactic: Tactics.byId('reset')!, reads: [
+        'That one cooled her. The recovery is not explaining it — it '
+            'is changing the temperature.',
+        'She went quiet on that. Drop it cleanly, open something else.',
+        'You lost a degree there. Don\'t chase it, change it.',
+      ]);
+    } else if (words >= 18 && !low.contains('when i') && !low.contains('once')) {
+      pick = (tactic: Tactics.byId('story')!, reads: [
+        'Long, and all information. Length is not the same as presence.',
+        'That was a paragraph of facts. She\'ll remember none of it.',
+        'You explained where you could have shown her a moment.',
+      ]);
     }
 
-    // Closed answer — nothing in it for her to grab.
-    if (!q && words <= 7) {
-      return LucienMirror(
-        hisLine: t,
-        tactic: Tactics.byId('detail')!,
-        read: 'That closes the exchange. She now has to restart the '
-            'conversation on her own, and most women just won\'t.',
-      );
-    }
-
-    // Hedged. He said it and then apologised for saying it.
-    if (_hedged(low)) {
-      return LucienMirror(
-        hisLine: t,
-        tactic: Tactics.byId('anchor')!,
-        read: 'You softened it before she could react to it. The hedge '
-            'is the part she hears.',
-      );
-    }
-
-    // Agreement with nothing behind it.
-    if (_agreeing(low) && words <= 12) {
-      return LucienMirror(
-        hisLine: t,
-        tactic: Tactics.byId('disagree')!,
-        read: 'You agreed. Agreement is polite and it is completely '
-            'frictionless — there is nothing there for her to feel.',
-      );
-    }
-
-    // Compliment used as currency.
-    if (_complimenting(low)) {
-      return LucienMirror(
-        hisLine: t,
-        tactic: Tactics.byId('tease')!,
-        read: 'A compliment early reads as buying her approval. She has '
-            'had a hundred of those this week.',
-      );
-    }
-
-    // It went backwards and he didn't react to it.
-    if (delta < -1.5) {
-      return LucienMirror(
-        hisLine: t,
-        tactic: Tactics.byId('reset')!,
-        read: 'That one cooled her. The recovery is not explaining it — '
-            'it is changing the temperature.',
-      );
-    }
-
-    // A long line with no story in it — facts where a moment belonged.
-    if (words >= 18 && !low.contains('when i') && !low.contains('once')) {
-      return LucienMirror(
-        hisLine: t,
-        tactic: Tactics.byId('story')!,
-        read: 'Long, and all information. She will not remember any of '
-            'it — length is not the same as presence.',
-      );
-    }
-
-    return null;
+    if (pick == null) return null;
+    final p = pick;
+    return LucienMirror(
+      hisLine: t,
+      read: p.reads[spin % p.reads.length],
+      move: p.tactic.name.toUpperCase(),
+      why: p.tactic.why,
+      lines: [p.tactic.example, p.tactic.example2],
+    );
   }
 
   static bool _looksLikeInterview(String s) {
