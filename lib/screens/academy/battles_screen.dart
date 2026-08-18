@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
 
 import '../../services/achievements.dart';
 import '../../services/backend/battle_service.dart';
@@ -26,6 +27,7 @@ import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/rank_emblem.dart';
 import '../../widgets/academy/rizz_off_reveal.dart';
 import '../../widgets/share/rizz_card.dart';
+import '../game/freeflow/free_flow_screen.dart';
 import '../roleplay/girl_chat_screen.dart';
 import 'matchmaking_screen.dart';
 
@@ -99,6 +101,10 @@ class _BattlesScreenState extends State<BattlesScreen> {
   bool _showingVerdict = false;
   Timer? _poll;
 
+  /// Postgres tells us the moment a duel row moves. See
+  /// BattleService.watchMine — the poll below is only the backstop now.
+  List<RealtimeChannel> _live = const [];
+
   @override
   void initState() {
     super.initState();
@@ -109,6 +115,17 @@ class _BattlesScreenState extends State<BattlesScreen> {
     // screen and the chat are pushed on top of it and this state object
     // stays alive underneath them, so an unguarded poll would fire a
     // verdict over a conversation in progress.
+
+    // THE INSTANT SIGNAL. A rival submitting, or the queue pairing him,
+    // is a row change — so this screen hears about it on the same beat
+    // instead of up to half a minute later. The poll below is now the
+    // backstop for a dropped socket, not the mechanism.
+    _live = BattleService.watchMine(() {
+      if (!mounted) return;
+      // ignore: discarded_futures
+      _load();
+    });
+
     //
     // THREE GUARDS, AND ALL THREE ARE ABOUT LOAD.
     //
@@ -140,6 +157,10 @@ class _BattlesScreenState extends State<BattlesScreen> {
   @override
   void dispose() {
     _poll?.cancel();
+    for (final c in _live) {
+      // ignore: discarded_futures
+      c.unsubscribe();
+    }
     super.dispose();
   }
 
@@ -294,8 +315,10 @@ class _BattlesScreenState extends State<BattlesScreen> {
   /// THE BUTTON. Search is a full-screen event now, not a spinner on a
   /// card — see matchmaking_screen.dart for why that's the whole point.
   Future<void> _findRival() async {
+    final medium = await _pickMedium('FIND A RIVAL');
+    if (medium == null || !mounted) return;
     HapticFeedback.mediumImpact();
-    final battle = await MatchmakingScreen.find(context);
+    final battle = await MatchmakingScreen.find(context, medium: medium);
     if (!mounted) return;
     if (battle == null) {
       await _load();
@@ -313,7 +336,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface1,
-        title: Text('BIN THIS CHALLENGE?',
+        title: Text(b.untouched ? 'BIN THIS CHALLENGE?' : 'FORFEIT THIS DUEL?',
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 14,
@@ -321,8 +344,20 @@ class _BattlesScreenState extends State<BattlesScreen> {
               fontWeight: FontWeight.w900,
             )),
         content: Text(
-            'Code ${b.inviteCode ?? ''} stops working. If you\'ve already '
-            'sent it to someone, they won\'t be able to take the fight.',
+            // THREE DIFFERENT ACTIONS BEHIND ONE BUTTON, so the copy has
+            // to say which one this is. Binning an untaken code and
+            // conceding a fight the other man has already recorded are
+            // not the same decision and must never read the same.
+            b.untouched
+                ? (b.opponentId == null
+                    ? 'Code ${b.inviteCode ?? ''} stops working. If you\'ve '
+                        'already sent it to someone, they won\'t be able to '
+                        'take the fight.'
+                    : 'Neither of you has played yet, so this one just '
+                        'disappears. No rating moves.')
+                : 'He has already recorded his attempt. Backing out now is '
+                    'a forfeit — he takes the win and the '
+                    '${Economy.rrShort}.',
             style: GoogleFonts.inter(
               color: AppColors.textSecondary,
               fontSize: 13,
@@ -341,7 +376,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('BIN IT',
+            child: Text(b.untouched ? 'BIN IT' : 'FORFEIT',
                 style: GoogleFonts.inter(
                   color: AppColors.red,
                   fontSize: 12,
@@ -356,13 +391,104 @@ class _BattlesScreenState extends State<BattlesScreen> {
     if (!mounted) return;
     if (!ok) {
       _toast('Couldn\'t bin it — someone may have already taken it.');
+    } else if (!b.untouched) {
+      _toast('Forfeited. He takes the ${Economy.rrShort}.');
     }
     await _load();
   }
 
+  /// VOICE OR TEXT — asked once, before anything is minted.
+  ///
+  /// Every duel until now was silently text, which threw away the half
+  /// of the product people actually come for. It has to be a question
+  /// rather than a setting: the answer changes which room the fight
+  /// happens in, and it decides who he can be paired against — a spoken
+  /// attempt and a typed one can't be scored against each other, so the
+  /// queue keeps two separate lines. See migration 0016.
+  ///
+  /// Returns null if he backs out, which is a real answer and must not
+  /// mint anything.
+  Future<String?> _pickMedium(String kicker) async {
+    HapticFeedback.selectionClick();
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 22),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+        decoration: BoxDecoration(
+          color: AppColors.surface1,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppColors.red.withValues(alpha: 0.28)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 34,
+            height: 3.5,
+            decoration: BoxDecoration(
+              color: AppColors.surface3,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(kicker,
+              style: GoogleFonts.inter(
+                color: AppColors.red,
+                fontSize: 10,
+                letterSpacing: 3,
+                fontWeight: FontWeight.w900,
+              )),
+          const SizedBox(height: 6),
+          Text('How do you want to fight?',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 19,
+                letterSpacing: -0.4,
+                fontWeight: FontWeight.w900,
+              )),
+          const SizedBox(height: 16),
+          Row(children: [
+            Expanded(
+              child: _Medium(
+                icon: Icons.graphic_eq_rounded,
+                label: 'VOICE',
+                line: 'Out loud, live',
+                tone: AppColors.red,
+                onTap: () => Navigator.of(ctx).pop('voice'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _Medium(
+                icon: Icons.chat_bubble_rounded,
+                label: 'TEXT',
+                line: 'Typed, no timer',
+                tone: AppColors.measure,
+                onTap: () => Navigator.of(ctx).pop('chat'),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('NEVER MIND',
+                style: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 11,
+                  letterSpacing: 1.6,
+                  fontWeight: FontWeight.w900,
+                )),
+          ),
+        ]),
+      ),
+    );
+  }
+
   Future<void> _challenge() async {
+    final medium = await _pickMedium('CHALLENGE A MATE');
+    if (medium == null || !mounted) return;
     HapticFeedback.mediumImpact();
-    final battle = await BattleService.createChallenge();
+    final battle = await BattleService.createChallenge(medium: medium);
     if (battle == null || !mounted) {
       if (mounted) _toast('Couldn\'t mint a challenge. Try again in a sec.');
       return;
@@ -379,7 +505,23 @@ class _BattlesScreenState extends State<BattlesScreen> {
       transitionDuration: const Duration(milliseconds: 340),
       pageBuilder: (ctx, _, __) => Material(
         color: Colors.transparent,
-        child: Center(
+        child: Stack(children: [
+          // THE WAY OUT. barrierDismissible was true and did nothing:
+          // this Material fills the screen, so every tap landed on the
+          // dialog and none of them ever reached the barrier behind it.
+          // With no X either, the only exit from a minted challenge was
+          // force-quitting the app.
+          //
+          // Both are here now — an explicit X, and a full-bleed tap
+          // target underneath the content that actually closes.
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () => Navigator.of(ctx).pop(),
+              behavior: HitTestBehavior.opaque,
+              child: const SizedBox.expand(),
+            ),
+          ),
+          Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 40),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -465,9 +607,30 @@ class _BattlesScreenState extends State<BattlesScreen> {
                   },
                 ),
               ),
+              const SizedBox(height: 14),
+              // Said plainly, because a minted code that vanishes when
+              // you close the sheet would be the obvious fear.
+              Text('The code is saved on your Battles screen.',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  )),
             ]),
           ),
-        ),
+          ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: SafeArea(
+              child: IconButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                icon: const Icon(Icons.close_rounded,
+                    size: 24, color: Colors.white),
+              ),
+            ),
+          ),
+        ]),
       ),
       transitionBuilder: (ctx, a, __, child) => FadeTransition(
         opacity: a,
@@ -591,18 +754,24 @@ class _BattlesScreenState extends State<BattlesScreen> {
     ));
   }
 
-  /// BATTLES ARE TEXT, not voice.
+  /// BATTLES ARE TEXT **OR** VOICE — he picks, before it's minted.
   ///
-  /// Two reasons, and the money one is the smaller of them. Live voice is
-  /// the single most expensive action in the app (OpenAI Realtime audio),
-  /// and a man already gets a voice rep every day from the Daily — paying
-  /// for unlimited duels on top of that is a bill with no ceiling.
+  /// This used to be text-only and the reasoning was sound as far as it
+  /// went: live voice is the most expensive action in the app, and a
+  /// duel is meant to be runnable in a pub, on a bus, at 1am with
+  /// someone asleep next to you — none of which are places you talk out
+  /// loud to your phone.
   ///
-  /// The better reason is that duels work in writing. A battle is meant
-  /// to be run whenever you fancy it, in a pub, on a bus, at 1am with
-  /// someone asleep next to you — and none of those are places you talk
-  /// out loud to your phone. Voice stays the once-a-day event that costs
-  /// you something to show up for; text is the thing you can always do.
+  /// What that argument missed is that it isn't the app's call. Text is
+  /// the right DEFAULT for those reasons and it stays the one you can
+  /// always do; making it the only option meant the best thing in the
+  /// product — a live spoken conversation — was the one mode you could
+  /// never compete in. The cost ceiling is the paywall's job, not a
+  /// silently removed choice.
+  ///
+  /// The two never mix. A spoken attempt and a typed one can't be
+  /// honestly scored against each other, so the queue keeps separate
+  /// lines and pairs like with like. See migration 0016.
   ///
   /// AND EVERY WOMAN IS UNLOCKED IN HERE. The 60-day ladder gates her in
   /// Practice and it should — the climb is the product. But a duel isn't
@@ -618,7 +787,33 @@ class _BattlesScreenState extends State<BattlesScreen> {
     final before = await LeaderboardService.myBattleRating();
     if (!mounted) return;
 
-    await Navigator.of(context, rootNavigator: true).push<bool>(
+    // ── A VOICE DUEL OPENS THE VOICE ROOM ─────────────────────────
+    //
+    // The plumbing for this already existed and was never reachable:
+    // BattleService.armedBattleId is read by the voice screen's
+    // session-end hook, which submits the transcript to the duel. All
+    // that was missing was a battle that knew it was spoken.
+    //
+    // `assigned` because the woman was picked by the server for both
+    // men — the same reason the Daily passes it. Running the Practice
+    // unlock ladder over an opponent nobody chose is what locked men
+    // out of their own squad challenge; see FreeFlowScreen.assigned.
+    if (b.isVoice) {
+      BattleService.armedBattleId = b.id;
+      await Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute(
+          builder: (_) => FreeFlowScreen(
+            initialVibeKey: girl.vibeKey,
+            assigned: true,
+          ),
+        ),
+      );
+      // Cleared defensively — the voice screen clears it on submit, but
+      // a man who backs out without finishing must not leave the next
+      // practice session armed to a duel he never fought.
+      BattleService.armedBattleId = null;
+    } else {
+      await Navigator.of(context, rootNavigator: true).push<bool>(
       MaterialPageRoute(
         builder: (_) => GirlChatScreen(
           config: GirlChatConfig(
@@ -638,9 +833,12 @@ class _BattlesScreenState extends State<BattlesScreen> {
           ),
         ),
       ),
-    );
+      );
+    }
     if (!mounted) return;
 
+    // Both rooms land here — the reveal, the verdict and the payout are
+    // the same event whether he spoke or typed.
     // HIS OWN NUMBER FIRST — the same count-up, axes and grade slam the
     // Daily gets. He learns what he scored here and still doesn't know
     // whether it was enough.
@@ -903,11 +1101,15 @@ class _BattlesScreenState extends State<BattlesScreen> {
                         oppRating: _oppRatings[b.opponentId],
                         myRating: _rating,
                         onRun: () => _run(b),
-                        // Only an unclaimed challenge can be binned —
-                        // once a rival is in, it's his fight too.
-                        onCancel: b.opponentId == null && b.state == 'open'
-                            ? () => _cancel(b)
-                            : null,
+                        // EVERY unsettled duel can be cleared. It used
+                        // to be open-and-unclaimed only, which left the
+                        // common case — a fight someone joined and
+                        // neither man started — stuck on both screens
+                        // forever. The server decides what clearing
+                        // MEANS: a delete if nobody has played, a
+                        // forfeit if the other man has. See the cancel
+                        // action in battle-action.
+                        onCancel: () => _cancel(b),
                       ).animate().fadeIn(
                           delay: (60 * i).clamp(0, 300).ms, duration: 260.ms),
                     const SizedBox(height: 10),
@@ -921,6 +1123,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
                       _Waiting(
                         battle: b,
                         opponent: _handles[b.opponentId],
+                        onCancel: () => _cancel(b),
                       ),
                     const SizedBox(height: 10),
                   ],
@@ -1385,13 +1588,7 @@ class _LiveDuel extends StatelessWidget {
                       ],
                     )),
                 const SizedBox(width: 8),
-                Text(b.scenarioLabel,
-                    style: GoogleFonts.inter(
-                      color: girl.accent,
-                      fontSize: 9.5,
-                      letterSpacing: 1.8,
-                      fontWeight: FontWeight.w900,
-                    )),
+                _MediumChip(voice: b.isVoice, onPhoto: true),
                 const Spacer(),
                 if (b.inviteCode != null && b.state == 'open')
                   Container(
@@ -1505,7 +1702,19 @@ class _LiveDuel extends StatelessWidget {
 class _Waiting extends StatelessWidget {
   final Battle battle;
   final String? opponent;
-  const _Waiting({required this.battle, required this.opponent});
+
+  /// A DUEL YOU'VE PLAYED IS STILL ONE YOU CAN WALK AWAY FROM. This
+  /// card had no exit at all, so a rival who never answered left the row
+  /// on screen permanently. The server decides what leaving means — a
+  /// forfeit here, since he has recorded an attempt. See the cancel
+  /// action in battle-action.
+  final VoidCallback onCancel;
+
+  const _Waiting({
+    required this.battle,
+    required this.opponent,
+    required this.onCancel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1550,12 +1759,21 @@ class _Waiting extends StatelessWidget {
                     letterSpacing: 1.2,
                     fontWeight: FontWeight.w900,
                   )),
-              Text('He hasn\'t answered ${girl.name} yet.',
-                  style: GoogleFonts.inter(
-                    color: AppColors.textTertiary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  )),
+              const SizedBox(height: 3),
+              Row(children: [
+                _MediumChip(voice: battle.isVoice),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text('He hasn\'t answered ${girl.name} yet.',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      )),
+                ),
+              ]),
             ],
           ),
         ),
@@ -1568,6 +1786,15 @@ class _Waiting extends StatelessWidget {
                 ))
             .animate(onPlay: (c) => c.repeat(reverse: true))
             .fade(begin: 0.35, end: 1, duration: 900.ms),
+        GestureDetector(
+          onTap: onCancel,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 10),
+            child: Icon(Icons.close_rounded,
+                size: 15, color: AppColors.textMuted),
+          ),
+        ),
       ]),
     );
   }
@@ -1707,6 +1934,105 @@ String battleScore(int? raw) =>
     raw == null ? '—' : '${Economy.aiScoreFromVoice(raw)}';
 
 /// The header cog, same object the other two tabs use.
+/// One half of the voice/text choice. Big enough to be a decision, not
+/// a radio button — this picks which room the fight happens in.
+/// WHICH ROOM. Now that a duel can be spoken or typed, this is the
+/// first thing you need off a card — the two are completely different
+/// commitments. Voice needs a quiet room and five minutes; text you can
+/// do on a bus. A card that doesn't say which is a card you have to tap
+/// to understand.
+class _MediumChip extends StatelessWidget {
+  final bool voice;
+  final bool onPhoto;
+  const _MediumChip({required this.voice, this.onPhoto = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = voice ? AppColors.red : AppColors.measure;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+      decoration: BoxDecoration(
+        color: onPhoto
+            ? Colors.black.withValues(alpha: 0.5)
+            : tone.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: tone.withValues(alpha: 0.6), width: 0.9),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(voice ? Icons.graphic_eq_rounded : Icons.chat_bubble_rounded,
+            size: 9.5, color: tone),
+        const SizedBox(width: 4),
+        Text(voice ? 'VOICE' : 'TEXT',
+            style: GoogleFonts.inter(
+              color: tone,
+              fontSize: 8.5,
+              letterSpacing: 1.6,
+              fontWeight: FontWeight.w900,
+            )),
+      ]),
+    );
+  }
+}
+
+class _Medium extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String line;
+  final Color tone;
+  final VoidCallback onTap;
+  const _Medium({
+    required this.icon,
+    required this.label,
+    required this.line,
+    required this.tone,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color.alphaBlend(
+                      tone.withValues(alpha: 0.16), AppColors.surface2),
+                  AppColors.surface1,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: tone.withValues(alpha: 0.45)),
+            ),
+            child: Column(children: [
+              Icon(icon, size: 24, color: tone),
+              const SizedBox(height: 9),
+              Text(label,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 13,
+                    letterSpacing: 2.2,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 3),
+              Text(line,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  )),
+            ]),
+          ),
+        ),
+      );
+}
+
 class _Cog extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;

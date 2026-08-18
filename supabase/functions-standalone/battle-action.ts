@@ -317,9 +317,11 @@ Deno.serve(async (req) => {
       const scenario = SCENARIOS.includes(body.scenario)
         ? body.scenario
         : SCENARIOS[Math.floor(Math.random() * SCENARIOS.length)];
+      const medium = body.medium === "voice" ? "voice" : "chat";
       const { data, error } = await admin.from("battles").insert({
         scenario,
         mode: "code",
+        medium,
         invite_code: mintCode(),
         player_a: uid,
         state: "open",
@@ -349,9 +351,53 @@ Deno.serve(async (req) => {
 
     // ── LINE UP (random matchmaking) ───────────────────────────────
     case "queue": {
+      // ── FIRST: AM I ALREADY IN A FIGHT? ─────────────────────────
+      //
+      // THE BUG THIS FIXES, and it was the worst one in the feature.
+      //
+      // Pairing is one-sided. The man who arrives SECOND finds the
+      // waiting stranger, creates the battle and gets it back in his
+      // response — instant. The man who was waiting is simply deleted
+      // from the queue and told nothing. His client polls this action
+      // again three seconds later, finds nobody waiting, and RE-QUEUES
+      // HIM — so he never learned the fight exists, and worse, he was
+      // now in line for a second one while already committed to a
+      // first. He only discovered it by backing out to the Battles
+      // screen and waiting for its slow poll, which is where the
+      // "five minutes to see my own match" came from.
+      //
+      // So the queue action answers the right question first: not
+      // "who is waiting" but "do I already have a fight". His very
+      // next poll now returns it, which makes the pairing feel
+      // simultaneous on both phones.
+      const { data: existing } = await admin.from("battles").select()
+        .or(`player_a.eq.${uid},player_b.eq.${uid}`)
+        .eq("state", "active")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const live = existing?.[0];
+      if (live) {
+        // Only surface one he hasn't answered yet — a duel he has
+        // already submitted to is waiting on the OTHER man, and
+        // handing it back here would drop him into a fight he has
+        // finished.
+        const mineIsA = live.player_a === uid;
+        const myScore = mineIsA ? live.a_score : live.b_score;
+        if (myScore === null || myScore === undefined) {
+          await admin.from("battle_queue").delete().eq("user_id", uid);
+          return Response.json({ battle: live });
+        }
+      }
+
+      // LIKE FOR LIKE. A voice man and a text man are not opponents —
+      // there is no honest way to score a spoken attempt against a
+      // typed one. The medium is part of the matchmaking key.
+      const wantMedium = body.medium === "voice" ? "voice" : "chat";
+
       // Oldest waiting stranger, else join the line ourselves.
       const { data: waiting } = await admin.from("battle_queue").select()
-        .neq("user_id", uid).order("enqueued_at", { ascending: true })
+        .neq("user_id", uid).eq("medium", wantMedium)
+        .order("enqueued_at", { ascending: true })
         .limit(1);
       const opponent = waiting?.[0];
       if (opponent) {
@@ -366,6 +412,7 @@ Deno.serve(async (req) => {
           const { data: battle } = await admin.from("battles").insert({
             scenario,
             mode: "random",
+            medium: wantMedium,
             player_a: opponent.user_id,
             player_b: uid,
             state: "active",
@@ -373,7 +420,11 @@ Deno.serve(async (req) => {
           return Response.json({ battle });
         }
       }
-      await admin.from("battle_queue").upsert({ user_id: uid });
+      await admin.from("battle_queue").upsert({
+        user_id: uid,
+        medium: wantMedium,
+        enqueued_at: new Date().toISOString(),
+      });
       return Response.json({ queued: true });
     }
 
@@ -391,16 +442,83 @@ Deno.serve(async (req) => {
       const bid = body.battle_id as string | undefined;
       if (!bid) return Response.json({ error: "battle_id required" }, { status: 400 });
       const { data: row } = await admin.from("battles")
-        .select("id, player_a, player_b, state").eq("id", bid).single();
+        .select("id, player_a, player_b, state, a_score, b_score")
+        .eq("id", bid).maybeSingle();
       if (!row) return Response.json({ error: "not found" }, { status: 404 });
-      if (row.player_a !== uid) {
+
+      // EITHER player, not just the creator. This used to be
+      // creator-only and open-only, which meant a duel someone joined
+      // and then abandoned sat on both screens permanently with no way
+      // to shift it. Any man in a fight can walk away from it.
+      const mineIsA = row.player_a === uid;
+      if (!mineIsA && row.player_b !== uid) {
         return Response.json({ error: "not yours" }, { status: 403 });
       }
-      if (row.state !== "open" || row.player_b) {
-        return Response.json({ error: "already claimed" }, { status: 409 });
+      if (row.state === "scored") {
+        return Response.json({ error: "already settled" }, { status: 409 });
       }
+
+      const myScore = mineIsA ? row.a_score : row.b_score;
+      const theirScore = mineIsA ? row.b_score : row.a_score;
+      const them = mineIsA ? row.player_b : row.player_a;
+
+      // ── HE ALREADY PLAYED. WALKING AWAY IS A FORFEIT, NOT A DELETE.
+      //
+      // The obvious implementation — delete whatever you're allowed to
+      // touch — quietly destroys the other man's graded attempt, and
+      // does it in the exact situation where he is most invested:
+      // he has recorded his run and is waiting on you. Deleting there
+      // would make quitting the optimal move whenever you think you're
+      // losing, which kills the ladder outright.
+      //
+      // So the row survives and settles against you. He wins, the RR
+      // moves, and it lands on his screen as a result rather than as a
+      // duel that vanished.
+      if (theirScore !== null && theirScore !== undefined && them) {
+        await admin.from("battles").update({
+          state: "scored",
+          winner: them,
+          [mineIsA ? "a_score" : "b_score"]: 0,
+        }).eq("id", bid);
+
+        const { data: elos } = await admin.from("rizz_elo")
+          .select("user_id, battle_rating, battle_peak, battles_won, battles_lost")
+          .in("user_id", [uid, them]);
+        const mine = elos?.find((e) => e.user_id === uid);
+        const theirs = elos?.find((e) => e.user_id === them);
+        const { newA, newB } = eloExchange(
+          mine?.battle_rating ?? 1000,
+          theirs?.battle_rating ?? 1000,
+          false, // "A" (the quitter) did not win
+        );
+        await admin.from("rizz_elo").upsert([
+          {
+            user_id: uid,
+            battle_rating: newA,
+            battle_peak: Math.max(mine?.battle_peak ?? 1000, newA),
+            battles_won: mine?.battles_won ?? 0,
+            battles_lost: (mine?.battles_lost ?? 0) + 1,
+            updated_at: new Date().toISOString(),
+          },
+          {
+            user_id: them,
+            battle_rating: newB,
+            battle_peak: Math.max(theirs?.battle_peak ?? 1000, newB),
+            battles_won: (theirs?.battles_won ?? 0) + 1,
+            battles_lost: theirs?.battles_lost ?? 0,
+            updated_at: new Date().toISOString(),
+          },
+        ], { onConflict: "user_id" });
+
+        return Response.json({ ok: true, forfeited: true });
+      }
+
+      // Nobody has played yet — nothing to protect, so it just goes.
+      // Covers the pile-up this was written for: minted codes nobody
+      // took, and duels both men joined and neither started.
+      void myScore;
       await admin.from("battles").delete().eq("id", bid);
-      return Response.json({ ok: true });
+      return Response.json({ ok: true, forfeited: false });
     }
 
     case "leave_queue": {
