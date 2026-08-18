@@ -632,6 +632,21 @@ abstract final class Tactics {
     return fresh;
   }
 
+  /// FIRST MIRROR EVER — true exactly once per device.
+  ///
+  /// Gates the one-off note telling him he can silence Lucien. An app
+  /// that keeps re-explaining its own controls is an app that doesn't
+  /// trust the person using it, so this flips false the moment it's
+  /// read and never comes back.
+  static const _kMirrorSeen = 'tactics.mirror.seen.v1';
+
+  static Future<bool> markMirrorSeen() async {
+    final p = await SharedPreferences.getInstance();
+    if (p.getBool(_kMirrorSeen) == true) return false;
+    await p.setBool(_kMirrorSeen, true);
+    return true;
+  }
+
   static Future<({int found, int total})> tally() async {
     final d = await discovered();
     return (found: d.length, total: all.length);
