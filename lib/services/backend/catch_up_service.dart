@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../live_events.dart';
+import '../../widgets/academy/callout.dart';
 import '../roster.dart';
 import 'auth_service.dart';
 import 'backend_service.dart';
@@ -103,6 +104,24 @@ class CatchUpService {
               icon: Icons.bolt_rounded,
               color: const Color(0xFFA8A8B2),
             ));
+            break;
+          case 'nudge':
+            // Aimed at me → not a feed row. It parks the full-screen
+            // callout the missions tab drains — see callout.dart, and
+            // the note there on why a nudge must be FELT by its target
+            // rather than scrolled past. Aimed at someone else → the
+            // squad watches it happen, which is half the pressure.
+            if (e.payload['target'] == me) {
+              Callout.pending = who;
+            } else {
+              out.add(LiveEvent(
+                title: who,
+                subtitle:
+                    'called out ${e.payload['handle'] ?? 'a squadmate'}',
+                icon: Icons.campaign_rounded,
+                color: const Color(0xFFE8222A),
+              ));
+            }
             break;
         }
         if (out.length >= 5) break;

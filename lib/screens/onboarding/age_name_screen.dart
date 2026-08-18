@@ -203,34 +203,15 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
 
                   const SizedBox(height: 26),
 
-                  // ── Language — she speaks yours ───────────────────────
-                  Text('YOUR LANGUAGE',
-                      style: GoogleFonts.inter(
-                        color: AppColors.red,
-                        fontSize: 11,
-                        letterSpacing: 2.6,
-                        fontWeight: FontWeight.w800,
-                      )),
-                  const SizedBox(height: 4),
-                  Text('She speaks it too.',
-                      style: GoogleFonts.inter(
-                        color: AppColors.textTertiary,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                      )),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final l in LanguageService.supported)
-                        _langChip(l),
-                    ],
-                  ),
-
-                  const SizedBox(height: 26),
-
-                  // ── Age band ──────────────────────────────────────────
+                  // ── Age band — FIRST, because it's the gate ───────────
+                  //
+                  // This page blocked CONTINUE until an age was picked,
+                  // and fifteen language chips sat between the name and
+                  // the age — five rows of Wrap that pushed the one
+                  // REQUIRED field below the fold. Men filled in a name,
+                  // stared at a dead button, and got stuck. The gate now
+                  // sits where the eye lands, and language collapses to
+                  // a single row below.
                   Text('YOUR AGE',
                       style: GoogleFonts.inter(
                         color: AppColors.red,
@@ -253,6 +234,26 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
                       for (final b in _bands) _ageChip(b),
                     ],
                   ),
+
+                  const SizedBox(height: 26),
+
+                  // ── Language — one row, opens a sheet ─────────────────
+                  Text('YOUR LANGUAGE',
+                      style: GoogleFonts.inter(
+                        color: AppColors.red,
+                        fontSize: 11,
+                        letterSpacing: 2.6,
+                        fontWeight: FontWeight.w800,
+                      )),
+                  const SizedBox(height: 4),
+                  Text('She speaks it too.',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                      )),
+                  const SizedBox(height: 12),
+                  _langRow(),
 
                         ],
                       ),
@@ -298,37 +299,79 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
     );
   }
 
-  Widget _langChip(AppLanguage l) {
-    final selected = _langCode == l.code;
+  /// The selected language as one tappable row. English is preselected,
+  /// so for the huge majority this is a row they read and skip — which
+  /// is precisely why it must not be fifteen chips: the default answer
+  /// shouldn't cost five rows of screen.
+  Widget _langRow() {
+    final l = LanguageService.supported
+        .firstWhere((x) => x.code == _langCode,
+            orElse: () => LanguageService.supported.first);
     return Material(
-      color: selected ? AppColors.red : AppColors.surface1,
-      borderRadius: BorderRadius.circular(99),
+      color: AppColors.surface1,
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() => _langCode = l.code);
-        },
-        borderRadius: BorderRadius.circular(99),
+        onTap: _pickLanguage,
+        borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(99),
-            border: Border.all(
-              color: selected
-                  ? AppColors.red
-                  : AppColors.red.withValues(alpha: 0.35),
-              width: 1,
-            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.surface3, width: 0.8),
           ),
-          child: Text('${l.flag} ${l.native}',
-              style: GoogleFonts.inter(
-                color: selected ? Colors.white : AppColors.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              )),
+          child: Row(children: [
+            Text(l.flag, style: const TextStyle(fontSize: 18)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(l.native,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  )),
+            ),
+            const Icon(Icons.keyboard_arrow_down_rounded,
+                size: 20, color: AppColors.textTertiary),
+          ]),
         ),
       ),
     );
+  }
+
+  Future<void> _pickLanguage() async {
+    HapticFeedback.selectionClick();
+    final code = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface1,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(8, 14, 8, 10),
+          children: [
+            for (final l in LanguageService.supported)
+              ListTile(
+                onTap: () => Navigator.of(ctx).pop(l.code),
+                leading:
+                    Text(l.flag, style: const TextStyle(fontSize: 20)),
+                title: Text(l.native,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    )),
+                trailing: _langCode == l.code
+                    ? const Icon(Icons.check_circle_rounded,
+                        size: 18, color: AppColors.red)
+                    : null,
+              ),
+          ],
+        ),
+      ),
+    );
+    if (code != null && mounted) setState(() => _langCode = code);
   }
 
   Widget _ageChip(String band) {

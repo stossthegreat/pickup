@@ -38,6 +38,18 @@ class ChatScoreService {
   /// DailyGameService.lastResult.
   static ChatResult? lastResult;
 
+  /// THE GRADE IN FLIGHT. The chat screen's two exit paths are not
+  /// equal: the finish button awaits the grade before popping, but the
+  /// back-arrow path fires it from dispose() — which cannot await — so
+  /// the caller read [lastResult] a beat before the network came back
+  /// and concluded, wrongly, that nothing was scored. The squad chat
+  /// challenge showed no score at all for any man who left with the X.
+  ///
+  /// The chat screen parks its submit future here on every exit;
+  /// whoever needs the result awaits this first. Nulled by the next
+  /// submission, not consumed on read — two screens may both want it.
+  static Future<void>? grading;
+
   // ── REVEAL ONCE ─────────────────────────────────────────────────────
   // Same guard as the voice Daily, for the same reason: the grade is
   // submitted without await when the chat closes, so it can land after

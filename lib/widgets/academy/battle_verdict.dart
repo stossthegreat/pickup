@@ -12,7 +12,7 @@ import '../../services/roster.dart';
 import '../../services/sfx_service.dart';
 import '../../services/share_service.dart';
 import '../../theme/app_colors.dart';
-import '../share/rizz_card.dart';
+import '../share/duel_card.dart';
 import 'game_button.dart';
 import 'game_feel.dart';
 // ImpactShake lives here, not in game_feel.dart.
@@ -66,6 +66,13 @@ class BattleVerdict extends StatefulWidget {
   final bool tie;
 
   final String opponent;
+
+  /// HIS OWN NAME. It said the literal string YOU, which is right on a
+  /// live screen and wrong the moment the screen is shared — a card
+  /// reading "YOU 61" is anonymous in the exact place it should brag.
+  /// Callers pass his handle; the fallback keeps old sites honest.
+  final String me;
+
   final GirlBrief girl;
 
   /// RR after settlement, and how far it moved. [delta] is null when the
@@ -94,6 +101,7 @@ class BattleVerdict extends StatefulWidget {
     required this.iWon,
     required this.tie,
     required this.opponent,
+    this.me = 'YOU',
     required this.girl,
     required this.rank,
     required this.delta,
@@ -247,7 +255,7 @@ class _BattleVerdictState extends State<BattleVerdict>
                 Row(children: [
                   Expanded(
                     child: _Side(
-                      name: 'YOU',
+                      name: widget.me.toUpperCase(),
                       score: _stage >= 1 ? widget.myScore : null,
                       color: widget.iWon ? kNeon : Colors.white,
                       lit: _stage >= 1,
@@ -564,31 +572,23 @@ class _BattleVerdictState extends State<BattleVerdict>
 
   void _share() {
     HapticFeedback.selectionClick();
-    ShareService.shareRizzCard(
+    ShareService.shareDuel(
       context: context,
-      data: RizzShareData(
-        kicker: widget.iWon ? 'VICTORY · ${widget.rank.label}' : 'RIZZ BATTLE',
-        hero: '${widget.myScore} — ${widget.theirScore}',
-        heroSub: 'YOU  ·  ${widget.opponent.toUpperCase()}',
-        line: 'Same woman. Both blind. ${widget.girl.name} had no idea '
-            'either of us was being scored.',
-        accent: _tone,
-        faces: [(asset: widget.girl.asset, owned: true)],
-        stats: [
-          (label: 'RANK', value: widget.rank.label),
-          if (widget.delta != null)
-            (
-              label: Economy.rrShort,
-              value: '${widget.delta! > 0 ? '+' : ''}${widget.delta}'
-            ),
-          if (widget.streak >= 2)
-            (label: 'STREAK', value: '${widget.streak}'),
-        ],
+      data: DuelShareData(
+        me: widget.me,
+        opponent: widget.opponent,
+        myScore: widget.myScore,
+        theirScore: widget.theirScore,
+        iWon: widget.iWon,
+        tie: widget.tie,
+        girlName: widget.girl.name,
+        rank: widget.rank,
+        delta: widget.delta,
       ),
       text: widget.iWon
-          ? 'Won my Rizz Battle ${widget.myScore}–${widget.theirScore}. '
+          ? 'Won my Rizz Battle ${widget.myScore}\u2013${widget.theirScore}. '
               '${widget.rank.label}. Who\'s next?'
-          : 'Rizz Battle: ${widget.myScore}–${widget.theirScore}. '
+          : 'Rizz Battle: ${widget.myScore}\u2013${widget.theirScore}. '
               'Running it back.',
     );
   }

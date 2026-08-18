@@ -38,6 +38,10 @@ personality — a specific human is visible; opinions, humour, a point of view
 momentum    — the thread moves somewhere; questions land, hooks are picked up
 restraint   — calibrated length, no neediness, no double-texting, no pleading
 
+The conversation may be in ANY language. Grade it in its own language
+on the same standard — never mark down for not being English, and never
+mistake a language you read less fluently for a lack of personality.
+
 Grade HONESTLY on a real-world standard. 50 = average forgettable
 message, 70 = genuinely good, 85+ = exceptional and rare, 95+ = almost
 never. A one-word or copy-paste message caps every axis at 30.

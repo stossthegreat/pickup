@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../config/backend_config.dart';
@@ -41,11 +42,80 @@ class AuthService {
   /// Fire-and-forget from main(); never blocks the first frame.
   static Future<void> ensureSignedIn() async {
     if (!BackendService.enabled) return;
-    if (_sb.auth.currentUser != null) return;
+    if (_sb.auth.currentUser != null) {
+      // Already in — but he may still be nameless (see below).
+      // ignore: discarded_futures
+      _ensureHandle();
+      return;
+    }
     try {
       await _sb.auth.signInAnonymously();
+      // ignore: discarded_futures
+      _ensureHandle();
     } catch (e) {
       debugPrint('AuthService.ensureSignedIn: $e'); // offline → retry next open
+    }
+  }
+
+  /// ══════════════════════════════════════════════════════════════════
+  ///  NOBODY IS ANON. A name is assigned before one is chosen.
+  ///  ══════════════════════════════════════════════════════════════════
+  ///
+  /// Every surface that shows another human — the boards, the squad
+  /// roster, a duel verdict — fell back to the literal string ANON when
+  /// his handle was null, and most handles were null: naming yourself is
+  /// an optional onboarding step most men skip. So the app's social
+  /// fabric read as a wall of ANON vs ANON, which kills the entire point
+  /// of fighting a real person — beating ANON feels like beating a bot.
+  ///
+  /// The fix is upstream of every single one of those surfaces: the
+  /// moment an identity exists it gets a generated call-sign (WOLF-482),
+  /// so a null handle stops being a state that can reach a screen. The
+  /// handle screen still lets him pick his own; this is the floor, not
+  /// the ceiling.
+  ///
+  /// Fire-and-forget from [ensureSignedIn]; a checked flag makes the
+  /// common path one prefs read, not a network call per launch.
+  static const _kHandleChecked = 'auth.handle.seeded.v1';
+
+  static const _callSigns = [
+    'WOLF', 'HAWK', 'VIPER', 'ACE', 'BLADE', 'DUKE', 'JET', 'ONYX',
+    'RHINO', 'SABER', 'TITAN', 'NOVA', 'RAZOR', 'STORM', 'DRIFT', 'KODA',
+    'MAVERICK', 'ORION', 'ATLAS', 'BANDIT', 'COBRA', 'DIESEL', 'FALCON',
+    'GHOST',
+  ];
+
+  static Future<void> _ensureHandle() async {
+    final uid = userId;
+    if (uid == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_kHandleChecked) == true) return;
+
+      final have = await getHandle();
+      if (have != null && have.trim().isNotEmpty) {
+        await prefs.setBool(_kHandleChecked, true);
+        return;
+      }
+
+      // Derived from the uid rather than random — the same account
+      // lands on the same name on every device, and Date.now-free code
+      // stays deterministic under test.
+      final seed = uid.hashCode.abs();
+      for (var attempt = 0; attempt < 6; attempt++) {
+        final word = _callSigns[(seed + attempt * 7) % _callSigns.length];
+        // Not called `num` — that shadows the numeric supertype and is
+        // exactly the kind of legal-but-cursed Dart that bites later.
+        final tag = ((seed ~/ 31) + attempt * 137) % 900 + 100;
+        final name = '$word-$tag';
+        if (await setHandle(name)) {
+          await prefs.setBool(_kHandleChecked, true);
+          return;
+        }
+        // Collision on the unique index → try the next variation.
+      }
+    } catch (e) {
+      debugPrint('AuthService._ensureHandle: $e'); // retry next launch
     }
   }
 

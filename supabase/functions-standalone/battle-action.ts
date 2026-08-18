@@ -58,6 +58,10 @@ wit        — humour, playfulness, spark (calibrated, never mean)
 recovery   — how they handle pushback, rejection, curveballs, silence
 close      — momentum toward a respectful, concrete next step
 
+The conversation may be in ANY language. Grade it in its own language
+on the same standard — never mark down for not being English, and never
+mistake a language you read less fluently for a lack of personality.
+
 Grade HONESTLY on a real-world standard. 50 = average nervous attempt,
 70 = genuinely good, 85+ = exceptional and rare, 95+ = almost never.
 A short or low-effort transcript caps every axis at 40.
@@ -318,14 +322,27 @@ Deno.serve(async (req) => {
         ? body.scenario
         : SCENARIOS[Math.floor(Math.random() * SCENARIOS.length)];
       const medium = body.medium === "voice" ? "voice" : "chat";
-      const { data, error } = await admin.from("battles").insert({
+      const row = {
         scenario,
         mode: "code",
-        medium,
         invite_code: mintCode(),
         player_a: uid,
         state: "open",
-      }).select().single();
+      };
+      // MIGRATION ORDER MUST NOT BREAK MINTING. This function and
+      // migration 0016 ship separately, and whichever lands second wins
+      // a window where they disagree. The first cut of this insert set
+      // `medium` unconditionally, so a redeploy ahead of the migration
+      // made EVERY create fail — "couldn't mint a challenge" on a
+      // button that worked the day before. Try with the column, and if
+      // the schema doesn't know it yet, mint without: a chat-default
+      // battle beats no battle every time.
+      let { data, error } = await admin.from("battles")
+        .insert({ ...row, medium }).select().single();
+      if (error) {
+        ({ data, error } = await admin.from("battles")
+          .insert(row).select().single());
+      }
       if (error) return Response.json({ error: "could not create" }, { status: 500 });
       return Response.json({ battle: data });
     }
@@ -395,10 +412,24 @@ Deno.serve(async (req) => {
       const wantMedium = body.medium === "voice" ? "voice" : "chat";
 
       // Oldest waiting stranger, else join the line ourselves.
-      const { data: waiting } = await admin.from("battle_queue").select()
+      //
+      // Same migration-order guard as create: before 0016 the medium
+      // column doesn't exist, the filtered select errors, and — because
+      // the error was never checked — the queue silently no-opped:
+      // nobody ever entered the line and nobody was ever paired. If the
+      // schema doesn't know the column, fall back to one unfiltered
+      // line (everything in it is chat by definition).
+      let { data: waiting, error: qerr } = await admin.from("battle_queue")
+        .select()
         .neq("user_id", uid).eq("medium", wantMedium)
         .order("enqueued_at", { ascending: true })
         .limit(1);
+      if (qerr) {
+        ({ data: waiting } = await admin.from("battle_queue").select()
+          .neq("user_id", uid)
+          .order("enqueued_at", { ascending: true })
+          .limit(1));
+      }
       const opponent = waiting?.[0];
       if (opponent) {
         // Claim them — the delete's row count is the lock, so two
@@ -409,22 +440,29 @@ Deno.serve(async (req) => {
           await admin.from("battle_queue").delete().eq("user_id", uid);
           const scenario =
             SCENARIOS[Math.floor(Math.random() * SCENARIOS.length)];
-          const { data: battle } = await admin.from("battles").insert({
+          const paired = {
             scenario,
             mode: "random",
-            medium: wantMedium,
             player_a: opponent.user_id,
             player_b: uid,
             state: "active",
-          }).select().single();
+          };
+          let { data: battle, error: berr } = await admin.from("battles")
+            .insert({ ...paired, medium: wantMedium }).select().single();
+          if (berr) {
+            ({ data: battle } = await admin.from("battles")
+              .insert(paired).select().single());
+          }
           return Response.json({ battle });
         }
       }
-      await admin.from("battle_queue").upsert({
+      const seat = {
         user_id: uid,
-        medium: wantMedium,
         enqueued_at: new Date().toISOString(),
-      });
+      };
+      const { error: uerr } = await admin.from("battle_queue")
+        .upsert({ ...seat, medium: wantMedium });
+      if (uerr) await admin.from("battle_queue").upsert(seat);
       return Response.json({ queued: true });
     }
 
