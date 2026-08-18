@@ -17,33 +17,44 @@ class BackendConfig {
   // Apple sign-in is unaffected and is the lane that actually matters on
   // iOS — this can ship empty.
   //
-  // The Firebase files already in the tree (android/app/
-  // google-services.json, ios/Runner/GoogleService-Info.plist) do NOT
-  // help: they were generated for Firebase Analytics with Google
-  // Sign-In switched off, so `oauth_client` is an empty array and the
-  // iOS plist carries no CLIENT_ID at all. They are the same Google
-  // project (imhim-75991) but they are not credentials.
+  // ── ANDROID ONLY. THIS BUTTON DOES NOT EXIST ON iOS ─────────────────
   //
-  // ── TO TURN IT ON ──────────────────────────────────────────────────
+  // account_screen.dart gates it on `!Platform.isIOS`. iOS runs the
+  // Apple lane alone — one button, no Google Cloud setup, and no App
+  // Review questions about a second provider. So there is NO iOS OAuth
+  // client to create and NO reversed URL scheme to add to Info.plist:
+  // an iPhone will never reach this code path. Testing on an iPhone and
+  // finding no Google button is the system working as designed.
+  //
+  // ── WHAT FIREBASE DID AND DIDN'T DO ─────────────────────────────────
+  //
+  // A Firebase project IS a Google Cloud project — this one is
+  // `imhim-75991`. Registering an Android app there with a SHA-1
+  // fingerprint auto-creates the ANDROID OAuth client in that project's
+  // credentials, which is a real, necessary step. But Firebase itself is
+  // inert in this app: the google-services gradle plugin is not applied,
+  // nothing calls a Firebase SDK, and auth runs entirely through
+  // Supabase. The google-services.json in the tree is stale (its
+  // `oauth_client` array is empty) and no code reads it.
+  //
+  // Firebase cannot create the client that's actually missing.
+  //
+  // ── THE ONE THING LEFT: A WEB CLIENT ────────────────────────────────
   //
   // Google Cloud Console → project `imhim-75991` → APIs & Services →
-  // Credentials. Create THREE OAuth clients:
+  // Credentials → Create credentials → OAuth client ID → **Web
+  // application**. There is no Firebase screen for this.
   //
-  //   WEB      → paste its ID into googleWebClientId below, AND into
-  //              Supabase → Authentication → Providers → Google as the
-  //              "Client ID". This is the one Supabase verifies tokens
-  //              against; without it every sign-in is rejected.
-  //   iOS      → bundle id `com.imhimrizz.app`. Paste its ID into
-  //              googleIosClientId below, and add its REVERSED form
-  //              (com.googleusercontent.apps.NNN-xxx) to Info.plist
-  //              CFBundleURLSchemes — the Google sheet returns to the
-  //              app through that scheme and never comes back without it.
-  //   ANDROID  → package `com.imhim.app` + a SHA-1 fingerprint. Nothing
-  //              to paste; it just has to exist.
+  // That ID goes in TWO places and both are required:
   //
-  // Then add the iOS and Android client IDs to Supabase's "Authorized
-  // Client IDs" field, or it accepts the web token and rejects both
-  // native ones.
+  //   1. googleWebClientId below. It's passed as `serverClientId`, which
+  //      is what makes Google mint an ID TOKEN rather than just a local
+  //      session. Without it there is no token to hand Supabase.
+  //   2. Supabase → Authentication → Providers → Google → "Client ID".
+  //      The token's audience is this web client, so this is the value
+  //      Supabase verifies against. Mismatch = every sign-in rejected.
+  //
+  // googleIosClientId stays empty forever — see the iOS note above.
   //
   // ── THE SHA-1 THAT ACTUALLY MATTERS ────────────────────────────────
   //
@@ -52,7 +63,9 @@ class BackendConfig {
   // from Play Console → Test and release → App integrity → App signing
   // key certificate. Using the upload key's fingerprint is the classic
   // failure here: sign-in works in every internal build and dies for
-  // every real user with a silent cancel and no error anywhere.
+  // every real user with a silent cancel and no error anywhere. Register
+  // BOTH if you're also testing debug builds — a client can hold many.
+  //
   static const googleWebClientId = '';
   static const googleIosClientId = '';
 }
