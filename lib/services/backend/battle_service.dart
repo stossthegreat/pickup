@@ -9,6 +9,10 @@ class Battle {
   final String id;
   final String scenario; // vibe key: cold | into_you | chaos | ...
   final String mode; // code | random
+
+  /// 'chat' | 'voice' — which room this duel is fought in. Defaults to
+  /// chat so a row written before migration 0016 reads as what it was.
+  final String medium;
   final String? inviteCode;
   final String? playerA, playerB;
   final int? aScore, bScore;
@@ -18,6 +22,7 @@ class Battle {
     required this.id,
     required this.scenario,
     required this.mode,
+    this.medium = 'chat',
     this.inviteCode,
     this.playerA,
     this.playerB,
@@ -31,6 +36,7 @@ class Battle {
         id: r['id'] as String,
         scenario: r['scenario'] as String? ?? 'cold',
         mode: r['mode'] as String? ?? 'code',
+        medium: r['medium'] as String? ?? 'chat',
         inviteCode: r['invite_code'] as String?,
         playerA: r['player_a'] as String?,
         playerB: r['player_b'] as String?,
@@ -51,6 +57,12 @@ class Battle {
   bool get settled => state == 'scored';
   bool get iWon => settled && winner != null && winner == AuthService.userId;
   bool get tie => settled && winner == null && aScore != null && bScore != null;
+
+  bool get isVoice => medium == 'voice';
+
+  /// A duel neither man has started. The only kind that can be binned
+  /// outright — see BattleService.cancelChallenge.
+  bool get untouched => aScore == null && bScore == null;
 }
 
 /// RIZZ BATTLES — same scenario, both play blind, higher score takes
@@ -78,9 +90,13 @@ class BattleService {
   }
 
   /// Mint a code duel (caller = player A). Null offline.
-  static Future<Battle?> createChallenge({String? scenario}) async {
+  static Future<Battle?> createChallenge({
+    String? scenario,
+    String medium = 'chat',
+  }) async {
     final d = await _invoke({
       'action': 'create',
+      'medium': medium,
       if (scenario != null) 'scenario': scenario,
     });
     final row = d?['battle'];
@@ -96,10 +112,47 @@ class BattleService {
 
   /// Random matchmaking. Returns the battle when paired instantly, or
   /// null while waiting in the line (poll again).
-  static Future<Battle?> findOpponent() async {
-    final d = await _invoke({'action': 'queue'});
+  static Future<Battle?> findOpponent({String medium = 'chat'}) async {
+    final d = await _invoke({'action': 'queue', 'medium': medium});
     final row = d?['battle'];
     return row == null ? null : Battle.fromRow((row as Map).cast());
+  }
+
+  /// ══════════════════════════════════════════════════════════════
+  ///  LIVE. A duel is a conversation between two phones.
+  ///  ══════════════════════════════════════════════════════════════
+  ///
+  /// Everything here used to move on a 30-second poll, and it showed:
+  /// a man submitted his attempt, watched "he hasn't answered yet", and
+  /// kept watching it long after the other man had answered. Both
+  /// screens sat on stale rows telling both players the fight was still
+  /// open. On the queue it was worse — the paired man could wait
+  /// minutes to be told he had an opponent.
+  ///
+  /// Postgres already knows the instant either of those changes. Two
+  /// subscriptions — one per player slot, because a filter can only
+  /// test one column and a duel can have me in either — and the screen
+  /// reloads on the same beat the row moves.
+  ///
+  /// Poll stays as the backstop. Realtime over a phone network drops,
+  /// and a duel that silently never resolves is worse than a slow one.
+  static List<RealtimeChannel> watchMine(void Function() onChange) {
+    final uid = AuthService.userId;
+    if (!BackendService.enabled || uid == null) return const [];
+    RealtimeChannel chan(String column) => _sb
+        .channel('battles-$column-$uid')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'battles',
+          filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: column,
+              value: uid),
+          callback: (_) => onChange(),
+        )
+        .subscribe();
+    return [chan('player_a'), chan('player_b')];
   }
 
   static Future<void> leaveQueue() async {

@@ -64,16 +64,21 @@ import '../../widgets/academy/rank_emblem.dart';
 ///     after. Ceremony that can't be dismissed is a cutscene, and every
 ///     man who's seen it fifty times comes to hate it.
 class MatchmakingScreen extends StatefulWidget {
-  const MatchmakingScreen({super.key});
+  /// 'chat' | 'voice'. The queue keeps a separate line per medium — a
+  /// spoken attempt and a typed one can't be scored against each other,
+  /// so they are never paired. See migration 0016.
+  final String medium;
+
+  const MatchmakingScreen({super.key, this.medium = 'chat'});
 
   /// Pushes the search and returns the paired duel, or null if he backed
   /// out / nobody was there.
-  static Future<Battle?> find(BuildContext context) {
+  static Future<Battle?> find(BuildContext context, {String medium = 'chat'}) {
     return Navigator.of(context, rootNavigator: true).push<Battle>(
       PageRouteBuilder(
         opaque: true,
         transitionDuration: const Duration(milliseconds: 260),
-        pageBuilder: (_, __, ___) => const MatchmakingScreen(),
+        pageBuilder: (_, __, ___) => MatchmakingScreen(medium: medium),
         transitionsBuilder: (_, a, __, child) =>
             FadeTransition(opacity: a, child: child),
       ),
@@ -175,7 +180,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen>
   Future<void> _search() async {
     final began = DateTime.now();
     while (mounted && !_bailed && _battle == null) {
-      final b = await BattleService.findOpponent();
+      final b = await BattleService.findOpponent(medium: widget.medium);
       if (!mounted || _bailed) return;
       if (b != null) {
         // THE MINIMUM. An instant pair still gets its beat and a half —
@@ -186,7 +191,17 @@ class _MatchmakingScreenState extends State<MatchmakingScreen>
         _at(wait, () => _found(b));
         return;
       }
-      await Future<void>.delayed(const Duration(seconds: 3));
+      // A SECOND, NOT THREE.
+      //
+      // Pairing is one-sided: the man who arrives second gets the duel
+      // in his own response, and the man already waiting only learns
+      // about it on his next ask. That gap IS his wait, so every second
+      // of this interval is a second of one player staring at a spinner
+      // while the fight already exists. The server now answers "you're
+      // already in one" before anything else (see the queue action), so
+      // this poll is cheap and the tighter loop is what makes the pair
+      // land on both phones at once.
+      await Future<void>.delayed(const Duration(milliseconds: 1000));
     }
   }
 

@@ -154,7 +154,11 @@ class _DailyScreenState extends State<DailyScreen> {
     SquadBroadcast.dailyStarted(s.scenarioKey);
     DailyGameService.armedDaily = true;
     await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
-      builder: (_) => FreeFlowScreen(initialVibeKey: s.scenarioKey),
+      // ASSIGNED, so the practice day-lock stands down. The world gets
+      // one woman today and he doesn't get a say in who — see the note
+      // on FreeFlowScreen.assigned.
+      builder: (_) =>
+          FreeFlowScreen(initialVibeKey: s.scenarioKey, assigned: true),
     ));
     DailyGameService.armedDaily = false;
     if (!mounted) return;
