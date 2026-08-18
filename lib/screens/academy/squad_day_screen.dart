@@ -440,6 +440,54 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
                       icon: const Icon(Icons.arrow_back_rounded,
                           color: Colors.white),
                     ),
+                    // ── THE CODE, ON THE FRONT PAGE ──────────────────
+                    //
+                    // It lived one screen deeper, on the squad room —
+                    // which meant the single piece of information a man
+                    // needs to GROW the squad was hidden behind a door
+                    // most men never open. Empty seats are the thing
+                    // this page keeps showing; the key to filling them
+                    // belongs on the same screen. Tap copies.
+                    if (_squad != null)
+                      GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          Clipboard.setData(
+                              ClipboardData(text: _squad!.inviteCode));
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(
+                            content: Text(
+                                'Code ${_squad!.inviteCode} copied — '
+                                'send it to your boys.'),
+                            behavior: SnackBarBehavior.floating,
+                          ));
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface1,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                                color: AppColors.red
+                                    .withValues(alpha: 0.4)),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(_squad!.inviteCode,
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 11.5,
+                                      letterSpacing: 2.4,
+                                      fontWeight: FontWeight.w900,
+                                    )),
+                                const SizedBox(width: 5),
+                                const Icon(Icons.copy_rounded,
+                                    size: 12,
+                                    color: AppColors.textTertiary),
+                              ]),
+                        ),
+                      ),
                     const Spacer(),
                     // THE PULSE opens HERE, as a sheet. It used to
                     // push into the squad room, which was the wrong

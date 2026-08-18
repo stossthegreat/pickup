@@ -39,6 +39,10 @@ wit        — humour, playfulness, spark (calibrated, never mean)
 recovery   — how they handle pushback, rejection, curveballs, silence
 close      — momentum toward a respectful, concrete next step
 
+The conversation may be in ANY language. Grade it in its own language
+on the same standard — never mark down for not being English, and never
+mistake a language you read less fluently for a lack of personality.
+
 Grade HONESTLY on a real-world standard. 50 = average nervous attempt,
 70 = genuinely good, 85+ = exceptional and rare, 95+ = almost never.
 A short or low-effort transcript caps every axis at 40.

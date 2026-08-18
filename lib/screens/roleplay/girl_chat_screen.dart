@@ -15,6 +15,7 @@ import '../../services/backend/battle_service.dart';
 import '../../services/backend/chat_score_service.dart';
 import '../../services/boon_service.dart';
 import '../../services/local_store_service.dart';
+import '../../services/language_service.dart';
 import '../../services/mirror_service.dart';
 import '../../services/paywall_gate.dart';
 import '../../services/achievements.dart';
@@ -823,6 +824,12 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
             headers: {'content-type': 'application/json'},
             body: jsonEncode({
               'characterId': widget.config.characterId,
+              // Her language. Voice has sent this since day one and the
+              // text side never did — so a Spanish user got a Spanish-
+              // speaking woman on calls and an English-only one in
+              // texts. Same field name the realtime session config
+              // uses; a server that predates it just ignores it.
+              'language': LanguageService.cachedCode,
               'focus': widget.config.focus,
               'creator': _creator,
               'history': history,
