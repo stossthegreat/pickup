@@ -160,7 +160,7 @@ class MirrorCard extends StatelessWidget {
                   width: 2.5),
             ),
           ),
-          child: Text('"${mirror.hisLine}"',
+          child: Text(_quoted(mirror.hisLine),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
@@ -258,6 +258,13 @@ class MirrorCard extends StatelessWidget {
         .slideY(begin: 0.14, end: 0, curve: Curves.easeOutCubic);
   }
 
+  /// One pair of quotes, wherever the line came from.
+  static String _quoted(String s) {
+    final t = s.trim();
+    final bare = t.replaceAll(RegExp(r'^[""\u201C\u201D]+|[""\u201C\u201D]+$'), '');
+    return '"$bare"';
+  }
+
   Widget _line(String text) => Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(11, 9, 11, 9),
@@ -268,7 +275,10 @@ class MirrorCard extends StatelessWidget {
             left: BorderSide(color: _gold, width: 2.5),
           ),
         ),
-        child: Text('"$text"',
+        // The line as Lucien wrote it. NOT re-quoted — he returns bare
+        // text, and the old tactic examples carried their own quote
+        // marks, which is where the ""double quoted"" cards came from.
+        child: Text(_quoted(text),
             style: GoogleFonts.inter(
               color: _gold,
               fontSize: 13,

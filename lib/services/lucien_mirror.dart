@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 
 import 'backend/backend_service.dart';
 import 'language_service.dart';
-import 'tactics.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
 ///  THE MIRROR — Lucien marks the line AFTER it's sent
@@ -33,9 +32,7 @@ import 'tactics.dart';
 /// the lucien-mirror Edge Function, which sees the transcript, her last
 /// line and her current interest, and answers about THAT.
 ///
-/// The rules below survive only as the offline fallback — when the
-/// network is gone or the function isn't deployed, a rotating local
-/// read is better than silence. They are explicitly the cheap version.
+/// There is deliberately NO local fallback. See [mark].
 ///
 /// ── IT ONLY SPEAKS WHEN IT HAS SOMETHING ────────────────────────────
 ///
@@ -144,131 +141,18 @@ class LucienMirror {
       }
     }
 
-    return _offline(t, delta);
-  }
-
-  /// THE CHEAP VERSION. Network down, or the function not deployed yet.
-  /// Rotates its wording off the line itself so even the fallback isn't
-  /// word-for-word identical twice running.
-  static LucienMirror? _offline(String t, double delta) {
-    final low = t.toLowerCase();
-    final words = t.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
-    final q = t.contains('?');
-    final spin = t.length; // stable per line, varied across lines
-
-    ({Tactic tactic, List<String> reads})? pick;
-
-    if (q && words <= 14 && _looksLikeInterview(low)) {
-      pick = (tactic: Tactics.byId('assumption')!, reads: [
-        'That was a question. Questions make her do the work and give '
-            'her nothing to push against.',
-        'You interviewed her. She can answer that in four words and '
-            'feel nothing doing it.',
-        'A question hands the conversation back to her. Hand her an '
-            'opinion instead.',
-      ]);
-    } else if (!q && words <= 7) {
-      pick = (tactic: Tactics.byId('detail')!, reads: [
-        'That closes the exchange. She now has to restart it on her '
-            'own, and most women just won\'t.',
-        'Nothing in that for her to grab. A closed answer is a door '
-            'shutting politely.',
-        'Short and finished. Leave her something odd to pick up.',
-      ]);
-    } else if (_hedged(low)) {
-      pick = (tactic: Tactics.byId('anchor')!, reads: [
-        'You softened it before she could react to it. The hedge is '
-            'the part she hears.',
-        'You apologised for your own line mid-sentence. Say it and '
-            'leave it standing.',
-        'The qualifier undid the sentence in front of it.',
-      ]);
-    } else if (_agreeing(low) && words <= 12) {
-      pick = (tactic: Tactics.byId('disagree')!, reads: [
-        'You agreed. Agreement is polite and completely frictionless — '
-            'nothing there for her to feel.',
-        'Pure agreement is a dead end. Take the other side for sport.',
-        'You matched her instead of meeting her.',
-      ]);
-    } else if (_complimenting(low)) {
-      pick = (tactic: Tactics.byId('tease')!, reads: [
-        'A compliment early reads as buying her approval. She\'s had a '
-            'hundred of those this week.',
-        'You paid for attention you could have earned in one line.',
-        'Praise is cheap from a stranger. Make her want it first.',
-      ]);
-    } else if (delta < -1.5) {
-      pick = (tactic: Tactics.byId('reset')!, reads: [
-        'That one cooled her. The recovery is not explaining it — it '
-            'is changing the temperature.',
-        'She went quiet on that. Drop it cleanly, open something else.',
-        'You lost a degree there. Don\'t chase it, change it.',
-      ]);
-    } else if (words >= 18 && !low.contains('when i') && !low.contains('once')) {
-      pick = (tactic: Tactics.byId('story')!, reads: [
-        'Long, and all information. Length is not the same as presence.',
-        'That was a paragraph of facts. She\'ll remember none of it.',
-        'You explained where you could have shown her a moment.',
-      ]);
-    }
-
-    if (pick == null) return null;
-    final p = pick;
-    return LucienMirror(
-      hisLine: t,
-      read: p.reads[spin % p.reads.length],
-      move: p.tactic.name.toUpperCase(),
-      why: p.tactic.why,
-      lines: [p.tactic.example, p.tactic.example2],
-    );
-  }
-
-  static bool _looksLikeInterview(String s) {
-    const openers = [
-      'what do you', 'what are you', 'where are you', 'where do you',
-      'how was', 'how is', 'how are', 'do you like', 'have you ever',
-      'what kind of', 'so what', 'and you', 'what about you', 'how old',
-      'where you from', 'what you do', 'do you work',
-    ];
-    for (final o in openers) {
-      if (s.contains(o)) return true;
-    }
-    return false;
-  }
-
-  static bool _hedged(String s) {
-    const hedges = [
-      'sorry if', 'i guess', 'maybe im', 'maybe i\'m', 'no worries if',
-      'if that\'s ok', 'if thats ok', 'just wondering', 'i mean idk',
-      'probably not but', 'don\'t have to', 'dont have to', 'no pressure',
-      'lol sorry', 'haha sorry',
-    ];
-    for (final h in hedges) {
-      if (s.contains(h)) return true;
-    }
-    return false;
-  }
-
-  static bool _agreeing(String s) {
-    const yes = [
-      'yeah same', 'same here', 'me too', 'totally', 'i agree',
-      'exactly', 'so true', 'for sure', 'definitely', 'yeah true',
-    ];
-    for (final y in yes) {
-      if (s.startsWith(y) || s.contains(y)) return true;
-    }
-    return false;
-  }
-
-  static bool _complimenting(String s) {
-    const c = [
-      'you\'re gorgeous', 'youre gorgeous', 'you look amazing',
-      'you\'re beautiful', 'youre beautiful', 'so pretty', 'you\'re stunning',
-      'youre stunning', 'you\'re perfect', 'youre perfect', 'so hot',
-    ];
-    for (final x in c) {
-      if (s.contains(x)) return true;
-    }
-    return false;
+    // ── NO FALLBACK. IF HE CAN'T THINK, HE DOESN'T SPEAK. ──────────
+    //
+    // There used to be a local keyword table here for when the network
+    // or the function was missing, and it was worse than useless: it
+    // produced the SAME canned card every time, which is precisely the
+    // failure the model call exists to fix. A coach who repeats himself
+    // is not a degraded coach, he is an irritant — and shipping one as
+    // a "graceful degradation" just guarantees most men only ever meet
+    // the bad version.
+    //
+    // Silence is the correct degraded state. Lucien speaks when Lucien
+    // has read the conversation, and not otherwise.
+    return null;
   }
 }
