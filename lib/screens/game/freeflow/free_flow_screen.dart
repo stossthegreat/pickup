@@ -1880,8 +1880,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       final armedBattle = BattleService.armedBattleId;
       if (armedBattle != null) {
         BattleService.armedBattleId = null;
-        // ignore: discarded_futures
-        BattleService.submit(armedBattle, academyTranscript);
+        // AWAITED, unlike the Daily below. The Battles screen reads
+        // BattleService.lastResult the instant this screen pops to
+        // decide whether to play his score and then the verdict —
+        // fire-and-forget raced that, so a voice duel could return to a
+        // screen that believed nothing had been submitted.
+        await BattleService.submit(armedBattle, academyTranscript);
       }
       // Armed DAILY → this session IS today's one shot. The service
       // parks the result; the Daily screen reveals it on return.
