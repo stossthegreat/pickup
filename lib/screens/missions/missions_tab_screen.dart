@@ -332,7 +332,13 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     // out — leaves the mission open.
     final before = (await LocalStoreService.loadGameScores()).length;
     await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
-      builder: (_) => FreeFlowScreen(initialVibeKey: g.vibeKey),
+      // ASSIGNED — the mission engine picked her, he didn't. The
+      // practice day-lock stays in Practice, where climbing to her is
+      // the point; on an assigned task it can only ever lock a man out
+      // of his own work (the ladder drops with the streak, missions
+      // don't). Same rule as the Daily and duels.
+      builder: (_) =>
+          FreeFlowScreen(initialVibeKey: g.vibeKey, assigned: true),
     ));
     final after = (await LocalStoreService.loadGameScores()).length;
     if (after > before) {

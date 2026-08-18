@@ -2035,6 +2035,24 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
   /// nothing to interact with. The picker is the existing _buildPicker
   /// rendered by setting phase = _Phase.pick.
   void _resetToPicker() {
+    // ── A PUSHED SESSION HAS NO PICKER ───────────────────────────────
+    //
+    // Every launch that arrives with an initialVibeKey — the squad
+    // Rizz-Off, the Daily, a duel, a mission, a practice card — was
+    // sent here to talk to ONE assigned woman. When that session ends
+    // early (consent declined, paywall declined, backgrounded, error),
+    // falling back to the roster picker is wrong twice over: it shows
+    // a choice he was never given, and from the squad flow it reads as
+    // a completely unrelated screen appearing out of nowhere. Those
+    // exits now go BACK to the screen that sent him.
+    if (!widget.tabMode && widget.initialVibeKey != null) {
+      _eventSub?.cancel();
+      _micSub?.cancel();
+      // ignore: discarded_futures
+      _session.close();
+      if (mounted) Navigator.of(context).maybePop();
+      return;
+    }
     _eventSub?.cancel();
     _micSub?.cancel();
     // v261 — shared mic keeps streaming for next session bind.
