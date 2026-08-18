@@ -57,7 +57,8 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
   const { data: eloRow } = await admin
-    .from("rizz_elo").select("rating, peak").eq("user_id", uid).single();
+    .from("rizz_elo").select("rating, peak, voice_points")
+    .eq("user_id", uid).maybeSingle();
   const rating = eloRow?.rating ?? 1000;
   const implied = 800 + weighted * 14;
   const eloDelta = Math.max(-40, Math.min(40, Math.round((implied - rating) / 8)));
@@ -71,13 +72,26 @@ Deno.serve(async (req) => {
     score,
     rubric,
   });
-  await admin.from("rizz_elo").upsert({
+  // VOICE POINTS — the board's sort key since 0017. Cumulative 0-100
+  // session scores: the higher you score the higher you climb, and
+  // volume catches up — the one property an ELO can never give a
+  // leaderboard. `rating` continues below, for divisions and stakes.
+  const aiScore = Math.round(score / 99.99);
+  const eloPatch = {
     user_id: uid,
     rating: newRating,
     tier,
     peak: Math.max(eloRow?.peak ?? 1000, newRating),
     updated_at: new Date().toISOString(),
+  };
+  // Same migration-order guard as battle-action: if 0017 hasn't run
+  // yet the column doesn't exist, and scoring must not start failing
+  // because a deploy landed first.
+  const { error: eloErr } = await admin.from("rizz_elo").upsert({
+    ...eloPatch,
+    voice_points: (eloRow?.voice_points ?? 0) + aiScore,
   });
+  if (eloErr) await admin.from("rizz_elo").upsert(eloPatch);
 
   // Every session quietly fuels the weekly league (auto-enrol) — the
   // casual roleplayer IS in the game without ever opting in. Half the

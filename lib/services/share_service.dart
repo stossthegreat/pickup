@@ -13,6 +13,7 @@ import '../widgets/share/certificate_share_card.dart';
 import '../widgets/share/eye_strip_share_card.dart';
 import '../widgets/share/progress_share_card.dart';
 import '../widgets/share/rizz_card.dart';
+import '../widgets/share/duel_card.dart';
 import '../widgets/share/rizz_score_share_card.dart';
 import '../widgets/share/score_share_card.dart';
 
@@ -581,6 +582,66 @@ class ShareService {
   /// the card is a recruitment poster, not a flex, and a man who joins
   /// because his mate posted this arrives with somebody already watching
   /// him — which is the difference between a user and a retained one.
+  /// THE DUEL RESULT — the verdict screen frozen at poster scale.
+  ///
+  /// Not shareRizzCard. That template is fine for codes and trophies,
+  /// but a fight result already has a definitive rendering — the screen
+  /// the man was just staring at — and pouring its numbers into a
+  /// generic layout threw that away. See duel_card.dart.
+  static Future<void> shareDuel({
+    required BuildContext context,
+    required DuelShareData data,
+    required String text,
+  }) async {
+    HapticFeedback.lightImpact();
+    if (context.mounted) {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+        builder: (_) => const _RenderingOverlay(),
+      );
+    }
+    final mq = MediaQuery.of(context);
+    final origin =
+        Rect.fromLTWH(mq.size.width / 2 - 1, mq.padding.top + 8, 2, 2);
+    String errorMsg = 'Share failed';
+    try {
+      if (!context.mounted) return;
+      final bytes = await _captureOffscreen(
+        context: context,
+        widget: DuelShareCard(data: data),
+        logicalSize: const Size(1080, 1920),
+        pixelRatio: 2.0,
+      );
+      if (bytes == null) {
+        errorMsg = "Couldn't render the card — try again";
+      } else {
+        if (context.mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+        HapticFeedback.mediumImpact();
+        await _shareBytes(
+          bytes,
+          'imhim-duel-${DateTime.now().millisecondsSinceEpoch}.png',
+          text,
+          origin: origin,
+        );
+        return;
+      }
+    } catch (e) {
+      errorMsg = 'Share failed: ${e.toString().split('\n').first}';
+    }
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(errorMsg),
+        backgroundColor: AppColors.toastBg,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
   static Future<void> shareRizzCard({
     required BuildContext context,
     required RizzShareData data,

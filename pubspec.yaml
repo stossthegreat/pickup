@@ -1,7 +1,7 @@
 name: charmr
 description: "Charmr — roleplay your way to real confidence."
 publish_to: 'none'
-version: 1.0.0+179
+version: 1.0.0+184
 
 environment:
   sdk: ^3.8.0
@@ -154,17 +154,37 @@ dependency_overrides:
   record_linux: ^1.0.0
 
 flutter:
-  # Disable Swift Package Manager integration FOR THIS PROJECT (Flutter
-  # 3.24+). This is the repo-side equivalent of the machine-level
-  # `flutter config --no-enable-swift-package-manager` the Podfile
-  # recommends — but it travels with the repo, so CI needs no extra
-  # config. Someone tried to get the same effect by appending the
-  # `flutter config` command to Codemagic's iOS build-arguments field,
-  # which concatenated it onto `flutter build ipa ...` and broke the
-  # build outright ("Could not find an option named
-  # --no-enable-swift-package-manager"). With this line in place that
-  # field must contain ONLY the plain build args.
-  disable-swift-package-manager: true
+  # ── SWIFT PACKAGE MANAGER: OFF ──────────────────────────────────────
+  #
+  # WHY IT MUST BE OFF. This is a CocoaPods project — Runner.xcodeproj
+  # contains zero SPM references and every dependency is a pod. SPM only
+  # appears because Flutter injects it when the build machine has the
+  # feature on, and it then drags in the whole firebase-ios-sdk package
+  # graph, including a gRPC BINARY artifact CocoaPods never needed (gRPC
+  # belongs to Firestore; this app only uses Analytics). That artifact
+  # failing to unpack is what killed b172.
+  #
+  # WHY IT LIVES HERE. Machine-level `flutter config` writes to
+  # ~/.config/flutter/settings, so it has to be remembered for every
+  # runner and every fresh CI image and is silently absent the one time
+  # somebody forgets. This key travels with the code.
+  #
+  # DO NOT PUT IT IN CODEMAGIC'S BUILD-ARGUMENTS FIELD. That field is
+  # concatenated onto `flutter build ipa ...`, so a `flutter config`
+  # command pasted there becomes an unknown flag and fails the build
+  # outright ("Could not find an option named
+  # --no-enable-swift-package-manager"). With this key set, that field
+  # must contain ONLY the plain build args.
+  #
+  # NOTE THE SHAPE — this is what b179 fixes. b177 set it as a
+  # top-level `disable-swift-package-manager: true`, which is the OLD
+  # spelling. Current Flutter does not ignore it: `pub get` refuses to
+  # run at all with "the configuration has moved", so the build died
+  # before a single line was compiled. It is a nested `config:` block
+  # now.
+  config:
+    enable-swift-package-manager: false
+
   uses-material-design: true
   assets:
     - assets/icons/appstore.png

@@ -15,6 +15,7 @@ import '../../services/backend/battle_service.dart';
 import '../../services/backend/chat_score_service.dart';
 import '../../services/boon_service.dart';
 import '../../services/local_store_service.dart';
+import '../../services/language_service.dart';
 import '../../services/mirror_service.dart';
 import '../../services/paywall_gate.dart';
 import '../../services/achievements.dart';
@@ -420,7 +421,16 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   /// reveal could never fire. _finishTask now awaits it BEFORE popping;
   /// dispose() still calls it as the backstop for men who leave early,
   /// and the _submitted guard means it can only ever run once.
-  Future<void> _submitForScoring() async {
+  Future<void> _submitForScoring() {
+    // Parked BEFORE the async body runs, so a caller that reads it on
+    // the frame after this screen pops always finds the future — see
+    // ChatScoreService.grading.
+    final f = _submitInner();
+    ChatScoreService.grading = f;
+    return f;
+  }
+
+  Future<void> _submitInner() async {
     if (_submitted) return;
     _submitted = true;
     final mine = _msgs.where((m) => m.who == 'you').length;
@@ -485,7 +495,11 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       // still graded. The hop must never be a way round the rule.
       builder: (_) => FreeFlowScreen(
           initialVibeKey: widget.config.vibeKey,
-          coachAllowed: widget.config.coachAllowed),
+          coachAllowed: widget.config.coachAllowed,
+          // A task chat's woman was assigned, so the hop to voice must
+          // not re-run the practice day-lock over her. A practice
+          // chat's woman is already unlocked, so the flag is moot there.
+          assigned: widget.config.taskMode),
     ));
   }
 
@@ -810,6 +824,12 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
             headers: {'content-type': 'application/json'},
             body: jsonEncode({
               'characterId': widget.config.characterId,
+              // Her language. Voice has sent this since day one and the
+              // text side never did — so a Spanish user got a Spanish-
+              // speaking woman on calls and an English-only one in
+              // texts. Same field name the realtime session config
+              // uses; a server that predates it just ignores it.
+              'language': LanguageService.cachedCode,
               'focus': widget.config.focus,
               'creator': _creator,
               'history': history,

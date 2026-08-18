@@ -244,7 +244,12 @@ class _ManRow extends StatelessWidget {
             width: 62,
             child: Row(children: [
               Flexible(
-                child: Text(me ? 'YOU' : handle,
+                // His real name, not YOU — the lit row and the red ring
+                // already say which one is him, and a table where one
+                // row speaks in the second person reads like the app
+                // talking over the squad. Auto call-signs (see
+                // AuthService._ensureHandle) mean this is never ANON.
+                child: Text(handle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(

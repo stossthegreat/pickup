@@ -104,10 +104,53 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
     );
     if (!mounted) return;
 
-    // Same one-a-day guard as the voice reveal, and for the same reason:
-    // the grade is submitted without await at the end of the chat, so it
-    // can land after this read and re-fire the moment on the next visit.
-    final r = ChatScoreService.lastResult;
+    // ── WAIT FOR THE GRADE, DON'T SHRUG AT IT ────────────────────────
+    //
+    // The back-arrow exit fires the grade from dispose(), which cannot
+    // await — so this read used to race the network and lose, and a man
+    // who ran the whole challenge got NO score, no reveal, no squad
+    // mark, no XP. The chat screen now parks its submit future
+    // (ChatScoreService.grading); if the result isn't in yet, we hold a
+    // beat behind a scoring overlay instead of concluding he never
+    // played. Capped, because a dead network must not trap him here.
+    var r = ChatScoreService.lastResult;
+    if (r == null && ChatScoreService.grading != null && mounted) {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black87,
+        builder: (_) => Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const SizedBox(
+                width: 26,
+                height: 26,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2.5, color: AppColors.red)),
+            const SizedBox(height: 18),
+            Text('SCORING THE CONVERSATION',
+                style: GoogleFonts.inter(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  letterSpacing: 2.6,
+                  fontWeight: FontWeight.w900,
+                  decoration: TextDecoration.none,
+                )),
+          ]),
+        ),
+      );
+      try {
+        await ChatScoreService.grading!
+            .timeout(const Duration(seconds: 25));
+      } catch (_) {/* graded slow or not at all — fall through */}
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+      r = ChatScoreService.lastResult;
+      if (r == null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Still scoring — give it a moment and reopen.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
     final already = await ChatScoreService.revealShownToday();
     if (r != null && !already) {
       ChatScoreService.lastResult = null;

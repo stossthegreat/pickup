@@ -39,9 +39,16 @@ import '../../../theme/auralay_app_typography.dart';
 import '../../../widgets/common/ai_consent_dialog.dart';
 import '../../../widgets/common/imhim_wordmark.dart';
 import '../../../widgets/common/mirrorly_components.dart';
-// DebugEvent — the _events diagnostics ring buffer. This import was
-// dropped upstream while the _log()/_events machinery stayed, which
-// killed the iOS archive with "Type 'DebugEvent' not found".
+// DebugEvent — the _events diagnostics ring buffer.
+//
+// KEEP THIS IMPORT even though the DebugPanel widget is gone from the
+// UI. b174 removed the panel — a live OpenAI socket readout pinned over
+// a conversation with a woman is a developer's console on a customer's
+// screen — and took the import with it, but the _log()/_events
+// machinery it fed stayed behind and is still used all through this
+// file. The archive then died on "Type 'DebugEvent' not found", which
+// is the whole reason to note it here: the type is load-bearing, the
+// widget is not.
 import '../../../widgets/debug_panel.dart';
 import '../../../widgets/safe_close_button.dart';
 
@@ -1893,10 +1900,14 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       }
       // Armed DAILY → this session IS today's one shot. The service
       // parks the result; the Daily screen reveals it on return.
-      if (DailyGameService.armedDaily) {
+      final wasDaily = DailyGameService.armedDaily;
+      if (wasDaily) {
         DailyGameService.armedDaily = false;
-        // ignore: discarded_futures
-        DailyGameService.submit(academyTranscript);
+        // AWAITED for the same reason as the battle submit above: the
+        // Daily screen reads DailyGameService.lastResult the moment this
+        // screen pops, and popping (below) before the grade lands would
+        // hand it null.
+        await DailyGameService.submit(academyTranscript);
       }
       // Blend the five dimension scores into the running total so The Five
       // CLIMBS over the 60 days instead of snapping to the last session.
@@ -1904,6 +1915,21 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         await LocalStoreService.blendDimensionScores(score.dimensions!);
       }
       if (_disposed || !mounted) return;
+
+      // ── ONE CEREMONY PER PERFORMANCE ─────────────────────────────
+      //
+      // An armed session — the Daily or a duel — already has a reveal
+      // waiting on the screen that launched it: the count-up, the rank,
+      // the share card. This scorecard is the SOLO practice ending, and
+      // showing both meant a man got two dramatic score screens
+      // back-to-back for one conversation. The second one reads as a
+      // glitch, and a ceremony that repeats stops being a ceremony.
+      // So an armed session skips the local scorecard and pops straight
+      // back to the reveal that owns the moment.
+      if ((armedBattle != null || wasDaily) && !widget.tabMode) {
+        Navigator.of(context).pop();
+        return;
+      }
       setState(() {
         _result = score;
         _phase = _Phase.scored;
@@ -2009,6 +2035,24 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
   /// nothing to interact with. The picker is the existing _buildPicker
   /// rendered by setting phase = _Phase.pick.
   void _resetToPicker() {
+    // ── A PUSHED SESSION HAS NO PICKER ───────────────────────────────
+    //
+    // Every launch that arrives with an initialVibeKey — the squad
+    // Rizz-Off, the Daily, a duel, a mission, a practice card — was
+    // sent here to talk to ONE assigned woman. When that session ends
+    // early (consent declined, paywall declined, backgrounded, error),
+    // falling back to the roster picker is wrong twice over: it shows
+    // a choice he was never given, and from the squad flow it reads as
+    // a completely unrelated screen appearing out of nowhere. Those
+    // exits now go BACK to the screen that sent him.
+    if (!widget.tabMode && widget.initialVibeKey != null) {
+      _eventSub?.cancel();
+      _micSub?.cancel();
+      // ignore: discarded_futures
+      _session.close();
+      if (mounted) Navigator.of(context).maybePop();
+      return;
+    }
     _eventSub?.cancel();
     _micSub?.cancel();
     // v261 — shared mic keeps streaming for next session bind.
