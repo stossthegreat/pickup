@@ -1,7 +1,7 @@
 name: charmr
 description: "Charmr — roleplay your way to real confidence."
 publish_to: 'none'
-version: 1.0.0+175
+version: 1.0.0+176
 
 environment:
   sdk: ^3.8.0
@@ -154,6 +154,30 @@ dependency_overrides:
   record_linux: ^1.0.0
 
 flutter:
+  # ── SWIFT PACKAGE MANAGER: OFF ──────────────────────────────────────
+  #
+  # This is a CocoaPods project. Runner.xcodeproj contains zero SPM
+  # references and every dependency is a pod. SPM only ever appeared
+  # because Flutter injects it when the BUILD MACHINE has the feature
+  # switched on — and it then drags in the whole firebase-ios-sdk
+  # package graph, including a gRPC binary artifact CocoaPods never
+  # needed (gRPC belongs to Firestore; this app only uses Analytics).
+  # That artifact failing to unpack is what killed b172's build.
+  #
+  # Declared HERE rather than as a CI pre-build step on purpose. The
+  # `flutter config` command writes to ~/.config/flutter/settings, which
+  # is a property of whichever machine happens to run the build — so it
+  # has to be remembered separately for every runner, every new laptop
+  # and every fresh CI image, and is silently absent the one time
+  # somebody forgets. This key travels with the code.
+  #
+  # NOTE THE SHAPE. The old spelling was a top-level
+  # `disable-swift-package-manager: true`; current Flutter rejects it
+  # outright with "the configuration has moved" and refuses to run
+  # `pub get` at all. It is a nested `config:` block now.
+  config:
+    enable-swift-package-manager: false
+
   uses-material-design: true
   assets:
     - assets/icons/appstore.png
