@@ -280,6 +280,8 @@ class _CardState extends State<_Card> {
                 )),
             const SizedBox(height: 12),
             _row('SAY SOMETHING LIKE', t.example, widget.tone),
+            const SizedBox(height: 8),
+            _row('OR THIS', t.example2, widget.tone),
             const SizedBox(height: 10),
             _row('INSTEAD OF', t.instead, AppColors.red),
             // HIS OWN SENTENCE. The whole reason this teaches rather

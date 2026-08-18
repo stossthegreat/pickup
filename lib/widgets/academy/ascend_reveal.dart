@@ -356,6 +356,15 @@ class _AscendRevealState extends State<AscendReveal>
                                 height: 1.5,
                                 fontWeight: FontWeight.w500,
                               )),
+                          // TWO KILLER LINES. The founder's note: the
+                          // reveals "don't hit hard enough" — a name and
+                          // a why is a lecture; two lines he could say
+                          // TONIGHT is a weapon. Set as quotes, tinted,
+                          // unmissable.
+                          const SizedBox(height: 14),
+                          _exampleLine(m.tactic!.example, c),
+                          const SizedBox(height: 8),
+                          _exampleLine(m.tactic!.example2, c),
                         ],
                       ),
                     )
@@ -416,6 +425,35 @@ class _AscendRevealState extends State<AscendReveal>
           ),
         ),
       ]),
+    );
+  }
+
+  /// One killer example line — tinted bar on the left, his ammo on the
+  /// right. Two of these sit under every discovered tactic.
+  static Widget _exampleLine(String text, Color c) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border(
+            left: BorderSide(color: c.withValues(alpha: 0.8), width: 3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(text,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 12.5,
+                  height: 1.45,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w700,
+                )),
+          ),
+        ],
+      ),
     );
   }
 
