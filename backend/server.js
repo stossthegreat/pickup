@@ -15,6 +15,7 @@ import 'dotenv/config';
 import Fastify from 'fastify';
 import multipart from '@fastify/multipart';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 
 import debugRoute from './src/routes/debug.js';
 import diabloRoute from './src/routes/diablo.js';
@@ -38,9 +39,34 @@ const HOST = '0.0.0.0';
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info' },
   bodyLimit: 25 * 1024 * 1024,   // 25MB — audio uploads
+  // ── SCALE HARDENING (500k-user readiness) ────────────────────────────
+  // trustProxy — Railway terminates TLS at its load balancer, so without
+  // this every request appears to come FROM the LB's IP. Rate limiting
+  // keyed by IP would then throttle the entire userbase as one client.
+  trustProxy: true,
+  // keepAliveTimeout must exceed the upstream LB's idle timeout or the
+  // node closes sockets the LB still considers live → random 502s under
+  // sustained load. Railway's edge idle timeout is well under 75s.
+  keepAliveTimeout: 76_000,
+  // A request that hasn't completed in 2 minutes is dead weight — kill
+  // it and free the socket instead of letting hung upstream calls pile
+  // up until the process starves. Longest legitimate request (villain
+  // audio scoring) finishes far inside this.
+  requestTimeout: 120_000,
 });
 
 await app.register(cors, { origin: true });
+// Global per-IP rate limit — cost armour, not UX. Every request here
+// fans out to a paid OpenAI call, so one abusive client (or one bug in
+// a retry loop) can burn real money at line rate. 120 req/min is far
+// above any human's real usage (voice minting is ~1/session, a text
+// turn every few seconds at worst) and far below what a runaway script
+// would attempt. Health/version stay unthrottled for Railway probes.
+await app.register(rateLimit, {
+  max: 120,
+  timeWindow: '1 minute',
+  allowList: (req) => req.url === '/health' || req.url === '/version',
+});
 await app.register(multipart, {
   limits: { fileSize: 25 * 1024 * 1024 },
 });

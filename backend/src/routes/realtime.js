@@ -247,14 +247,26 @@ export default async function realtimeRoute(app) {
     });
 
     try {
-      const resp = await fetch(openAIUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+      // 15s abort — minting a client_secret is a sub-second call when
+      // OpenAI is healthy. Without this, an OpenAI stall holds our
+      // request slot for the platform default (minutes) and stalled
+      // session-mints pile up under load.
+      const ac = new AbortController();
+      const killer = setTimeout(() => ac.abort(), 15_000);
+      let resp;
+      try {
+        resp = await fetch(openAIUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: ac.signal,
+        });
+      } finally {
+        clearTimeout(killer);
+      }
 
       // Always read the body as text first so we can ship the verbatim
       // response back to the client when something fails — even if it's

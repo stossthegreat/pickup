@@ -70,7 +70,12 @@ export default async function diabloRoute(app) {
           try { context = JSON.parse(String(part.value)); } catch {}
         }
         if (part.fieldname === 'history') {
-          try { history = JSON.parse(String(part.value)); } catch {}
+          try {
+            history = JSON.parse(String(part.value));
+            // Cap: unbounded client history = unbounded prompt = cost bomb.
+            if (!Array.isArray(history)) history = [];
+            history = history.slice(-14);
+          } catch {}
         }
       }
     }
