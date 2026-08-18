@@ -754,16 +754,29 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   /// whoever has played least, which is the opposite of what a
   /// competitive ladder is supposed to reward.
   Widget _battleTable() {
+    // ── ONE UNIT ON ALL THREE BOARDS ─────────────────────────────────
+    //
+    // This ranked on wins, then WIN RATE, then points — which made the
+    // three tabs mean three different things. VOICE and CHAT both show
+    // points (the sum of your scores); BATTLES showed a percentage, so
+    // a man who fought once and won sat above a man who fought forty
+    // times and won thirty. A ladder that rewards quitting while ahead
+    // is not a ladder.
+    //
+    // Points, like the other two. Battle wins already bank a bonus into
+    // the same total (see WIN_BONUS in roll-chat.ts), so a man who
+    // fights and wins climbs faster than one who only texts — which is
+    // the thing win-rate was clumsily trying to say. Wins break ties.
+    //
+    // The rule is now one sentence and it is true on every tab: the
+    // better you talk the higher you go, and playing more catches you
+    // up.
     final fought = [
       for (final e in _chat)
         if (e.battles > 0) e
     ]..sort((a, b) {
-        final w = b.wins.compareTo(a.wins);
-        if (w != 0) return w;
-        final ra = a.battles == 0 ? 0 : (a.wins * 1000) ~/ a.battles;
-        final rb = b.battles == 0 ? 0 : (b.wins * 1000) ~/ b.battles;
-        final r = rb.compareTo(ra);
-        return r != 0 ? r : b.points.compareTo(a.points);
+        final p = b.points.compareTo(a.points);
+        return p != 0 ? p : b.wins.compareTo(a.wins);
       });
 
     if (fought.isEmpty) {
@@ -1154,7 +1167,12 @@ class _DuelRow extends StatelessWidget {
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                   )),
-              Text('$rate% · ${Economy.commas(e.points)} PTS',
+              // The record and the rate move DOWN here, as credibility
+              // under the number rather than as the number. 400 points
+              // off forty battles reads differently to 400 off four,
+              // and that context belongs beside the total, not instead
+              // of it.
+              Text('${e.wins}–$lost  ·  $rate%',
                   style: GoogleFonts.inter(
                     color: AppColors.textTertiary,
                     fontSize: 9.5,
@@ -1164,8 +1182,11 @@ class _DuelRow extends StatelessWidget {
             ],
           ),
         ),
-        // The record, read the way every fighter reads one.
-        Text('${e.wins}–$lost',
+        // THE SAME NUMBER THE OTHER TWO BOARDS SHOW. Voice shows
+        // points, chat shows points, and this showed a W–L record — so
+        // the one column your eye goes to meant something different on
+        // every tab. It is the ranked number everywhere now.
+        Text(Economy.commas(e.points),
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 16,
