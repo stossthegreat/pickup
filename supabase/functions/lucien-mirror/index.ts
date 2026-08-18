@@ -74,6 +74,16 @@ RETURN ONLY JSON:
   "lines": ["a line he could have sent instead, in HIS register, referencing what SHE actually said", "a second, different in flavour from the first — if the first is warm make this one sharp"]
 }
 
+RULES FOR THE TWO LINES, and these are the whole job:
+· They must only work in THIS conversation. If a line would fit any
+  woman on any night, it is filler — delete it and write a real one.
+· Use her actual words. Reference the thing she just said, by name.
+· Never write a line that announces its own cleverness. No "banned from
+  one country" bar-story filler, no rehearsed-sounding set pieces.
+· Match his level. Read how he types — short, long, dry, keen — and
+  write something he could plausibly have sent.
+· No emoji unless he uses them. No exclamation marks unless he does.
+
 RETURN {"skip": true} AND NOTHING ELSE IF the line was genuinely good,
 or it is small talk too neutral to be worth a lecture. Silence is
 correct far more often than a mark. You are not obliged to find fault.
@@ -125,8 +135,16 @@ Deno.serve(async (req) => {
       authorization: `Bearer ${key}`,
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
-      temperature: 0.9,
+      // NOT gpt-4o-mini. Every grader in this app uses mini because
+      // scoring is a classification job and mini is fine at it. This is
+      // the opposite: it has to write two lines with actual wit, in a
+      // specific man's register, about a specific woman's last message.
+      // Mini writes competent, generic seduction — which is the same
+      // failure as a lookup table, just more expensive. This call fires
+      // rarely (cooldown, skip-when-good, silent-on-openers), so it is
+      // the one place in the product to spend on quality.
+      model: "gpt-4o",
+      temperature: 0.95,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: LUCIEN },
