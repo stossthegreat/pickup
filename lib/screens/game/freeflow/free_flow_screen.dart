@@ -39,6 +39,17 @@ import '../../../theme/auralay_app_typography.dart';
 import '../../../widgets/common/ai_consent_dialog.dart';
 import '../../../widgets/common/imhim_wordmark.dart';
 import '../../../widgets/common/mirrorly_components.dart';
+// DebugEvent — the _events diagnostics ring buffer.
+//
+// KEEP THIS IMPORT even though the DebugPanel widget is gone from the
+// UI. b174 removed the panel — a live OpenAI socket readout pinned over
+// a conversation with a woman is a developer's console on a customer's
+// screen — and took the import with it, but the _log()/_events
+// machinery it fed stayed behind and is still used all through this
+// file. The archive then died on "Type 'DebugEvent' not found", which
+// is the whole reason to note it here: the type is load-bearing, the
+// widget is not.
+import '../../../widgets/debug_panel.dart';
 import '../../../widgets/safe_close_button.dart';
 
 /// FREE FLOW — live, streaming voice roleplay (OpenAI Realtime API).
