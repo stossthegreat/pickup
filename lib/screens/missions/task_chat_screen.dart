@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/api_config.dart';
+import '../../services/backend/chat_score_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/ai_consent_dialog.dart';
 
@@ -95,11 +96,40 @@ class _TaskChatScreenState extends State<TaskChatScreen> {
     _msgs = [_Msg('assistant', widget.config.opening)];
   }
 
+  bool _submitted = false;
+
   @override
   void dispose() {
+    _submitForScoring();
     _ctrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  /// "They get scored for their tasks." A coached mission chat is a
+  /// graded text conversation like any other, so it feeds RIZZ POINTS
+  /// alongside battles and roleplay rather than paying a flat XP number
+  /// that says nothing about how well it went.
+  ///
+  /// Fires on the way out, once, and only with enough of the user's own
+  /// writing to judge — grading a single "hey" would put a number on the
+  /// board that means nothing.
+  void _submitForScoring() {
+    if (_submitted) return;
+    _submitted = true;
+    final mine = _msgs.where((m) => m.role == 'user').length;
+    if (mine < 3) return;
+    final transcript = [
+      for (final m in _msgs)
+        if (m.text.trim().isNotEmpty)
+          '${m.role == 'user' ? 'YOU' : 'COACH'}: ${m.text}',
+    ].join('\n');
+    // ignore: discarded_futures
+    ChatScoreService.score(
+      transcript: transcript,
+      surface: 'mission',
+      scenario: widget.config.taskTitle,
+    );
   }
 
   void _scrollToBottom() {
@@ -562,7 +592,6 @@ class _SendThisCard extends StatelessWidget {
                       fontSize: 14,
                       height: 1.35,
                       fontWeight: FontWeight.w600,
-                      fontStyle: FontStyle.italic,
                     )),
               ),
               const SizedBox(width: 6),

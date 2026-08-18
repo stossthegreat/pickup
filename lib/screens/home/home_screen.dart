@@ -21,6 +21,7 @@ import '../../theme/app_typography.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/mirrorly_components.dart';
 import '../../widgets/report/aspect_protocol_cards.dart';
+import '../academy/battles_screen.dart';
 import '../missions/missions_tab_screen.dart';
 import '../practice/practice_tab_screen.dart';
 import 'ascend_screen.dart';
@@ -121,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // keep working. Legacy deep links with index > 3 fall back to
     // LOOKS so older shortcuts don't crash.
     final t = widget.initialTab ?? 0;
-    _tab = (t >= 0 && t < 3) ? t : 0;
+    _tab = (t >= 0 && t < 4) ? t : 0;
     _reload();
     // No entry wall — users browse the app freely; the paywall fires on
     // actions (see PaywallGate calls in Practice / Missions / Free Flow).
@@ -278,9 +279,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 PracticeTabScreen(                          // 1 · PRACTICE
                   key: ValueKey('practice-$_practiceEpoch'),
+                  onGoToTab: _switchTab,
                 ),
-                // Progress (Ascend) — the daily flame + missions + rank
-                // surface. Now index 2 after the Texts tab was pulled.
+                // 2 · BATTLES. Promoted out of a card and into the bar:
+                // it's one of the two permanent competitive systems and
+                // it was two taps deep behind a strip on Home.
+                // `active` is load control, not cosmetics. An
+                // IndexedStack builds every child and keeps it alive —
+                // it just doesn't paint the ones you aren't looking at
+                // — so this screen's 20-second poll was firing for
+                // every user with the app open regardless of which tab
+                // they were on. See the note on the timer.
+                BattlesScreen(onGoToTab: _switchTab, active: _tab == 2),
+                // 3 · PROGRESS (Ascend). Still in the stack — it keeps
+                // its long parameter list from this screen's state, so
+                // making it a pushed route would mean re-plumbing all of
+                // it — but it is NO LONGER IN THE BOTTOM BAR. The flame
+                // icon on every tab switches to it.
                 AscendScreen(
                   onJumpToTab:          _switchTab,
                   onRefresh:            _reload,
@@ -387,7 +402,6 @@ class _ScanHubTab extends StatelessWidget {
                 style: GoogleFonts.inter(
                   color: AppColors.textSecondary,
                   fontSize: 15, height: 1.35,
-                  fontStyle: FontStyle.italic,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -650,11 +664,10 @@ class _HopeCard extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.inter(
               color: AppColors.red,
               fontSize: 14, height: 1.15,
               letterSpacing: -0.2,
-              fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w800,
             )),
         ],
@@ -736,11 +749,10 @@ class _HopeCard extends StatelessWidget {
         Transform.translate(
           offset: Offset(0, isNow ? -4 : 0),
           child: Text(shown,
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.inter(
               color: mainColor,
               fontSize: 48, height: 0.95,
               letterSpacing: -2.0,
-              fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w900,
               shadows: isNow || locked
                   ? null
@@ -947,11 +959,10 @@ class _MirrorHeroCard extends StatelessWidget {
                             )),
                           const SizedBox(height: 8),
                           Text('See what could\nchange.',
-                            style: GoogleFonts.playfairDisplay(
+                            style: GoogleFonts.inter(
                               color: AppColors.textPrimary,
                               fontSize: 20, height: 1.1,
                               letterSpacing: -0.4,
-                              fontStyle: FontStyle.italic,
                               fontWeight: FontWeight.w800,
                             )),
                           const SizedBox(height: 6),
@@ -1402,9 +1413,12 @@ class _NavBar extends StatelessWidget {
     // pre-existing index map (Looks=0, Game=1, Rizz=2) stays
     // valid for every legacy caller of initialTab + onJumpToTab.
     final items = const <({String label, IconData icon})>[
+      // THREE THINGS YOU DO. Progress was a third of the navigation for
+      // a screen you look at once a week; battles is a live competitive
+      // system that was two taps deep. They swapped.
       (label: 'Missions', icon: Icons.bolt_rounded),
       (label: 'Practice', icon: Icons.graphic_eq_rounded),
-      (label: 'Progress', icon: Icons.local_fire_department_rounded),
+      (label: 'Battles', icon: Icons.sports_mma_rounded),
     ];
     // Modern floating segmented pill (the reference bro sent). A dark
     // rounded bar that sits OFF the screen edges, with the ACTIVE tab
@@ -1415,9 +1429,13 @@ class _NavBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        // NARROWER, like the reference. It was 16pt off each edge, which
+        // on a modern handset is almost edge-to-edge and reads as chrome
+        // rather than a control. A floating pill has to look like it's
+        // sitting ON the screen, not framing it.
+        padding: const EdgeInsets.fromLTRB(52, 0, 52, 10),
         child: Container(
-          padding: const EdgeInsets.all(5),
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: AppColors.surface1,
             borderRadius: BorderRadius.circular(28),
@@ -1437,8 +1455,11 @@ class _NavBar extends StatelessWidget {
                     label: items[i].label,
                     icon: items[i].icon,
                     active: i == index,
-                    showPendingDot:
-                        i == 2 && ascendPending && i != index,
+                    // The pending dot used to ride the Progress tab.
+                    // Progress isn't in the bar any more, so it has
+                    // nothing to sit on here — the flame icon in each
+                    // tab's header is where that signal belongs now.
+                    showPendingDot: false,
                     onTap: () => onTap(i),
                   ),
                 ),

@@ -6,6 +6,7 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 
 import '../config/purchase_config.dart';
 import 'analytics_service.dart';
+import 'extra_service.dart';
 import 'local_store_service.dart' show LocalStoreService, ProTier;
 
 /// Single front-door for all billing operations.
@@ -50,6 +51,18 @@ class PurchaseService {
     lines.add('Platform: ${Platform.isIOS ? "iOS" : "Android"}');
     lines.add('Configured: ${PurchaseConfig.isConfigured}');
     lines.add('Initialised: $_initialized');
+    // WHICH KEY IS IN THIS BINARY. The Android sub was dead for a full
+    // release because the goog_ key still pointed at the previous
+    // RevenueCat project while iOS had already moved — and nothing
+    // on-device said so. Fingerprint (never the whole key) so a
+    // wrong-project build is identifiable from a screenshot.
+    final key = Platform.isIOS
+        ? PurchaseConfig.iosApiKey
+        : PurchaseConfig.androidApiKey;
+    lines.add('SDK key: ${key.length < 12
+        ? (key.isEmpty ? "(empty)" : "(malformed, len ${key.length})")
+        : "${key.substring(0, 5)}…${key.substring(key.length - 6)} "
+            "(len ${key.length})"}');
     if (!_initialized) {
       lines.add('→ Init never ran. Check API key in purchase_config.dart.');
       return lines.join('\n');
@@ -189,6 +202,8 @@ class PurchaseService {
 
       Package? weekly;
       Package? rescue;
+      Package? extra10;
+      Package? extra20;
 
       // v285 — WEEKLY ONLY. The app sells exactly ONE subscription:
       // mirrorly_pro_weekly. The legacy monthly/yearly SKUs still
@@ -224,6 +239,21 @@ class PurchaseService {
             || prodId.contains('7day')
             || prodId.contains('7d'));
 
+        // EXTRA packs — matched on the EXACT product identifier, never
+        // a substring. `contains` matching is fine for choosing which
+        // label to draw; it is not fine for choosing what to charge
+        // someone for.
+        final rawProd = pkg.storeProduct.identifier;
+        if (PurchaseConfig.isExtra(rawProd)) {
+          final mins = PurchaseConfig.minutesFor(rawProd);
+          if (mins <= 10 && extra10 == null) {
+            extra10 = pkg;
+          } else if (mins > 10 && extra20 == null) {
+            extra20 = pkg;
+          }
+          continue;
+        }
+
         if (isRescue && rescue == null) {
           rescue = pkg;
         } else if (isWeekly && weekly == null) {
@@ -237,6 +267,8 @@ class PurchaseService {
         weekly: weekly,
         annual: null, // voided — never populated, never purchasable
         rescue: rescue,
+        extra10: extra10,
+        extra20: extra20,
       );
       return _cached!;
     } catch (err) {
@@ -293,6 +325,43 @@ class PurchaseService {
       // completed transaction; the ongoing isProLive()/cache reconcile
       // the true entitlement state on every subsequent read.
       final result = await Purchases.purchasePackage(pkg);
+
+      // ── EXTRA: GRANT THE MINUTES HERE AND NOWHERE ELSE ──────────────
+      //
+      // This is the line the old rescue path was missing. It correctly
+      // identified a consumable, correctly declined to flip the
+      // subscription flag — and then credited nothing, so a man could
+      // pay and receive literally nothing. Putting the grant inside the
+      // transaction handler means no call site can forget it and no
+      // future screen can get the minute count wrong: the amount comes
+      // from PurchaseConfig.extraMinutes, which is the single source of
+      // truth.
+      //
+      // Keyed by the store transaction id so a retry, a resumed app or
+      // a replayed CustomerInfo can never credit the same payment
+      // twice. Free minutes are real OpenAI spend.
+      //
+      // Note it grants BEFORE any entitlement read below: a consumable
+      // grants no entitlement at all, and consumables cannot be
+      // restored under Play Billing 8, so this local write is the only
+      // record that will ever exist. It has to happen first.
+      final extraMinutes =
+          PurchaseConfig.minutesFor(pkg.storeProduct.identifier);
+      if (extraMinutes > 0) {
+        // VERIFY-ON-FIRST-BUILD: `storeTransaction.transactionIdentifier`
+        // is the only symbol in this change that couldn't be checked
+        // against the SDK offline. If it's named differently in
+        // purchases_flutter 10.8, this is a COMPILE error — loud, cheap,
+        // and one line to fix. It can never fail silently, and
+        // ExtraService.grant() still credits correctly with a null id.
+        await ExtraService.grant(
+          minutes: extraMinutes,
+          txnId: result.storeTransaction.transactionIdentifier,
+        );
+        AnalyticsService.purchaseCompleted(pkg.identifier);
+        return PurchaseOutcome.success;
+      }
+
       // The rescue product is a one-time consumable, not a subscription —
       // don't flip the "subscribed" flag for it (it grants credits only).
       final isRescue =
@@ -302,9 +371,20 @@ class PurchaseService {
           || pkg.storeProduct.identifier.toLowerCase().contains('rescue');
       if (!isRescue) {
         await LocalStoreService.setSubscribed(true);
+        // Start the lag grace. RevenueCat can take a beat to publish the
+        // entitlement after a completed transaction (routine in sandbox,
+        // seen in prod), and the resume refresh below must not read that
+        // gap as "cancelled" and re-lock a man who just paid.
+        _paidAt = DateTime.now();
       }
       // Keep the entitlement read purely for telemetry — never to gate.
-      final entActive = result.entitlements.all[PurchaseConfig.proEntitlementId]
+      //
+      // purchases_flutter 9.0.0 changed purchasePackage's return type from
+      // CustomerInfo to PurchaseResult, which wraps the CustomerInfo
+      // alongside the StoreTransaction. This is the ONLY call site in the
+      // app the Billing 8 upgrade actually breaks.
+      final entActive = result
+          .customerInfo.entitlements.all[PurchaseConfig.proEntitlementId]
           ?.isActive ?? false;
       AnalyticsService.purchaseCompleted(pkg.identifier);
       if (!entActive && !isRescue) {
@@ -337,7 +417,15 @@ class PurchaseService {
         AnalyticsService.purchaseCompleted(pkg.identifier);
         return PurchaseOutcome.success;
       }
-      lastErrorMessage = _humanise(code, err.message);
+      // KEEP THE STORE'S OWN WORDS. _humanise() returns one fixed
+      // sentence per error code, which threw away the single most
+      // useful string in the whole failure: Play's DebugMessage. On
+      // Android a DEVELOPER_ERROR can mean "Please ensure the app is
+      // signed correctly", "Expired Product details", or a handful of
+      // other things — same code, completely different fixes. Without
+      // the raw text you cannot tell them apart, which is exactly the
+      // hole we spent a release falling into.
+      lastErrorMessage = _withRaw(_humanise(code, err.message), code, err);
       AnalyticsService.purchaseFailed(pkg.identifier, code?.name ?? 'unknown');
       return PurchaseOutcome.error;
     } catch (err) {
@@ -395,6 +483,39 @@ class PurchaseService {
   //  INTERNAL
   // ─────────────────────────────────────────────────────────────────────────
 
+  /// When the last completed transaction landed. Guards the window in
+  /// which RevenueCat may not yet be reporting the entitlement.
+  static DateTime? _paidAt;
+
+  /// Throttle for [refreshOnResume] — a man tabbing in and out shouldn't
+  /// fire a store round-trip every time.
+  static DateTime? _lastResumeRefresh;
+
+  /// How long after a completed purchase we refuse to write `false`.
+  static const _lagGrace = Duration(minutes: 10);
+
+  /// Re-check entitlements when the app comes back to the foreground.
+  ///
+  /// THE LEAK THIS CLOSES: [PaywallGate.isPro] is cache-first, and the
+  /// cache was only ever repainted `false` by [_refreshEntitlementCache],
+  /// which only runs inside [init] — i.e. on a COLD launch. iOS keeps apps
+  /// resident for days, so a man who cancelled (or whose card failed) kept
+  /// the full paid app until he happened to fully restart it. That is the
+  /// one real way this app could hand out more than the week Apple sold.
+  ///
+  /// Throttled to 15 minutes and identical on both platforms — Play and
+  /// StoreKit lapse the same way and neither told us about it.
+  static Future<void> refreshOnResume() async {
+    if (!_initialized) return;
+    final now = DateTime.now();
+    if (_lastResumeRefresh != null &&
+        now.difference(_lastResumeRefresh!) < const Duration(minutes: 15)) {
+      return;
+    }
+    _lastResumeRefresh = now;
+    await _refreshEntitlementCache();
+  }
+
   static Future<void> _refreshEntitlementCache() async {
     try {
       final info = await Purchases.getCustomerInfo();
@@ -404,6 +525,14 @@ class PurchaseService {
       final isPro = entActive ||
           info.entitlements.active.isNotEmpty ||
           info.activeSubscriptions.isNotEmpty;
+      // Unlocking is always safe. Re-LOCKING inside the post-purchase lag
+      // window is not — that's the "I just paid and it locked me out" bug,
+      // and running this on every resume would have made it far easier to
+      // hit than it was on cold launch alone.
+      if (!isPro && _paidAt != null &&
+          DateTime.now().difference(_paidAt!) < _lagGrace) {
+        return;
+      }
       await LocalStoreService.setSubscribed(isPro);
     } catch (_) {
       // Network fail on launch is not fatal — the cached flag stands.
@@ -495,6 +624,27 @@ class PurchaseService {
     }
   }
 
+  /// Append the store's verbatim reason under the friendly sentence.
+  ///
+  /// The friendly line is what a real user should read; everything after
+  /// the rule is for us. `err.message` is RevenueCat's message and
+  /// `err.details` carries the underlying store payload — on Android
+  /// that's where Play's own DebugMessage ends up, and it names the
+  /// actual cause instead of leaving us to guess between several very
+  /// different fixes that share one error code.
+  static String _withRaw(
+      String friendly, PurchasesErrorCode? code, PlatformException err) {
+    final bits = <String>[
+      if (code != null) 'code: ${code.name}',
+      if (err.code.isNotEmpty) 'platform: ${err.code}',
+      if (err.message != null && err.message!.isNotEmpty)
+        'message: ${err.message}',
+      if (err.details != null) 'details: ${err.details}',
+    ];
+    if (bits.isEmpty) return friendly;
+    return '$friendly\n\n── store said ──\n${bits.join('\n')}';
+  }
+
   /// Map a RevenueCat error code + raw message into something a user
   /// (and a reviewer, and us) can read. Store names are
   /// platform-gated — Apple rejects copy that names "Google Play"
@@ -520,6 +670,17 @@ class PurchaseService {
         return 'The store rejected the purchase as invalid.';
       case PurchasesErrorCode.networkError:
         return 'Network error. Check your connection and try again.';
+      // CODE 17 — the App Store Connect In-App Purchase Key (.p8) has
+      // never been uploaded to RevenueCat, so Apple refuses the purchase
+      // at the server-validation step. Nothing about it is the user's
+      // fault or the user's problem, so he gets a plain apology and we
+      // keep the full diagnostic behind the developer sheet.
+      case PurchasesErrorCode.invalidAppleSubscriptionKeyError:
+        return 'Subscriptions aren\'t available right now — this one\'s on '
+            'us, not you. Nothing was charged. Try again shortly.';
+      case PurchasesErrorCode.invalidCredentialsError:
+        return 'The store rejected our credentials. Nothing was charged — '
+            'we\'re on it.';
       case PurchasesErrorCode.configurationError:
         return 'Billing not configured on this build — $sideloadFix';
       case PurchasesErrorCode.unsupportedError:
@@ -549,13 +710,25 @@ class PurchaseOfferings {
   final Package? annual;
   final Package? rescue;
 
+  /// EXTRA voice-minute packs. Null when the store hasn't published
+  /// them yet — on iOS that's the normal state until the consumables
+  /// are created in App Store Connect, and the sheet must say so
+  /// rather than render a button that can't transact.
+  final Package? extra10;
+  final Package? extra20;
+
   const PurchaseOfferings({
     required this.weekly,
     required this.annual,
     required this.rescue,
+    this.extra10,
+    this.extra20,
   });
 
   factory PurchaseOfferings.empty() => const PurchaseOfferings(
     weekly: null, annual: null, rescue: null,
   );
+
+  /// True when at least one pack can actually be bought right now.
+  bool get hasExtra => extra10 != null || extra20 != null;
 }

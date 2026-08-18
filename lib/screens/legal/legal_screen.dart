@@ -105,7 +105,7 @@ class LegalScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(doc.title,
-                  style: GoogleFonts.playfairDisplay(
+                  style: GoogleFonts.inter(
                     color: AppColors.textPrimary,
                     fontSize: 24, height: 1,
                     letterSpacing: -0.5,

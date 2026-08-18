@@ -364,19 +364,17 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
             ),
           ] else ...[
             Text('Drop her chat.',
-              style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.inter(
                 color: Colors.white,
                 fontSize: 36, height: 1.05,
                 letterSpacing: -0.7,
-                fontStyle: FontStyle.italic,
                 fontWeight: FontWeight.w800,
               )),
             Text('Get 3 hits.',
-              style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.inter(
                 color: AppColors.red,
                 fontSize: 36, height: 1.05,
                 letterSpacing: -0.7,
-                fontStyle: FontStyle.italic,
                 fontWeight: FontWeight.w800,
               )),
           ],
@@ -406,7 +404,6 @@ class _RizzReplyScreenState extends State<RizzReplyScreen> {
                       style: GoogleFonts.inter(
                         color: AppColors.textSecondary,
                         fontSize: 13, letterSpacing: 0.4,
-                        fontStyle: FontStyle.italic,
                         fontWeight: FontWeight.w600,
                       )),
                   ),
@@ -793,7 +790,6 @@ class _TypedHerCard extends StatelessWidget {
             style: GoogleFonts.inter(
               color: AppColors.textPrimary,
               fontSize: 15, height: 1.4,
-              fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w500,
             )),
         ],
@@ -923,10 +919,9 @@ class _GeneratingPanelState extends State<_GeneratingPanel>
                 const SizedBox(height: 6),
                 RichText(
                   text: TextSpan(
-                    style: GoogleFonts.playfairDisplay(
+                    style: GoogleFonts.inter(
                       fontSize: 42, height: 1,
                       letterSpacing: -1.6,
-                      fontStyle: FontStyle.italic,
                       fontWeight: FontWeight.w800,
                     ),
                     children: [
@@ -1082,7 +1077,6 @@ class _TextInput extends StatelessWidget {
           color: AppColors.textPrimary,
           fontSize: 16, height: 1.45,
           fontWeight: FontWeight.w500,
-          fontStyle: FontStyle.italic,
         ),
         decoration: InputDecoration(
           hintText: 'What did she say?',
@@ -1090,7 +1084,6 @@ class _TextInput extends StatelessWidget {
             color: AppColors.textTertiary,
             fontSize: 16, height: 1.45,
             fontWeight: FontWeight.w400,
-            fontStyle: FontStyle.italic,
           ),
           counterText: '',
           border:           InputBorder.none,

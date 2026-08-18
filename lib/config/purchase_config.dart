@@ -42,7 +42,22 @@ class PurchaseConfig {
   static const iosApiKey     = 'appl_qLSVUdcrgjVeLZqNkuoOgaBCtOv';
 
   /// RevenueCat public SDK key for Android. Starts with `goog_`.
-  static const androidApiKey = 'goog_cdoFAjjiwMkzsxNjPBwoKalEwkF';
+  ///
+  /// THE ANDROID BILLING BUG (fixed here): when the app moved to the new
+  /// RevenueCat project, only the iOS `appl_` key was swapped. This one
+  /// still pointed at the OLD project — so on Android the SDK configured
+  /// fine, `getOfferings()` succeeded, and came back with the old
+  /// project's offerings, which contain no `imhim_pro_weekly` and no
+  /// products registered against the `com.imhim.app` package. Zero
+  /// packages survived, `_offerings.weekly` stayed null, and the paywall
+  /// bailed at its `pkg == null` branch with "Subscription isn't
+  /// available right now" WITHOUT ever calling purchasePackage(). iOS
+  /// worked the whole time because its key was already correct.
+  ///
+  /// Both keys must come from the SAME RevenueCat project — the one that
+  /// owns `imhim_pro_weekly`. These are publishable SDK keys (safe to
+  /// ship); the secret key never belongs in the app.
+  static const androidApiKey = 'goog_pvyTRZSUsrXkGWCDBCtnUXEBDkk';
 
   /// The entitlement identifier that grants Mirrorly Pro. Configured
   /// in RevenueCat dashboard → Entitlements. Both weekly and annual
@@ -64,7 +79,40 @@ class PurchaseConfig {
     weekly:  'imhim_pro_weekly',   // ImHim weekly sub (primary)
     yearly:  'mirrorly_pro_yearly',
     rescue:  'mirrorly_pro_rescue',
+    extra10: 'imhim_extra_10',     // 10 voice minutes, consumable
+    extra20: 'imhim_extra_20',     // 20 voice minutes, consumable
   );
+
+  // ── EXTRA — voice-minute packs ──────────────────────────────────────
+  //
+  // MATCHED BY EXACT PRODUCT ID, NEVER BY SUBSTRING. The weekly matcher
+  // above uses lenient `contains` checks because it has to survive an
+  // offering where the package slot was named inconsistently, and it
+  // needs three separate dead-SKU guards to stop it selling the wrong
+  // thing. That's a pattern to contain, not to copy: a fuzzy match on a
+  // paid product is a bug that charges people. These are exact.
+  //
+  // The map IS the source of truth for how many minutes a purchase
+  // grants, so no call site can decide that for itself and get it
+  // wrong. PurchaseService reads it directly and grants inside the
+  // transaction handler.
+  //
+  // `mirrorly_pro_rescue` is the legacy Android-only consumable — it's
+  // already approved on Play, so it stays recognised and maps to 20
+  // minutes. iOS has no approved consumable yet; until the two new ones
+  // are created in App Store Connect the packs simply don't appear and
+  // the sheet says so rather than showing a dead button.
+  static const extraMinutes = <String, int>{
+    'imhim_extra_10': 10,
+    'imhim_extra_20': 20,
+    'mirrorly_pro_rescue': 20,
+  };
+
+  /// Minutes a product grants, or 0 if it isn't an EXTRA pack.
+  static int minutesFor(String productId) =>
+      extraMinutes[productId.toLowerCase()] ?? 0;
+
+  static bool isExtra(String productId) => minutesFor(productId) > 0;
 
   /// RevenueCat package identifiers inside the current Offering.
   /// RevenueCat has built-in slot names (\$rc_weekly, \$rc_annual)
@@ -76,6 +124,8 @@ class PurchaseConfig {
     weeklyPackage:  '\$rc_weekly',
     annualPackage:  '\$rc_annual',
     rescuePackage:  'rescue',
+    extra10Package: 'extra10',
+    extra20Package: 'extra20',
   );
 
   /// Convenience — true only when RevenueCat is [enabled] AND keys are

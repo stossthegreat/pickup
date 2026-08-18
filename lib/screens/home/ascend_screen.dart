@@ -17,6 +17,8 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/ascend/ascension_map.dart';
 import '../../widgets/charmr/metrics_panel.dart';
+import '../../services/achievements.dart';
+import '../../widgets/academy/trophy.dart';
 import '../../widgets/common/streak_badge.dart';
 
 /// v281 — ASCENSION home tab.
@@ -73,9 +75,10 @@ class AscendScreen extends StatefulWidget {
   /// Longest daily streak the user has ever reached (StreakService).
   final int longestStreak;
 
-  /// Earned ascension day (total days shown up, 1..60) from
-  /// StreakService.progress via home_screen. Drives the DAY N/60 flame
-  /// ring, the rank ladder, and the final-form unlock.
+  /// Ascension day (0..60) from StreakService.progress via home_screen.
+  /// It is the SAME number as [dayStreak] — the ladder and the flame move
+  /// together, and a day with nothing done sends both to 0. Drives the
+  /// DAY N/60 ring, the rank ladder, and the final-form unlock.
   final int ascensionDay;
 
   /// Rolling 7-day mission-completion consistency (0..100) from
@@ -239,6 +242,9 @@ class _AscendScreenState extends State<AscendScreen> {
                     StreakBadge(days: widget.dayStreak),
                     const SizedBox(width: 8),
                   ],
+                  _MastheadBoardCog(
+                    onTap: () => context.push('/leaderboard')),
+                  const SizedBox(width: 6),
                   _MastheadSettingsCog(
                     onTap: () => context.push('/settings')),
                 ],
@@ -255,7 +261,7 @@ class _AscendScreenState extends State<AscendScreen> {
                   const SizedBox(height: 4),
                   Text('Every real rep moves you closer to becoming him.',
                       style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.red, fontStyle: FontStyle.italic)),
+                          color: AppColors.red)),
                 ],
               ),
             ),
@@ -345,6 +351,18 @@ class _AscendScreenState extends State<AscendScreen> {
               current: widget.dayStreak,
               longest: longestStreak,
             ).animate().fadeIn(delay: 520.ms, duration: 400.ms),
+
+            const SizedBox(height: Sp.lg),
+
+            // ── 6 — THE CABINET. Moved here off Home.
+            //
+            // The next-badge strip lived under the squad card on the
+            // Missions tab, which is the tab you open to WORK. A badge
+            // shelf is something you go and look at, and this is the
+            // screen for looking — it already holds the map, the streak
+            // and the record. Home gets its space back for the five.
+            const _BadgesPanel()
+              .animate().fadeIn(delay: 580.ms, duration: 400.ms),
 
             const SizedBox(height: Sp.lg),
 
@@ -617,12 +635,11 @@ class _FlameHeroState extends State<_FlameHero>
                                 )),
                               const SizedBox(height: 6),
                               Text('${widget.day}',
-                                style: GoogleFonts.playfairDisplay(
+                                style: GoogleFonts.inter(
                                   color: Colors.white,
                                   fontSize: 96, height: 1,
                                   letterSpacing: -3,
                                   fontWeight: FontWeight.w900,
-                                  fontStyle: FontStyle.italic,
                                 )),
                               const SizedBox(height: 2),
                               Text('/ ${widget.total}',
@@ -668,11 +685,10 @@ class _FlameHeroState extends State<_FlameHero>
           child: Text(
             widget.rank.tagline,
             textAlign: TextAlign.center,
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.inter(
               color: AppColors.textPrimary,
               fontSize: 18, height: 1.35,
               letterSpacing: -0.4,
-              fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -777,12 +793,11 @@ class _ImHimScoreHero extends StatelessWidget {
               )),
             const SizedBox(height: 6),
             Text('$score',
-              style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.inter(
                 color: Colors.white,
                 fontSize: 72, height: 1,
                 letterSpacing: -2.4,
                 fontWeight: FontWeight.w900,
-                fontStyle: FontStyle.italic,
               )),
             const SizedBox(height: 6),
             Text(deltaText,
@@ -900,11 +915,10 @@ class _TodayMessageCard extends StatelessWidget {
             const _SectionHead(index: '01', label: 'TODAY'),
             const SizedBox(height: 10),
             Text(line,
-              style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.inter(
                 color: AppColors.textPrimary,
                 fontSize: 18, height: 1.35,
                 letterSpacing: -0.4,
-                fontStyle: FontStyle.italic,
                 fontWeight: FontWeight.w600,
               )),
           ],
@@ -1141,7 +1155,7 @@ class _RankRow extends StatelessWidget {
               fontSize: 16, height: 1.2,
               letterSpacing: 1.4,
               fontWeight: isCurrent ? FontWeight.w900 : FontWeight.w700,
-              fontStyle: isCurrent ? FontStyle.italic : FontStyle.normal,
+              fontStyle: FontStyle.normal,
             )),
         ),
         if (isCurrent)
@@ -1167,6 +1181,175 @@ class _RankRow extends StatelessWidget {
 //  SECTION 5 — ASCENSION RECORD (timeline)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// ── THE CABINET, ON THE SCREEN FOR LOOKING ──────────────────────────
+///
+/// This panel used to be a bare strip under the squad card on the
+/// Missions tab. Wrong room: Missions is the tab you open to WORK, and
+/// a badge shelf is something you go and admire. Progress already holds
+/// the map, the streak and the record — the badges belong in that set.
+///
+/// It shows two different things on purpose:
+///
+///   THE COUNT — how many of the thirty are his. That's the collection
+///   instinct, and an incomplete set is the oldest hook there is.
+///
+///   THE NEXT ONE — a single named badge with a number under it. The
+///   count gets admired; the next-one line gets ACTED ON, which is why
+///   the families are tiered in the first place. See achievements.dart.
+class _BadgesPanel extends StatefulWidget {
+  const _BadgesPanel();
+
+  @override
+  State<_BadgesPanel> createState() => _BadgesPanelState();
+}
+
+class _BadgesPanelState extends State<_BadgesPanel> {
+  ({Trophy trophy, int have})? _next;
+  ({int earned, int total})? _tally;
+
+  @override
+  void initState() {
+    super.initState();
+    // ignore: discarded_futures
+    _load();
+  }
+
+  Future<void> _load() async {
+    final n = await Achievements.next();
+    final t = await Achievements.tally();
+    if (mounted) setState(() { _next = n; _tally = t; });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _tally;
+    final n = _next;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(Rd.lg),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Rd.lg),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            context.push('/trophies');
+          },
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+            decoration: BoxDecoration(
+              color: AppColors.surface1,
+              borderRadius: BorderRadius.circular(Rd.lg),
+              border: Border.all(
+                  color: AppColors.red.withValues(alpha: 0.14), width: 0.8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionHead(
+                  index: '04',
+                  label: 'BADGES',
+                  trailing: Text(
+                    t == null ? '' : '${t.earned} / ${t.total}',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                      letterSpacing: 1.8,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (n == null)
+                  Text(
+                      'Thirty of them. Every one is a thing you already do '
+                      '— done more times than you have done it.',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 13,
+                        height: 1.5,
+                        fontWeight: FontWeight.w500,
+                      ))
+                else
+                  Row(children: [
+                    SizedBox(
+                      width: 52,
+                      height: 52,
+                      child: TrophyMedal(
+                        trophy: n.trophy,
+                        size: 52,
+                        earned: false,
+                        progress:
+                            (n.have / n.trophy.need).clamp(0.0, 1.0),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('NEXT BADGE',
+                              style: GoogleFonts.inter(
+                                color: n.trophy.tier.color,
+                                fontSize: 9,
+                                letterSpacing: 2.4,
+                                fontWeight: FontWeight.w900,
+                              )),
+                          const SizedBox(height: 4),
+                          Text(n.trophy.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 17,
+                                height: 1.1,
+                                letterSpacing: -0.2,
+                                fontWeight: FontWeight.w900,
+                              )),
+                          const SizedBox(height: 3),
+                          Text(n.trophy.line,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                color: AppColors.textTertiary,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                              )),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text('${n.have}',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 22,
+                            height: 1,
+                            letterSpacing: -0.8,
+                            fontWeight: FontWeight.w900,
+                          )),
+                      Text('OF ${n.trophy.need}',
+                          style: GoogleFonts.inter(
+                            color: n.trophy.tier.color,
+                            fontSize: 8,
+                            letterSpacing: 1.6,
+                            fontWeight: FontWeight.w900,
+                          )),
+                    ]),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right_rounded,
+                        size: 18, color: AppColors.textTertiary),
+                  ]),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RecordTimeline extends StatelessWidget {
   final List<AscendMilestone> milestones;
   const _RecordTimeline({required this.milestones});
@@ -1185,14 +1368,13 @@ class _RecordTimeline extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _SectionHead(index: '04', label: 'ASCENSION RECORD'),
+            const _SectionHead(index: '05', label: 'ASCENSION RECORD'),
             const SizedBox(height: 14),
             if (milestones.isEmpty)
               Text('Your record writes itself the moment you log day one.',
                 style: GoogleFonts.inter(
                   color: AppColors.textTertiary,
                   fontSize: 13, height: 1.5,
-                  fontStyle: FontStyle.italic,
                   fontWeight: FontWeight.w500,
                 )),
             for (var i = 0; i < milestones.length; i++) ...[
@@ -1340,11 +1522,10 @@ class _StreakPanel extends StatelessWidget {
                       // to match the flame's optical height so the
                       // pair reads as one unit.
                       Text('$current',
-                        style: GoogleFonts.playfairDisplay(
+                        style: GoogleFonts.inter(
                           color: Colors.white,
                           fontSize: 92, height: 1,
                           letterSpacing: -3.4,
-                          fontStyle: FontStyle.italic,
                           fontWeight: FontWeight.w900,
                         )),
                       const SizedBox(width: 10),
@@ -1431,7 +1612,7 @@ class _FinalFormCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _SectionHead(
-              index: '05',
+              index: '06',
               label: unlocked ? 'UNLOCKED · DAY 60' : 'LOCKED · DAY 60',
               trailing: Icon(
                 unlocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
@@ -1439,12 +1620,11 @@ class _FinalFormCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text('BECOME HIM',
-              style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.inter(
                 color: AppColors.textPrimary,
                 fontSize: 30, height: 1.1,
                 letterSpacing: -0.8,
                 fontWeight: FontWeight.w900,
-                fontStyle: FontStyle.italic,
               )),
             const SizedBox(height: 14),
             Text(
@@ -1642,6 +1822,34 @@ class _MastheadSettingsCog extends StatelessWidget {
           ),
           alignment: Alignment.center,
           child: const Icon(Icons.settings_outlined,
+            size: 18, color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+}
+
+class _MastheadBoardCog extends StatelessWidget {
+  final VoidCallback onTap;
+  const _MastheadBoardCog({required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 38, height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: AppColors.divider, width: 0.8),
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.emoji_events_outlined,
             size: 18, color: AppColors.textSecondary),
         ),
       ),

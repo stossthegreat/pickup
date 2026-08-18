@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/analytics_service.dart';
+import '../../services/language_service.dart';
 import '../../services/local_store_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/imhim_wordmark.dart';
@@ -26,6 +27,9 @@ class AgeNameScreen extends StatefulWidget {
 class _AgeNameScreenState extends State<AgeNameScreen> {
   final _nameCtrl = TextEditingController();
   String? _ageGroup;
+  // Roleplay language — English preselected, never empty. The wingman
+  // app's data: non-English installs churn instantly without this.
+  String _langCode = LanguageService.cachedCode;
 
   static const _bands = <String>['18-25', '26-35', '36-45', '46+'];
 
@@ -60,6 +64,7 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
     HapticFeedback.mediumImpact();
     await LocalStoreService.setUserName(_nameCtrl.text);
     await LocalStoreService.setUserAgeGroup(_ageGroup);
+    await LanguageService.set(_langCode);
     // ignore: discarded_futures
     AnalyticsService.onbProfileSet(
       hasName: _nameCtrl.text.trim().isNotEmpty,
@@ -136,12 +141,11 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
                   const SizedBox(height: 30),
 
                   Text('Before we start.',
-                      style: GoogleFonts.playfairDisplay(
+                      style: GoogleFonts.inter(
                         color: AppColors.textPrimary,
                         fontSize: 34,
                         height: 1.05,
                         letterSpacing: -0.6,
-                        fontStyle: FontStyle.italic,
                         fontWeight: FontWeight.w800,
                       )).animate().fadeIn(duration: 420.ms),
                   const SizedBox(height: 8),
@@ -195,6 +199,33 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
                         contentPadding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                     ),
+                  ),
+
+                  const SizedBox(height: 26),
+
+                  // ── Language — she speaks yours ───────────────────────
+                  Text('YOUR LANGUAGE',
+                      style: GoogleFonts.inter(
+                        color: AppColors.red,
+                        fontSize: 11,
+                        letterSpacing: 2.6,
+                        fontWeight: FontWeight.w800,
+                      )),
+                  const SizedBox(height: 4),
+                  Text('She speaks it too.',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                      )),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final l in LanguageService.supported)
+                        _langChip(l),
+                    ],
                   ),
 
                   const SizedBox(height: 26),
@@ -263,6 +294,39 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _langChip(AppLanguage l) {
+    final selected = _langCode == l.code;
+    return Material(
+      color: selected ? AppColors.red : AppColors.surface1,
+      borderRadius: BorderRadius.circular(99),
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          setState(() => _langCode = l.code);
+        },
+        borderRadius: BorderRadius.circular(99),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(
+              color: selected
+                  ? AppColors.red
+                  : AppColors.red.withValues(alpha: 0.35),
+              width: 1,
+            ),
+          ),
+          child: Text('${l.flag} ${l.native}',
+              style: GoogleFonts.inter(
+                color: selected ? Colors.white : AppColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              )),
+        ),
       ),
     );
   }

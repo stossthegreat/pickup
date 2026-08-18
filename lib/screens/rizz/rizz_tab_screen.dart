@@ -400,11 +400,10 @@ class _RizzCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(title,
-                          style: GoogleFonts.playfairDisplay(
+                          style: GoogleFonts.inter(
                             color: titleColor,
                             fontSize: 24, height: 1.1,
                             letterSpacing: -0.4,
-                            fontStyle: FontStyle.italic,
                             fontWeight: FontWeight.w800,
                           )),
                         const SizedBox(height: 8),

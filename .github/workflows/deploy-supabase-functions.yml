@@ -1,0 +1,69 @@
+name: Deploy Supabase Functions
+
+# No Mac needed. This runs on GitHub's machines and pushes the Edge
+# Functions to Supabase for you.
+#
+# ── ONE-TIME SETUP (all on your phone, ~3 minutes) ────────────────────
+#  1. Supabase → click your avatar (top right) → Account Settings →
+#     Access Tokens → "Generate new token" → copy it.
+#  2. GitHub → this repo → Settings → Secrets and variables → Actions
+#     → "New repository secret", add these two:
+#         SUPABASE_ACCESS_TOKEN   = the token from step 1
+#         SUPABASE_PROJECT_REF    = xfmnvmuhabrkiemtvdzg
+#     (Optional, only if you want scoring live:)
+#         OPENAI_API_KEY          = your sk-... key
+#  3. Done. It deploys on every push that touches supabase/functions,
+#     and you can also run it by hand: Actions tab → this workflow →
+#     "Run workflow".
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/deploy-supabase-functions.yml'
+  workflow_dispatch: # the "Run workflow" button
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Push the OpenAI key (skipped when the secret isn't set)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "No OPENAI_API_KEY secret set — skipping (add it in the"
+            echo "Supabase dashboard instead if you prefer)."
+            exit 0
+          fi
+          supabase secrets set OPENAI_API_KEY="$OPENAI_API_KEY" \
+            --project-ref "$PROJECT_REF"
+
+      # Each function is deployed with --no-verify-jwt=false (the
+      # default): the functions verify the caller's token themselves.
+      - name: Deploy functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -e
+          if [ -z "$PROJECT_REF" ]; then
+            echo "SUPABASE_PROJECT_REF secret is missing."
+            echo "Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          for fn in score-voice score-chat battle-action daily-game; do
+            echo "── deploying $fn ─────────────────────────────"
+            supabase functions deploy "$fn" --project-ref "$PROJECT_REF"
+          done
+          echo "All functions deployed."

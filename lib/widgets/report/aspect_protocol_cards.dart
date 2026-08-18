@@ -54,7 +54,6 @@ class AspectProtocolCards extends StatelessWidget {
             color: AppColors.textTertiary,
             fontSize: 11.5,
             height: 1.4,
-            fontStyle: FontStyle.italic,
           )),
         const SizedBox(height: 12),
         for (int i = 0; i < aspects.length; i++) ...[

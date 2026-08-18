@@ -47,8 +47,11 @@ class MissionEngine {
 
     // Only ever hand out missions for girls he's actually UNLOCKED on the
     // 60-day journey — a mission can never target a locked girl. At least the
-    // three Day-1 starters are always available.
-    final roster = kRoster.where((g) => g.unlockDay <= day).toList();
+    // three Day-1 starters are always available. The ladder day now falls to
+    // 0 on a missed day, so the gate is floored at 1 — the starters are the
+    // road back and can't be locked behind the thing you just lost.
+    final unlocked = day < 1 ? 1 : day;
+    final roster = kRoster.where((g) => g.unlockDay <= unlocked).toList();
     final pool = roster.isNotEmpty ? roster : kRoster.take(3).toList();
 
     // ── DAY 1 — deliberately gentle + crystal clear ─────────────────────────

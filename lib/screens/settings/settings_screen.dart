@@ -10,10 +10,12 @@ import '../../config/app_store_config.dart';
 import '../../config/dev_flags.dart';
 import '../../services/analytics_service.dart';
 import '../../services/creator_mode_store.dart';
+import '../../services/language_service.dart';
 import '../../services/face_asset_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/purchase_service.dart';
 import '../../services/rizz_memory_service.dart';
+import '../../services/win_back_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 
@@ -80,6 +82,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // toast the tile fires on tap, so the list reads as
               // tall clean rectangles like the reference image.
 
+              // ── Backend check — diagnose 'needs a connection' ─────────
+              _SettingTile(
+                icon: Icons.wifi_tethering_rounded,
+                iconColor: AppColors.measure,
+                title: 'Backend check',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  context.push('/backend-check');
+                },
+              ),
+
+              // ── Your identity — handle + Apple/Google claim ───────────
+              _SettingTile(
+                icon: Icons.person_rounded,
+                iconColor: AppColors.red,
+                title: 'Your identity',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  context.push('/account');
+                },
+              ),
+
+              // ── Roleplay language — she speaks yours ──────────────────
+              _SettingTile(
+                icon: Icons.language_rounded,
+                title: 'Language · ${LanguageService.current.native}',
+                onTap: () => _pickLanguage(context),
+              ),
+
               // ── Get ImHim Pro — top of the list (red crown) ───────────
               if (!kBypassPaywall)
                 _SettingTile(
@@ -111,6 +142,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Manage subscription',
                 onTap: () => _manageSubscription(context),
               ),
+
+              // ── Unlock reminders — the off switch for the win-back
+              // ladder. It has to be its own control: a man who wants us
+              // to stop pitching Pro shouldn't have to kill his streak
+              // reminders to do it, and burying "stop asking me" is the
+              // fastest way to earn an uninstall.
+              if (!kBypassPaywall) const _WinBackTile(),
 
               // ── Usage tile — voice minutes this week ────────────────────
               const _VoiceCapTile(),
@@ -199,6 +237,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// the real ImHim listing's review tab; until then we fall back to the
   /// native in-app prompt, which targets the CURRENT app (never the old one).
   /// Android uses the native Play in-app review, else the store listing.
+  /// Language sheet — flag + native name rows, tap to save instantly.
+  /// She (and the coach) switch language on the very next session.
+  Future<void> _pickLanguage(BuildContext ctx) async {
+    HapticFeedback.selectionClick();
+    await showModalBottomSheet<void>(
+      context: ctx,
+      backgroundColor: AppColors.surface1,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(8, 14, 8, 10),
+          children: [
+            for (final l in LanguageService.supported)
+              ListTile(
+                dense: true,
+                leading: Text(l.flag, style: const TextStyle(fontSize: 20)),
+                title: Text(l.native,
+                    style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700)),
+                trailing: LanguageService.cachedCode == l.code
+                    ? const Icon(Icons.check_rounded,
+                        size: 18, color: AppColors.red)
+                    : null,
+                onTap: () async {
+                  HapticFeedback.selectionClick();
+                  await LanguageService.set(l.code);
+                  if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
+                  if (mounted) setState(() {});
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _rateUs(BuildContext ctx) async {
     HapticFeedback.selectionClick();
     // ignore: discarded_futures
@@ -417,6 +496,95 @@ class _SettingsScreenState extends State<SettingsScreen> {
 /// unlocks (and routes to /paywall on tap so it doubles as
 /// a soft upsell). Pro users get the live "X min left" readout so they
 /// never wonder how much roleplay time they've spent.
+/// The off switch for the win-back ladder. Self-contained state so the
+/// settings screen doesn't have to carry it.
+class _WinBackTile extends StatefulWidget {
+  const _WinBackTile();
+
+  @override
+  State<_WinBackTile> createState() => _WinBackTileState();
+}
+
+class _WinBackTileState extends State<_WinBackTile> {
+  bool _muted = false;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final m = await WinBackService.isMuted();
+    if (!mounted) return;
+    setState(() {
+      _muted = m;
+      _loaded = true;
+    });
+  }
+
+  Future<void> _toggle() async {
+    HapticFeedback.selectionClick();
+    if (_muted) {
+      await WinBackService.unmute();
+    } else {
+      await WinBackService.mute();
+    }
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+          _muted
+              ? 'Unlock reminders off. Your streak nudges stay on.'
+              : 'Unlock reminders back on.',
+          style: const TextStyle(
+              color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w600)),
+      backgroundColor: AppColors.toastBg,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingTile(
+      icon: _muted
+          ? Icons.notifications_off_rounded
+          : Icons.notifications_active_rounded,
+      iconColor: _muted ? AppColors.textTertiary : AppColors.red,
+      title: 'Unlock reminders',
+      subtitle: !_loaded
+          ? ' '
+          : _muted
+              ? 'Off. We won\'t mention Pro again.'
+              : 'On. Occasional, and they stop on their own.',
+      // A pill rather than a Switch: `Switch.adaptive`'s active-colour
+      // parameter was renamed between Flutter versions and this repo has
+      // no other switch to pin the API from. A pill is version-proof and
+      // reads better against the rest of the list anyway.
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: (_muted ? AppColors.textTertiary : AppColors.red)
+              .withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+              color: (_muted ? AppColors.textTertiary : AppColors.red)
+                  .withValues(alpha: 0.5)),
+        ),
+        child: Text(_muted ? 'OFF' : 'ON',
+            style: TextStyle(
+              color: _muted ? AppColors.textTertiary : AppColors.red,
+              fontSize: 10,
+              letterSpacing: 1.4,
+              fontWeight: FontWeight.w900,
+            )),
+      ),
+      onTap: _toggle,
+    );
+  }
+}
+
 class _VoiceCapTile extends StatefulWidget {
   const _VoiceCapTile();
 

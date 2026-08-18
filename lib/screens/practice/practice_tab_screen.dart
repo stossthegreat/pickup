@@ -17,7 +17,11 @@ import '../roleplay/girl_chat_screen.dart';
 /// Tap her and choose how to practise: text her, or take it live on voice.
 /// Both remember you (the memory layer), so you pick up where you left off.
 class PracticeTabScreen extends StatefulWidget {
-  const PracticeTabScreen({super.key});
+  /// 0 Missions · 1 Practice · 2 Battles · 3 Progress. Progress isn't
+  /// in the bottom bar any more — the flame in this header goes to it.
+  final ValueChanged<int>? onGoToTab;
+
+  const PracticeTabScreen({super.key, this.onGoToTab});
 
   @override
   State<PracticeTabScreen> createState() => _PracticeTabScreenState();
@@ -56,7 +60,13 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
 
   // A girl is locked until her ascension day arrives. Creator mode
   // (owner-only, password-gated) unlocks the whole roster immediately.
-  bool _locked(GirlBrief g) => !_creator && _day < g.unlockDay;
+  //
+  // The ladder day now falls to 0 on a missed day (it tracks the streak),
+  // so the gate is floored at 1: the Day-1 starters are the way back in
+  // and must never lock. Everything above them does drop when you drop —
+  // that's the point of tying the ladder to showing up.
+  bool _locked(GirlBrief g) =>
+      !_creator && (_day < 1 ? 1 : _day) < g.unlockDay;
 
   Future<void> _tap(GirlBrief g) async {
     if (_locked(g)) {
@@ -78,6 +88,12 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
   }
 
   GirlChatConfig _configFor(GirlBrief g) => GirlChatConfig(
+        // PRACTICE IS THE ONE PLACE THE COACH LIVES. It scores
+        // nothing anyone else can see and feeds no ladder, so being
+        // shown a good line here is teaching rather than cheating.
+        // Every graded surface defaults to false — see the note on
+        // GirlChatConfig.coachAllowed.
+        coachAllowed: true,
         characterId: g.id,
         vibeKey: g.vibeKey,
         name: g.name,
@@ -96,7 +112,11 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
 
   void _openVoice(GirlBrief g) {
     Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(builder: (_) => FreeFlowScreen(initialVibeKey: g.vibeKey)),
+      MaterialPageRoute(
+          // The one surface that keeps the coach — see the note on
+          // FreeFlowScreen.coachAllowed.
+          builder: (_) =>
+              FreeFlowScreen(initialVibeKey: g.vibeKey, coachAllowed: true)),
     );
   }
 
@@ -138,32 +158,76 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.md, Sp.lg, Sp.md),
+              // Sp.sm at the top, matching the Missions and Progress
+              // mastheads exactly — this tab sat Sp.md lower than the
+              // other two, so switching tabs nudged the whole page.
+              padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.lg, Sp.md),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title + settings cog, matching Missions / Progress.
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text('Practice until it feels natural.',
-                            style: AppTypography.h1Italic),
+                  // THE TITLE SITS ON THE ICON LINE.
+                  //
+                  // It had a row to itself and the whole left half of
+                  // the cog row was dead space on every screenful. One
+                  // word in that gap buys back a full row of height and
+                  // pulls the grid up the page.
+                  //
+                  // It's PRACTICE, not the sentence. The sentence is
+                  // the red line underneath — that's what a subtitle is
+                  // for, and running it as the title made a masthead
+                  // that wrapped to two lines and said the same thing
+                  // twice.
+                  //
+                  // FittedBox scaleDown, not ellipsis: on the narrowest
+                  // phone the word shrinks a point rather than turning
+                  // into "PRACTI…", which is the one thing a masthead
+                  // must never do.
+                  //
+                  // THE XP / STREAK / RANK PILLS ARE NOT HERE ANYMORE.
+                  // They belong on Home, where standing IS the subject.
+                  // Repeated on all three tabs they became furniture —
+                  // three rows of the same numbers pushing the actual
+                  // content of each tab a hundred points down the page,
+                  // and a number you see everywhere is a number you stop
+                  // reading. Everything below moves up to fill the gap.
+                  //
+                  // ORDER, READ FROM THE RIGHT: settings, progress, board.
+                  Row(children: [
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text('PRACTICE',
+                            maxLines: 1,
+                            style: AppTypography.mastheadInline),
                       ),
-                      const SizedBox(width: 10),
-                      _SettingsCog(
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            context.push('/settings');
-                          }),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
+                    ),
+                    const SizedBox(width: 10),
+                    _BoardCog(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          context.push('/leaderboard');
+                        }),
+                    const SizedBox(width: 6),
+                    _BoardCog(
+                        icon: Icons.trending_up_rounded,
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          widget.onGoToTab?.call(3);
+                        }),
+                    const SizedBox(width: 6),
+                    _SettingsCog(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          context.push('/settings');
+                        }),
+                  ]),
+                  const SizedBox(height: 8),
                   Text(
                     'Voice calls, texts and scenarios that prepare you '
                     'for real conversations.',
-                    style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.red, fontStyle: FontStyle.italic),
+                    style: AppTypography.bodySmall
+                        .copyWith(color: AppColors.red),
                   ),
                 ],
               ),
@@ -487,6 +551,38 @@ class _SettingsCog extends StatelessWidget {
           alignment: Alignment.center,
           child: const Icon(Icons.settings_outlined,
               size: 18, color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+}
+
+class _BoardCog extends StatelessWidget {
+  final VoidCallback onTap;
+
+  /// Defaults to the board's trophy — the same cog now also carries the
+  /// progress flame, so it takes its glyph rather than hard-coding one.
+  final IconData icon;
+
+  const _BoardCog({required this.onTap, this.icon = Icons.emoji_events_outlined});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.divider, width: 0.8),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, size: 18, color: AppColors.textSecondary),
         ),
       ),
     );

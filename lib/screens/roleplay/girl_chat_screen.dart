@@ -11,11 +11,25 @@ import 'package:http/http.dart' as http;
 import '../../config/auralay_dev_flags.dart';
 import '../../services/analytics_service.dart';
 import '../../services/creator_mode_store.dart';
+import '../../services/backend/battle_service.dart';
+import '../../services/backend/chat_score_service.dart';
+import '../../services/boon_service.dart';
 import '../../services/local_store_service.dart';
+import '../../services/mirror_service.dart';
 import '../../services/paywall_gate.dart';
+import '../../services/achievements.dart';
+import '../../services/coaching.dart' show Coaching;
+import '../../services/tactics.dart';
+import '../../services/milestone_service.dart';
+import '../../services/rewards.dart';
+import '../../services/rolodex_service.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/academy/perfect_line.dart';
+import '../../widgets/academy/the_roll.dart';
+import '../../widgets/academy/verdict.dart';
 import '../../widgets/common/ai_consent_dialog.dart';
+import '../academy/rolodex_screen.dart';
 import '../game/freeflow/free_flow_screen.dart';
 
 /// A story / post the AI girl dropped — the "scenario ready" for a
@@ -59,6 +73,54 @@ class GirlChatConfig {
   final bool taskMode;
   final int taskGoal;
 
+  /// Which ladder this conversation is graded under. Defaults to
+  /// ordinary practice; the daily chat challenge passes 'daily_chat' so
+  /// DailyChatService can find today's run without a table of its own.
+  final String scoreSurface;
+
+  /// Set when this conversation IS a battle. The transcript then goes to
+  /// the duel rather than the solo grader — battle-action grades it,
+  /// settles the duel, and records the chat attempt itself, so sending
+  /// it both ways would double-count the man's points.
+  final String? battleId;
+
+  /// Whether finishing this conversation ends on THE VERDICT.
+  ///
+  /// False for the surfaces that already own their ending — the daily
+  /// chat challenge and battles both close on the full reveal with the
+  /// squad slam in it, and stacking a second full-screen result behind
+  /// the first is precisely the "it keeps showing again and again"
+  /// problem. The mid-conversation win is NOT suppressed by this: her
+  /// folding is a different event from a score landing, it's rare, and
+  /// an interrupt he didn't schedule is the whole reason it works.
+  final bool verdictOnFinish;
+
+  /// ══════════════════════════════════════════════════════════════════
+  ///  THE COACH IS OFF BY DEFAULT
+  /// ══════════════════════════════════════════════════════════════════
+  ///
+  /// Lucien writes the line for you. That is a fine feature and a fatal
+  /// one on any surface that produces a number other people can see.
+  ///
+  /// A leaderboard where the score can be typed for you is not a
+  /// leaderboard, it's a list of who used the help button most. A duel
+  /// where one man was fed his opener isn't a duel. And an AI mission
+  /// that pays XP for a conversation the coach wrote pays for nothing —
+  /// the man walks away having learnt that the app can talk to women.
+  ///
+  /// DEFAULTS TO FALSE ON PURPOSE. Not "off where it matters" — off
+  /// everywhere, opted back IN by the one surface that should have it.
+  /// A new graded screen written a year from now is safe without its
+  /// author having to know this rule exists; the failure mode of
+  /// forgetting is a missing button, not a corrupted ladder.
+  ///
+  /// PRACTICE KEEPS IT, and keeps it entirely. Practice is where you're
+  /// meant to be shown what a good line looks like — it scores nothing
+  /// anyone else can see, it feeds no ladder, and stripping the coach
+  /// out of it would remove the only place in the app that actually
+  /// teaches.
+  final bool coachAllowed;
+
   const GirlChatConfig({
     required this.characterId,
     required this.vibeKey,
@@ -71,6 +133,10 @@ class GirlChatConfig {
     this.post,
     this.taskMode = false,
     this.taskGoal = 15,
+    this.scoreSurface = 'roleplay',
+    this.battleId,
+    this.verdictOnFinish = true,
+    this.coachAllowed = false,
   });
 }
 
@@ -112,6 +178,53 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   /// Set per-character in initState — cold girls start lower. Persisted
   /// per girl so warmth carries between sessions (the memory layer).
   double _heat = 20;
+
+  /// THE HIGH-WATER MARK. Where she got to at her warmest, which is the
+  /// only number worth showing him when it ends badly — "she was at 71
+  /// before it went" is a near miss, and a near miss is the version of a
+  /// loss a man runs back. The final score alone is just a verdict.
+  double _peak = 0;
+
+  /// The line of his that moved her most, and by how much. Captured live
+  /// because it can't be reconstructed later: this is what goes on the
+  /// Rolodex card if she folds, and the card is worth keeping precisely
+  /// because he wrote that sentence himself.
+  String _bestLine = '';
+  double _bestDelta = -999;
+
+  /// Was his last line a stumble? Feeds the mirror's SECOND WIND axis —
+  /// "his best line is the one straight after a bad one" is only
+  /// measurable if you remember the bad one.
+  bool _stumbled = false;
+
+  /// WHERE HE LOST HER. The mirror of _bestLine, and the single most
+  /// useful thing this screen can hand the reveal.
+  ///
+  /// The grader returns five numbers and nothing else — no spans, no
+  /// quotes — so "the line that cost you" could never come from the
+  /// server. But this screen scores EVERY message locally on its way
+  /// past, so it has always known and has always thrown it away.
+  String _worstLine = '';
+  double _worstDelta = 999;
+
+  /// Everything she's said, for callback detection. A callback has to
+  /// reach further back than the message he's answering, or every reply
+  /// would count as one.
+  final List<String> _herLines = [];
+  String _hisPrevious = '';
+
+  /// Tactics this conversation demonstrated, banked at the end so a man
+  /// isn't interrupted mid-flow by a card.
+  final List<String> _tacticsSeen = [];
+
+  /// PERFECT LINE fires at most once in a conversation, on top of the
+  /// once-a-day cap. Rare is the entire mechanic.
+  bool _perfectShown = false;
+
+  /// The verdict fires exactly once per conversation. She can't hand you
+  /// her number twice, and a second showing turns the biggest moment in
+  /// the app into a dialog.
+  bool _verdictShown = false;
 
   /// Relationship arc: what she remembers about him + which stage they're
   /// at (1 Matched → 5 Together). Loaded on open, saved as it moves.
@@ -172,6 +285,12 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   void initState() {
     super.initState();
     _heat = _startHeat;
+    _peak = _heat;
+    // Talking to her at all brings a Rolodex card back to full warmth.
+    // Re-entry has to be the cheapest action in the app — a man who has
+    // to work to undo a lapse simply doesn't.
+    // ignore: discarded_futures
+    Rolodex.touch(widget.config.characterId);
     // ignore: discarded_futures
     AnalyticsService.roleplayOpened(
       character: widget.config.characterId,
@@ -190,6 +309,28 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     _loadProfile();
     // ignore: discarded_futures
     _loadMemory();
+    // ignore: discarded_futures
+    _takeHeadStart();
+  }
+
+  /// A HEAD START won on the wheel. Applied on open and announced —
+  /// an invisible buff is not a reward, and a number that moved for
+  /// reasons he can't account for makes the whole system feel arbitrary.
+  Future<void> _takeHeadStart() async {
+    if (!await BoonService.takeHeadStart()) return;
+    if (!mounted) return;
+    setState(() {
+      _heat = (_heat + BoonService.headStartPoints).clamp(0, 100).toDouble();
+      if (_heat > _peak) _peak = _heat;
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+          'HEAD START · she opens ${BoonService.headStartPoints} warmer'),
+      backgroundColor: AppColors.toastBg,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(milliseconds: 2600),
+    ));
   }
 
   Future<void> _loadProfile() async {
@@ -237,6 +378,7 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       // In practice mode, carry her real warmth in. Post mode always
       // opens cold (it's a fresh comment on a new post).
       if (widget.config.post == null && interest > 0) _heat = interest.toDouble();
+      if (_heat > _peak) _peak = _heat;
     });
   }
 
@@ -253,9 +395,73 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
 
   @override
   void dispose() {
+    _submitForScoring();
     _ctrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  bool _submitted = false;
+
+  /// Hand the conversation to the text grader on the way out.
+  ///
+  /// This is what turns a text mission from a flat +50 XP into a real
+  /// number. Fire-and-forget and context-free, so it's safe from
+  /// dispose(); the result parks in ChatScoreService.lastResult for
+  /// whichever screen wants to show it.
+  ///
+  /// Only submits a conversation with something in it — three lines from
+  /// you, minimum. Anything less isn't a performance to judge, and a
+  /// board full of two-word attempts would be worthless.
+  /// AWAITABLE ON PURPOSE. This used to be fire-and-forget from
+  /// dispose(), which meant the grade was requested at the exact moment
+  /// the screen popped — so the caller read ChatScoreService.lastResult
+  /// a microsecond later and always found null. The chat challenge's
+  /// reveal could never fire. _finishTask now awaits it BEFORE popping;
+  /// dispose() still calls it as the backstop for men who leave early,
+  /// and the _submitted guard means it can only ever run once.
+  Future<void> _submitForScoring() async {
+    if (_submitted) return;
+    _submitted = true;
+    final mine = _msgs.where((m) => m.who == 'you').length;
+    // SLOW BURN's evidence. Length is the one mirror axis that can only
+    // be known once it's over, and this method is the single place both
+    // exit paths converge on.
+    // ignore: discarded_futures
+    MirrorService.endConversation(mine);
+    if (mine < 3) return;
+    final transcript = [
+      for (final m in _msgs)
+        if (m.who == 'you' || m.who == 'her')
+          '${m.who == 'you' ? 'YOU' : 'HER'}: ${m.text}',
+    ].join('\n');
+
+    // A battle transcript goes to the duel and nowhere else —
+    // battle-action grades it, settles the fight AND records the chat
+    // attempt, so also calling the solo grader would pay the man twice
+    // for one conversation.
+    // ── HAND THE REVEAL WHAT ONLY THIS SCREEN KNOWS ──────────────────
+    // The worst line, and every tactic the conversation demonstrated.
+    // Banked here rather than mid-chat: a card interrupting him at turn
+    // four would be the app talking over the thing it's teaching.
+    Coaching.lastWorstLine = _worstLine;
+    if (_tacticsSeen.isNotEmpty) {
+      final fresh = await Tactics.claim(_tacticsSeen, _bestLine.isEmpty
+          ? _tacticsSeen.first
+          : _bestLine);
+      MilestoneService.pushTactics(fresh);
+    }
+
+    final battle = widget.config.battleId;
+    if (battle != null) {
+      await BattleService.submit(battle, transcript);
+      return;
+    }
+    await ChatScoreService.score(
+      transcript: transcript,
+      surface: widget.config.scoreSurface,
+      scenario: widget.config.name,
+    );
   }
 
   void _scrollToBottom() {
@@ -274,37 +480,76 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     // ignore: discarded_futures
     AnalyticsService.roleplayVoiceHandoff(widget.config.characterId);
     Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
-      builder: (_) => FreeFlowScreen(initialVibeKey: widget.config.vibeKey),
+      // Inherits the permission: hopping from a practice chat into
+      // voice is still practice, and hopping out of a graded one is
+      // still graded. The hop must never be a way round the rule.
+      builder: (_) => FreeFlowScreen(
+          initialVibeKey: widget.config.vibeKey,
+          coachAllowed: widget.config.coachAllowed),
     ));
   }
 
-  /// Mission task finished — slide up the score card, then pop back to
-  /// Missions (which auto-completes the mission on return).
+  /// Mission task finished — the verdict, then back to Missions (which
+  /// auto-completes the mission on return).
+  ///
+  /// THIS USED TO BE A SCORE CARD: her face, a number out of 100, and a
+  /// sentence of commentary. The number was the payout, and a number
+  /// cannot hurt — which means it cannot thrill either, because the two
+  /// run on the same circuit. So the payout is now her decision, and the
+  /// number is a footnote on it. Same data, completely different organ.
   Future<void> _finishTask() async {
     HapticFeedback.mediumImpact();
-    final interest = _heat.round().clamp(0, 100);
-    // Overall: mostly how into you she got, plus credit for staying in it.
-    final overall = ((interest * 0.8) + 20).clamp(0, 100).round();
-    final verdict = interest >= 90
-        ? 'You had her. Textbook.'
-        : interest >= 70
-            ? 'She\'s into it — you ran that clean.'
-            : interest >= 45
-                ? 'Solid. You held her attention.'
-                : 'She wasn\'t feeling it. Reset and run it back.';
     if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _TaskScoreCard(
-        config: widget.config,
-        overall: overall,
-        interest: interest,
-        verdict: verdict,
-      ),
+    // Fire the grade NOW and let it run under the reveal — by the time
+    // he's watched her decide, the result is parked, so the caller's
+    // squad reveal actually has something to show.
+    final grading = _submitForScoring();
+
+    final girl = girlById(widget.config.characterId);
+    final v = Verdict.of(
+      girl: girl,
+      score: _heat.round(),
+      peak: _peak.round(),
     );
-    if (mounted) Navigator.of(context).maybePop(); // → Missions auto-completes
+    // If she folded mid-conversation we've already run the full
+    // ceremony. Selling a man the same moment twice in ninety seconds is
+    // how a jackpot becomes a dialog box, so the replay skips the wait
+    // and goes straight to the outcome.
+    final firstTime = !_verdictShown;
+    _verdictShown = true;
+    final fresh = v.band == VerdictBand.won && firstTime
+        ? await Rolodex.win(
+            girlId: girl.id, line: _bestLine, score: _heat.round())
+        : false;
+    // A NUMBER IS A CLOSE. It was banking a card and paying nothing —
+    // the one outcome in the app that maps directly to the real thing
+    // it's training, and it wasn't worth a single point.
+    if (fresh) {
+      await Rewards.number(girl.name);
+      MilestoneService.pushTrophies(await Achievements.bump(Stat.numbers));
+    }
+    if (!mounted) return;
+    // The daily challenge and battles close on their own full reveal.
+    // The card is still banked above — he keeps the win, he just doesn't
+    // watch two result screens in a row to get it.
+    if (widget.config.verdictOnFinish) {
+      await _showVerdict(girl, ceremony: firstTime, newCard: fresh);
+      // THE ROLL rides on the back of the verdict rather than getting
+      // its own trigger. He's just been told an outcome he couldn't
+      // control; the wheel is the one moment in the app where he gets to
+      // gamble on purpose, and it only ever gives. It cannot pay in
+      // anything earned — see BoonService.
+      if (mounted) {
+        await TheRoll.show(context, accent: girl.accent);
+      }
+    }
+
+    // Pop with TRUE — this is the only path that proves the task was
+    // genuinely run, and Missions completes on that result alone. Every
+    // other exit (back arrow, swipe) returns null and leaves the mission
+    // open, which is the point: opening a chat is not doing it.
+    await grading;
+    if (mounted) Navigator.of(context).pop(true);
   }
 
   Future<void> _send(String raw) async {
@@ -363,9 +608,39 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
         .map((s) => s.trim())
         .where((s) => s.isNotEmpty)
         .toList();
+    // THE MIRROR, fed before the heat moves. `heat` here is her interest
+    // BEFORE this line, which is what makes THE CLOSER mean "strong
+    // while she was already warm" rather than crediting him for the
+    // line that warmed her.
+    final girlTier = girlById(widget.config.characterId).tier;
+    final wasStumble = _stumbled;
+    // ignore: discarded_futures
+    MirrorService.record(
+      turnIndex: _turnIndex,
+      delta: result.delta,
+      heat: _heat,
+      girlTier: girlTier,
+      afterStumble: wasStumble,
+    );
+    _stumbled = result.delta < 0;
+
     setState(() {
       _sending = false;
       _heat = _applyDelta(_heat, result.delta);
+      if (_heat > _peak) _peak = _heat;
+      // The best line so far — captured now because the transcript alone
+      // can't tell you which sentence did the work.
+      if (result.delta > _bestDelta) {
+        _bestDelta = result.delta;
+        _bestLine = text;
+      }
+      // The other half. Only counted once the conversation is properly
+      // under way — the opener is allowed to be clumsy and calling it
+      // out would be the app kicking a man for starting.
+      if (_turnIndex >= 2 && result.delta < _worstDelta) {
+        _worstDelta = result.delta;
+        _worstLine = text;
+      }
       if (result.memory.isNotEmpty) _memory = result.memory;
       if (bubbles.isNotEmpty) _msgs.add(_Msg('her', bubbles.first));
     });
@@ -386,6 +661,25 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       // ignore: discarded_futures
       _finishTask();
     }
+    // ── WHAT THAT LINE DEMONSTRATED ───────────────────────────────────
+    // Local, instant, free. See tactics.dart for why detection is rules
+    // rather than a server round-trip, and what that trade costs.
+    // Everything older than the message he's replying to is fair game
+    // for a callback.
+    final reachBack = _herLines.length > 1
+        ? _herLines.sublist(0, _herLines.length - 1)
+        : const <String>[];
+    for (final id in Tactics.detect(
+      line: text,
+      herEarlier: reachBack,
+      hisPrevious: _hisPrevious,
+      delta: result.delta,
+    )) {
+      if (!_tacticsSeen.contains(id)) _tacticsSeen.add(id);
+    }
+    _hisPrevious = text;
+    if (bubbles.isNotEmpty) _herLines.add(bubbles.first);
+
     // A genuinely sharp line nudges The Five — practice moves your score.
     if (result.strong) {
       // ignore: discarded_futures
@@ -393,6 +687,32 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     }
     _scrollToBottom();
     if (result.strong) HapticFeedback.lightImpact();
+
+    // ── PERFECT LINE ──────────────────────────────────────────────────
+    // The only unscheduled reward in the app. He sent a sentence and
+    // was waiting for her reply; instead the screen takes over and tells
+    // him that sentence was perfect. Fires before her follow-up texts so
+    // it genuinely interrupts rather than politely queueing behind them.
+    //
+    // Rare by construction: an exceptional grade AND once per
+    // conversation AND once per day. A jackpot that pays twice in an
+    // evening is a participation trophy and there's no way back from
+    // that.
+    if (result.strong &&
+        result.delta >= PerfectLine.bar &&
+        !_perfectShown &&
+        await PerfectLine.availableToday()) {
+      _perfectShown = true;
+      if (!mounted) return;
+      await PerfectLine.show(
+        context,
+        line: text,
+        girlName: widget.config.name,
+        accent: widget.config.accent,
+      );
+      if (!mounted) return;
+    }
+
     for (var i = 1; i < bubbles.length; i++) {
       await Future.delayed(Duration(milliseconds: 650 + bubbles[i].length * 22));
       if (!mounted) return;
@@ -400,6 +720,76 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       HapticFeedback.selectionClick();
       _scrollToBottom();
     }
+    // SHE FOLDS THE INSTANT SHE FOLDS — not at the end of the session.
+    //
+    // An interrupt he didn't schedule is worth several times the same
+    // event delivered onto a results screen he was already waiting for.
+    // He's mid-conversation, she's just fired off two texts, and then
+    // the typing indicator takes the screen and she gives him her
+    // number. Nothing about that was predictable, which is the entire
+    // reason it will stick.
+    //
+    // Last thing in the turn on purpose: her texts land first, so the
+    // verdict reads as the conversation continuing rather than an
+    // animation interrupting it.
+    // ignore: discarded_futures
+    _maybeWinHer();
+  }
+
+  /// Has she just crossed her bar? If so, run the ceremony once.
+  ///
+  /// The bar scales with her rarity (see [Rarity.bar]) — Daisy folds at
+  /// 70, Seraphina at 90 — so the ICE cards are genuinely worth more
+  /// than the common ones instead of being ten identical trophies with
+  /// different faces on them.
+  Future<void> _maybeWinHer() async {
+    if (_verdictShown || !mounted) return;
+    final girl = girlById(widget.config.characterId);
+    if (_heat < rarityOf(girl).bar) return;
+    _verdictShown = true; // set synchronously — nothing else may claim it
+    final fresh = await Rolodex.win(
+      girlId: girl.id,
+      line: _bestLine,
+      score: _heat.round(),
+    );
+    if (fresh) {
+      await Rewards.number(girl.name);
+      MilestoneService.pushTrophies(await Achievements.bump(Stat.numbers));
+    }
+    if (!mounted) return;
+    await _showVerdict(girl, ceremony: true, newCard: fresh);
+  }
+
+  /// The verdict, full screen. Returns the action he chose, if any.
+  Future<String?> _showVerdict(
+    GirlBrief girl, {
+    required bool ceremony,
+    bool newCard = false,
+  }) async {
+    final action = await Navigator.of(context).push<String>(
+      PageRouteBuilder<String>(
+        opaque: true,
+        transitionDuration: const Duration(milliseconds: 260),
+        pageBuilder: (_, __, ___) => VerdictAct(
+          girl: girl,
+          verdict: Verdict.of(
+            girl: girl,
+            score: _heat.round(),
+            peak: _peak.round(),
+          ),
+          line: _bestLine,
+          ceremony: ceremony,
+          newCard: newCard,
+        ),
+        transitionsBuilder: (_, anim, __, child) =>
+            FadeTransition(opacity: anim, child: child),
+      ),
+    );
+    if (action == 'rolodex' && mounted) {
+      await Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const RolodexScreen()));
+    }
+    return action;
   }
 
   Future<_TurnResult> _turn(String text) async {
@@ -459,6 +849,9 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
 
   // ── Lucien "Get Help" — on-demand rizz suggestion for the live convo ──
   Future<void> _getHelp() async {
+    // Refuses even if something ever calls it directly. The UI hides
+    // the bar; this makes the rule true rather than merely invisible.
+    if (!widget.config.coachAllowed) return;
     if (_helping || _sending) return;
     if (!await AiConsentDialog.ensure(context)) return;
     if (!mounted) return;
@@ -548,7 +941,6 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
                             style: GoogleFonts.inter(
                               color: AppColors.textTertiary,
                               fontSize: 12,
-                              fontStyle: FontStyle.italic,
                               fontWeight: FontWeight.w500,
                             )),
                       ),
@@ -563,8 +955,13 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
                   ],
                 ),
               ),
-              // Lucien "Get Help" bar — on-demand rizz, no sporadic cut-ins.
-              _HelpBar(busy: _helping || _sending, onTap: _getHelp),
+              // THE COACH, ONLY WHERE HE'S ALLOWED. Graded surfaces —
+              // battles, the daily, AI missions — don't render this at
+              // all. Not disabled, not greyed: absent. A dead button is
+              // a promise the app can't keep and an invitation to keep
+              // pressing it. See GirlChatConfig.coachAllowed.
+              if (widget.config.coachAllowed)
+                _HelpBar(busy: _helping || _sending, onTap: _getHelp),
               _InputBar(
                 controller: _ctrl,
                 sending: _sending,
@@ -1191,7 +1588,6 @@ class _LucienThinking extends StatelessWidget {
               style: GoogleFonts.inter(
                 color: AppColors.accent,
                 fontSize: 12.5,
-                fontStyle: FontStyle.italic,
                 fontWeight: FontWeight.w600,
               )),
         ],
@@ -1344,152 +1740,6 @@ class _InputBar extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════
-//  TASK SCORE CARD — slides up when a mission chat hits its message goal
-// ══════════════════════════════════════════════════════════════════════
-class _TaskScoreCard extends StatelessWidget {
-  final GirlChatConfig config;
-  final int overall;
-  final int interest;
-  final String verdict;
-  const _TaskScoreCard({
-    required this.config,
-    required this.overall,
-    required this.interest,
-    required this.verdict,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.base,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      padding: EdgeInsets.fromLTRB(
-          24, 16, 24, 24 + MediaQuery.of(context).padding.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-                color: AppColors.surface3,
-                borderRadius: BorderRadius.circular(2)),
-          ),
-          const SizedBox(height: 20),
-          Text('TASK COMPLETE',
-              style: GoogleFonts.inter(
-                color: config.accent,
-                fontSize: 12,
-                letterSpacing: 3,
-                fontWeight: FontWeight.w900,
-              )),
-          const SizedBox(height: 16),
-          Container(
-            width: 74,
-            height: 74,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: config.accent, width: 2),
-              boxShadow: [
-                BoxShadow(color: config.accent.withOpacity(0.4), blurRadius: 18),
-              ],
-            ),
-            child: ClipOval(
-              child: Image.asset(config.portraitAsset, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                        color: AppColors.surface2,
-                        child: Icon(Icons.person_rounded, color: config.accent),
-                      )),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text('$overall',
-              style: GoogleFonts.playfairDisplay(
-                color: Colors.white,
-                fontSize: 66,
-                height: 1,
-                fontWeight: FontWeight.w800,
-              )),
-          Text('OUT OF 100',
-              style: GoogleFonts.inter(
-                color: AppColors.textTertiary,
-                fontSize: 10,
-                letterSpacing: 2,
-                fontWeight: FontWeight.w800,
-              )),
-          const SizedBox(height: 16),
-          Text(verdict,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                color: AppColors.textSecondary,
-                fontSize: 15,
-                height: 1.4,
-                fontWeight: FontWeight.w500,
-              )),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Text('HER INTEREST',
-                  style: GoogleFonts.inter(
-                    color: AppColors.textTertiary,
-                    fontSize: 8.5,
-                    letterSpacing: 1.8,
-                    fontWeight: FontWeight.w800,
-                  )),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(
-                    value: (interest / 100).clamp(0.0, 1.0).toDouble(),
-                    minHeight: 6,
-                    backgroundColor: AppColors.surface2,
-                    valueColor: AlwaysStoppedAnimation(config.accent),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text('$interest',
-                  style: GoogleFonts.inter(
-                    color: config.accent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  )),
-            ],
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: Material(
-              color: config.accent,
-              borderRadius: BorderRadius.circular(14),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () => Navigator.of(context).maybePop(),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  child: Center(
-                    child: Text('DONE',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 14,
-                          letterSpacing: 2,
-                          fontWeight: FontWeight.w900,
-                        )),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

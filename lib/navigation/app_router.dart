@@ -1,9 +1,24 @@
 import 'package:go_router/go_router.dart';
+import '../screens/academy/account_screen.dart';
+import '../screens/academy/backend_debug_screen.dart';
+import '../screens/academy/battles_screen.dart';
+import '../screens/academy/tactics_screen.dart';
+import '../screens/academy/trophies_screen.dart';
+import '../screens/academy/daily_screen.dart';
+import '../screens/academy/fear_button_screen.dart';
+import '../screens/academy/leaderboard_screen.dart';
+import '../screens/academy/rolodex_screen.dart';
+import '../screens/academy/score_reveal_screen.dart';
+import '../screens/academy/daily_chat_screen.dart';
+import '../screens/onboarding/squad_invite_screen.dart';
+import '../screens/academy/squad_day_screen.dart';
+import '../screens/academy/squad_room_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/legal/legal_screen.dart';
 import '../screens/onboarding/age_name_screen.dart';
 import '../screens/onboarding/ai_consent_screen.dart';
 import '../screens/onboarding/gender_pick_screen.dart';
+import '../screens/onboarding/handle_screen.dart';
 import '../screens/onboarding/onboarding_story_screen.dart';
 import '../screens/onboarding/intro_reel_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
@@ -97,6 +112,67 @@ final appRouter = GoRouter(
       builder: (_, __) => const RizzChatScreen(),
     ),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
+
+    // ── The Academy layer — squads, the board, the reveal ────────────
+    // TODAY — the standing + both daily challenges. Home's single card
+    // opens here; the full squad room is one more tap in.
+    // The squad pitch — one page, straight after he picks a name.
+    GoRoute(
+        path: '/onboarding/squad',
+        builder: (_, __) => const SquadInviteScreen()),
+    GoRoute(path: '/today', builder: (_, __) => const SquadDayScreen()),
+    // The chat Daily — the voice screen's mirror, out of 100.
+    GoRoute(path: '/daily-chat', builder: (_, __) => const DailyChatScreen()),
+    GoRoute(path: '/squad', builder: (_, __) => const SquadRoomScreen()),
+    // THE ROLODEX — every woman he's won, and every one he hasn't.
+    GoRoute(path: '/rolodex', builder: (_, __) => const RolodexScreen()),
+    // The Fear Button — the moment training becomes behaviour.
+    GoRoute(path: '/fear', builder: (_, __) => const FearButtonScreen()),
+    // Rizz Battles — same scenario, both blind, higher score takes ELO.
+    GoRoute(path: '/battles', builder: (_, __) => const BattlesScreen()),
+    GoRoute(path: '/trophies', builder: (_, __) => const TrophiesScreen()),
+    GoRoute(path: '/playbook', builder: (_, __) => const TacticsScreen()),
+    // THE DAILY — one scenario worldwide, one attempt, plus the league.
+    GoRoute(path: '/daily', builder: (_, __) => const DailyScreen()),
+    // Diagnostic — what exactly is failing between app and Supabase.
+    GoRoute(
+        path: '/backend-check',
+        builder: (_, __) => const BackendDebugScreen()),
+    // Identity — handle + Apple/Google account claim.
+    GoRoute(path: '/account', builder: (_, __) => const AccountScreen()),
+    // Same screen as the FINAL onboarding step: no back arrow, SKIP FOR
+    // NOW exit — claiming is pitched, never forced.
+    GoRoute(
+        path: '/onboarding/identity',
+        builder: (_, __) => const AccountScreen(onboarding: true)),
+    // PICK YOUR NAME — its own page now. Onboarding: consent+sign-in,
+    // then this. Settings reaches the same screen without `onboarding`.
+    GoRoute(
+        path: '/onboarding/handle',
+        builder: (_, __) => const HandleScreen(onboarding: true)),
+    GoRoute(path: '/handle', builder: (_, __) => const HandleScreen()),
+    GoRoute(
+        path: '/leaderboard',
+        builder: (_, __) => const LeaderboardScreen()),
+    // Pushed after a scored voice session with a ScoreRevealPayload.
+    // Pops with 'rematch' when the user taps RUN IT BACK.
+    GoRoute(
+      path: '/score-reveal',
+      builder: (_, state) {
+        final p = state.extra;
+        return ScoreRevealScreen(
+          payload: p is ScoreRevealPayload
+              ? p
+              // Defensive demo payload so a stray navigation never crashes.
+              : const ScoreRevealPayload(
+                  score: 0,
+                  rubric: {},
+                  eloDelta: 0,
+                  newRating: 1000,
+                  scenario: ''),
+        );
+      },
+    ),
     GoRoute(path: '/terms',    builder: (_, __) => LegalScreen(doc: termsDoc)),
     GoRoute(path: '/privacy',  builder: (_, __) => LegalScreen(doc: privacyDoc)),
   ],

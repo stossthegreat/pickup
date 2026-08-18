@@ -13,11 +13,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../config/dev_flags.dart';
+import '../../../services/achievements.dart';
 import '../../../services/analytics_service.dart';
+import '../../../services/milestone_service.dart';
+import '../../../services/rewards.dart';
 import '../../../services/audio_session.dart';
+import '../../../services/backend/battle_service.dart';
+import '../../../services/backend/daily_game_service.dart';
+import '../../../services/backend/rizz_score_service.dart';
+import '../../../services/language_service.dart';
 import '../../../services/creator_mode_store.dart';
 import '../../../services/local_store_service.dart';
 import '../../../services/paywall_gate.dart';
+import '../../../services/extra_service.dart';
+import '../../paywall/extra_sheet.dart';
 import '../../../services/realtime_session.dart';
 import '../../../services/daily_nudge_service.dart';
 import '../../../services/review_prompt_service.dart';
@@ -69,10 +78,25 @@ class FreeFlowScreen extends StatefulWidget {
   /// 'ice_then_fire', 'sweet'); an unknown key falls back to the first.
   final String? initialVibeKey;
 
+  /// ══════════════════════════════════════════════════════════════════
+  ///  THE COACH IS OFF BY DEFAULT — same rule as the text side.
+  /// ══════════════════════════════════════════════════════════════════
+  ///
+  /// This screen is BOTH the practice room and the graded Daily. The
+  /// Daily produces the number on the world leaderboard and the squad
+  /// Rizz-Off, and "COACH — STEP IN" hands the man his next line. One
+  /// button, and the entire voice ladder measures who pressed it.
+  ///
+  /// False unless a caller says otherwise, so the Daily, an AI mission
+  /// and anything written later are safe without their author knowing
+  /// this rule exists. Practice — and only Practice — passes true.
+  final bool coachAllowed;
+
   const FreeFlowScreen({
     super.key,
     this.tabMode = false,
     this.initialVibeKey,
+    this.coachAllowed = false,
   });
 
   @override
@@ -930,6 +954,10 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         'scenarioSetting': vibe.setting,
         'creator':         _creator,
         'memoryBlock':     memoryBlock,
+        // She speaks the user's language — the single biggest retention
+        // lever for non-English markets. Server folds this into the
+        // persona prompt ('en' = today's behaviour, unchanged).
+        'language':        LanguageService.cachedCode,
         if (userName != null || userAge != null)
           'userProfile': {
             if (userName != null) 'name': userName,
@@ -1431,13 +1459,34 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
           // ignore: discarded_futures
           AnalyticsService.freeflowVoiceCapHit();
           HapticFeedback.mediumImpact();
-          // Pro user out of weekly minutes — nothing to sell, so no
-          // paywall trip. Clear white-text notice with the renewal.
-          _capNotice('Weekly roleplay minutes used. They renew at the '
-              'start of your next billing week.');
+          // This used to read "nothing to sell, so no paywall trip" and
+          // send him away until next week. It is the highest-intent
+          // moment the product has — he is mid-conversation and wants
+          // more — and it was being spent on an apology. Now there's
+          // something to sell, and if he declines he still gets the
+          // honest renewal notice.
+          final bought = await ExtraSheet.show(context, remainingMinutes: 0);
+          if (!mounted) return;
+          if (bought) {
+            _beginHold();
+          } else {
+            _capNotice('Weekly roleplay minutes used. They renew at the '
+                'start of your next billing week.');
+          }
           return;
         }
         if (!mounted) return;
+        // THE SOFT NUDGE — offered before the wall, not at it.
+        // A man with three minutes left is still enjoying himself and
+        // can say no without resentment; the same offer at zero is an
+        // interruption. Once a day, and never if he already has a bank.
+        if (await extraNudgeDue()) {
+          await ExtraService.markNudged();
+          if (!mounted) return;
+          await ExtraSheet.show(
+              context, remainingMinutes: await voiceMinutesLeft());
+          if (!mounted) return;
+        }
         _beginHold();
         return;
       }
@@ -1523,6 +1572,9 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       s.replaceAll(_cueRe, '').replaceAll(RegExp(r'\s{2,}'), ' ').trim();
 
   Future<void> _lucienStepIn() async {
+    // The rule made true rather than merely invisible — nothing can
+    // reach the coach round the back of the hidden button.
+    if (!widget.coachAllowed) return;
     if (_phase != _Phase.live) return;
     // ignore: discarded_futures
     AnalyticsService.freeflowLucienTapped(
@@ -1545,10 +1597,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         // ignore: discarded_futures
         AnalyticsService.freeflowVoiceCapHit();
         HapticFeedback.mediumImpact();
-        // Pro user out of weekly minutes — readable notice, no paywall.
-        _capNotice('Weekly roleplay minutes used. They renew at the '
-            'start of your next billing week.');
-        return;
+        final bought = await ExtraSheet.show(context, remainingMinutes: 0);
+        if (!mounted) return;
+        if (!bought) {
+          _capNotice('Weekly roleplay minutes used. They renew at the '
+              'start of your next billing week.');
+          return;
+        }
       }
     } else {
       // v228 — Lucien step-in is now paywalled for EVERY free user,
@@ -1712,6 +1767,17 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
     // v244 — cap matches the timer: every session is 3 minutes.
     final cap = _sessionSeconds;
     final reason = _remaining <= 0 ? 'timer' : 'user';
+
+    // PRACTICE PAID NOTHING. Minutes of live conversation with a woman
+    // and the progression bar didn't move — see rewards.dart. It's the
+    // smallest rate in the economy and the tightest daily cap, because
+    // it's also the easiest thing here to grind.
+    // ignore: discarded_futures
+    Rewards.practice(Duration(seconds: cap - _remaining));
+    if (_transcript.isNotEmpty) {
+      // ignore: discarded_futures
+      Achievements.bump(Stat.talks).then(MilestoneService.pushTrophies);
+    }
     // ignore: discarded_futures
     AnalyticsService.freeflowSessionEnded(
       reason:          reason,
@@ -1768,6 +1834,35 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // a fast back-tap was beating the SharedPreferences write and
       // the Ascend GAME pillar stayed at zero.
       await _persistGame(score.score);
+      // Academy: hand the SAME transcript to the server-side rubric
+      // grader so this real session moves the user's ELO, the Board and
+      // the squad Pulse. Fire-and-forget — Lucien's scorecard stays the
+      // on-screen result; the rating updates land on the Board.
+      final academyTranscript = [
+        for (final t in _transcript)
+          "${t['role'] == 'user' ? 'YOU' : 'HER'}: ${t['text']}",
+      ].join('\n');
+      // ignore: discarded_futures
+      RizzScoreService.scoreSession(
+        scenario: _vibe?.label ?? 'Free Flow',
+        transcript: academyTranscript,
+      );
+      // Armed battle → this session IS the duel attempt. Submit the
+      // same transcript; the result lands on the Battles screen when
+      // the other man finishes his.
+      final armedBattle = BattleService.armedBattleId;
+      if (armedBattle != null) {
+        BattleService.armedBattleId = null;
+        // ignore: discarded_futures
+        BattleService.submit(armedBattle, academyTranscript);
+      }
+      // Armed DAILY → this session IS today's one shot. The service
+      // parks the result; the Daily screen reveals it on return.
+      if (DailyGameService.armedDaily) {
+        DailyGameService.armedDaily = false;
+        // ignore: discarded_futures
+        DailyGameService.submit(academyTranscript);
+      }
       // Blend the five dimension scores into the running total so The Five
       // CLIMBS over the 60 days instead of snapping to the last session.
       if (score.dimensions != null) {
@@ -2050,7 +2145,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                           color: AppColors.textPrimary,
                           fontSize: 34,
                           letterSpacing: -1.2,
-                          fontStyle: FontStyle.italic,
                           fontWeight: FontWeight.w900,
                           height: 1.0,
                         )),
@@ -2059,7 +2153,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                         style: AppTypography.bodySmall.copyWith(
                           color: AppColors.accent,
                           fontSize: 14,
-                          fontStyle: FontStyle.italic,
                         )),
                   ],
                 ),
@@ -2357,7 +2450,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                               color: Colors.white,
                               fontSize: 18,
                               height: 1.5,
-                              fontStyle: FontStyle.italic,
                             ))
                       else if (_herCaption.isNotEmpty)
                         Text(_herCaption,
@@ -2366,7 +2458,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                               color: Colors.white,
                               fontSize: 19,
                               height: 1.45,
-                              fontStyle: FontStyle.italic,
                             )),
                       if (_youCaption.isNotEmpty) ...[
                         const SizedBox(height: 14),
@@ -2442,6 +2533,10 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
               // (which is also when the clock starts) flips the
               // button live. Resets on session end / new persona.
               Builder(builder: (_) {
+                // GRADED SURFACES DON'T GET HIM AT ALL. Absent, not
+                // greyed — a permanently dead button is a promise the
+                // app can't keep. See FreeFlowScreen.coachAllowed.
+                if (!widget.coachAllowed) return const SizedBox.shrink();
                 final lucienReady = _phase == _Phase.live && _clockStarted;
                 return Material(
                   color: Colors.transparent,
@@ -2680,13 +2775,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                         color: color,
                         fontSize: 130,
                         height: 1.0,
-                        fontStyle: FontStyle.italic,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -5,
                       )),
                   Padding(
                     padding: const EdgeInsets.only(bottom: 24),
-                    child: Text(' / 10',
+                    child: Text(' / 100',
                         style: AppTypography.label.copyWith(
                           color: AppColors.textTertiary,
                           fontSize: 18,
@@ -2704,7 +2798,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                       color: Colors.white,
                       fontSize: 20,
                       height: 1.45,
-                      fontStyle: FontStyle.italic,
                     )),
               const SizedBox(height: 8),
               Text('— YOUR COACH',
@@ -2748,7 +2841,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                             color: AppColors.textPrimary,
                             fontSize: 14,
                             height: 1.4,
-                            fontStyle: FontStyle.italic,
                           )),
                     ],
                   ),
@@ -2812,7 +2904,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                           Navigator.of(context, rootNavigator: true)
                               .pushReplacement(MaterialPageRoute(
                             builder: (_) =>
-                                FreeFlowScreen(initialVibeKey: _vibe?.key),
+                                FreeFlowScreen(
+                                    initialVibeKey: _vibe?.key,
+                                    // Carry the permission across a
+                                    // restart — a practice session
+                                    // that respawns is still practice.
+                                    coachAllowed: widget.coachAllowed),
                           ));
                         }
                       },
@@ -2915,7 +3012,6 @@ class _VibeCard extends StatelessWidget {
                           color: AppColors.accent,
                           fontSize: 13,
                           height: 1.35,
-                          fontStyle: FontStyle.italic,
                         )),
                   ],
                 ),
@@ -3395,11 +3491,10 @@ class _LucienUpsellSheet extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text('Tap in your coach.\nMaster every reply.',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.playfairDisplay(
+                    style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 30, height: 1.15,
                       letterSpacing: -0.5,
-                      fontStyle: FontStyle.italic,
                       fontWeight: FontWeight.w800,
                     )),
                   const SizedBox(height: 10),
@@ -3648,11 +3743,10 @@ class _FirstTimeBubble extends StatelessWidget {
           Text(
             'Live AI. Real pressure.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 24, height: 1.1,
               letterSpacing: -0.6,
-              fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -3770,11 +3864,10 @@ class _LucienNudgeBubble extends StatelessWidget {
               children: [
                 Text('Tap the master.',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.playfairDisplay(
+                  style: GoogleFonts.inter(
                     color: Colors.white,
                     fontSize: 22, height: 1.1,
                     letterSpacing: -0.4,
-                    fontStyle: FontStyle.italic,
                     fontWeight: FontWeight.w800,
                   ),
                 ),

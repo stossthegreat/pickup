@@ -7,12 +7,19 @@ import 'config/dev_flags.dart';
 import 'navigation/app_router.dart';
 import 'providers/auralay_app_provider.dart';
 import 'services/analytics_service.dart';
+import 'services/backend/auth_service.dart';
+import 'services/backend/backend_service.dart';
+import 'services/backend/squad_live_service.dart';
+import 'services/progress_sync.dart';
 import 'services/daily_nudge_service.dart';
+import 'services/language_service.dart';
 import 'services/local_store_service.dart';
 import 'services/notification_service.dart';
 import 'services/purchase_service.dart';
 import 'services/share_intake_service.dart';
+import 'services/win_back_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/academy/live_toast.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +36,32 @@ void main() async {
   // leaves every event call a silent no-op until config arrives.
   await AnalyticsService.init();
   AnalyticsService.appOpen();
+
+  // Supabase backend (identity, squads, ELO, leaderboards). Fail-soft:
+  // offline launch keeps the whole solo experience working. The silent
+  // anonymous sign-in is fire-and-forget so it never delays first frame
+  // — every user gets a server identity with zero friction, and claims
+  // it with Apple later once they have a rank worth keeping.
+  await BackendService.init();
+  // ignore: discarded_futures
+  AuthService.ensureSignedIn()
+      // Global squad watcher — a squadmate's move reaches you anywhere
+      // in the app, not only while the Squad Room is open. This is the
+      // difference between an app you inspect and one that talks.
+      // ignore: discarded_futures
+      .then((_) => SquadLiveService.start())
+      // AND PULL HIS RUN BACK. The claim screen restores on sign-in,
+      // but a man who reinstalls and is already claimed never opens it
+      // — the session restores silently and he'd land on day zero with
+      // no way to ask for his streak back. Self-limiting: it reads one
+      // row, finds nothing bigger on the phone he already plays on, and
+      // stops. Fire-and-forget so a cold network never delays launch.
+      // ignore: discarded_futures
+      .then((_) => ProgressSync.restore());
+
+  // Roleplay language — hydrated before any voice session can start so
+  // the synchronous cache is always right. English default.
+  await LanguageService.hydrate();
 
   // RevenueCat is DISABLED for this launch (PurchaseConfig.enabled = false).
   // This call stays but no-ops while disabled — the SDK is never configured
@@ -50,6 +83,13 @@ void main() async {
   // SINGLE source of truth for retention notifications now; the legacy
   // streak/training/rescan schedulers are no longer wired in (they'd
   // only fight the horizon by competing for the same OS slots).
+  //
+  // Before the rebuild: stop the win-back ladder if he became a
+  // subscriber somewhere this build's paywall screen never saw (a restore
+  // on another device, the RevenueCat listener flipping the flag). It has
+  // to run FIRST so the horizon's evening slot reads the corrected state.
+  await WinBackService.syncOnLaunch();
+
   // ignore: discarded_futures
   DailyNudgeService.markAppOpened();
 
@@ -144,6 +184,13 @@ class _MirrorAppState extends State<MirrorApp> with WidgetsBindingObserver {
         // retention trigger for the NEXT notification.
         // ignore: discarded_futures
         NotificationService.clearIconBadge();
+        // Re-check the subscription with the store. Without this the
+        // paid app kept working for anyone who cancelled until they
+        // next COLD-launched — iOS holds apps in memory for days, so
+        // that could be well past the week they actually bought.
+        // Throttled to 15 min inside; same on Android and iOS.
+        // ignore: discarded_futures
+        PurchaseService.refreshOnResume();
         break;
       case AppLifecycleState.detached:
       case AppLifecycleState.inactive:
@@ -170,6 +217,9 @@ class _MirrorAppState extends State<MirrorApp> with WidgetsBindingObserver {
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
         routerConfig: appRouter,
+        // Live events land over whatever screen is showing.
+        builder: (context, child) =>
+            LiveToastHost(child: child ?? const SizedBox.shrink()),
       ),
     );
   }

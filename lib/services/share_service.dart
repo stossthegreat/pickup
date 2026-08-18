@@ -12,6 +12,8 @@ import '../widgets/common/share_card.dart';
 import '../widgets/share/certificate_share_card.dart';
 import '../widgets/share/eye_strip_share_card.dart';
 import '../widgets/share/progress_share_card.dart';
+import '../widgets/share/rizz_card.dart';
+import '../widgets/share/rizz_score_share_card.dart';
 import '../widgets/share/score_share_card.dart';
 
 /// Captures any widget via RepaintBoundary + exports a PNG + opens the
@@ -287,6 +289,79 @@ class ShareService {
     }
   }
 
+  /// Render + share the ACADEMY rizz-score card — the 0–9999 number,
+  /// tier stamp, rubric bars and the "THINK YOU'D SURVIVE IT?" gauntlet
+  /// line. Wired to the Score Reveal's SHARE button. Pipeline identical
+  /// to [shareScore].
+  static Future<void> shareRizzScore({
+    required BuildContext context,
+    required String scenario,
+    required int score,
+    required int rating,
+    required Map<String, int> rubric,
+    String? handle,
+  }) async {
+    HapticFeedback.lightImpact();
+
+    if (context.mounted) {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+        builder: (_) => const _RenderingOverlay(),
+      );
+    }
+
+    final mq = MediaQuery.of(context);
+    final origin =
+        Rect.fromLTWH(mq.size.width / 2 - 1, mq.padding.top + 8, 2, 2);
+
+    String errorMsg = 'Share failed';
+    try {
+      if (!context.mounted) return;
+      final card = RizzScoreShareCard(
+        scenario: scenario,
+        score: score,
+        rating: rating,
+        rubric: rubric,
+        handle: handle,
+      );
+      final bytes = await _captureOffscreen(
+        context: context,
+        widget: card,
+        logicalSize: _auralayCardSize(context),
+        pixelRatio: 2.0,
+      );
+      if (bytes == null) {
+        errorMsg = "Couldn't render the card — try again";
+      } else {
+        if (context.mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+        HapticFeedback.mediumImpact();
+        await _shareBytes(
+          bytes,
+          'imhim-rizz-${DateTime.now().millisecondsSinceEpoch}.png',
+          'I scored $score on ImHim Rizz — "$scenario". '
+              'Think you\'d survive it?',
+          origin: origin,
+        );
+        return;
+      }
+    } catch (e) {
+      errorMsg = 'Share failed: ${e.toString().split('\n').first}';
+    }
+
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(errorMsg),
+        backgroundColor: AppColors.toastBg,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
   /// Render + share the ImHim PROGRESS receipt — DAY hero, streak,
   /// per-surface scores + deltas, total reps, brand wordmark + domain.
   /// Wired to /progress via the masthead SHARE button so the user can
@@ -474,6 +549,79 @@ class ShareService {
           bytes,
           'imhim-certified-${DateTime.now().millisecondsSinceEpoch}.png',
           text ?? defaultText,
+          origin: origin,
+        );
+        return;
+      }
+    } catch (e) {
+      errorMsg = 'Share failed: ${e.toString().split('\n').first}';
+    }
+
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(errorMsg),
+        backgroundColor: AppColors.toastBg,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  /// THE UNIVERSAL RIZZ CARD — every feature built since b142 shares
+  /// through here.
+  ///
+  /// The Rolodex, the Perfect Line, the Chain, the Verdict and battle
+  /// results were all pushing plain text into the share sheet. Text gets
+  /// read and forgotten. An image gets posted, and a posted image is the
+  /// only marketing this app has that costs nothing and compounds — so
+  /// they all go through the same off-screen render the score cards
+  /// already used successfully.
+  ///
+  /// [text] is the caption. It is ALWAYS suffixed with the squad line:
+  /// the card is a recruitment poster, not a flex, and a man who joins
+  /// because his mate posted this arrives with somebody already watching
+  /// him — which is the difference between a user and a retained one.
+  static Future<void> shareRizzCard({
+    required BuildContext context,
+    required RizzShareData data,
+    required String text,
+  }) async {
+    HapticFeedback.lightImpact();
+
+    if (context.mounted) {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+        builder: (_) => const _RenderingOverlay(),
+      );
+    }
+
+    final mq = MediaQuery.of(context);
+    final origin =
+        Rect.fromLTWH(mq.size.width / 2 - 1, mq.padding.top + 8, 2, 2);
+
+    String errorMsg = 'Share failed';
+    try {
+      if (!context.mounted) return;
+      final bytes = await _captureOffscreen(
+        context: context,
+        widget: RizzShareCard(data: data),
+        logicalSize: _auralayCardSize(context),
+        pixelRatio: 2.0,
+      );
+      if (bytes == null) {
+        errorMsg = "Couldn't render the card — try again";
+      } else {
+        if (context.mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+        HapticFeedback.mediumImpact();
+        await _shareBytes(
+          bytes,
+          'imhim-rizz-${DateTime.now().millisecondsSinceEpoch}.png',
+          '$text\n\nImHim Rizz — squads of 2 to 5. Same woman every day, '
+              'everyone blind, scores land side by side. Get in.',
           origin: origin,
         );
         return;

@@ -2,34 +2,76 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
-/// Mirrorly typography — editorial. Serif for display (luxury fragrance ad
-/// energy), sans for body (modern, clinical), mono for measurements
-/// (scanner/diagnostic feel).
+/// ImHim typography — one voice. Inter everywhere, tight and heavy for
+/// display, regular for body, mono for measurements.
+///
+/// The italic Playfair serif used to carry every headline in the app.
+/// It now survives in exactly ONE place — the ImHim wordmark in the
+/// masthead (see widgets/common/imhim_wordmark.dart) — because that's
+/// the logo. Everywhere else it read as a different app bolted onto
+/// this one. Display styles keep their names so call sites don't move;
+/// only the letterforms changed.
 abstract final class AppTypography {
-  // ── Editorial display (serif) ────────────────────────────────────────────
-  // Playfair Display — high-contrast serif, sophisticated, reads like
-  // Chanel / Armani / high-fashion editorial.
+  // ── Display (sans, heavy) ────────────────────────────────────────────────
 
-  static TextStyle get displayXL => GoogleFonts.playfairDisplay(
-    fontSize: 64, fontWeight: FontWeight.w700,
-    letterSpacing: -2.5, color: AppColors.textPrimary, height: 1.02,
-    fontStyle: FontStyle.italic,
+  static TextStyle get displayXL => GoogleFonts.inter(
+    fontSize: 60, fontWeight: FontWeight.w900,
+    letterSpacing: -3.0, color: AppColors.textPrimary, height: 1.0,
   );
 
-  static TextStyle get display => GoogleFonts.playfairDisplay(
-    fontSize: 48, fontWeight: FontWeight.w700,
-    letterSpacing: -1.8, color: AppColors.textPrimary, height: 1.06,
+  static TextStyle get display => GoogleFonts.inter(
+    fontSize: 44, fontWeight: FontWeight.w900,
+    letterSpacing: -2.0, color: AppColors.textPrimary, height: 1.04,
   );
 
-  static TextStyle get h1 => GoogleFonts.playfairDisplay(
-    fontSize: 34, fontWeight: FontWeight.w700,
-    letterSpacing: -1.0, color: AppColors.textPrimary, height: 1.1,
+  static TextStyle get h1 => GoogleFonts.inter(
+    fontSize: 32, fontWeight: FontWeight.w900,
+    letterSpacing: -1.1, color: AppColors.textPrimary, height: 1.1,
   );
 
-  static TextStyle get h1Italic => GoogleFonts.playfairDisplay(
-    fontSize: 34, fontWeight: FontWeight.w500,
-    letterSpacing: -0.8, color: AppColors.textPrimary, height: 1.1,
-    fontStyle: FontStyle.italic,
+  /// Kept for call-site compatibility — no longer italic, just lighter.
+  static TextStyle get h1Italic => GoogleFonts.inter(
+    fontSize: 32, fontWeight: FontWeight.w700,
+    letterSpacing: -0.9, color: AppColors.textPrimary, height: 1.1,
+  );
+
+  /// THE TAB MASTHEAD — one object, three tabs.
+  ///
+  /// This is the old RIZZ BATTLES header at twice the size. That header
+  /// was tracked caps at 15pt and it was the best-looking type in the
+  /// app; the other two tabs used a lowercase 32pt sentence, so the
+  /// three mastheads never read as one product.
+  ///
+  /// Size is deliberately double the red line that sits under it —
+  /// [bodySmall] is 13, this is 26. A masthead needs to beat its own
+  /// subtitle by a clear factor or the two argue.
+  ///
+  /// Tracking drops from 0.2em to 0.1em on the way up. Letterspacing is
+  /// optical, not proportional: the value that opens up 15pt caps turns
+  /// 26pt caps into a ransom note, and every display face tightens as it
+  /// grows for exactly this reason.
+  static TextStyle get masthead => GoogleFonts.inter(
+    fontSize: 26, fontWeight: FontWeight.w900,
+    letterSpacing: 2.6, color: AppColors.textPrimary, height: 1.15,
+  );
+
+  /// THE SAME MASTHEAD, SITTING ON THE ICON LINE.
+  ///
+  /// Practice and Battles put the title level with the cog row instead
+  /// of on a line of its own. That space to the left of three 38pt
+  /// circles was empty on every screenful, and a title parked there
+  /// buys back a whole row of height for the content underneath — the
+  /// grid comes up, the rank hero comes up.
+  ///
+  /// 22 rather than 26 because it has to share the line: the cogs are
+  /// 38pt tall, and type that out-measures the thing beside it stops
+  /// looking like a header and starts looking like a collision.
+  /// Tracking eases with it (2.6 → 2.2) on the same optical rule as
+  /// above. Same family, same weight, same caps — one masthead, two
+  /// sizes.
+  static TextStyle get mastheadInline => GoogleFonts.inter(
+    fontSize: 22, fontWeight: FontWeight.w900,
+    letterSpacing: 2.2, color: AppColors.textPrimary, height: 1.1,
   );
 
   // ── Sans (body / UI) — Inter ─────────────────────────────────────────────

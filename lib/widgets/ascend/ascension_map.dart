@@ -17,7 +17,8 @@ import '../../theme/app_typography.dart';
 /// grants them. The map doesn't compete with those systems — it gives them a
 /// home and makes "Become Him" a place you can see yourself walking toward.
 class AscensionMap extends StatelessWidget {
-  /// Earned ascension day, 1..60 (StreakService — days you actually showed up).
+  /// Ascension day, 0..60 (StreakService). Identical to the streak — a
+  /// day with nothing done resets both, so 0 is a real state.
   final int day;
 
   /// Fires when the user taps the CONTINUE call-to-action under the map —
@@ -52,7 +53,11 @@ class AscensionMap extends StatelessWidget {
   Widget build(BuildContext context) {
     final ranks = AscensionService.ranks();
     final total = AscensionService.totalDays;
-    final d = day.clamp(1, total);
+    // Floored at 0, not 1. The ascension day tracks the streak now, so a
+    // missed day genuinely puts you back on the floor — clamping to 1
+    // would have quietly hidden the one thing the reset is meant to say.
+    final d = day.clamp(0, total);
+    final reset = d == 0;
 
     // Index of the highest rank reached (current band), and the next target.
     int reachedIdx = 0;
@@ -104,6 +109,25 @@ class AscensionMap extends StatelessWidget {
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.2,
               )),
+          // Say it out loud when the climb has been reset. A silent drop
+          // back to Day 0 reads as a bug; named, it reads as the rule —
+          // and the rule is the reason showing up every day is worth
+          // anything.
+          if (reset) ...[
+            const SizedBox(height: 6),
+            Row(children: [
+              const Icon(Icons.restart_alt_rounded,
+                  size: 13, color: AppColors.red),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                    'A day went by with nothing done — the climb starts '
+                    'again. One mission today puts you back on Day 1.',
+                    style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary, fontSize: 12)),
+              ),
+            ]),
+          ],
           const SizedBox(height: 16),
 
           // ── The path. ──

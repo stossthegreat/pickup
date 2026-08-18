@@ -15,12 +15,23 @@ import 'local_store_service.dart';
 ///     freeze/grace — miss a whole day and it resets. It is the same
 ///     number on every masthead (Looks / Rizz / Ascend).
 ///
-///   • ASCENSION DAY — the TOTAL number of distinct days you've ever
-///     shown up. It is earned, never free: it only climbs on days you do
-///     the work, and it NEVER goes backward (a broken streak doesn't cost
-///     you your day). Day thresholds drive the rank ladder (Observer 1,
-///     Initiate 10, Contender 20, Dangerous 30, Magnetic 45, ImHim 60).
-///     Clamped to 1..60 for display.
+///   • ASCENSION DAY — how far up the 60-day ladder you are RIGHT NOW,
+///     and it is the same number as the streak. The two move together:
+///     one zero-day and both go to 0.
+///
+///     It used to be the lifetime count of distinct active days, and it
+///     never went backward — so a man who showed up ten days, vanished
+///     for a month and came back was still "Day 10, Initiate" with a
+///     streak of 0. Two numbers telling opposite stories about the same
+///     person, and the flattering one was the lie: he had not kept
+///     climbing, he had fallen off. The ladder is a claim about who you
+///     are today, so it has to be able to fall. Miss a day and you start
+///     the climb again — which is exactly what makes not missing one
+///     worth something.
+///
+///     Day thresholds drive the rank ladder (Observer 1, Initiate 10,
+///     Contender 20, Dangerous 30, Magnetic 45, ImHim 60). Clamped to
+///     0..60 — 0 is a real state now, not an impossible one.
 ///
 ///   • CONSISTENCY — a rolling 7-day mission-completion rate. Each day
 ///     records how many of the 5 missions you finished; consistency is
@@ -164,6 +175,49 @@ class StreakService {
     return (current, best);
   }
 
+  /// GIVE A MAN HIS RUN BACK on a new phone.
+  ///
+  /// Called once, by ProgressSync, after a sign-in restores a bigger
+  /// streak than this device knows about. Everywhere else the day set is
+  /// derived from what actually happened here; this is the one door that
+  /// writes it from outside, and it only ever ADDS days.
+  ///
+  /// ── IT BACKFILLS TO YESTERDAY, NOT TO TODAY ─────────────────────────
+  ///
+  /// A restored 63-day run lands as the 63 days ENDING YESTERDAY. He gets
+  /// every day he earned and still has to show up today to make it 64,
+  /// exactly as if he'd never changed phones. Backfilling through today
+  /// would hand him a free day for reinstalling, which is both a lie and
+  /// a way to farm the streak.
+  ///
+  /// Merged into the existing set rather than replacing it, so a man who
+  /// played offline on the new handset before signing in keeps that too.
+  static Future<void> restoreRun({
+    required int days,
+    required int longest,
+  }) async {
+    if (days <= 0 && longest <= 0) return;
+    final prefs = await SharedPreferences.getInstance();
+
+    if (days > 0) {
+      final set = (prefs.getStringList(_kActiveDays) ?? const <String>[])
+          .map(int.parse)
+          .toSet();
+      final yesterday = DateTime.now().subtract(const Duration(days: 1));
+      for (var i = 0; i < days; i++) {
+        set.add(_ymd(yesterday.subtract(Duration(days: i))));
+      }
+      final kept = set.toList()..sort();
+      await prefs.setStringList(
+          _kActiveDays, kept.map((e) => e.toString()).toList());
+    }
+
+    // Never lower a personal best — the device may hold a bigger one.
+    final have = prefs.getInt(_kLongest) ?? 0;
+    final best = [have, longest, days].reduce((a, b) => a > b ? a : b);
+    if (best > have) await prefs.setInt(_kLongest, best);
+  }
+
   /// Rebuild the log and return the live `(current, longest)` streak.
   /// Safe to call from any masthead load.
   static Future<(int current, int longest)> refresh() async {
@@ -179,9 +233,10 @@ class StreakService {
     final prefs = await SharedPreferences.getInstance();
     final (set, missionsToday) = await _rebuild(prefs);
     final (current, longest) = await _streakPair(prefs, set);
-    // Ascension day = total distinct days shown up, earned + permanent,
-    // clamped to the 1..60 ladder for display.
-    final ascensionDay = set.length.clamp(1, ascensionTotalDays);
+    // Ascension day IS the streak — the ladder and the flame are one
+    // climb, so a zero-day drops both. See the class doc for why the old
+    // never-goes-backward lifetime count had to go.
+    final ascensionDay = current.clamp(0, ascensionTotalDays);
     final consistency = _consistency7d(prefs);
     return AscensionSnapshot(
       streak: current,
@@ -253,6 +308,28 @@ class StreakService {
     return best;
   }
 
+  /// The raw active-day set. Exposed for StreakRescue, which needs to
+  /// see the shape of a break before it can offer to fix one.
+  static Future<Set<int>> activeDays() async {
+    final prefs = await SharedPreferences.getInstance();
+    final (set, _) = await _rebuild(prefs);
+    return set;
+  }
+
+  /// Force one day into the active set.
+  ///
+  /// The ONLY caller is StreakRescue. Everything else earns its days by
+  /// doing the work, and this exists so a bought day can reconnect a run
+  /// — see StreakRescue for why that door exists and why it's capped.
+  /// The rescue records separately which days were bought, so nothing
+  /// downstream has to trust this set to be entirely earned.
+  static Future<void> markDayActive(int ymd) async {
+    final prefs = await SharedPreferences.getInstance();
+    final days = {...(prefs.getStringList(_kActiveDays) ?? const <String>[])};
+    days.add('$ymd');
+    await prefs.setStringList(_kActiveDays, days.toList()..sort());
+  }
+
   /// Read-only current streak (still rebuilds the log as a side effect).
   static Future<int> current() async {
     final (cur, _) = await refresh();
@@ -270,7 +347,8 @@ class AscensionSnapshot {
   /// Longest streak ever reached.
   final int longest;
 
-  /// Total distinct days shown up, earned + permanent, clamped 1..60.
+  /// How far up the 60-day ladder you are right now. Identical to
+  /// [streak] — a zero-day resets both. Clamped 0..60.
   final int ascensionDay;
 
   /// Rolling 7-day mission-completion rate, 0..100.

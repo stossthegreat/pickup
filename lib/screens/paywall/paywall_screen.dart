@@ -12,19 +12,21 @@ import '../../services/analytics_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/purchase_service.dart';
 import '../../services/review_prompt_service.dart';
+import '../../services/win_back_service.dart';
 import '../../theme/app_colors.dart';
 
 /// ImHim paywall — "paywall-final" carousel.
 ///
-/// A swipeable five-panel story (Looks → Game → Rizz → Ascension → Him)
-/// rebuilt 1:1 from the HTML mock. The header copy + classified
-/// progress tracker change per panel, the CTA / price / legal row stay
-/// pinned at the bottom.
+/// A swipeable three-panel story (Practice → Game → Him). The header
+/// copy + classified progress tracker change per panel, the CTA / price
+/// / legal row stay pinned at the bottom. (The RIZZ panel was pulled
+/// from the carousel — its widget is kept below, marked unused, so it
+/// can be dropped back in.)
 ///
-/// Auto-tour behaviour (matches the mock): on open the carousel
-/// advances one panel every 6 s, plays through all five, returns to
-/// panel 1 (the photo) and then STOPS — from there the user swipes
-/// manually. Any manual touch also stops the tour immediately.
+/// Auto-tour behaviour: on open the carousel advances one panel every
+/// 6 s, plays through all panels, returns to panel 1 and then STOPS —
+/// from there the user swipes manually. Any manual touch also stops the
+/// tour immediately.
 ///
 /// Weekly-only. The annual tier is commented out (see `_Tier` /
 /// `_priceLine`); only the weekly package is ever purchased.
@@ -59,12 +61,11 @@ enum _Tier { weekly, annual, rescue }
 const List<(String, String)> _copy = [
   ('Practice Before It Matters.', 'Train with AI until confidence feels natural.'),
   ('Practice Every Conversation.', 'Handle rejection, flirting and pressure before it\'s real.'),
-  ('Know What To Say. Before You Say It.', 'Upload chats, practise replies and build real game.'),
   ('Practice With AI. Prove It In Real Life.', 'Complete daily missions and become him in 60 days.'),
 ];
 
 // Classified progress-tracker section labels, one per panel.
-const List<String> _sections = ['PRACTICE', 'GAME', 'RIZZ', 'HIM'];
+const List<String> _sections = ['PRACTICE', 'GAME', 'HIM'];
 
 // Neon green used for the projected score + the final HIM pulse. The
 // mock uses a brighter green than the app's signalGreen, so it's local.
@@ -76,7 +77,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
   bool _purchasing = false;
 
   final PageController _pager = PageController();
-  static const int _panelCount = 4;
+  static const int _panelCount = 3;
   int _page = 0;
   final Set<int> _visited = {0};
 
@@ -165,9 +166,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   // ── Auto-tour ─────────────────────────────────────────────────────
   //
-  // Advance one panel every 3 s. Play through all five, wrap back to
-  // panel 0 (the photo), then stop — from there it's swipe-only. Any
-  // manual touch cancels the tour early (see the Listener in build()).
+  // Advance one panel every 6 s. Play through all panels, wrap back to
+  // panel 0, then stop — from there it's swipe-only. Any manual touch
+  // cancels the tour early (see the Listener in build()).
   void _startTour() {
     _tourTimer = Timer.periodic(const Duration(seconds: 6), (t) {
       if (_interacted || !mounted) {
@@ -199,7 +200,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
     setState(() {
       _page = i;
       _visited.add(i);
-      if (i == 3) _ladderRun++; // ladder panel is now the 4th (last)
+      if (i == 2) _ladderRun++; // ladder panel is now the 3rd (last)
     });
     // Only buzz on manual swipes — the auto-tour should stay silent.
     if (_interacted) HapticFeedback.selectionClick();
@@ -225,15 +226,20 @@ class _PaywallScreenState extends State<PaywallScreen> {
     if (_purchasing) return;
     final pkg = _packageFor(_Tier.weekly);
     if (pkg == null) {
-      // No live weekly Package yet — RevenueCat returned no Offering, so the
-      // subscription isn't fetchable (product not submitted/approved, or the
-      // Paid Apps Agreement isn't active). Give IMMEDIATE, clean feedback so
-      // the button never feels dead — "no response after tapping BECOME HIM"
-      // was an App Review finding. (The real fix is server-side: submit the
-      // IAP + sign the Paid Apps Agreement so a real package loads here.)
+      // NO PACKAGE = the store never handed us a purchasable product, so
+      // there is nothing to charge. This branch used to end at a vague
+      // "check your connection" toast — which is exactly backwards: an
+      // empty offering does NOT throw, so loadOfferings() returns
+      // normally, nothing is logged, and the one screen that could name
+      // the cause stayed silent. The diagnostic now runs HERE, where the
+      // failure actually happens, instead of only on a purchase error we
+      // can never reach from this state.
       HapticFeedback.mediumImpact();
-      _snack('Subscription isn\'t available right now — please check your '
-          'connection and try again in a moment.');
+      final diag = await PurchaseService.diagnose();
+      if (!mounted) return;
+      _showDiagnostic(
+          'No purchasable subscription came back from the store, so the '
+          'purchase was never started.\n\n──────────\n$diag');
       return;
     }
 
@@ -296,9 +302,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
         _snack('No previous purchases found.');
         break;
       case PurchaseOutcome.notConfigured:
-        await LocalStoreService.setSubscribed(true);
-        await LocalStoreService.setOnboarded(true);
-        if (mounted) _forwardOnSuccess();
+        // FAIL CLOSED. This used to unlock the app — permanently, with no
+        // transaction behind it and nothing able to take it back: when the
+        // store isn't configured, _refreshEntitlementCache() never runs
+        // either, so that flag would sit true forever. One failed
+        // Purchases.configure() and that user had the paid app for good.
+        // A store that won't configure is an error to show, not a gift.
+        _snack('Store unavailable right now. Nothing was charged — '
+            'try again in a moment.');
         break;
       case PurchaseOutcome.error:
         // Last chance: the RC listener may have registered the
@@ -345,6 +356,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
   }
 
   void _forwardOnSuccess() {
+    // He paid — the ladder stops immediately and permanently. Nothing
+    // reads worse than being sold something you already bought.
+    // ignore: discarded_futures
+    WinBackService.markConverted();
     final ctx = widget.context;
     if (ctx != null && ctx['afterPurchase'] == '/report') {
       context.go('/report', extra: {
@@ -369,6 +384,12 @@ class _PaywallScreenState extends State<PaywallScreen> {
     HapticFeedback.selectionClick();
     AnalyticsService.paywallDismissed(
         (widget.context?['afterPurchase'] as String?) ?? 'standalone');
+    // THE WALK. He read the whole thing and closed it — the most
+    // recoverable user in the funnel, and the one generic "open the app!"
+    // copy is most wasted on. Arm the win-back ladder with the gate he
+    // bounced off so the first message can name it.
+    await WinBackService.markPaywallWalked(
+        (widget.context?['source'] as String?) ?? 'standalone');
     if (kPaywallDemoUnlock) {
       // DEMO / RECORDING ONLY — pressing X unlocks the app so the paid features
       // can be shown after the paywall. Never true in the submitted build.
@@ -466,8 +487,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   children: [
                     const _GirlsPanel(),
                     const _OrbPanel(),
-                    const _RizzPanel(),
-                    _LadderPanel(runToken: _page == 3 ? _ladderRun : -1),
+                    _LadderPanel(runToken: _page == 2 ? _ladderRun : -1),
                   ],
                 ),
               ),
@@ -990,9 +1010,10 @@ class _OrbPanelState extends State<_OrbPanel> {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  PANEL 4 — RIZZ ACTIONS
+//  PANEL (legacy) — RIZZ ACTIONS  ·  no longer in the carousel
 // ══════════════════════════════════════════════════════════════════════
 
+// ignore: unused_element
 class _RizzPanel extends StatelessWidget {
   const _RizzPanel();
 
@@ -1027,6 +1048,7 @@ class _RizzPanel extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _RizzBtn extends StatelessWidget {
   final String title, sub;
   final bool ghost;
