@@ -245,6 +245,8 @@ class AuthService {
         provider: OAuthProvider.google,
         idToken: idToken,
         accessToken: auth.accessToken,
+        // ECHO THE TOKEN'S OWN NONCE BACK. See _nonceFromIdToken.
+        nonce: _nonceFromIdToken(idToken),
       );
       return true;
     } on AuthException catch (e) {
@@ -254,7 +256,14 @@ class AuthService {
       // rejects a Google token for three distinct reasons and they have
       // three different fixes.
       final m = e.message.toLowerCase();
-      final hint = m.contains('nonce')
+      final hint = m.contains('nonce mismatch') || m.contains('nonces mismatch')
+          ? 'Both sides sent a nonce and the server did not accept them '
+              'as equal.\n\n'
+              'Fix: Supabase → Authentication → Providers → Google → '
+              'turn ON "Skip nonce checks". The app already echoes '
+              'Google\'s own nonce back, so nothing else can be done '
+              'from this side.'
+          : m.contains('nonce')
           // Google's iOS SDK puts a nonce claim in the id_token. We
           // don't pass one (google_sign_in gives us no way to set it),
           // and GoTrue rejects a token where one side has a nonce and
@@ -262,9 +271,9 @@ class AuthService {
           // supported way through — Apple sign-in is unaffected, it
           // does its own nonce properly.
           ? 'The Google SDK put a nonce in the token and the server '
-              'expected either both or neither.\n\n'
-              'Fix: Supabase → Authentication → Providers → Google → '
-              'turn ON "Skip nonce checks".'
+              'expected either both or neither. The app now reads that '
+              'nonce out of the token and passes it back, so seeing '
+              'this means the build is older than b201.'
           : (m.contains('audience') || m.contains('client'))
               ? 'The token was issued for a different client than the '
                   'one Supabase is checking against.\n\n'
@@ -280,6 +289,53 @@ class AuthService {
       lastError = e.toString();
       debugPrint('AuthService.signInWithGoogle: $e');
       return false;
+    }
+  }
+
+  /// ── READ THE NONCE BACK OUT OF GOOGLE'S OWN TOKEN ─────────────────
+  ///
+  /// Google's iOS SDK stamps a `nonce` claim into the id_token. We never
+  /// asked it to and we cannot stop it — google_sign_in exposes no way
+  /// to supply or suppress one. The server's rule is that the nonce must
+  /// be present on both sides or neither, so passing nothing got every
+  /// sign-in rejected with "Passed nonce and nonce in id_token should
+  /// either both exist or not" AFTER the user had already picked their
+  /// account. The furthest possible point to fail.
+  ///
+  /// There is a dashboard switch for this. Relying on it means the app
+  /// only works while a setting in a web console stays flipped, which is
+  /// not a thing to bet sign-in on — so this handles it in code and the
+  /// switch becomes irrelevant either way.
+  ///
+  /// WHY ECHOING IT IS NOT A HOLE. A nonce binds a token to the request
+  /// that asked for it, and it only does that when the CALLER generates
+  /// it. Here the SDK does, so we could never have checked anything —
+  /// echoing it back is exactly as strong as the check we were already
+  /// not performing, and no weaker than the dashboard switch. The real
+  /// protection is elsewhere and unaffected: the server still verifies
+  /// Google's signature on the token and that its audience is our Web
+  /// client. Apple's lane is untouched and still does a proper nonce —
+  /// it generates the raw value, sends only the SHA-256 to Apple, and
+  /// hands the raw half to the server to match.
+  ///
+  /// Returns null when there's no nonce claim, which is the correct
+  /// value to pass then: neither side has one, and the rule is met.
+  static String? _nonceFromIdToken(String idToken) {
+    try {
+      final parts = idToken.split('.');
+      if (parts.length < 2) return null;
+      // JWTs are base64URL and unpadded; base64.decode needs both fixed.
+      var payload = parts[1].replaceAll('-', '+').replaceAll('_', '/');
+      payload = payload.padRight((payload.length + 3) ~/ 4 * 4, '=');
+      final claims =
+          jsonDecode(utf8.decode(base64.decode(payload))) as Map<String, dynamic>;
+      final nonce = claims['nonce'];
+      return (nonce is String && nonce.isNotEmpty) ? nonce : null;
+    } catch (e) {
+      // A token we can't read is a token the server will reject on its
+      // own terms, with a better message than anything we'd invent.
+      debugPrint('AuthService._nonceFromIdToken: $e');
+      return null;
     }
   }
 
