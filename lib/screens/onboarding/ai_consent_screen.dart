@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../config/backend_config.dart';
 import '../../services/analytics_service.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/local_store_service.dart';
@@ -41,6 +44,31 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
   bool _busy = false;
 
   bool get _canContinue => _agreedTerms && _agreedPrivacy;
+
+  /// ── ONE PROVIDER PER PLATFORM, AND NEVER BOTH ─────────────────────
+  ///
+  /// This screen used to show Apple AND Google to everyone. On an iPhone
+  /// that meant a Google button that could only fail — signInWithGoogle()
+  /// bails at its own guard, and a man reads a dead button as a broken
+  /// app on the very first screen he touches. The account screen already
+  /// gated it; this one, the one that actually greets him, did not.
+  ///
+  /// iOS runs Apple alone: it's the native sheet, it's what App Review
+  /// expects, and it means zero Google Cloud setup for the platform that
+  /// ships first. Android runs Google alone, because Sign in with Apple
+  /// off an Apple device is a web redirect flow this app never wired up.
+  bool get _showApple => Platform.isIOS;
+
+  /// Android only, and only once the Web client ID is pasted into
+  /// backend_config.dart. Empty ID → no button, rather than a button
+  /// whose only outcome is a snackbar.
+  bool get _showGoogle =>
+      !Platform.isIOS && BackendConfig.googleWebClientId.isNotEmpty;
+
+  /// Android before Google is configured has no provider at all. The
+  /// screen still has a job — the two consent ticks — so it keeps them
+  /// and stops pretending there was a choice to make.
+  bool get _anyProvider => _showApple || _showGoogle;
 
   @override
   void initState() {
@@ -150,7 +178,7 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
 
               const Spacer(flex: 2),
 
-              Text('Save your progress.',
+              Text(_anyProvider ? 'Save your progress.' : 'Before you start.',
                       style: GoogleFonts.inter(
                         color: Colors.white,
                         fontSize: 30,
@@ -162,8 +190,11 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
                   .fadeIn(duration: 320.ms),
               const SizedBox(height: 8),
               Text(
-                  'Sign in so your rank, streak and squad survive a lost '
-                  'phone. Or skip — everything works without it.',
+                  _anyProvider
+                      ? 'Sign in so your rank, streak and squad survive a '
+                          'lost phone. Or skip — everything works without it.'
+                      : 'Two things to agree to, then you\'re in. You can '
+                          'claim the account later from settings.',
                   style: GoogleFonts.inter(
                     color: AppColors.textSecondary,
                     fontSize: 14,
@@ -174,26 +205,34 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
               const SizedBox(height: 26),
 
               // ── SIGN IN — above the small print, like every real app ──
+              // Exactly one provider, chosen by platform. See _showApple.
+              if (_showApple) ...[
+                _ProviderButton(
+                  label: 'CONTINUE WITH APPLE',
+                  icon: Icons.apple,
+                  filled: true,
+                  enabled: ready,
+                  onTap: () => _claim(AuthService.signInWithApple),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (_showGoogle) ...[
+                _ProviderButton(
+                  label: 'CONTINUE WITH GOOGLE',
+                  glyph: 'G',
+                  filled: true,
+                  enabled: ready,
+                  onTap: () => _claim(AuthService.signInWithGoogle),
+                ),
+                const SizedBox(height: 10),
+              ],
+              // With a provider above it this is the quiet way out. With
+              // none, it's the only way forward — so it stops being grey
+              // and stops calling itself a skip.
               _ProviderButton(
-                label: 'CONTINUE WITH APPLE',
-                icon: Icons.apple,
-                filled: true,
-                enabled: ready,
-                onTap: () => _claim(AuthService.signInWithApple),
-              ),
-              const SizedBox(height: 10),
-              _ProviderButton(
-                label: 'CONTINUE WITH GOOGLE',
-                glyph: 'G',
-                filled: false,
-                enabled: ready,
-                onTap: () => _claim(AuthService.signInWithGoogle),
-              ),
-              const SizedBox(height: 10),
-              _ProviderButton(
-                label: 'SKIP FOR NOW',
-                filled: false,
-                muted: true,
+                label: _anyProvider ? 'SKIP FOR NOW' : 'CONTINUE',
+                filled: !_anyProvider,
+                muted: _anyProvider,
                 enabled: ready,
                 onTap: _skip,
               ),

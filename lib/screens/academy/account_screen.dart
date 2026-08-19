@@ -281,9 +281,15 @@ class _AccountScreenState extends State<AccountScreen> {
               ).animate().fadeIn(duration: 300.ms)
             else ...[
               Text(
-                  'You\'re playing anonymously — fine for now, but your '
-                  'rank, streak and squad die with a lost phone. Claim '
-                  'them in one tap:',
+                  // Android before the Google Web client ID is pasted in
+                  // has no provider to offer, so it must not promise one.
+                  (Platform.isIOS || BackendConfig.googleWebClientId.isNotEmpty)
+                      ? 'You\'re playing anonymously — fine for now, but '
+                          'your rank, streak and squad die with a lost '
+                          'phone. Claim them in one tap:'
+                      : 'You\'re playing anonymously. Everything works, but '
+                          'your rank, streak and squad live on this handset '
+                          'alone — sign-in is coming.',
                   style: GoogleFonts.inter(
                     color: AppColors.textSecondary,
                     fontSize: 13,
@@ -291,6 +297,12 @@ class _AccountScreenState extends State<AccountScreen> {
                     fontWeight: FontWeight.w500,
                   )),
               const SizedBox(height: 14),
+              // APPLE ONLY ON APPLE. sign_in_with_apple off an Android
+              // handset is a web-redirect flow this app never wired up,
+              // so on Android this button opened nothing and returned
+              // false — the same dead-button failure the Google one had
+              // on iOS. One provider per platform, everywhere.
+              if (Platform.isIOS)
               SizedBox(
                 height: 54,
                 child: ElevatedButton.icon(
