@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -131,8 +132,21 @@ class AuthService {
 
   /// Claim the account with Apple (native sheet → Supabase id-token).
   /// Returns true on success.
+  ///
+  /// iOS ONLY, ENFORCED HERE AND NOT JUST IN THE UI. Both screens that
+  /// offer this already hide it on Android, but a guard in the service
+  /// is the one that can't be undone by someone adding a third button
+  /// later. sign_in_with_apple off an Apple device falls back to a web
+  /// redirect flow that needs a Services ID and a return URL this app
+  /// has never configured — so on Android it doesn't fail loudly, it
+  /// opens a browser that goes nowhere. Refusing outright is better.
   static Future<bool> signInWithApple() async {
     lastError = null;
+    if (!Platform.isIOS && !Platform.isMacOS) {
+      lastError = 'Sign in with Apple is only available on Apple devices.';
+      debugPrint('AuthService.signInWithApple: refused on non-Apple platform');
+      return false;
+    }
     if (!BackendService.enabled) {
       lastError = 'No backend connection.';
       return false;

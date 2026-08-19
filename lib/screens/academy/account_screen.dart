@@ -297,11 +297,12 @@ class _AccountScreenState extends State<AccountScreen> {
                     fontWeight: FontWeight.w500,
                   )),
               const SizedBox(height: 14),
-              // APPLE ONLY ON APPLE. sign_in_with_apple off an Android
-              // handset is a web-redirect flow this app never wired up,
-              // so on Android this button opened nothing and returned
-              // false — the same dead-button failure the Google one had
-              // on iOS. One provider per platform, everywhere.
+              // APPLE ONLY ON APPLE, and AuthService refuses it outright
+              // off an Apple device so the UI isn't the only thing
+              // holding the line. sign_in_with_apple on Android falls
+              // back to a web-redirect flow this app never configured —
+              // it doesn't fail loudly, it opens a browser that goes
+              // nowhere, which is worse than a dead button.
               if (Platform.isIOS)
               SizedBox(
                 height: 54,
@@ -339,7 +340,10 @@ class _AccountScreenState extends State<AccountScreen> {
               // sign_in_with_apple off an Apple device needs a
               // web-redirect flow this app never wired up.
               if (BackendConfig.googleWebClientId.isNotEmpty) ...[
-              const SizedBox(height: 10),
+              // Only spaced off Apple when Apple is actually there —
+              // otherwise Android inherits a 24pt hole where the hidden
+              // button used to be.
+              if (Platform.isIOS) const SizedBox(height: 10),
               SizedBox(
                 height: 54,
                 child: OutlinedButton.icon(
@@ -348,13 +352,24 @@ class _AccountScreenState extends State<AccountScreen> {
                       : () => _claim(AuthService.signInWithGoogle, 'Google'),
                   icon: Text('G',
                       style: GoogleFonts.inter(
-                          color: AppColors.textPrimary,
+                          color: Platform.isIOS
+                              ? AppColors.textPrimary
+                              : Colors.black,
                           fontSize: 17,
                           fontWeight: FontWeight.w900)),
+                  // Outlined under Apple on iOS, solid when it stands
+                  // alone on Android. The only provider on a screen has
+                  // to look like the thing to press; a lone outlined
+                  // button reads as secondary to nothing.
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textPrimary,
-                    side: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.25)),
+                    backgroundColor:
+                        Platform.isIOS ? Colors.transparent : Colors.white,
+                    foregroundColor:
+                        Platform.isIOS ? AppColors.textPrimary : Colors.black,
+                    side: Platform.isIOS
+                        ? BorderSide(
+                            color: Colors.white.withValues(alpha: 0.25))
+                        : BorderSide.none,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15)),
                   ),
