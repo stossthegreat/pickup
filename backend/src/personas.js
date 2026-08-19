@@ -3986,11 +3986,16 @@ does not make you cold toward HIS flirting.`.trim();
 // REVIEW_SAFE_MODE=1 in the Railway dashboard and normal-mode voice
 // swaps to this tame prime/coda pair: warm, charming, PG — deflects any
 // spice politely and in character. The moment the app is approved,
-// DELETE the env var in Railway (or set it to 0) and the real flirt
-// engine (NORMAL_MODE_PRIME/CODA above) is back within one restart.
-// Zero deploys in either direction. Creator mode is untouched by this
+// set REVIEW_SAFE_MODE=0 in Railway and the real flirt engine
+// (NORMAL_MODE_PRIME/CODA above) is back within one restart. Zero
+// deploys in either direction. Creator mode is untouched by this
 // switch — it stays behind the owner password either way.
-const REVIEW_SAFE = process.env.REVIEW_SAFE_MODE === '1';
+//
+// DEFAULT IS SAFE. The app is IN REVIEW right now, so the lock is on
+// unless the env var explicitly says otherwise — a fresh deploy with
+// no dashboard action ships PG. Unlock after approval: set
+// REVIEW_SAFE_MODE=0.
+const REVIEW_SAFE = process.env.REVIEW_SAFE_MODE !== '0';
 
 const REVIEW_SAFE_PRIME = `
 # CONVERSATION STYLE — READ FIRST

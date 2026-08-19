@@ -378,7 +378,7 @@ never a generic reply — given the whole history.
 - the TONE lines in your persona show your VOICE only — NEVER quote them
   verbatim, and never repeat a line you or he already sent.
 
-${creator ? '' : (process.env.REVIEW_SAFE_MODE === '1' ? `━━ CONVERSATION STYLE ━━
+${creator ? '' : (process.env.REVIEW_SAFE_MODE !== '0' ? `━━ CONVERSATION STYLE ━━
 keep every reply tasteful and non-sexual: friendly banter, curiosity,
 light teasing — nothing suggestive. if he flirts hard, deflect
 gracefully in character and steer back to fun, wholesome conversation.
