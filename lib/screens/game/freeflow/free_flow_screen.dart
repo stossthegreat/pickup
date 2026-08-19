@@ -13,6 +13,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../config/dev_flags.dart';
+import '../../../services/mission_catalog.dart';
+import '../../../services/today_targets.dart';
 import '../../../services/achievements.dart';
 import '../../../services/analytics_service.dart';
 import '../../../services/milestone_service.dart';
@@ -1908,6 +1910,20 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         // screen pops, and popping (below) before the grade lands would
         // hand it null.
         await DailyGameService.submit(academyTranscript);
+        // ── THE TICK FOLLOWS THE WORK, NOT THE CEREMONY ────────────
+        //
+        // This used to live inside the Daily screen's reveal block, so
+        // it only ran when `lastResult != null && !alreadyRevealed`.
+        // Both of those can be false after a conversation that actually
+        // happened: submit() returns null whenever the grader or the
+        // network hiccups, and the reveal stamp is per-day and one-way,
+        // so a single failure locked the tick out until tomorrow. The
+        // man had the conversation either way, and watching a
+        // count-up animation is not what completes a mission.
+        //
+        // Credited here, at the point the transcript exists, with no
+        // conditions on it at all. Idempotent — see today_targets.dart.
+        await TodayTargets.credit(MissionKind.aiVoice);
       }
       // Blend the five dimension scores into the running total so The Five
       // CLIMBS over the 60 days instead of snapping to the last session.

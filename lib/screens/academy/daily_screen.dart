@@ -214,10 +214,6 @@ class _DailyScreenState extends State<DailyScreen> {
       // single biggest hole in the economy.
       final ai = Economy.aiScoreFromVoice(r.score);
       await Rewards.daily(ai);
-      // TWO BIRDS. He only has minutes for one voice conversation a day,
-      // so this one ticks his AI voice mission too rather than leaving
-      // it sitting on Home unticked. Idempotent — see today_targets.dart.
-      await TodayTargets.credit(MissionKind.aiVoice);
       MilestoneService.pushTrophies(await Achievements.bump(Stat.dailies));
       MilestoneService.pushTrophies(await Achievements.bump(Stat.talks));
       if (ai >= 90) {
@@ -232,6 +228,20 @@ class _DailyScreenState extends State<DailyScreen> {
         await BragSheet.maybeShow(context, score: '$ai', scaleLabel: '/ 100');
       }
     }
+    // ── OUTSIDE EVERY GUARD, DELIBERATELY ──────────────────────────
+    //
+    // TWO BIRDS: he only has minutes for one voice conversation a day,
+    // so the Daily ticks his AI voice mission rather than leaving it
+    // sitting on Home asking for a second one.
+    //
+    // This sits after the `if`, not inside it, because the block above
+    // is gated on the grade landing AND the reveal not having played —
+    // and neither of those has anything to do with whether he did the
+    // conversation. FreeFlowScreen credits it at session end too; this
+    // is the backstop for any route that reaches the Daily without
+    // going through the armed-session hook. credit() is idempotent, so
+    // the second call costs one prefs read and pays nothing.
+    await TodayTargets.credit(MissionKind.aiVoice);
     _load();
   }
 
