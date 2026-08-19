@@ -85,4 +85,4 @@ const kForceOnboarding = false;
 /// tell which build is actually installed on-device (TestFlight lag has
 /// repeatedly made us debug a stale build). Bump this with every pubspec
 /// build-number bump.
-const kBuildTag = 'b203-reel-plays';
+const kBuildTag = 'b204-reel-rebuilt';
