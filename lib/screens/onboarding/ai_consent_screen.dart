@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../config/backend_config.dart';
 import '../../services/analytics_service.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/local_store_service.dart';
@@ -41,6 +44,34 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
   bool _busy = false;
 
   bool get _canContinue => _agreedTerms && _agreedPrivacy;
+
+  /// ── SHOW A PROVIDER ONLY WHERE IT CAN ACTUALLY WORK ───────────────
+  ///
+  /// The rule is not "one per platform", it's "never a button that can
+  /// only fail". A dead button on the first screen a man touches reads
+  /// as a broken app, and this screen briefly had exactly that: Google
+  /// offered on an iPhone with no client IDs behind it.
+  ///
+  /// Apple is iOS-only because sign_in_with_apple off an Apple device is
+  /// a web-redirect flow this app never wired up.
+  bool get _showApple => Platform.isIOS;
+
+  /// Google runs on BOTH now — the iOS OAuth client exists and its
+  /// reversed id is in Info.plist, so the sheet opens and comes back.
+  /// Two providers is the point: every man who'd have bounced off a
+  /// single unfamiliar button is a man who signs in instead. App Review
+  /// is fine with it precisely because Apple is offered alongside
+  /// (guideline 4.8 requires the reverse — Apple present wherever a
+  /// third-party login is).
+  ///
+  /// Still gated on the Web client ID, which is what mints the token on
+  /// both platforms. Empty → no button, rather than a snackbar.
+  bool get _showGoogle => BackendConfig.googleWebClientId.isNotEmpty;
+
+  /// Android before Google is configured has no provider at all. The
+  /// screen still has a job — the two consent ticks — so it keeps them
+  /// and stops pretending there was a choice to make.
+  bool get _anyProvider => _showApple || _showGoogle;
 
   @override
   void initState() {
@@ -150,7 +181,7 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
 
               const Spacer(flex: 2),
 
-              Text('Save your progress.',
+              Text(_anyProvider ? 'Save your progress.' : 'Before you start.',
                       style: GoogleFonts.inter(
                         color: Colors.white,
                         fontSize: 30,
@@ -162,8 +193,11 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
                   .fadeIn(duration: 320.ms),
               const SizedBox(height: 8),
               Text(
-                  'Sign in so your rank, streak and squad survive a lost '
-                  'phone. Or skip — everything works without it.',
+                  _anyProvider
+                      ? 'Sign in so your rank, streak and squad survive a '
+                          'lost phone. Or skip — everything works without it.'
+                      : 'Two things to agree to, then you\'re in. You can '
+                          'claim the account later from settings.',
                   style: GoogleFonts.inter(
                     color: AppColors.textSecondary,
                     fontSize: 14,
@@ -174,26 +208,43 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
               const SizedBox(height: 26),
 
               // ── SIGN IN — above the small print, like every real app ──
+              // Which providers appear is decided in _showApple /
+              // _showGoogle; the styling below decides which one leads.
+              if (_showApple) ...[
+                _ProviderButton(
+                  label: 'CONTINUE WITH APPLE',
+                  icon: Icons.apple,
+                  filled: true,
+                  enabled: ready,
+                  onTap: () => _claim(AuthService.signInWithApple),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (_showGoogle) ...[
+                _ProviderButton(
+                  label: 'CONTINUE WITH GOOGLE',
+                  glyph: 'G',
+                  // Solid when it stands alone (Android), outlined when
+                  // Apple is above it (iOS). Two solid white buttons
+                  // stacked is two primaries, which is none — the eye
+                  // has nothing to land on and the tap gets slower.
+                  filled: !_showApple,
+                  enabled: ready,
+                  onTap: () => _claim(AuthService.signInWithGoogle),
+                ),
+                const SizedBox(height: 10),
+              ],
+              // Pushed down off the provider stack and shrunk. Sitting
+              // flush under them at the same size it was a third equal
+              // option; the gap is what tells the eye the choice above
+              // is finished. With no provider at all it's the only way
+              // forward, so it takes the full solid treatment instead.
+              SizedBox(height: _anyProvider ? 8 : 0),
               _ProviderButton(
-                label: 'CONTINUE WITH APPLE',
-                icon: Icons.apple,
-                filled: true,
-                enabled: ready,
-                onTap: () => _claim(AuthService.signInWithApple),
-              ),
-              const SizedBox(height: 10),
-              _ProviderButton(
-                label: 'CONTINUE WITH GOOGLE',
-                glyph: 'G',
-                filled: false,
-                enabled: ready,
-                onTap: () => _claim(AuthService.signInWithGoogle),
-              ),
-              const SizedBox(height: 10),
-              _ProviderButton(
-                label: 'SKIP FOR NOW',
-                filled: false,
-                muted: true,
+                label: _anyProvider ? 'CONTINUE WITHOUT SIGNING IN' : 'CONTINUE',
+                filled: !_anyProvider,
+                muted: _anyProvider,
+                quiet: _anyProvider,
                 enabled: ready,
                 onTap: _skip,
               ),
@@ -315,12 +366,22 @@ class _ProviderButton extends StatelessWidget {
   final bool muted;
   final bool enabled;
   final VoidCallback onTap;
+
+  /// THE WAY OUT SHOULD NOT LOOK LIKE A WAY IN.
+  ///
+  /// Given the same 54pt box and the same outline as the providers, the
+  /// skip read as a third equal choice — and a third of a screen's worth
+  /// of equally-weighted options is a third of the sign-ins. Quiet drops
+  /// the height, the type and the border so it's plainly the exit, while
+  /// still being a full-width tap target rather than a hidden link.
+  final bool quiet;
   const _ProviderButton({
     required this.label,
     this.icon,
     this.glyph,
     required this.filled,
     this.muted = false,
+    this.quiet = false,
     required this.enabled,
     required this.onTap,
   });
@@ -341,11 +402,11 @@ class _ProviderButton extends StatelessWidget {
           onTap: enabled ? onTap : null,
           borderRadius: BorderRadius.circular(14),
           child: Container(
-            height: 54,
+            height: quiet ? 44 : 54,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              border: filled
+              border: (filled || quiet)
                   ? null
                   : Border.all(color: Colors.white.withValues(alpha: 0.18)),
             ),
@@ -366,9 +427,9 @@ class _ProviderButton extends StatelessWidget {
               Text(label,
                   style: GoogleFonts.inter(
                     color: fg,
-                    fontSize: 13,
-                    letterSpacing: 1.6,
-                    fontWeight: FontWeight.w900,
+                    fontSize: quiet ? 11.5 : 13,
+                    letterSpacing: quiet ? 1.9 : 1.6,
+                    fontWeight: quiet ? FontWeight.w700 : FontWeight.w900,
                   )),
             ]),
           ),

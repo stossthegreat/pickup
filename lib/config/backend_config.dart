@@ -12,38 +12,53 @@ class BackendConfig {
 
   // ── GOOGLE SIGN-IN ──────────────────────────────────────────────────
   //
-  // STATUS: NOT SET UP. Both IDs are empty, so signInWithGoogle() bails
-  // at its own guard and the button is hidden (see account_screen.dart).
-  // Apple sign-in is unaffected and is the lane that actually matters on
-  // iOS — this can ship empty.
+  // STATUS: LIVE ON ANDROID. Project imhimrizz-cb182 (94590135779) holds
+  // all three OAuth clients — Android (com.imhim.app, SHA-1 registered),
+  // iOS (com.imhimrizz.app), and the Web client whose ID is below.
   //
-  // The Firebase files already in the tree (android/app/
-  // google-services.json, ios/Runner/GoogleService-Info.plist) do NOT
-  // help: they were generated for Firebase Analytics with Google
-  // Sign-In switched off, so `oauth_client` is an empty array and the
-  // iOS plist carries no CLIENT_ID at all. They are the same Google
-  // project (imhim-75991) but they are not credentials.
+  // ── BOTH PLATFORMS ──────────────────────────────────────────────────
   //
-  // ── TO TURN IT ON ──────────────────────────────────────────────────
+  // Google shows on iOS and Android; Apple shows on iOS only, because
+  // sign_in_with_apple off an Apple device needs a web-redirect flow
+  // this app never wired up. So an iPhone offers two buttons and an
+  // Android one offers Google. App Store guideline 4.8 is satisfied by
+  // Apple being present alongside the third-party option, which it is.
   //
-  // Google Cloud Console → project `imhim-75991` → APIs & Services →
-  // Credentials. Create THREE OAuth clients:
+  // ── HOW FIREBASE AND SUPABASE SPLIT THE WORK ────────────────────────
   //
-  //   WEB      → paste its ID into googleWebClientId below, AND into
-  //              Supabase → Authentication → Providers → Google as the
-  //              "Client ID". This is the one Supabase verifies tokens
-  //              against; without it every sign-in is rejected.
-  //   iOS      → bundle id `com.imhimrizz.app`. Paste its ID into
-  //              googleIosClientId below, and add its REVERSED form
-  //              (com.googleusercontent.apps.NNN-xxx) to Info.plist
-  //              CFBundleURLSchemes — the Google sheet returns to the
-  //              app through that scheme and never comes back without it.
-  //   ANDROID  → package `com.imhim.app` + a SHA-1 fingerprint. Nothing
-  //              to paste; it just has to exist.
+  // Firebase is real and running in this app — firebase_core plus
+  // firebase_analytics, started from firebase_options.dart rather than
+  // from the config files, which is why analytics works without the
+  // google-services gradle plugin ever being applied. What Firebase
+  // does NOT do here is authentication: sign-in is Supabase end to end.
   //
-  // Then add the iOS and Android client IDs to Supabase's "Authorized
-  // Client IDs" field, or it accepts the web token and rejects both
-  // native ones.
+  // They meet at Google Cloud. A Firebase project IS a Cloud project —
+  // `imhimrizz-cb182` — so registering the Android app there with a
+  // SHA-1 auto-creates the ANDROID OAuth client, and switching the
+  // Google provider on in Firebase Auth auto-creates the WEB one. We
+  // never use Firebase Auth to sign anybody in; we just take the web
+  // client id it minted and hand it to Supabase, which is the thing
+  // that actually verifies the token.
+  //
+  // ── THE WEB CLIENT IS THE ONE THAT MATTERS ──────────────────────────
+  //
+  // Counter-intuitively it is NOT the Android client that gets named in
+  // code. The Android client is matched implicitly by package name plus
+  // signing fingerprint and is never referenced here; the WEB client id
+  // is passed as `serverClientId`, and that is what makes Google mint an
+  // ID TOKEN rather than just a local session. No web client, no token,
+  // nothing to hand Supabase.
+  //
+  // The same string must ALSO sit in Supabase → Authentication →
+  // Providers → Google → "Client ID", because the token's audience is
+  // this web client and that is the value Supabase verifies against.
+  // Set in one place only and every sign-in is rejected.
+  //
+  // googleIosClientId is the iOS half. google_sign_in needs it as
+  // `clientId` on iOS (Android passes null and is matched by package +
+  // fingerprint instead), and its REVERSED form is in Info.plist under
+  // CFBundleURLSchemes — that scheme is how the Google sheet hands
+  // control back to the app. Without it the sheet opens and hangs.
   //
   // ── THE SHA-1 THAT ACTUALLY MATTERS ────────────────────────────────
   //
@@ -52,7 +67,11 @@ class BackendConfig {
   // from Play Console → Test and release → App integrity → App signing
   // key certificate. Using the upload key's fingerprint is the classic
   // failure here: sign-in works in every internal build and dies for
-  // every real user with a silent cancel and no error anywhere.
-  static const googleWebClientId = '';
-  static const googleIosClientId = '';
+  // every real user with a silent cancel and no error anywhere. Register
+  // BOTH if you're also testing debug builds — a client can hold many.
+  //
+  static const googleWebClientId =
+      '94590135779-rlc0e497v8k5nc30grgqna79mpltu29v.apps.googleusercontent.com';
+  static const googleIosClientId =
+      '94590135779-37sj39doa8rikv9it3d9o5n8oahb14uj.apps.googleusercontent.com';
 }

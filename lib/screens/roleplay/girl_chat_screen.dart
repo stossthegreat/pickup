@@ -21,14 +21,12 @@ import '../../services/paywall_gate.dart';
 import '../../services/achievements.dart';
 import '../../services/coaching.dart' show Coaching;
 import '../../services/tactics.dart';
-import '../../services/lucien_mirror.dart';
 import '../../services/milestone_service.dart';
 import '../../services/rewards.dart';
 import '../../services/rolodex_service.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/perfect_line.dart';
-import '../../widgets/academy/mirror_card.dart';
 import '../../widgets/academy/the_roll.dart';
 import '../../widgets/academy/verdict.dart';
 import '../../widgets/common/ai_consent_dialog.dart';
@@ -406,25 +404,8 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
 
   bool _submitted = false;
 
-  /// ── THE MIRROR ───────────────────────────────────────────────────
-  ///
-  /// Lucien's mark on the line he JUST sent. One at a time — a second
-  /// one replaces the first rather than stacking, because a column of
-  /// coaching cards is a lecture and he came here to talk to a woman.
-  /// Anchored to the message index so it renders under the right line.
-  LucienMirror? _mirror;
-  int _mirrorAt = -1;
-  int _lastMarkTurn = -99;
-
-  /// He can shut Lucien up from the card itself, and it sticks for the
-  /// session. Deliberately NOT persisted: a man who silenced Lucien on
-  /// a bad night should meet him again tomorrow, and the switch is one
-  /// tap to get back.
-  bool _mirrorOff = false;
-
-  /// The one-off "you can shut me up" note, shown with the very first
-  /// mirror this device ever sees and never again.
-  bool _mirrorHint = false;
+  // The mirror's state fields are gone with it — see the note further
+  // down in the send handler for why, and for how to switch it back on.
 
   /// Hand the conversation to the text grader on the way out.
   ///
@@ -715,41 +696,35 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       if (!_tacticsSeen.contains(id)) _tacticsSeen.add(id);
     }
 
-    // ── LUCIEN MARKS IT ───────────────────────────────────────────────
+    // ── LUCIEN'S MIRROR IS OFF ────────────────────────────────────────
     //
-    // AFTER the line is sent and graded, never before. That single fact
-    // is what makes this safe on every surface including the ranked
-    // ones: it cannot improve the conversation it is commenting on, only
-    // the next one. See lucien_mirror.dart.
-    if (!_mirrorOff) {
-      final mark = await LucienMirror.mark(
-        line: text,
-        demonstrated: demonstrated,
-        transcript: [
-          for (final m in _msgs)
-            if (m.who == 'you' || m.who == 'her')
-              '${m.who == 'you' ? 'HIM' : 'HER'}: ${m.text}',
-        ].join('\n'),
-        herLast: _herLines.isNotEmpty ? _herLines.last : '',
-        girl: widget.config.name,
-        heat: _heat,
-        turnIndex: _turnIndex,
-        turnsSinceLastMark: _turnIndex - _lastMarkTurn,
-        delta: result.delta,
-      );
-      if (mark != null && mounted) {
-        final first = await Tactics.markMirrorSeen();
-        if (mounted) {
-          setState(() {
-            _mirror = mark;
-            _mirrorAt = _msgs.length - 1;
-            _lastMarkTurn = _turnIndex;
-            _mirrorHint = first;
-          });
-          _scrollToBottom();
-        }
-      }
-    }
+    // Removed after testing, not because the idea was wrong but because
+    // the output never got good enough to earn its interruption. Three
+    // prompt passes (a rule table, then a model call, then worked
+    // examples) each improved it and none made it something worth
+    // stopping a conversation for.
+    //
+    // The honest read on why: this chat already had a tactic reveal, a
+    // score reveal, a coaching line, a payout and a verdict commenting
+    // on it. A seventh voice cannot be specific because the six before
+    // it already said everything general. Making Lucien louder was
+    // never going to fix a room that crowded.
+    //
+    // WHAT SURVIVES, deliberately: the lucien-mirror Edge Function is
+    // still deployed and still good, and MirrorCard/LucienMirror are
+    // still in the tree. Turning this back on is uncommenting the block
+    // below — worth doing once the end-of-chat noise is cut down and
+    // there is room for one voice to be heard.
+    //
+    // if (!_mirrorOff) {
+    //   final mark = await LucienMirror.mark(...);
+    //   if (mark != null && mounted) setState(() => _mirror = mark);
+    // }
+    //
+    // THE COACH IN PRACTICE IS UNTOUCHED. "Get help from your coach"
+    // hands him a genuinely sharp line and men like it — that one works
+    // because he ASKED for it, which is the whole difference.
+
     _hisPrevious = text;
     if (bubbles.isNotEmpty) _herLines.add(bubbles.first);
 
@@ -1028,28 +1003,6 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
                     for (var i = 0; i < _msgs.length; i++) ...[
                       _MsgView(msg: _msgs[i], config: widget.config),
                       const SizedBox(height: 12),
-                      // Under the exact line it's about — a coaching
-                      // note floating at the bottom of the thread would
-                      // make him scroll to work out which line it meant.
-                      if (_mirror != null && _mirrorAt == i)
-                        MirrorCard(
-                          mirror: _mirror!,
-                          showHint: _mirrorHint,
-                          onSilence: () {
-                            setState(() {
-                              _mirrorOff = true;
-                              _mirror = null;
-                              _mirrorHint = false;
-                            });
-                            ScaffoldMessenger.of(context)
-                                .showSnackBar(const SnackBar(
-                              content: Text(
-                                  'Lucien\'s out. He\'s back next chat.'),
-                              behavior: SnackBarBehavior.floating,
-                              duration: Duration(milliseconds: 1800),
-                            ));
-                          },
-                        ),
                     ],
                     if (_sending) const _TypingBubble(),
                     if (_helping) const _LucienThinking(),

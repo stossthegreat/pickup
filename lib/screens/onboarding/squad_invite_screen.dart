@@ -49,6 +49,9 @@ class _SquadInviteScreenState extends State<SquadInviteScreen> {
   /// all land on this page with the job already done — so it steps out
   /// of the way instead of pitching him something he owns.
   Future<void> _skipIfAlreadyIn() async {
+    // Straight home, NOT via the what-this-is reel: a man who already
+    // holds a squad has run this app before, and explaining it to him is
+    // the kind of thing that makes a reinstall feel like a demotion.
     try {
       if (await SquadService.mySquad() == null) return;
       if (!mounted) return;
@@ -67,13 +70,16 @@ class _SquadInviteScreenState extends State<SquadInviteScreen> {
     // Came back with a squad → onboarding is done. Came back without one
     // → he's still on the pitch, which is where he should be.
     if (await SquadService.mySquad() != null && mounted) {
-      context.go('/home');
+      context.go('/onboarding/what-this-is');
     }
   }
 
+  /// LAST STEP IS THE REEL, NOT HOME. Skipping the squad shouldn't cost
+  /// him the explanation of what the other three quarters of the app do —
+  /// that's the man most likely to bounce, not least.
   void _finish(BuildContext context) {
     HapticFeedback.mediumImpact();
-    context.go('/home');
+    context.go('/onboarding/what-this-is');
   }
 
   @override

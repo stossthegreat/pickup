@@ -352,20 +352,50 @@ Deno.serve(async (req) => {
       // Battles fuel the weekly league/fixture engine like any session.
       await addLeaguePoints(admin, uid, Math.round(graded.score / 200));
 
-      // ── RIZZ POINTS — battles are the main feed into the text ladder.
-      // A duel IS a graded text conversation, so it records a chat_attempt
-      // like any other and the cumulative board picks it up. The grader
-      // here is the shared 0..9999 rubric (battles predate the chat one
-      // and re-grading would mean a second model call per submission), so
-      // the score is rescaled by the app's standard 99.99 factor into the
-      // 0..100 the text ladder speaks.
-      await admin.from("chat_attempts").insert({
-        user_id: uid,
-        surface: "battle",
-        scenario: b.scenario ?? null,
-        score: Math.max(0, Math.min(100, Math.round(graded.score / 99.99))),
-        rubric: graded.rubric,
-      });
+      // ── THE SCORE GOES TO THE BOARD THAT MATCHES THE ROOM ──────────
+      //
+      // A duel is not a separate economy — it is a graded conversation
+      // that also happens to be a fight. So the number it produces
+      // lands on the SAME ladder any other conversation in that room
+      // would feed: a spoken duel counts toward voice, a typed one
+      // toward chat. Every battle used to record a chat_attempt
+      // regardless, which meant a man could climb the TEXT board
+      // without typing a word.
+      //
+      // Rescaled by the app's standard 99.99 factor: the battle grader
+      // is the shared 0..9999 rubric (battles predate the chat one, and
+      // re-grading would mean a second model call per submission), and
+      // both boards speak 0..100.
+      const points = Math.max(0, Math.min(100,
+        Math.round(graded.score / 99.99)));
+      const isVoiceDuel = b.medium === "voice";
+
+      if (isVoiceDuel) {
+        await admin.from("voice_sessions").insert({
+          user_id: uid,
+          scenario: b.scenario ?? null,
+          score: graded.score,
+          rubric: graded.rubric,
+        });
+        // Same accumulate-with-fallback shape score-voice uses, so a
+        // deploy landing before migration 0017 can't break submitting.
+        const { data: ve } = await admin.from("rizz_elo")
+          .select("voice_points").eq("user_id", uid).maybeSingle();
+        const { error: verr } = await admin.from("rizz_elo").upsert({
+          user_id: uid,
+          voice_points: (ve?.voice_points ?? 0) + points,
+          updated_at: new Date().toISOString(),
+        });
+        if (verr) {/* pre-0017 schema — the session row still landed */}
+      } else {
+        await admin.from("chat_attempts").insert({
+          user_id: uid,
+          surface: "battle",
+          scenario: b.scenario ?? null,
+          score: points,
+          rubric: graded.rubric,
+        });
+      }
 
       const patch: Record<string, unknown> = isA
         ? { a_score: graded.score }

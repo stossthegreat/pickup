@@ -1,26 +1,51 @@
 {
   "project_info": {
-    "project_number": "826053971859",
-    "project_id": "imhim-75991",
-    "storage_bucket": "imhim-75991.firebasestorage.app"
+    "project_number": "94590135779",
+    "project_id": "imhimrizz-cb182",
+    "storage_bucket": "imhimrizz-cb182.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:826053971859:android:c0ff8bb707e3f4c485a266",
+        "mobilesdk_app_id": "1:94590135779:android:daaa4e4145dbb29ab584d6",
         "android_client_info": {
           "package_name": "com.imhim.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "94590135779-bl01n70k98eqrtvg667a48pjk1tftjvg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.imhim.app",
+            "certificate_hash": "1b12a2b652ef9520beb98d60077378233f2d4543"
+          }
+        },
+        {
+          "client_id": "94590135779-rlc0e497v8k5nc30grgqna79mpltu29v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyBJDHSki94CSv_vkOb9yGkBldRBfLtlFDU"
+          "current_key": "AIzaSyCtF-lM3TGwBJB-EpJ8QjELKV_cReVVOGk"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "94590135779-rlc0e497v8k5nc30grgqna79mpltu29v.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "94590135779-37sj39doa8rikv9it3d9o5n8oahb14uj.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.imhimrizz.app"
+              }
+            }
+          ]
         }
       }
     }

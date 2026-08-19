@@ -281,9 +281,15 @@ class _AccountScreenState extends State<AccountScreen> {
               ).animate().fadeIn(duration: 300.ms)
             else ...[
               Text(
-                  'You\'re playing anonymously — fine for now, but your '
-                  'rank, streak and squad die with a lost phone. Claim '
-                  'them in one tap:',
+                  // With no provider configured at all there is nothing
+                  // to offer, so it must not promise a one-tap claim.
+                  (Platform.isIOS || BackendConfig.googleWebClientId.isNotEmpty)
+                      ? 'You\'re playing anonymously — fine for now, but '
+                          'your rank, streak and squad die with a lost '
+                          'phone. Claim them in one tap:'
+                      : 'You\'re playing anonymously. Everything works, but '
+                          'your rank, streak and squad live on this handset '
+                          'alone — sign-in is coming.',
                   style: GoogleFonts.inter(
                     color: AppColors.textSecondary,
                     fontSize: 13,
@@ -291,6 +297,13 @@ class _AccountScreenState extends State<AccountScreen> {
                     fontWeight: FontWeight.w500,
                   )),
               const SizedBox(height: 14),
+              // APPLE ONLY ON APPLE, and AuthService refuses it outright
+              // off an Apple device so the UI isn't the only thing
+              // holding the line. sign_in_with_apple on Android falls
+              // back to a web-redirect flow this app never configured —
+              // it doesn't fail loudly, it opens a browser that goes
+              // nowhere, which is worse than a dead button.
+              if (Platform.isIOS)
               SizedBox(
                 height: 54,
                 child: ElevatedButton.icon(
@@ -314,25 +327,23 @@ class _AccountScreenState extends State<AccountScreen> {
               ),
               // GOOGLE ONLY EXISTS WHEN GOOGLE EXISTS.
               //
-              // The client IDs in backend_config.dart are empty, so
+              // Gated on the config, not the platform: the client IDs
+              // are filled in now, so this shows on iOS and Android
+              // alike. It stays gated because an empty ID means
               // signInWithGoogle() bails at its own guard and returns
-              // false — and this button sat there fully live, opening a
-              // sheet-less failure and a snackbar saying it isn't
-              // configured. A button that can only fail is worse than no
-              // button: the user reads it as the app being broken, and
-              // on the onboarding pass it's the first thing they touch.
+              // false — a button that opens a sheet-less failure and a
+              // snackbar saying it isn't configured. A button that can
+              // only fail is worse than no button; the user reads it as
+              // the app being broken.
               //
-              // Gated on the config rather than deleted, so the day the
-              // two IDs are pasted in, the button comes back on its own
-              // with no code change. See the setup steps in
-              // backend_config.dart.
-              // …and NEVER on iOS, even once configured. iOS runs the
-              // Apple lane only — one button, zero Google Cloud setup,
-              // and no App-Review questions about a second provider.
-              // Android keeps Google (no Sign in with Apple there).
-              if (!Platform.isIOS &&
-                  BackendConfig.googleWebClientId.isNotEmpty) ...[
-              const SizedBox(height: 10),
+              // Apple above is iOS-only in the other direction, since
+              // sign_in_with_apple off an Apple device needs a
+              // web-redirect flow this app never wired up.
+              if (BackendConfig.googleWebClientId.isNotEmpty) ...[
+              // Only spaced off Apple when Apple is actually there —
+              // otherwise Android inherits a 24pt hole where the hidden
+              // button used to be.
+              if (Platform.isIOS) const SizedBox(height: 10),
               SizedBox(
                 height: 54,
                 child: OutlinedButton.icon(
@@ -341,13 +352,24 @@ class _AccountScreenState extends State<AccountScreen> {
                       : () => _claim(AuthService.signInWithGoogle, 'Google'),
                   icon: Text('G',
                       style: GoogleFonts.inter(
-                          color: AppColors.textPrimary,
+                          color: Platform.isIOS
+                              ? AppColors.textPrimary
+                              : Colors.black,
                           fontSize: 17,
                           fontWeight: FontWeight.w900)),
+                  // Outlined under Apple on iOS, solid when it stands
+                  // alone on Android. The only provider on a screen has
+                  // to look like the thing to press; a lone outlined
+                  // button reads as secondary to nothing.
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textPrimary,
-                    side: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.25)),
+                    backgroundColor:
+                        Platform.isIOS ? Colors.transparent : Colors.white,
+                    foregroundColor:
+                        Platform.isIOS ? AppColors.textPrimary : Colors.black,
+                    side: Platform.isIOS
+                        ? BorderSide(
+                            color: Colors.white.withValues(alpha: 0.25))
+                        : BorderSide.none,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15)),
                   ),
