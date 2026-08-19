@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -9,43 +7,38 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_colors.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
-///  WHAT THIS IS — the reel. Four rooms, ninety seconds, then he's in.
+///  WHAT THIS IS — six title cards. Black, white, red. Nothing else.
 /// ══════════════════════════════════════════════════════════════════════
 ///
-/// THE PROBLEM THIS SOLVES. Onboarding ended and a man landed on a grid
-/// of ten women. Nothing had told him there were squads, or battles, or
-/// that the coach exists, or that the whole thing is a sixty-day climb —
-/// so he used one tenth of what he'd just signed up for and judged the
-/// product on that tenth.
+/// THE PROBLEM. Onboarding ended and a man landed on a grid of ten
+/// women. Nothing had told him there were squads, or duels, or that the
+/// coach exists — so he used a tenth of what he'd signed up for and
+/// judged the product on that tenth.
 ///
-/// ── IT PLAYS. IT IS NOT A FORM ──────────────────────────────────────
+/// ── WHAT THE FIRST ATTEMPT GOT WRONG, SO IT ISN'T REPEATED ──────────
 ///
-/// The first version was four cards with a NEXT button, which is a
-/// slideshow, and nobody has ever been sold anything by a slideshow.
-/// This one runs on its own like a story: a segmented bar fills across
-/// the top, each card holds for its own beat, and it moves whether he
-/// touches it or not. He can drive it if he wants — tap the right side
-/// to skip ahead, the left to go back, hold anywhere to pause — but
-/// doing nothing is a valid way to watch it, which is the entire
-/// difference between a reel and a wizard.
+/// Four cards, each with a kicker, a two-line headline, a paragraph AND
+/// a payoff line — sixty words — held for five seconds. Unreadable. Then
+/// four different accent colours across four cards, which turned a black
+/// app with one red into a colour swatch. Every fault came from the same
+/// instinct: saying more, and dressing it up.
 ///
-/// ── ONE ROOM PER CARD ───────────────────────────────────────────────
+/// ── SO: ONE THOUGHT A FRAME, AND ONE COLOUR ─────────────────────────
 ///
-/// PRACTISE · PROVE IT · BE HELD TO IT · FIGHT, in the order of the
-/// actual loop: you rehearse, you do it for real, your squad checks, and
-/// when you fancy it you put it against another man.
+/// A tag, a headline of one or two words, and a single line under it.
+/// Nine words a frame. The headline does the work and everything else
+/// gets out of its way — which is the only reason a word can land at
+/// all, because a word only hits hard when it is the loudest thing on
+/// the screen.
 ///
-/// Each card owns a colour, and everything on screen takes it — the
-/// wash behind, the drifting light, the giant ghost numeral, the rule,
-/// the bar. Swiping doesn't change the text on a page, it changes the
-/// room you're standing in. That's what makes four screens feel like one
-/// film instead of four forms.
+/// Black, white, and the app's red. A brand is what you refuse to add.
 ///
-/// ── HE CAN LEAVE AT ANY POINT ───────────────────────────────────────
+/// ── AND TIME TO ACTUALLY READ IT ────────────────────────────────────
 ///
-/// SKIP is on every frame. A man who wants to get on with it has already
-/// decided to use the app, and holding him hostage to four screens is
-/// how you turn a signup into an uninstall.
+/// Nine words held for 4.2 seconds, with everything on screen by 900ms.
+/// Three clear seconds of reading on every frame, against sixty words in
+/// five seconds before. Tap right to move on if that's still slow, left
+/// to go back, hold to pause.
 class WhatThisIsScreen extends StatefulWidget {
   const WhatThisIsScreen({super.key});
 
@@ -53,82 +46,44 @@ class WhatThisIsScreen extends StatefulWidget {
   State<WhatThisIsScreen> createState() => _WhatThisIsScreenState();
 }
 
-class _Card {
-  final String kicker;
-  final String title;
-  final String body;
-  final String proof;
-  final IconData icon;
-  final Color tone;
-  const _Card(this.kicker, this.title, this.body, this.proof, this.icon,
-      this.tone);
+class _Frame {
+  final String tag;
+  final String head;
+  final String line;
+  const _Frame(this.tag, this.head, this.line);
 }
 
 class _WhatThisIsScreenState extends State<WhatThisIsScreen>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   final _pages = PageController();
   int _i = 0;
 
-  /// Drives the segment fill AND the auto-advance — one clock, so the
-  /// bar can never disagree with when the page actually turns.
+  /// One clock drives the bar fill AND the page turn, so the bar can
+  /// never disagree with when the frame actually changes.
   late final AnimationController _clock = AnimationController(
     vsync: this,
-    duration: _hold,
+    duration: const Duration(milliseconds: 4200),
   )..addStatusListener((s) {
       if (s == AnimationStatus.completed) _advance();
     });
 
-  /// Never stops — the slow light behind everything, which is most of
-  /// why the screen reads as filmed rather than laid out.
-  late final AnimationController _drift = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 11),
-  )..repeat();
-
-  static const _hold = Duration(milliseconds: 5200);
-
-  static const _cards = <_Card>[
-    _Card(
-      'PRACTISE',
-      'Ten women.\nAs often as you like.',
-      'Text them or call them for real — her header has a phone icon and '
-          'it goes live. They remember you. They warm up, or they don\'t.',
-      'Your coach sits in every conversation. Tap him and he hands you '
-          'the line you were reaching for.',
-      Icons.forum_rounded,
-      AppColors.red,
-    ),
-    _Card(
-      'PROVE IT',
-      'Five missions.\nEvery single day.',
-      'Three on the AI. Two out there. The real ones pay the most, '
-          'because talking to a stranger on a Tuesday is the thing that '
-          'actually changes you.',
-      'Everything you do comes back scored out of a hundred, with what '
-          'landed and what didn\'t.',
-      Icons.bolt_rounded,
-      AppColors.signalAmber,
-    ),
-    _Card(
-      'BE HELD TO IT',
-      'Two to five men.\nNobody hides.',
-      'Your squad sees what you did and what you skipped. Same woman '
-          'every day, everyone blind, scores side by side.',
-      'Go quiet and they can call you out in front of everyone. You will '
-          'feel it. That is the point.',
-      Icons.groups_rounded,
-      Color(0xFF2EE87A),
-    ),
-    _Card(
-      'FIGHT',
-      'Same woman.\nBoth blind.',
-      'Queue against a stranger or send a mate a code. You both talk to '
-          'her. Neither of you sees the other\'s attempt.',
-      'The better conversation takes it. Voice or text — you pick your '
-          'weapon.',
-      Icons.sports_mma_rounded,
-      Color(0xFF8B94F5),
-    ),
+  /// HEADLINES STAY SHORT ON PURPOSE. The tag says which part of the app
+  /// it is, so the headline never has to name it — it only has to hit.
+  /// Short also keeps every frame's type at the same size, and six
+  /// headlines set at six different sizes reads as a bug.
+  static const _frames = <_Frame>[
+    _Frame('PRACTICE', 'TALK',
+        'Ten women. Voice or text. They remember you.'),
+    _Frame('YOUR COACH', 'LUCIEN',
+        'Stuck mid-sentence? Tap him. He hands you the line.'),
+    _Frame('MISSIONS', 'FIVE A DAY',
+        'Three on the AI. Two in the real world.'),
+    _Frame('THE VERDICT', 'SCORED',
+        'Out of 100. What landed, what flopped, every run.'),
+    _Frame('YOUR SQUAD', 'NO HIDING',
+        'Two to five men. They see what you skipped.'),
+    _Frame('RIZZ BATTLES', 'FIGHT',
+        'Same woman. Both blind. Better conversation wins.'),
   ];
 
   @override
@@ -140,34 +95,29 @@ class _WhatThisIsScreenState extends State<WhatThisIsScreen>
   @override
   void dispose() {
     _clock.dispose();
-    _drift.dispose();
     _pages.dispose();
     super.dispose();
   }
 
-  /// THE CLOCK RAN OUT ON ITS OWN — so this turns the page, and on the
-  /// last frame it does nothing at all.
+  /// The clock ran out by itself — turn the page, and on the last frame
+  /// do nothing at all.
   ///
-  /// The reel plays itself through all four rooms and then STOPS, with
-  /// START sitting there waiting. It deliberately does not walk him out
-  /// of the door: the last card is the one he is most likely to still
-  /// be reading, and a screen that ejects a man mid-sentence because a
-  /// timer expired is the same rudeness as an ad he cannot pause.
-  ///
-  /// Doing nothing here also means the automatic path never navigates,
-  /// so nothing can tear this widget — and _clock with it — down from
-  /// inside _clock's own status notification.
+  /// It plays through and STOPS, with START waiting. The last frame is
+  /// the one he's most likely to still be reading, and a screen that
+  /// ejects a man because a timer expired is an ad he can't pause.
+  /// Never navigating from here also means nothing can tear this widget
+  /// — and _clock with it — down from inside _clock's own notification.
   void _advance() {
-    if (_i >= _cards.length - 1) return;
+    if (_i >= _frames.length - 1) return;
     _pages.nextPage(
-        duration: const Duration(milliseconds: 420), curve: Curves.easeOutCubic);
+        duration: const Duration(milliseconds: 380), curve: Curves.easeOutCubic);
   }
 
-  /// A DELIBERATE TAP, which is a different thing. He has asked to move
-  /// on, so on the last card that means into the app.
+  /// A deliberate tap is a different thing: he's asked to move on, so on
+  /// the last frame that means into the app.
   void _next() {
     HapticFeedback.selectionClick();
-    if (_i >= _cards.length - 1) {
+    if (_i >= _frames.length - 1) {
       _done();
       return;
     }
@@ -175,19 +125,15 @@ class _WhatThisIsScreenState extends State<WhatThisIsScreen>
   }
 
   void _back() {
+    HapticFeedback.selectionClick();
     if (_i == 0) {
-      // Restart the beat rather than sit there doing nothing — a tap
-      // that produces no response reads as a dead screen.
-      _clock.forward(from: 0);
+      _clock.forward(from: 0); // replay — a dead tap reads as a dead screen
       return;
     }
-    HapticFeedback.selectionClick();
     _pages.previousPage(
-        duration: const Duration(milliseconds: 420), curve: Curves.easeOutCubic);
+        duration: const Duration(milliseconds: 380), curve: Curves.easeOutCubic);
   }
 
-  /// Guarded because there are three ways out — SKIP, START, and a tap
-  /// on the last frame — and two of them can land in the same frame.
   bool _leaving = false;
 
   void _done() {
@@ -199,89 +145,45 @@ class _WhatThisIsScreenState extends State<WhatThisIsScreen>
 
   void _onPage(int i) {
     setState(() => _i = i);
-    _clock.forward(from: 0); // every room gets its full beat
+    _clock.forward(from: 0); // every frame gets its full beat
   }
 
   @override
   Widget build(BuildContext context) {
-    final c = _cards[_i];
-    final last = _i == _cards.length - 1;
-    final size = MediaQuery.sizeOf(context);
+    final last = _i == _frames.length - 1;
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(children: [
-        // ── THE ROOM ────────────────────────────────────────────────
-        // Two washes, not one: a fixed pool of colour high on the
-        // screen, and a second one orbiting slowly underneath it. The
-        // orbit is what stops a still page from looking still.
-        Positioned.fill(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 620),
-            curve: Curves.easeOut,
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: const Alignment(0, -0.62),
-                radius: 1.15,
-                colors: [c.tone.withValues(alpha: 0.26), Colors.black],
+        // ONE red light, low and to the left, sitting under the type.
+        // Static. The previous version had a coloured gradient orbiting
+        // the screen, which is motion for its own sake — it pulls the
+        // eye away from the only thing that matters, which is the word.
+        const Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(-0.7, 0.45),
+                  radius: 1.0,
+                  colors: [Color(0x33E8222A), Colors.black],
+                ),
               ),
             ),
-          ),
-        ),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: AnimatedBuilder(
-              animation: _drift,
-              builder: (_, __) {
-                final t = _drift.value * 2 * math.pi;
-                return DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: Alignment(math.cos(t) * 0.7, math.sin(t) * 0.5),
-                      radius: 0.85,
-                      colors: [
-                        c.tone.withValues(alpha: 0.13),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-
-        // ── THE GHOST NUMERAL ───────────────────────────────────────
-        // Enormous, barely there, and it tells him how far through he
-        // is without a word. Sits behind everything.
-        Positioned(
-          right: -size.width * 0.14,
-          bottom: size.height * 0.20,
-          child: IgnorePointer(
-            child: Text('${_i + 1}',
-                style: GoogleFonts.inter(
-                  color: c.tone.withValues(alpha: 0.075),
-                  fontSize: size.width * 0.92,
-                  height: 0.8,
-                  fontWeight: FontWeight.w900,
-                )),
           ),
         ),
 
         SafeArea(
           child: Column(children: [
-            // ── THE BAR ─────────────────────────────────────────────
+            // ── The bar ─────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
               child: Row(children: [
-                for (var i = 0; i < _cards.length; i++)
+                for (var i = 0; i < _frames.length; i++)
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
                       child: _Segment(
-                        tone: c.tone,
-                        // Past segments are full, future ones empty, and
-                        // the current one is the clock made visible.
                         progress: i < _i
                             ? const AlwaysStoppedAnimation<double>(1)
                             : i > _i
@@ -293,34 +195,41 @@ class _WhatThisIsScreenState extends State<WhatThisIsScreen>
               ]),
             ),
 
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _done,
-                child: Text('SKIP',
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 8, 0),
+              child: Row(children: [
+                Text('${(_i + 1).toString().padLeft(2, '0')} / '
+                    '${_frames.length.toString().padLeft(2, '0')}',
                     style: GoogleFonts.inter(
                       color: AppColors.textMuted,
-                      fontSize: 11,
-                      letterSpacing: 2.4,
-                      fontWeight: FontWeight.w900,
+                      fontSize: 10.5,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w800,
                     )),
-              ),
+                const Spacer(),
+                TextButton(
+                  onPressed: _done,
+                  child: Text('SKIP',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                        letterSpacing: 2.4,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ),
+              ]),
             ),
 
             Expanded(
               child: PageView.builder(
                 controller: _pages,
                 onPageChanged: _onPage,
-                itemCount: _cards.length,
-                // ── DRIVE IT BY HAND ────────────────────────────────
-                //
-                // Left third goes back, the rest goes on, hold pauses.
-                // This has to sit INSIDE the page rather than as a
-                // layer behind the PageView: a Scrollable is opaque to
-                // hit tests, so it swallows every tap before anything
-                // underneath it in the Stack is ever asked. Swipes
-                // still work — the drag recognizer takes those and
-                // leaves the taps alone.
+                itemCount: _frames.length,
+                // The tap handler lives INSIDE the page. A layer behind
+                // a PageView never receives a tap — a Scrollable is
+                // opaque to hit tests and swallows them before anything
+                // under it is asked. Swipes still work; the drag
+                // recognizer takes those and leaves taps alone.
                 itemBuilder: (_, i) => GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTapUp: (d) =>
@@ -329,41 +238,34 @@ class _WhatThisIsScreenState extends State<WhatThisIsScreen>
                           : _next(),
                   onLongPressStart: (_) => _clock.stop(),
                   onLongPressEnd: (_) => _clock.forward(),
-                  child: _Page(card: _cards[i]),
+                  child: _FrameView(frame: _frames[i]),
                 ),
               ),
             ),
 
-            // ── THE WAY OUT ─────────────────────────────────────────
-            // Only on the last frame. Before that the reel is running
-            // and a button under it is just something to press instead
-            // of watching.
             Padding(
-              padding: const EdgeInsets.fromLTRB(26, 8, 26, 22),
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 22),
               child: AnimatedOpacity(
                 opacity: last ? 1 : 0,
-                duration: const Duration(milliseconds: 360),
+                duration: const Duration(milliseconds: 300),
                 child: IgnorePointer(
                   ignoring: !last,
                   child: SizedBox(
                     width: double.infinity,
-                    height: 58,
+                    height: 56,
                     child: ElevatedButton(
                       onPressed: _done,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: c.tone,
-                        foregroundColor:
-                            c.tone.computeLuminance() > 0.45
-                                ? Colors.black
-                                : Colors.white,
+                        backgroundColor: AppColors.red,
+                        foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
+                            borderRadius: BorderRadius.circular(15)),
                       ),
                       child: Text('START',
                           style: GoogleFonts.inter(
                             fontSize: 14,
-                            letterSpacing: 3,
+                            letterSpacing: 4,
                             fontWeight: FontWeight.w900,
                           )),
                     ),
@@ -378,28 +280,27 @@ class _WhatThisIsScreenState extends State<WhatThisIsScreen>
   }
 }
 
-/// One bar segment. Repaints off the shared clock, so the fill and the
+/// A bar segment. Repaints off the shared clock, so the fill and the
 /// page turn are the same event rather than two things kept in step.
 class _Segment extends StatelessWidget {
   final Animation<double> progress;
-  final Color tone;
-  const _Segment({required this.progress, required this.tone});
+  const _Segment({required this.progress});
 
   @override
   Widget build(BuildContext context) => ClipRRect(
         borderRadius: BorderRadius.circular(999),
         child: SizedBox(
-          height: 2.5,
+          height: 2,
           child: Stack(children: [
             Positioned.fill(
-                child: ColoredBox(
-                    color: Colors.white.withValues(alpha: 0.16))),
+                child:
+                    ColoredBox(color: Colors.white.withValues(alpha: 0.14))),
             AnimatedBuilder(
               animation: progress,
               builder: (_, __) => FractionallySizedBox(
                 alignment: Alignment.centerLeft,
                 widthFactor: progress.value.clamp(0.0, 1.0),
-                child: ColoredBox(color: tone),
+                child: const ColoredBox(color: AppColors.red),
               ),
             ),
           ]),
@@ -407,100 +308,99 @@ class _Segment extends StatelessWidget {
       );
 }
 
-/// One room. Everything enters on a stagger — icon, kicker, headline,
-/// rule, body, then the proof line — so the eye is walked down the page
-/// instead of being handed a block of text.
-class _Page extends StatelessWidget {
-  final _Card card;
-  const _Page({required this.card});
+/// One frame. Anchored LOW and left, the way a film title is — centred
+/// text floats and reads as a splash screen. Everything is on screen by
+/// 900ms so the rest of the beat is his to read in.
+class _FrameView extends StatelessWidget {
+  final _Frame frame;
+  const _FrameView({required this.frame});
 
   @override
   Widget build(BuildContext context) {
+    // The headline is the whole design, so it takes whatever width the
+    // phone has. Small phones get 44, large ones 60.
+    final w = MediaQuery.sizeOf(context).width;
+    final headSize = (w * 0.145).clamp(40.0, 62.0);
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(30, 0, 30, 6),
+      padding: const EdgeInsets.fromLTRB(26, 0, 26, 8),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 58,
-            height: 58,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: card.tone.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(19),
-              border: Border.all(color: card.tone.withValues(alpha: 0.55)),
-              boxShadow: [
-                BoxShadow(
-                    color: card.tone.withValues(alpha: 0.28), blurRadius: 26),
-              ],
+          Text(frame.tag,
+                  style: GoogleFonts.inter(
+                    color: AppColors.red,
+                    fontSize: 11,
+                    letterSpacing: 4.5,
+                    fontWeight: FontWeight.w900,
+                  ))
+              .animate()
+              .fadeIn(duration: 300.ms)
+              .slideX(begin: -0.25, end: 0, curve: Curves.easeOutCubic),
+
+          const SizedBox(height: 14),
+
+          // MASK REVEAL, NOT A FADE. The word starts fully below its own
+          // clip and is wiped upward into place — it arrives from
+          // somewhere with weight behind it. A fade is a word gradually
+          // becoming visible, which is the opposite of landing.
+          //
+          // FittedBox is the safety net, not the plan: the headlines are
+          // written short enough to fit at full size on a normal phone,
+          // and this only bites on a very narrow screen or a large
+          // accessibility text scale. Without it those cases are a
+          // yellow-and-black overflow stripe across the best thing on
+          // the page. ClipRect sits INSIDE it so the mask is measured
+          // against the text, not against the scaled-down result.
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: ClipRect(
+                child: Text(frame.head,
+                        maxLines: 1,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: headSize,
+                          height: 1.0,
+                          letterSpacing: -2.2,
+                          fontWeight: FontWeight.w900,
+                        ))
+                    .animate()
+                    .slideY(
+                        begin: 1,
+                        end: 0,
+                        duration: 480.ms,
+                        curve: Curves.easeOutCubic)
+                    .fadeIn(duration: 200.ms),
+              ),
             ),
-            child: Icon(card.icon, size: 27, color: card.tone),
-          )
-              .animate()
-              .fadeIn(duration: 380.ms)
-              .scaleXY(begin: 0.8, end: 1, curve: Curves.easeOutBack),
-
-          const SizedBox(height: 24),
-          Text(card.kicker,
-                  style: GoogleFonts.inter(
-                    color: card.tone,
-                    fontSize: 11.5,
-                    letterSpacing: 5,
-                    fontWeight: FontWeight.w900,
-                  ))
-              .animate()
-              .fadeIn(delay: 120.ms, duration: 340.ms)
-              .slideX(begin: -0.12, end: 0, curve: Curves.easeOut),
-
-          const SizedBox(height: 12),
-          Text(card.title,
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 34,
-                    height: 1.08,
-                    letterSpacing: -1.2,
-                    fontWeight: FontWeight.w900,
-                  ))
-              .animate()
-              .fadeIn(delay: 220.ms, duration: 380.ms)
-              .slideY(begin: 0.16, end: 0, curve: Curves.easeOutCubic),
+          ),
 
           const SizedBox(height: 20),
-          // The rule draws itself. Small thing, and it is the moment the
-          // page stops feeling like it loaded and starts feeling like it
-          // is being written.
-          Container(height: 2, width: 54, color: card.tone)
+
+          Container(height: 2, width: 46, color: AppColors.red)
               .animate()
-              .fadeIn(delay: 420.ms, duration: 200.ms)
+              .fadeIn(delay: 380.ms, duration: 160.ms)
               .scaleX(begin: 0, end: 1, alignment: Alignment.centerLeft),
 
           const SizedBox(height: 18),
-          Text(card.body,
-                  style: GoogleFonts.inter(
-                    color: Colors.white.withValues(alpha: 0.82),
-                    fontSize: 15,
-                    height: 1.58,
-                    fontWeight: FontWeight.w500,
-                  ))
-              .animate()
-              .fadeIn(delay: 520.ms, duration: 400.ms)
-              .slideY(begin: 0.08, end: 0, curve: Curves.easeOut),
 
-          const SizedBox(height: 16),
-          // THE PAYOFF LINE, tinted and set apart. Every card keeps one
-          // sentence back and lands it a beat late — the bit he should
-          // still remember on the home screen.
-          Text(card.proof,
+          Text(frame.line,
                   style: GoogleFonts.inter(
-                    color: card.tone.withValues(alpha: 0.95),
-                    fontSize: 14.5,
-                    height: 1.55,
-                    fontWeight: FontWeight.w700,
+                    color: Colors.white.withValues(alpha: 0.72),
+                    fontSize: 17,
+                    height: 1.5,
+                    letterSpacing: -0.2,
+                    fontWeight: FontWeight.w600,
                   ))
               .animate()
-              .fadeIn(delay: 900.ms, duration: 460.ms)
-              .slideY(begin: 0.1, end: 0, curve: Curves.easeOut),
+              .fadeIn(delay: 480.ms, duration: 380.ms)
+              .slideY(begin: 0.25, end: 0, curve: Curves.easeOutCubic),
+
+          const SizedBox(height: 30),
         ],
       ),
     );
