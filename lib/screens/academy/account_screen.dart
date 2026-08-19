@@ -281,8 +281,8 @@ class _AccountScreenState extends State<AccountScreen> {
               ).animate().fadeIn(duration: 300.ms)
             else ...[
               Text(
-                  // Android before the Google Web client ID is pasted in
-                  // has no provider to offer, so it must not promise one.
+                  // With no provider configured at all there is nothing
+                  // to offer, so it must not promise a one-tap claim.
                   (Platform.isIOS || BackendConfig.googleWebClientId.isNotEmpty)
                       ? 'You\'re playing anonymously — fine for now, but '
                           'your rank, streak and squad die with a lost '
@@ -326,24 +326,19 @@ class _AccountScreenState extends State<AccountScreen> {
               ),
               // GOOGLE ONLY EXISTS WHEN GOOGLE EXISTS.
               //
-              // The client IDs in backend_config.dart are empty, so
+              // Gated on the config, not the platform: the client IDs
+              // are filled in now, so this shows on iOS and Android
+              // alike. It stays gated because an empty ID means
               // signInWithGoogle() bails at its own guard and returns
-              // false — and this button sat there fully live, opening a
-              // sheet-less failure and a snackbar saying it isn't
-              // configured. A button that can only fail is worse than no
-              // button: the user reads it as the app being broken, and
-              // on the onboarding pass it's the first thing they touch.
+              // false — a button that opens a sheet-less failure and a
+              // snackbar saying it isn't configured. A button that can
+              // only fail is worse than no button; the user reads it as
+              // the app being broken.
               //
-              // Gated on the config rather than deleted, so the day the
-              // two IDs are pasted in, the button comes back on its own
-              // with no code change. See the setup steps in
-              // backend_config.dart.
-              // …and NEVER on iOS, even once configured. iOS runs the
-              // Apple lane only — one button, zero Google Cloud setup,
-              // and no App-Review questions about a second provider.
-              // Android keeps Google (no Sign in with Apple there).
-              if (!Platform.isIOS &&
-                  BackendConfig.googleWebClientId.isNotEmpty) ...[
+              // Apple above is iOS-only in the other direction, since
+              // sign_in_with_apple off an Apple device needs a
+              // web-redirect flow this app never wired up.
+              if (BackendConfig.googleWebClientId.isNotEmpty) ...[
               const SizedBox(height: 10),
               SizedBox(
                 height: 54,

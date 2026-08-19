@@ -16,14 +16,13 @@ class BackendConfig {
   // all three OAuth clients — Android (com.imhim.app, SHA-1 registered),
   // iOS (com.imhimrizz.app), and the Web client whose ID is below.
   //
-  // ── ANDROID ONLY. THIS BUTTON DOES NOT EXIST ON iOS ─────────────────
+  // ── BOTH PLATFORMS ──────────────────────────────────────────────────
   //
-  // account_screen.dart gates it on `!Platform.isIOS`. iOS runs the
-  // Apple lane alone — one button, no Google Cloud setup, and no App
-  // Review questions about a second provider. So there is NO iOS OAuth
-  // client to create and NO reversed URL scheme to add to Info.plist:
-  // an iPhone will never reach this code path. Testing on an iPhone and
-  // finding no Google button is the system working as designed.
+  // Google shows on iOS and Android; Apple shows on iOS only, because
+  // sign_in_with_apple off an Apple device needs a web-redirect flow
+  // this app never wired up. So an iPhone offers two buttons and an
+  // Android one offers Google. App Store guideline 4.8 is satisfied by
+  // Apple being present alongside the third-party option, which it is.
   //
   // ── HOW FIREBASE AND SUPABASE SPLIT THE WORK ────────────────────────
   //
@@ -55,11 +54,11 @@ class BackendConfig {
   // this web client and that is the value Supabase verifies against.
   // Set in one place only and every sign-in is rejected.
   //
-  // googleIosClientId stays empty — the button is Android-only, so the
-  // iOS client Firebase auto-created is simply unused. Turning Google on
-  // for iOS later means: fill it in, add the REVERSED_CLIENT_ID from
-  // GoogleService-Info.plist to Info.plist CFBundleURLSchemes, and drop
-  // the !Platform.isIOS gate in ai_consent_screen + account_screen.
+  // googleIosClientId is the iOS half. google_sign_in needs it as
+  // `clientId` on iOS (Android passes null and is matched by package +
+  // fingerprint instead), and its REVERSED form is in Info.plist under
+  // CFBundleURLSchemes — that scheme is how the Google sheet hands
+  // control back to the app. Without it the sheet opens and hangs.
   //
   // ── THE SHA-1 THAT ACTUALLY MATTERS ────────────────────────────────
   //
@@ -73,5 +72,6 @@ class BackendConfig {
   //
   static const googleWebClientId =
       '94590135779-rlc0e497v8k5nc30grgqna79mpltu29v.apps.googleusercontent.com';
-  static const googleIosClientId = '';
+  static const googleIosClientId =
+      '94590135779-37sj39doa8rikv9it3d9o5n8oahb14uj.apps.googleusercontent.com';
 }
