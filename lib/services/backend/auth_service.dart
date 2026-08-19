@@ -248,9 +248,33 @@ class AuthService {
       );
       return true;
     } on AuthException catch (e) {
-      lastError = 'Supabase rejected the Google token: ${e.message}\n\n'
-          'Usually means the Web client ID is missing from '
-          'Supabase → Authentication → Providers → Google.';
+      // THE HINT HAS TO MATCH THE ACTUAL FAILURE. This used to blame a
+      // missing Web client ID for every rejection, which sent a man who
+      // had already pasted it in round the same loop again. Supabase
+      // rejects a Google token for three distinct reasons and they have
+      // three different fixes.
+      final m = e.message.toLowerCase();
+      final hint = m.contains('nonce')
+          // Google's iOS SDK puts a nonce claim in the id_token. We
+          // don't pass one (google_sign_in gives us no way to set it),
+          // and GoTrue rejects a token where one side has a nonce and
+          // the other doesn't. The provider-level switch is the
+          // supported way through — Apple sign-in is unaffected, it
+          // does its own nonce properly.
+          ? 'The Google SDK put a nonce in the token and the server '
+              'expected either both or neither.\n\n'
+              'Fix: Supabase → Authentication → Providers → Google → '
+              'turn ON "Skip nonce checks".'
+          : (m.contains('audience') || m.contains('client'))
+              ? 'The token was issued for a different client than the '
+                  'one Supabase is checking against.\n\n'
+                  'Fix: the Client ID in Supabase → Authentication → '
+                  'Providers → Google must be the WEB client ID, and '
+                  'must match googleWebClientId in backend_config.dart '
+                  'exactly.'
+              : 'Check Supabase → Authentication → Providers → Google '
+                  'is enabled and its Client ID is the Web client ID.';
+      lastError = 'Supabase rejected the Google token:\n${e.message}\n\n$hint';
       return false;
     } catch (e) {
       lastError = e.toString();
