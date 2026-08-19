@@ -38,24 +38,43 @@ class SquadInviteScreen extends StatefulWidget {
 }
 
 class _SquadInviteScreenState extends State<SquadInviteScreen> {
+  /// SET THE MOMENT HE MOVES, AND CHECKED BY EVERY ASYNC PATH.
+  ///
+  /// This is the bug that made the reel flash and vanish. initState
+  /// fires a network call to ask whether he already has a squad. On a
+  /// slow connection that call is still in the air when he taps through
+  /// — and `mounted` is still true for the frame or two before this
+  /// route is torn down, so the late reply won its race and sent him
+  /// home over the top of the screen he had just opened. The reel got
+  /// one frame and then the network answered a question nobody was
+  /// asking any more.
+  ///
+  /// `mounted` cannot catch this on its own: it answers "is this widget
+  /// alive", and the widget IS alive during the handover. The question
+  /// that matters is "has he already gone somewhere", which only this
+  /// screen can know.
+  bool _left = false;
+
   @override
   void initState() {
     super.initState();
     _skipIfAlreadyIn();
   }
 
-  /// A man who already has a squad has nothing to do here. Reinstalls,
-  /// a re-run onboarding, or an account that joined on another device
-  /// all land on this page with the job already done — so it steps out
-  /// of the way instead of pitching him something he owns.
+  /// A man who already has a squad has nothing to pitch. Reinstalls, a
+  /// re-run onboarding, or an account that joined on another device all
+  /// land here with the job already done — so it steps out of the way
+  /// rather than selling him something he owns.
+  ///
+  /// It steps forward to the reel, not sideways to home. This is the
+  /// last stop before the app either way, and skipping ONE step is not
+  /// a reason to skip the step after it.
   Future<void> _skipIfAlreadyIn() async {
-    // Straight home, NOT via the what-this-is reel: a man who already
-    // holds a squad has run this app before, and explaining it to him is
-    // the kind of thing that makes a reinstall feel like a demotion.
     try {
       if (await SquadService.mySquad() == null) return;
-      if (!mounted) return;
-      context.go('/home');
+      if (!mounted || _left) return;
+      _left = true;
+      context.go('/onboarding/what-this-is');
     } catch (_) {/* offline — show the pitch, it's harmless */}
   }
 
@@ -66,10 +85,11 @@ class _SquadInviteScreenState extends State<SquadInviteScreen> {
   Future<void> _openSquad(BuildContext context) async {
     HapticFeedback.mediumImpact();
     await context.push('/squad');
-    if (!mounted) return;
+    if (!mounted || _left) return;
     // Came back with a squad → onboarding is done. Came back without one
     // → he's still on the pitch, which is where he should be.
-    if (await SquadService.mySquad() != null && mounted) {
+    if (await SquadService.mySquad() != null && mounted && !_left) {
+      _left = true;
       context.go('/onboarding/what-this-is');
     }
   }
@@ -78,6 +98,8 @@ class _SquadInviteScreenState extends State<SquadInviteScreen> {
   /// him the explanation of what the other three quarters of the app do —
   /// that's the man most likely to bounce, not least.
   void _finish(BuildContext context) {
+    if (_left) return;
+    _left = true;
     HapticFeedback.mediumImpact();
     context.go('/onboarding/what-this-is');
   }

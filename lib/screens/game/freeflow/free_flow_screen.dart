@@ -1932,17 +1932,25 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       }
       if (_disposed || !mounted) return;
 
-      // ── ONE CEREMONY PER PERFORMANCE ─────────────────────────────
+      // ── ONE CEREMONY PER PERFORMANCE, AND THE DAILY KEEPS THIS ONE ──
       //
-      // An armed session — the Daily or a duel — already has a reveal
-      // waiting on the screen that launched it: the count-up, the rank,
-      // the share card. This scorecard is the SOLO practice ending, and
-      // showing both meant a man got two dramatic score screens
-      // back-to-back for one conversation. The second one reads as a
-      // glitch, and a ceremony that repeats stops being a ceremony.
-      // So an armed session skips the local scorecard and pops straight
-      // back to the reveal that owns the moment.
-      if ((armedBattle != null || wasDaily) && !widget.tabMode) {
+      // A duel still hands off: it has its own verdict screen waiting,
+      // built around a second man's score, and this scorecard has
+      // nothing to say about that.
+      //
+      // THE DAILY USED TO HAND OFF TOO, and it was the wrong call. What
+      // it handed off to was a count-up and a rank — a good ceremony,
+      // and it taught nothing. This scorecard is the one with the
+      // verdict line, what LANDED, what FLOPPED, and the dimension
+      // scores that feed the same voice progression practice feeds.
+      // Sending the Daily to the other screen meant the flagship
+      // conversation of the day was the ONE voice session that came
+      // back with no coaching attached to it.
+      //
+      // So the Daily now ends here, the same way practice does. The
+      // squad standing hasn't gone anywhere — it's on the Daily screen
+      // itself, which is what he pops back to.
+      if (armedBattle != null && !widget.tabMode) {
         Navigator.of(context).pop();
         return;
       }
@@ -2827,7 +2835,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
             children: [
               Row(
                 children: [
-                  Text('FREE FLOW · ${_vibe?.label ?? ''}',
+                  // The Daily lands on this card now, and calling the
+                  // flagship event of the day FREE FLOW would read as
+                  // the wrong screen having opened.
+                  Text(widget.assigned
+                          ? 'THE DAILY · ${_vibe?.label ?? ''}'
+                          : 'FREE FLOW · ${_vibe?.label ?? ''}',
                       style: AppTypography.label.copyWith(
                         color: AppColors.accent,
                         fontSize: 11,
