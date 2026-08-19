@@ -12,10 +12,9 @@ class BackendConfig {
 
   // ── GOOGLE SIGN-IN ──────────────────────────────────────────────────
   //
-  // STATUS: NOT SET UP. Both IDs are empty, so signInWithGoogle() bails
-  // at its own guard and the button is hidden (see account_screen.dart).
-  // Apple sign-in is unaffected and is the lane that actually matters on
-  // iOS — this can ship empty.
+  // STATUS: LIVE ON ANDROID. Project imhimrizz-cb182 (94590135779) holds
+  // all three OAuth clients — Android (com.imhim.app, SHA-1 registered),
+  // iOS (com.imhimrizz.app), and the Web client whose ID is below.
   //
   // ── ANDROID ONLY. THIS BUTTON DOES NOT EXIST ON iOS ─────────────────
   //
@@ -26,35 +25,41 @@ class BackendConfig {
   // an iPhone will never reach this code path. Testing on an iPhone and
   // finding no Google button is the system working as designed.
   //
-  // ── WHAT FIREBASE DID AND DIDN'T DO ─────────────────────────────────
+  // ── HOW FIREBASE AND SUPABASE SPLIT THE WORK ────────────────────────
   //
-  // A Firebase project IS a Google Cloud project — this one is
-  // `imhim-75991`. Registering an Android app there with a SHA-1
-  // fingerprint auto-creates the ANDROID OAuth client in that project's
-  // credentials, which is a real, necessary step. But Firebase itself is
-  // inert in this app: the google-services gradle plugin is not applied,
-  // nothing calls a Firebase SDK, and auth runs entirely through
-  // Supabase. The google-services.json in the tree is stale (its
-  // `oauth_client` array is empty) and no code reads it.
+  // Firebase is real and running in this app — firebase_core plus
+  // firebase_analytics, started from firebase_options.dart rather than
+  // from the config files, which is why analytics works without the
+  // google-services gradle plugin ever being applied. What Firebase
+  // does NOT do here is authentication: sign-in is Supabase end to end.
   //
-  // Firebase cannot create the client that's actually missing.
+  // They meet at Google Cloud. A Firebase project IS a Cloud project —
+  // `imhimrizz-cb182` — so registering the Android app there with a
+  // SHA-1 auto-creates the ANDROID OAuth client, and switching the
+  // Google provider on in Firebase Auth auto-creates the WEB one. We
+  // never use Firebase Auth to sign anybody in; we just take the web
+  // client id it minted and hand it to Supabase, which is the thing
+  // that actually verifies the token.
   //
-  // ── THE ONE THING LEFT: A WEB CLIENT ────────────────────────────────
+  // ── THE WEB CLIENT IS THE ONE THAT MATTERS ──────────────────────────
   //
-  // Google Cloud Console → project `imhim-75991` → APIs & Services →
-  // Credentials → Create credentials → OAuth client ID → **Web
-  // application**. There is no Firebase screen for this.
+  // Counter-intuitively it is NOT the Android client that gets named in
+  // code. The Android client is matched implicitly by package name plus
+  // signing fingerprint and is never referenced here; the WEB client id
+  // is passed as `serverClientId`, and that is what makes Google mint an
+  // ID TOKEN rather than just a local session. No web client, no token,
+  // nothing to hand Supabase.
   //
-  // That ID goes in TWO places and both are required:
+  // The same string must ALSO sit in Supabase → Authentication →
+  // Providers → Google → "Client ID", because the token's audience is
+  // this web client and that is the value Supabase verifies against.
+  // Set in one place only and every sign-in is rejected.
   //
-  //   1. googleWebClientId below. It's passed as `serverClientId`, which
-  //      is what makes Google mint an ID TOKEN rather than just a local
-  //      session. Without it there is no token to hand Supabase.
-  //   2. Supabase → Authentication → Providers → Google → "Client ID".
-  //      The token's audience is this web client, so this is the value
-  //      Supabase verifies against. Mismatch = every sign-in rejected.
-  //
-  // googleIosClientId stays empty forever — see the iOS note above.
+  // googleIosClientId stays empty — the button is Android-only, so the
+  // iOS client Firebase auto-created is simply unused. Turning Google on
+  // for iOS later means: fill it in, add the REVERSED_CLIENT_ID from
+  // GoogleService-Info.plist to Info.plist CFBundleURLSchemes, and drop
+  // the !Platform.isIOS gate in ai_consent_screen + account_screen.
   //
   // ── THE SHA-1 THAT ACTUALLY MATTERS ────────────────────────────────
   //
@@ -66,6 +71,7 @@ class BackendConfig {
   // every real user with a silent cancel and no error anywhere. Register
   // BOTH if you're also testing debug builds — a client can hold many.
   //
-  static const googleWebClientId = '';
+  static const googleWebClientId =
+      '94590135779-rlc0e497v8k5nc30grgqna79mpltu29v.apps.googleusercontent.com';
   static const googleIosClientId = '';
 }
