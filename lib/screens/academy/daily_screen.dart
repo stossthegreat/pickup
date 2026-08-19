@@ -8,7 +8,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/backend/daily_game_service.dart';
 import '../../services/backend/squad_broadcast.dart';
-import '../../services/backend/squad_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../services/roster.dart';
 import '../../services/achievements.dart';
@@ -23,7 +22,6 @@ import '../../widgets/academy/brag_sheet.dart';
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/league_crest.dart';
 import 'payout_screen.dart';
-import '../../widgets/academy/rizz_off_reveal.dart';
 import '../game/freeflow/free_flow_screen.dart';
 
 /// THE DAILY — the arena. Her face fills the top third like a fight
@@ -163,55 +161,28 @@ class _DailyScreenState extends State<DailyScreen> {
     DailyGameService.armedDaily = false;
     if (!mounted) return;
     final r = DailyGameService.lastResult;
-    // ONCE A DAY, AND ONCE ONLY. Clearing lastResult wasn't enough: the
-    // submit that sets it is fire-and-forget inside FreeFlowScreen, so it
-    // can land after this read, survive, and re-fire the reveal on the
-    // next return — which is why it kept replaying. The guard is now a
-    // persisted per-day stamp, so the big moment can only happen on the
-    // day it was earned no matter what order the futures settle in.
-    final alreadyRevealed = await DailyGameService.revealShownToday();
-    if (r != null && !alreadyRevealed) {
-      DailyGameService.lastResult = null;
-      await DailyGameService.markRevealShown();
-      // Pull the squad in for the final slam. Fail-soft: solo users and
-      // anyone offline just get the personal reveal, never a stall.
-      var roster = <SquadMember>[];
-      var marks = <DailyMark>[];
-      try {
-        final squad = await SquadService.mySquad();
-        if (squad != null) {
-          roster = await SquadService.roster(squad.id);
-          marks = await SquadService.dailyToday(
-              [for (final m in roster) m.userId],
-              squadId: squad.id);
-        }
-      } catch (_) {/* solo reveal */}
-      if (!mounted) return;
 
-      final girl = girlForVibe(s.scenarioKey);
-      await showGeneralDialog<void>(
-        context: context,
-        barrierColor: Colors.black,
-        barrierDismissible: false,
-        barrierLabel: 'scored',
-        transitionDuration: const Duration(milliseconds: 320),
-        pageBuilder: (ctx, _, __) => RizzOffReveal(
-          score: r.score,
-          rubric: r.rubric,
-          rankToday: r.rankToday,
-          worldAvg: r.worldAvg,
-          girlName: girl.name,
-          girlAccent: girl.accent,
-          roster: roster,
-          squadMarks: marks,
-        ),
-        transitionBuilder: (ctx, a, __, child) =>
-            FadeTransition(opacity: a, child: child),
-      );
-      // THE DAILY PAID NOTHING. A live voice conversation with a woman,
-      // graded on five axes, the flagship event of the day — and the
-      // progression bar did not move. See rewards.dart; this was the
-      // single biggest hole in the economy.
+    // ── THE SCORECARD OWNS THE ENDING NOW ──────────────────────────
+    //
+    // This used to throw a second full-screen ceremony — the count-up,
+    // the grade, the squad slam — on top of the one FreeFlowScreen had
+    // just shown. Two dramatic score screens for one conversation, and
+    // the second was the one that taught nothing: no verdict line, no
+    // what-landed, no what-flopped, no dimensions. The Daily was the
+    // only voice session in the app that came back without coaching.
+    //
+    // So the Daily ends on Lucien's scorecard like practice does, and
+    // this method is left with the bookkeeping. The squad standing is
+    // on THIS screen, which is exactly where he lands.
+    //
+    // ONCE A DAY, ATOMICALLY. The pay-out still has to be idempotent —
+    // the submit that sets lastResult is fired from a dispose() path
+    // that cannot await, so it can land late and re-enter here. A
+    // read-then-write pair left a gap where two callers both saw
+    // "not yet"; claimReveal() closes it in a single call and is the
+    // reason the ceremony stopped repeating.
+    if (r != null && await DailyGameService.claimReveal()) {
+      DailyGameService.lastResult = null;
       final ai = Economy.aiScoreFromVoice(r.score);
       await Rewards.daily(ai);
       MilestoneService.pushTrophies(await Achievements.bump(Stat.dailies));

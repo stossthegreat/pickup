@@ -151,10 +151,10 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
         ));
       }
     }
-    final already = await ChatScoreService.revealShownToday();
-    if (r != null && !already) {
+    // CHECK AND SET IN ONE CALL. The pair of awaits it replaces left a
+    // gap two callers could both pass through — see claimReveal.
+    if (r != null && await ChatScoreService.claimReveal()) {
       ChatScoreService.lastResult = null;
-      await ChatScoreService.markRevealShown();
       await _reveal(r);
       if (mounted) {
         await BragSheet.maybeShow(context,

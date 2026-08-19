@@ -125,14 +125,23 @@ class DailyGameService {
     return n.year * 10000 + n.month * 100 + n.day;
   }
 
-  static Future<bool> revealShownToday() async {
+  /// CHECK AND SET IN ONE BREATH. Returns true exactly once per day.
+  ///
+  /// A separate has-it-shown read followed by a mark-it-shown write is
+  /// two awaits with a gap in the middle, and anything that can call the
+  /// ending twice —
+  /// a double tap, a session that ends from both the finish button and
+  /// dispose, a rebuild that re-enters — can have both callers read
+  /// false before either writes. Then the day's ceremony plays twice,
+  /// or five times, which is what was happening.
+  ///
+  /// Collapsing it into one call closes that window: the second caller
+  /// reads a stamp the first already wrote.
+  static Future<bool> claimReveal() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_kRevealYmd) == _todayInt();
-  }
-
-  static Future<void> markRevealShown() async {
-    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getInt(_kRevealYmd) == _todayInt()) return false;
     await prefs.setInt(_kRevealYmd, _todayInt());
+    return true;
   }
 
   static Future<Map<String, dynamic>?> _invoke(
