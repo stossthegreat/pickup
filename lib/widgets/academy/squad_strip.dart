@@ -226,17 +226,43 @@ class _SquadStripState extends State<SquadStrip> {
           ),
         ),
         const SizedBox(width: 8),
-        // Form is the one stat worth carrying to the home screen.
+        // ── THE NUMBER HAS TO BE READABLE WITHOUT BEING EXPLAINED ────
+        //
+        // This was `form` — moves completed as a percentage — under the
+        // word FORM. Nobody could tell you what 47 meant, and a number
+        // on the home screen that has to be explained is worse than no
+        // number: it is a thing the eye stops on and gets nothing from.
+        //
+        // The literal count says the same thing and needs no key. 7/15
+        // is instantly "eight to go", which is the only thought this is
+        // trying to produce. DONE is the same fraction with the tension
+        // taken out of it — the tally still stands, it just isn't asking
+        // for anything any more.
         Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('${day.form}',
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 24,
-                height: 1,
-                letterSpacing: -1.2,
-                fontWeight: FontWeight.w900,
-              )),
-          Text('FORM',
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text('${day.complete}',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 24,
+                    height: 1,
+                    letterSpacing: -1.2,
+                    fontWeight: FontWeight.w900,
+                  )),
+              Text('/${day.possible}',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textMuted,
+                    fontSize: 13,
+                    height: 1,
+                    letterSpacing: -0.5,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ],
+          ),
+          Text(day.won ? 'DONE' : 'MOVES',
               style: GoogleFonts.inter(
                 color: accent,
                 fontSize: 7.5,

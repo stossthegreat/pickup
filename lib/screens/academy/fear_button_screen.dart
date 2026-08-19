@@ -213,7 +213,9 @@ class _FearButtonScreenState extends State<FearButtonScreen> {
         ),
       ),
       const Spacer(),
-      Text("YOU'RE BOTTLING IT.",
+      // See the note on missions_tab_screen: "bottling it" is
+      // British-only and this line has to land on first read.
+      Text("YOU'RE CHICKENING OUT.",
           style: GoogleFonts.inter(
             color: AppColors.red,
             fontSize: 13,

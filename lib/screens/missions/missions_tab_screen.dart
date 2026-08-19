@@ -722,7 +722,11 @@ class _HeadingState extends State<_Heading> {
                   const Icon(Icons.bolt_rounded,
                       size: 12, color: AppColors.red),
                   const SizedBox(width: 3),
-                  Text('BOTTLING IT',
+                  // BOTTLING IT is British for losing your nerve, and
+                  // means nothing to an American reader — which is a
+                  // hard fail on a label whose whole job is to sting.
+                  // CHICKENING OUT lands the same everywhere.
+                  Text('CHICKENING OUT',
                       style: AppTypography.label.copyWith(
                           color: AppColors.red, fontSize: 8.5)),
                 ]),

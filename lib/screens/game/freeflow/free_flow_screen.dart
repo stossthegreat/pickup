@@ -660,6 +660,30 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
   /// stage / interest / remembered notes. Returns '' when there's no real
   /// history so she stays a fresh pickup — only once he's actually built
   /// something (over text or a past call) does she pick up from there.
+  /// ── MAKE HER SPEAK HIS LANGUAGE, WHATEVER THE SERVER READS ────────
+  ///
+  /// The picker in Settings writes a code, the app sends it as
+  /// `language`, and nothing happens — because the roleplay backend is
+  /// a separate service outside this repository and it ignores fields it
+  /// was not written for. From the user's side that is simply a setting
+  /// that does not work, which is worse than not offering it.
+  ///
+  /// So the instruction goes where the server already looks. memoryBlock
+  /// is folded into her persona prompt — it is how she remembers you
+  /// between calls — so a directive at the top of it reaches the model
+  /// by a route that is already proven to work.
+  ///
+  /// English returns the block untouched: today's behaviour, byte for
+  /// byte, for the overwhelming majority of users.
+  static String _withLanguage(String block) {
+    final lang = LanguageService.current;
+    if (lang.code == 'en') return block;
+    return 'LANGUAGE: speak ONLY ${lang.native} (${lang.code}) for this '
+        'entire conversation — every line, including flirting, teasing '
+        'and pushing back. Never switch to English unless he writes in '
+        'English first.\n\n$block';
+  }
+
   Future<String> _girlMemoryBlock(String vibeKey) async {
     GirlBrief? girl;
     for (final g in kRoster) {
@@ -971,7 +995,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // → she stays a fresh pickup, exactly as before. (Replaces the old
       // rizz-topic UserMemory block, which made every persona "remember"
       // Arena/Diabla conversations she was never part of.)
-      final memoryBlock = await _girlMemoryBlock(vibe.key);
+      final memoryBlock = _withLanguage(await _girlMemoryBlock(vibe.key));
       _log('info', 'WS',
           'girl memory block built (${memoryBlock.length} chars)');
       // ignore: avoid_print
@@ -995,8 +1019,16 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         'creator':         _creator,
         'memoryBlock':     memoryBlock,
         // She speaks the user's language — the single biggest retention
-        // lever for non-English markets. Server folds this into the
-        // persona prompt ('en' = today's behaviour, unchanged).
+        // lever for non-English markets.
+        //
+        // SENT TWICE, ON PURPOSE. This field is the clean way and it is
+        // what the server should read. It plainly doesn't yet: the
+        // roleplay backend lives outside this repo and drops anything
+        // it wasn't written for, so a man who picked Español got an
+        // English woman and the setting looked broken. The directive
+        // therefore ALSO rides in memoryBlock below, which the server
+        // demonstrably does fold into the persona prompt. When the
+        // server learns this field the duplicate line is harmless.
         'language':        LanguageService.cachedCode,
         if (userName != null || userAge != null)
           'userProfile': {

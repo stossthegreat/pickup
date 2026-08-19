@@ -133,8 +133,16 @@ class BattleVerdict extends StatefulWidget {
 class _BattleVerdictState extends State<BattleVerdict>
     with SingleTickerProviderStateMixin {
   /// 0 hold · 1 my score · 2 his score + stamp · 3 the RR · 4 actions
-  int _stage = 0;
-  bool _burst = false;
+  ///
+  /// NOTIFIERS, NOT setState — same fault, same fix as RizzOffReveal.
+  /// A setState here rebuilds the whole verdict, and the chained
+  /// `.animate()` calls all over it construct fresh effect lists on
+  /// every build, which reads as a new animation and replays from the
+  /// top. Five stage changes meant five replays of the count-up and
+  /// every fade on the screen. A ValueNotifier rebuilds only the branch
+  /// that listens to it.
+  final ValueNotifier<int> _stage = ValueNotifier(0);
+  final ValueNotifier<bool> _burst = ValueNotifier(false);
   final _shakeKey = GlobalKey<ImpactShakeState>();
   final _timers = <Timer>[];
 
@@ -167,18 +175,18 @@ class _BattleVerdictState extends State<BattleVerdict>
 
     Sfx.hold();
     at(1100, () {
-      setState(() => _stage = 1);
+      _stage.value = 1;
       Feel.tick();
       Sfx.axis();
     });
     at(2600, () {
-      setState(() => _stage = 2);
+      _stage.value = 2;
       _shakeKey.currentState?.shake();
       _flash.forward(from: 0);
       HapticFeedback.heavyImpact();
       Sfx.gradeSlam();
       if (widget.iWon) {
-        setState(() => _burst = true);
+        _burst.value = true;
         Feel.win();
         Sfx.win();
       } else if (!widget.tie) {
@@ -187,18 +195,18 @@ class _BattleVerdictState extends State<BattleVerdict>
       }
     });
     at(4200, () {
-      setState(() => _stage = 3);
+      _stage.value = 3;
       Feel.reel();
       if (widget.promoted) {
         _timers.add(Timer(const Duration(milliseconds: 900), () {
           if (!mounted) return;
-          setState(() => _burst = true);
+          _burst.value = true;
           Feel.best();
           Sfx.personalBest();
         }));
       }
     });
-    at(widget.promoted ? 6600 : 5800, () => setState(() => _stage = 4));
+    at(widget.promoted ? 6600 : 5800, () => _stage.value = 4);
   }
 
   @override
@@ -207,6 +215,8 @@ class _BattleVerdictState extends State<BattleVerdict>
       t.cancel();
     }
     _flash.dispose();
+    _stage.dispose();
+    _burst.dispose();
     super.dispose();
   }
 
@@ -216,20 +226,31 @@ class _BattleVerdictState extends State<BattleVerdict>
       color: Colors.black,
       child: Stack(children: [
         Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: const Alignment(0, -0.2),
-                radius: 1.15,
-                colors: [
-                  _tone.withValues(alpha: _stage >= 2 ? 0.18 : 0.06),
-                  Colors.black,
-                ],
+          child: ValueListenableBuilder<int>(
+            valueListenable: _stage,
+            builder: (_, stage, __) => DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0, -0.2),
+                  radius: 1.15,
+                  colors: [
+                    _tone.withValues(alpha: stage >= 2 ? 0.18 : 0.06),
+                    Colors.black,
+                  ],
+                ),
               ),
             ),
           ),
         ),
-        if (_burst) Positioned.fill(child: Burst(color: _tone)),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _burst,
+              builder: (_, on, __) =>
+                  on ? Burst(color: _tone) : const SizedBox.shrink(),
+            ),
+          ),
+        ),
         SafeArea(
           child: ImpactShake(
             key: _shakeKey,
@@ -252,77 +273,92 @@ class _BattleVerdictState extends State<BattleVerdict>
                 const Spacer(),
 
                 // ── THE TWO NUMBERS ────────────────────────────────────
-                Row(children: [
-                  Expanded(
-                    child: _Side(
-                      name: widget.me.toUpperCase(),
-                      score: _stage >= 1 ? widget.myScore : null,
-                      color: widget.iWon ? kNeon : Colors.white,
-                      lit: _stage >= 1,
+                ValueListenableBuilder<int>(
+                  valueListenable: _stage,
+                  builder: (_, stage, __) => Row(children: [
+                    Expanded(
+                      child: _Side(
+                        name: widget.me.toUpperCase(),
+                        score: stage >= 1 ? widget.myScore : null,
+                        color: widget.iWon ? kNeon : Colors.white,
+                        lit: stage >= 1,
+                      ),
                     ),
-                  ),
-                  Text('—',
-                      style: GoogleFonts.inter(
-                        color: AppColors.textMuted,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                      )),
-                  Expanded(
-                    child: _Side(
-                      name: widget.opponent.toUpperCase(),
-                      score: _stage >= 2 ? widget.theirScore : null,
-                      color: !widget.iWon && !widget.tie
-                          ? AppColors.red
-                          : Colors.white,
-                      lit: _stage >= 2,
+                    Text('—',
+                        style: GoogleFonts.inter(
+                          color: AppColors.textMuted,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        )),
+                    Expanded(
+                      child: _Side(
+                        name: widget.opponent.toUpperCase(),
+                        score: stage >= 2 ? widget.theirScore : null,
+                        color: !widget.iWon && !widget.tie
+                            ? AppColors.red
+                            : Colors.white,
+                        lit: stage >= 2,
+                      ),
                     ),
-                  ),
-                ]),
+                  ]),
+                ),
 
                 const SizedBox(height: 22),
 
-                // ── THE WORD ───────────────────────────────────────────
-                if (_stage >= 2)
-                  Text(_headline,
-                          style: GoogleFonts.inter(
-                            color: _tone,
-                            fontSize: 42,
-                            height: 1,
-                            letterSpacing: 4,
-                            fontWeight: FontWeight.w900,
-                            shadows: [
-                              Shadow(
-                                  color: _tone.withValues(alpha: 0.65),
-                                  blurRadius: 44)
-                            ],
-                          ))
-                      .animate()
-                      .fadeIn(duration: 180.ms)
-                      .scaleXY(
-                          begin: 2.1, end: 1, curve: Curves.easeOutBack),
-
-                if (_stage >= 2) ...[
-                  const SizedBox(height: 8),
-                  Text(_margin,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            color: AppColors.textSecondary,
-                            fontSize: 12.5,
-                            height: 1.4,
-                            fontWeight: FontWeight.w600,
-                          ))
-                      .animate()
-                      .fadeIn(delay: 420.ms, duration: 300.ms),
-                ],
+                // ── THE WORD, THE RR, THE ACTIONS ─────────────────────
+                // All stage-gated, so one listener carries the lot and
+                // nothing above it rebuilds when a stage ticks over.
+                ValueListenableBuilder<int>(
+                  valueListenable: _stage,
+                  builder: (_, stage, __) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (stage >= 2)
+                        Text(_headline,
+                                style: GoogleFonts.inter(
+                                  color: _tone,
+                                  fontSize: 42,
+                                  height: 1,
+                                  letterSpacing: 4,
+                                  fontWeight: FontWeight.w900,
+                                  shadows: [
+                                    Shadow(
+                                        color: _tone.withValues(alpha: 0.65),
+                                        blurRadius: 44)
+                                  ],
+                                ))
+                            .animate()
+                            .fadeIn(duration: 180.ms)
+                            .scaleXY(
+                                begin: 2.1,
+                                end: 1,
+                                curve: Curves.easeOutBack),
+                      if (stage >= 2) ...[
+                        const SizedBox(height: 8),
+                        Text(_margin,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12.5,
+                                  height: 1.4,
+                                  fontWeight: FontWeight.w600,
+                                ))
+                            .animate()
+                            .fadeIn(delay: 420.ms, duration: 300.ms),
+                      ],
+                      if (stage >= 3) ...[
+                        const SizedBox(height: 26),
+                        _ratingBlock(),
+                      ],
+                      if (stage >= 4) ...[
+                        const SizedBox(height: 26),
+                        _actions(),
+                      ],
+                    ],
+                  ),
+                ),
 
                 const Spacer(),
-
-                // ── THE RR ─────────────────────────────────────────────
-                if (_stage >= 3) _ratingBlock(),
-
-                const Spacer(),
-
-                if (_stage >= 4) _actions(),
               ]),
             ),
           ),

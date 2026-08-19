@@ -256,7 +256,8 @@ class _YourFiveState extends State<YourFive> {
             value: took ? 1 : 0,
             max: 1,
             color: AppColors.red,
-            note: bailed ? 'BOTTLED' : null),
+            // Same reason as the others — 'bottled' is British.
+            note: bailed ? 'BAILED' : null),
         if (took && daily?.score != null) ...[
           const SizedBox(height: 10),
           Row(children: [
