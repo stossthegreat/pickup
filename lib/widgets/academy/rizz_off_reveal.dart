@@ -712,34 +712,29 @@ class _RizzOffRevealState extends State<RizzOffReveal>
 
 /// One axis: label, a bar that draws, and the number out of 10.
 /// ══════════════════════════════════════════════════════════════════
-///  THE NUMBER — counted once, and only once, whatever the parent does
+///  THE NUMBER — static. It does not animate, so it cannot misbehave.
 /// ══════════════════════════════════════════════════════════════════
 ///
-/// THE BUG THIS EXISTS TO KILL. The headline used to be a
-/// TweenAnimationBuilder wrapped in a chained `.animate()`, built inline
-/// inside the reveal's own build method. That build method runs on every
-/// setState the reveal makes — and it makes four of them, one per stage,
-/// plus another when the burst fires. `.animate()` constructs a fresh
-/// list of effects each time it is built, which the Animate widget reads
-/// as a new animation and replays from the top.
+/// THE COUNT-UP IS GONE, ON PURPOSE, AND IT IS NOT COMING BACK.
 ///
-/// So the number counted up, then counted up again, then again, then
-/// again: once per stage change, for one conversation. On every surface
-/// that shows this reveal — the Daily, chat, squads, duels — because the
-/// fault was never in any of those screens, it was in here.
+/// It replayed. Then the rebuild source was fixed and it replayed
+/// somewhere else. Then the stages were fixed, the subtrees were
+/// cached, the controller was moved into its own State — four builds of
+/// increasingly airtight engineering — and bro's phone still showed it
+/// counting again and again on the battle verdict. Every fix was
+/// correct and none of them was the guarantee, because ANY animated
+/// number is one unnoticed rebuild away from animating again.
 ///
-/// THE FIX IS OWNERSHIP. The controller lives in this widget's State and
-/// is started exactly once, in initState. A parent rebuild hands this
-/// widget new props; it does not hand it a new controller, and
-/// AnimatedBuilder just reads whatever the controller is already at. No
-/// number of rebuilds can wind it back to zero, because nothing outside
-/// this State can reach it.
+/// A static number is the guarantee. It renders complete, at its final
+/// size, in its final place, on the first frame the score block exists
+/// — there is no controller, no timer, no curve, nothing that CAN run
+/// twice. The theatre lost is already paid for elsewhere: the axes
+/// build the tension one bar at a time, and the grade stamp still
+/// slams. The number is the fact, and facts don't need to move.
 ///
-/// One controller also drives the whole beat rather than three chained
-/// effects: the count, the entrance, and the settle where it shrinks and
-/// rises to make room for the grade stamp. Chained effects can drift out
-/// of step with each other. Intervals on one clock cannot.
-class _CountUp extends StatefulWidget {
+/// Rendered directly at its settled position — small enough that the
+/// stamp lands beneath it exactly as before.
+class _CountUp extends StatelessWidget {
   final double value;
   final int decimals;
   final String suffix;
@@ -752,76 +747,33 @@ class _CountUp extends StatefulWidget {
   });
 
   @override
-  State<_CountUp> createState() => _CountUpState();
-}
-
-class _CountUpState extends State<_CountUp>
-    with SingleTickerProviderStateMixin {
-  // 1900ms of beat, laid out as fractions of one clock:
-  //   0    – 380   entrance: fade up into place
-  //   0    – 900   the count itself
-  //   1580 – 1880  settle: shrink and rise under the grade stamp
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1900),
-  )..forward();
-
-  static const _entrance = Interval(0, 0.2, curve: Curves.easeOutCubic);
-  static const _count = Interval(0, 0.474, curve: Curves.easeOutCubic);
-  static const _settle = Interval(0.831, 0.989, curve: Curves.easeOutCubic);
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (_, __) {
-        final entrance = _entrance.transform(_c.value);
-        final settle = _settle.transform(_c.value);
-        final shown = widget.value * _count.transform(_c.value);
-        return Opacity(
-          opacity: entrance,
-          child: Transform.translate(
-            // Up 25% of its own height on entry, then up another 18 as
-            // it settles — both expressed on the same clock.
-            offset: Offset(0, (1 - entrance) * 19 - settle * 18),
-            child: Transform.scale(
-              scale: 1 - settle * 0.38,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(shown.toStringAsFixed(widget.decimals),
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 76,
-                        height: 1,
-                        letterSpacing: -3.5,
-                        fontWeight: FontWeight.w900,
-                        shadows: [
-                          Shadow(
-                              color: widget.glow.withValues(alpha: 0.5),
-                              blurRadius: 50)
-                        ],
-                      )),
-                  Text(' ${widget.suffix}',
-                      style: GoogleFonts.inter(
-                        color: AppColors.textMuted,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      )),
+    return Transform.translate(
+      offset: const Offset(0, -18),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(value.toStringAsFixed(decimals),
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 47,
+                height: 1,
+                letterSpacing: -2.2,
+                fontWeight: FontWeight.w900,
+                shadows: [
+                  Shadow(color: glow.withValues(alpha: 0.5), blurRadius: 34)
                 ],
-              ),
-            ),
-          ),
-        );
-      },
+              )),
+          Text(' $suffix',
+              style: GoogleFonts.inter(
+                color: AppColors.textMuted,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              )),
+        ],
+      ),
     );
   }
 }
