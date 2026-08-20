@@ -86,15 +86,19 @@ class _SquadInviteScreenState extends State<SquadInviteScreen> {
     // → he's still on the pitch, which is where he should be.
     if (await SquadService.mySquad() != null && mounted && !_left) {
       _left = true;
-      context.go('/home');
+      context.go('/onboarding/tour');
     }
   }
 
+  /// The tour is the last step, not home — he is about to be SHOWN the
+  /// rest of the app instead of left to find a tenth of it. A man who
+  /// already holds a squad (the initState skip above) still goes
+  /// straight home: he has run this app before.
   void _finish(BuildContext context) {
     if (_left) return;
     _left = true;
     HapticFeedback.mediumImpact();
-    context.go('/home');
+    context.go('/onboarding/tour');
   }
 
   @override
