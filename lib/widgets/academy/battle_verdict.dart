@@ -665,36 +665,42 @@ class _Side extends StatelessWidget {
             fontWeight: FontWeight.w900,
           )),
       const SizedBox(height: 6),
+      // ── STATIC, AND THIS WAS THE SPAM ─────────────────────────────
+      //
+      // The score used to enter through a chained .animate() slam —
+      // and this Row sits inside the stage listener, which rebuilds it
+      // on EVERY stage tick. A rebuilt .animate() chain is a fresh
+      // effects list, which replays from the top: so the number
+      // re-slammed at stage 2, again at 3, again at 4. That is the
+      // "keeps counting up again and again" bro reported ten times
+      // while the guards, the notifiers and the caches all fixed
+      // everything except the one subtree that HAS to rebuild (its
+      // props change per stage). The rule that ends it for good: a
+      // score NUMBER is never animated. It is a fact; facts render
+      // finished. The stamp and the flash carry the theatre.
       SizedBox(
         height: 56,
         child: score == null
-            // The unknown number breathes. A blank space is a loading
-            // state; a pulsing question mark is a result being withheld.
             ? Text('?',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textMuted,
-                      fontSize: 47,
-                      height: 1,
-                      fontWeight: FontWeight.w900,
-                    ))
-                .animate(onPlay: (c) => c.repeat(reverse: true))
-                .fade(begin: 0.25, end: 0.7, duration: 620.ms)
+                style: GoogleFonts.inter(
+                  color: AppColors.textMuted.withValues(alpha: 0.6),
+                  fontSize: 47,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                ))
             : Text('$score',
-                    style: GoogleFonts.inter(
-                      color: color,
-                      fontSize: 47,
-                      height: 1,
-                      letterSpacing: -2,
-                      fontWeight: FontWeight.w900,
-                      shadows: [
-                        Shadow(
-                            color: color.withValues(alpha: 0.45),
-                            blurRadius: 30)
-                      ],
-                    ))
-                .animate()
-                .fadeIn(duration: 160.ms)
-                .scaleXY(begin: 1.9, end: 1, curve: Curves.easeOutBack),
+                style: GoogleFonts.inter(
+                  color: color,
+                  fontSize: 47,
+                  height: 1,
+                  letterSpacing: -2,
+                  fontWeight: FontWeight.w900,
+                  shadows: [
+                    Shadow(
+                        color: color.withValues(alpha: 0.45),
+                        blurRadius: 30)
+                  ],
+                )),
       ),
       Text('OUT OF 100',
           style: GoogleFonts.inter(
