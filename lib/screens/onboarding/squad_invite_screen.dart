@@ -80,19 +80,18 @@ class _SquadInviteScreenState extends State<SquadInviteScreen> {
     // → he's still on the pitch, which is where he should be.
     if (await SquadService.mySquad() != null && mounted && !_left) {
       _left = true;
-      context.go('/onboarding/tour');
+      context.go('/onboarding/plan');
     }
   }
 
-  /// The tour is the last step, not home — he is about to be SHOWN the
-  /// rest of the app instead of left to find a tenth of it. A man who
-  /// already holds a squad (the initState skip above) still goes
-  /// straight home: he has run this app before.
+  /// Into the 60-DAY PLAN, not home. The story funnel's last button
+  /// promised a plan and the app used to answer it with a name field and
+  /// a grid of strangers; this is where that promise finally gets kept.
   void _finish(BuildContext context) {
     if (_left) return;
     _left = true;
     HapticFeedback.mediumImpact();
-    context.go('/onboarding/tour');
+    context.go('/onboarding/plan');
   }
 
   @override

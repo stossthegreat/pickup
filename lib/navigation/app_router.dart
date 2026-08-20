@@ -11,7 +11,8 @@ import '../screens/academy/rolodex_screen.dart';
 import '../screens/academy/score_reveal_screen.dart';
 import '../screens/academy/daily_chat_screen.dart';
 import '../screens/onboarding/squad_invite_screen.dart';
-import '../screens/onboarding/experience_tour_screen.dart';
+import '../screens/onboarding/plan_flow_screen.dart';
+import '../screens/onboarding/first_rep_screen.dart';
 import '../screens/academy/squad_day_screen.dart';
 import '../screens/academy/squad_room_screen.dart';
 import '../screens/home/home_screen.dart';
@@ -121,11 +122,15 @@ final appRouter = GoRouter(
     GoRoute(
         path: '/onboarding/squad',
         builder: (_, __) => const SquadInviteScreen()),
-    // THE EXPERIENCE TOUR — six live vignettes showing what the app is,
-    // ending at the paywall. The last onboarding step for a fresh user.
+    // THE 60-DAY PLAN — the four screens that finally deliver what the
+    // story funnel's last button promises, then the first rep, then the
+    // price. See plan_flow_screen.dart.
     GoRoute(
-        path: '/onboarding/tour',
-        builder: (_, __) => const ExperienceTourScreen()),
+        path: '/onboarding/plan',
+        builder: (_, __) => const PlanFlowScreen()),
+    GoRoute(
+        path: '/onboarding/first-rep',
+        builder: (_, __) => const FirstRepScreen()),
     GoRoute(path: '/today', builder: (_, __) => const SquadDayScreen()),
     // The chat Daily — the voice screen's mirror, out of 100.
     GoRoute(path: '/daily-chat', builder: (_, __) => const DailyChatScreen()),
