@@ -55,24 +55,18 @@ class _SquadInviteScreenState extends State<SquadInviteScreen> {
   /// screen can know.
   bool _left = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _skipIfAlreadyIn();
-  }
-
-  /// A man who already has a squad has nothing to pitch. Reinstalls, a
-  /// re-run onboarding, or an account that joined on another device all
-  /// land here with the job already done — so it steps out of the way
-  /// rather than selling him something he owns.
-  Future<void> _skipIfAlreadyIn() async {
-    try {
-      if (await SquadService.mySquad() == null) return;
-      if (!mounted || _left) return;
-      _left = true;
-      context.go('/home');
-    } catch (_) {/* offline — show the pitch, it's harmless */}
-  }
+  // NO AUTO-NAVIGATION. EVER. This screen used to fire a network call
+  // in initState asking "does he already have a squad?" and warp to
+  // home when the answer was yes. That call races the user's own taps,
+  // and it kept winning: the reply landed a beat after he had moved
+  // on, and yanked him off whatever screen he had just opened — the
+  // tour got one frame and vanished. Guards shrank the window; nothing
+  // closes it, because the answer can always arrive at a bad time.
+  //
+  // So the rule is absolute now: a screen in the onboarding chain may
+  // only navigate from a deliberate user gesture. A man who already
+  // has a squad taps through one extra page once in his life — that
+  // costs him two seconds. The race cost the whole flow.
 
   /// PUSH, NOT GO. `go` replaces the whole stack, so the squad room
   /// opened from onboarding had nothing behind it and the back gesture
