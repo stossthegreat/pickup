@@ -43,7 +43,13 @@ class ScoreRevealScreen extends StatefulWidget {
 class _ScoreRevealScreenState extends State<ScoreRevealScreen>
     with SingleTickerProviderStateMixin {
   int _lastTick = 0;
-  bool _celebrated = false;
+  /// A notifier, not a field flipped in setState. The one setState this
+  /// screen had — flipping this at grade impact — rebuilt the whole
+  /// tree, and every chained `.animate()` on it reconstructs its effects
+  /// on rebuild and replays from the top. So the score counted itself up
+  /// twice: once on entry, once when its own grade landed. The notifier
+  /// rebuilds the confetti layer and nothing else.
+  final ValueNotifier<bool> _celebrated = ValueNotifier(false);
   final _shakeKey = GlobalKey<ImpactShakeState>();
 
   /// White-out on the frame the grade lands. One frame of pure light is
@@ -63,6 +69,7 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen>
   @override
   void dispose() {
     _flash.dispose();
+    _celebrated.dispose();
     super.dispose();
   }
 
@@ -73,7 +80,7 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen>
     _flash.forward(from: 0);
     HapticFeedback.heavyImpact();
     // A win throws confetti; anything below a B just takes the hit.
-    if (_good || p.score >= 680) setState(() => _celebrated = true);
+    if (_good || p.score >= 680) _celebrated.value = true;
   }
 
   void _share() {
@@ -120,7 +127,16 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen>
             ),
           ),
         ),
-        if (_celebrated) Positioned.fill(child: Burst(color: grade.color)),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _celebrated,
+              builder: (_, on, __) => on
+                  ? Burst(color: grade.color)
+                  : const SizedBox.shrink(),
+            ),
+          ),
+        ),
         SafeArea(
           child: ImpactShake(
             key: _shakeKey,

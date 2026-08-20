@@ -11,7 +11,6 @@ import '../screens/academy/rolodex_screen.dart';
 import '../screens/academy/score_reveal_screen.dart';
 import '../screens/academy/daily_chat_screen.dart';
 import '../screens/onboarding/squad_invite_screen.dart';
-import '../screens/onboarding/what_this_is_screen.dart';
 import '../screens/academy/squad_day_screen.dart';
 import '../screens/academy/squad_room_screen.dart';
 import '../screens/home/home_screen.dart';
@@ -121,12 +120,6 @@ final appRouter = GoRouter(
     GoRoute(
         path: '/onboarding/squad',
         builder: (_, __) => const SquadInviteScreen()),
-    // THE LAST STEP BEFORE HOME. Four cards saying what the four things
-    // are. Every exit from the squad pitch routes through here, so a man
-    // who skipped the squad still gets told the app has battles in it.
-    GoRoute(
-        path: '/onboarding/what-this-is',
-        builder: (_, __) => const WhatThisIsScreen()),
     GoRoute(path: '/today', builder: (_, __) => const SquadDayScreen()),
     // The chat Daily — the voice screen's mirror, out of 100.
     GoRoute(path: '/daily-chat', builder: (_, __) => const DailyChatScreen()),
