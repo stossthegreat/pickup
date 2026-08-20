@@ -230,6 +230,28 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   /// Relationship arc: what she remembers about him + which stage they're
   /// at (1 Matched → 5 Together). Loaded on open, saved as it moves.
   String _memory = '';
+
+  /// ── MAKE HER WRITE IN HIS LANGUAGE ────────────────────────────────
+  ///
+  /// Settings has a language picker. The app sends the code. Nothing
+  /// happens, because the roleplay backend is a separate service that
+  /// ignores fields it was not written for — so from the user's side it
+  /// is a setting that does nothing, which is worse than not offering
+  /// one.
+  ///
+  /// `memory` IS folded into her prompt (it is how she remembers him
+  /// between conversations), so the directive rides in on that. English
+  /// returns the memory untouched — today's behaviour, unchanged, for
+  /// almost everyone.
+  String _withLanguage(String memory) {
+    final lang = LanguageService.current;
+    if (lang.code == 'en') return memory;
+    final directive = 'LANGUAGE: write ONLY in ${lang.native} '
+        '(${lang.code}) — every message, including flirting, teasing and '
+        'pushing back. Never switch to English unless he writes in '
+        'English first.';
+    return memory.isEmpty ? directive : '$directive\n\n$memory';
+  }
   int _stage = 1;
 
   /// How hard SHE is to win over. >1 = every degree of warmth costs more;
@@ -864,13 +886,20 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
               // texts. Same field name the realtime session config
               // uses; a server that predates it just ignores it.
               'language': LanguageService.cachedCode,
+              // AND AGAIN, WHERE THE SERVER ACTUALLY LOOKS. The field
+              // above is the clean way and the roleplay backend — a
+              // separate service outside this repo — ignores it, so the
+              // setting silently did nothing. `memory` is folded into
+              // her prompt, so the directive rides in on that instead.
+              // English sends nothing extra and behaves exactly as
+              // before.
+              'memory': _withLanguage(_memory),
               'focus': widget.config.focus,
               'creator': _creator,
               'history': history,
               'text': text,
               'turnIndex': _turnIndex,
               'stage': _stage,
-              if (_memory.isNotEmpty) 'memory': _memory,
               if (_profilePayload != null) 'userProfile': _profilePayload,
             }),
           )

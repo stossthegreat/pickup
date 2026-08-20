@@ -495,7 +495,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
   }
 
   Future<void> _challenge() async {
-    final medium = await _pickMedium('CHALLENGE A MATE');
+    final medium = await _pickMedium('CHALLENGE A FRIEND');
     if (medium == null || !mounted) return;
     HapticFeedback.mediumImpact();
     final battle = await BattleService.createChallenge(medium: medium);
@@ -1074,7 +1074,10 @@ class _BattlesScreenState extends State<BattlesScreen> {
                     Expanded(
                       child: _Quiet(
                         icon: Icons.link_rounded,
-                        label: 'CHALLENGE A MATE',
+                        // FRIEND, not MATE. "Mate" is British and
+                        // reads as odd or wrong to an American ear,
+                        // and most of the store is American.
+                        label: 'CHALLENGE A FRIEND',
                         onTap: _challenge,
                       ),
                     ),

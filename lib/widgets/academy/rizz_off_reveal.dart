@@ -106,8 +106,28 @@ class _RizzOffRevealState extends State<RizzOffReveal>
   );
 
   /// 0 breathe · 1 axes · 2 collapse+score · 3 squad · 4 actions
-  int _stage = 0;
-  bool _burst = false;
+  ///
+  /// NOTIFIERS, NOT setState, AND THAT IS THE WHOLE BUG FIX.
+  ///
+  /// The stage advances four times during one reveal, and the burst
+  /// fires a fifth. Every one of those used to be a setState, which
+  /// rebuilds this entire widget — and almost everything on it is
+  /// wrapped in a chained `.animate()`. Those chains construct a fresh
+  /// list of effects on each build, which reads as a new animation and
+  /// replays from the top.
+  ///
+  /// So one conversation produced five run-throughs: the number counted
+  /// up again, the kicker faded in again, the rank line faded in again.
+  /// It looked like the screen was stuck in a loop, and it was — just
+  /// not in the way anyone would guess from the outside, which is why
+  /// guarding the SCREENS against showing twice never fixed it. It was
+  /// never showing twice. It was animating five times.
+  ///
+  /// A ValueNotifier rebuilds only the branch that listens to it. The
+  /// kicker, the flash layer and the number are built once and never
+  /// touched again, so nothing outside its own beat can restart them.
+  final ValueNotifier<int> _stage = ValueNotifier(0);
+  final ValueNotifier<bool> _burst = ValueNotifier(false);
   final _timers = <Timer>[];
 
   List<String> get _axes => widget.axes;
@@ -185,10 +205,10 @@ class _RizzOffRevealState extends State<RizzOffReveal>
         Sfx.axis();
       });
     }
-    at(hold, () => setState(() => _stage = 1));
+    at(hold, () => _stage.value = 1);
     final axesEnd = hold + 200 + _axes.length * 520;
     at(axesEnd, () {
-      setState(() => _stage = 2);
+      _stage.value = 2;
       // The number lands like a thing with weight, then the grade
       // stamps a beat later — two events, not one.
       Feel.land();
@@ -207,9 +227,9 @@ class _RizzOffRevealState extends State<RizzOffReveal>
       }
     });
     if (_hasSquad) {
-      at(axesEnd + 2600, () => setState(() => _stage = 3));
+      at(axesEnd + 2600, () => _stage.value = 3);
     }
-    at(axesEnd + (_hasSquad ? 4200 : 2400), () => setState(() => _stage = 4));
+    at(axesEnd + (_hasSquad ? 4200 : 2400), () => _stage.value = 4);
   }
 
   @override
@@ -218,6 +238,8 @@ class _RizzOffRevealState extends State<RizzOffReveal>
       t.cancel();
     }
     _flash.dispose();
+    _stage.dispose();
+    _burst.dispose();
     super.dispose();
   }
 
@@ -225,7 +247,7 @@ class _RizzOffRevealState extends State<RizzOffReveal>
     if (!mounted) return;
     _shakeKey.currentState?.shake();
     _flash.forward(from: 0);
-    if (widget.score >= 6200) setState(() => _burst = true);
+    if (widget.score >= 6200) _burst.value = true;
   }
 
   @override
@@ -234,7 +256,15 @@ class _RizzOffRevealState extends State<RizzOffReveal>
     return Material(
       color: Colors.black,
       child: Stack(children: [
-        if (_burst) Positioned.fill(child: Burst(color: grade.color)),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _burst,
+              builder: (_, on, __) =>
+                  on ? Burst(color: grade.color) : const SizedBox.shrink(),
+            ),
+          ),
+        ),
         SafeArea(
           child: ImpactShake(
             key: _shakeKey,
@@ -254,41 +284,55 @@ class _RizzOffRevealState extends State<RizzOffReveal>
 
                 Expanded(
                   child: Center(
-                    child: _stage == 0
-                        ? _breath()
-                        : _stage == 1
-                            ? _axesList()
-                            : _scoreBlock(grade),
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: _stage,
+                      builder: (_, stage, __) => stage == 0
+                          ? _breath()
+                          : stage == 1
+                              ? _axesList()
+                              : _scoreBlock(grade),
+                    ),
                   ),
                 ),
 
                 // THE NEAR MISS. Placed under the squad slam because it
                 // only means anything once you've seen whose name is
                 // above yours — and the screen flinches when it lands.
-                if (_stage >= 3 && _near != null)
-                  Flinch(
-                    active: true,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.trending_up_rounded,
-                              size: 14, color: AppColors.red),
-                          const SizedBox(width: 8),
-                          Text(_near!.toUpperCase(),
-                              style: GoogleFonts.inter(
-                                color: AppColors.red,
-                                fontSize: 12,
-                                letterSpacing: 2,
-                                fontWeight: FontWeight.w900,
-                              )),
-                        ],
-                      ),
-                    ),
+                // The tail of the screen, all of it stage-gated. One
+                // listener rather than three, so it rebuilds once per
+                // stage instead of once per widget per stage.
+                ValueListenableBuilder<int>(
+                  valueListenable: _stage,
+                  builder: (_, stage, __) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (stage >= 3 && _near != null)
+                        Flinch(
+                          active: true,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.trending_up_rounded,
+                                    size: 14, color: AppColors.red),
+                                const SizedBox(width: 8),
+                                Text(_near!.toUpperCase(),
+                                    style: GoogleFonts.inter(
+                                      color: AppColors.red,
+                                      fontSize: 12,
+                                      letterSpacing: 2,
+                                      fontWeight: FontWeight.w900,
+                                    )),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (stage >= 3 && _hasSquad) _squadSlam(),
+                      if (stage >= 4) _actions(grade),
+                    ],
                   ),
-                if (_stage >= 3 && _hasSquad) _squadSlam(),
-                if (_stage >= 4) _actions(grade),
+                ),
               ]),
             ),
           ),
@@ -379,46 +423,12 @@ class _RizzOffRevealState extends State<RizzOffReveal>
           // The number rises out of where the axes collapsed.
           Positioned(
             top: 0,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                TweenAnimationBuilder<double>(
-                  tween: Tween(
-                      begin: 0,
-                      end: double.parse(_outOfTen)),
-                  duration: const Duration(milliseconds: 900),
-                  curve: Curves.easeOutCubic,
-                  builder: (_, v, __) => Text(
-                    v.toStringAsFixed(widget.decimals),
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 76,
-                      height: 1,
-                      letterSpacing: -3.5,
-                      fontWeight: FontWeight.w900,
-                      shadows: [
-                        Shadow(
-                            color: grade.color.withValues(alpha: 0.5),
-                            blurRadius: 50)
-                      ],
-                    ),
-                  ),
-                ),
-                Text(' ${widget.suffix}',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textMuted,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    )),
-              ],
-            )
-                .animate()
-                .fadeIn(duration: 380.ms)
-                .slideY(begin: 0.25, end: 0, curve: Curves.easeOutCubic)
-                .then(delay: 1200.ms)
-                .moveY(begin: 0, end: -18, duration: 300.ms)
-                .scaleXY(begin: 1, end: 0.62, duration: 300.ms),
+            child: _CountUp(
+              value: double.parse(_outOfTen),
+              decimals: widget.decimals,
+              suffix: widget.suffix,
+              glow: grade.color,
+            ),
           ),
           Positioned(
             top: 56,
@@ -680,6 +690,121 @@ class _RizzOffRevealState extends State<RizzOffReveal>
 }
 
 /// One axis: label, a bar that draws, and the number out of 10.
+/// ══════════════════════════════════════════════════════════════════
+///  THE NUMBER — counted once, and only once, whatever the parent does
+/// ══════════════════════════════════════════════════════════════════
+///
+/// THE BUG THIS EXISTS TO KILL. The headline used to be a
+/// TweenAnimationBuilder wrapped in a chained `.animate()`, built inline
+/// inside the reveal's own build method. That build method runs on every
+/// setState the reveal makes — and it makes four of them, one per stage,
+/// plus another when the burst fires. `.animate()` constructs a fresh
+/// list of effects each time it is built, which the Animate widget reads
+/// as a new animation and replays from the top.
+///
+/// So the number counted up, then counted up again, then again, then
+/// again: once per stage change, for one conversation. On every surface
+/// that shows this reveal — the Daily, chat, squads, duels — because the
+/// fault was never in any of those screens, it was in here.
+///
+/// THE FIX IS OWNERSHIP. The controller lives in this widget's State and
+/// is started exactly once, in initState. A parent rebuild hands this
+/// widget new props; it does not hand it a new controller, and
+/// AnimatedBuilder just reads whatever the controller is already at. No
+/// number of rebuilds can wind it back to zero, because nothing outside
+/// this State can reach it.
+///
+/// One controller also drives the whole beat rather than three chained
+/// effects: the count, the entrance, and the settle where it shrinks and
+/// rises to make room for the grade stamp. Chained effects can drift out
+/// of step with each other. Intervals on one clock cannot.
+class _CountUp extends StatefulWidget {
+  final double value;
+  final int decimals;
+  final String suffix;
+  final Color glow;
+  const _CountUp({
+    required this.value,
+    required this.decimals,
+    required this.suffix,
+    required this.glow,
+  });
+
+  @override
+  State<_CountUp> createState() => _CountUpState();
+}
+
+class _CountUpState extends State<_CountUp>
+    with SingleTickerProviderStateMixin {
+  // 1900ms of beat, laid out as fractions of one clock:
+  //   0    – 380   entrance: fade up into place
+  //   0    – 900   the count itself
+  //   1580 – 1880  settle: shrink and rise under the grade stamp
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1900),
+  )..forward();
+
+  static const _entrance = Interval(0, 0.2, curve: Curves.easeOutCubic);
+  static const _count = Interval(0, 0.474, curve: Curves.easeOutCubic);
+  static const _settle = Interval(0.831, 0.989, curve: Curves.easeOutCubic);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) {
+        final entrance = _entrance.transform(_c.value);
+        final settle = _settle.transform(_c.value);
+        final shown = widget.value * _count.transform(_c.value);
+        return Opacity(
+          opacity: entrance,
+          child: Transform.translate(
+            // Up 25% of its own height on entry, then up another 18 as
+            // it settles — both expressed on the same clock.
+            offset: Offset(0, (1 - entrance) * 19 - settle * 18),
+            child: Transform.scale(
+              scale: 1 - settle * 0.38,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(shown.toStringAsFixed(widget.decimals),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 76,
+                        height: 1,
+                        letterSpacing: -3.5,
+                        fontWeight: FontWeight.w900,
+                        shadows: [
+                          Shadow(
+                              color: widget.glow.withValues(alpha: 0.5),
+                              blurRadius: 50)
+                        ],
+                      )),
+                  Text(' ${widget.suffix}',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textMuted,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _AxisRow extends StatelessWidget {
   final String label;
   final int value; // 0..100
