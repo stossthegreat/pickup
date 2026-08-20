@@ -128,6 +128,26 @@ class _RizzOffRevealState extends State<RizzOffReveal>
   /// touched again, so nothing outside its own beat can restart them.
   final ValueNotifier<int> _stage = ValueNotifier(0);
   final ValueNotifier<bool> _burst = ValueNotifier(false);
+
+  /// ── BUILT ONCE, CACHED FOREVER ────────────────────────────────────
+  ///
+  /// The notifiers stopped the WHOLE tree rebuilding, but the branch
+  /// that listens still reruns its builder on every stage tick — and
+  /// the score block is on screen for stages 2, 3 AND 4, so it was
+  /// being reconstructed twice more after it landed. Every `.animate()`
+  /// chain inside it makes a fresh effects list on reconstruction,
+  /// which flutter_animate reads as a new animation and replays. That
+  /// is the "count-up spamming again and again" — the labels and the
+  /// number re-entering on each stage.
+  ///
+  /// Caching the subtree makes replay structurally impossible: the
+  /// second build returns the SAME widget instance, and an identical
+  /// child is something Flutter doesn't even diff into. There is no
+  /// timing to get right because there is nothing that can run twice.
+  Widget? _axesCache;
+  Widget? _scoreCache;
+  Widget? _slamCache;
+  Widget? _actionsCache;
   final _timers = <Timer>[];
 
   List<String> get _axes => widget.axes;
@@ -289,8 +309,8 @@ class _RizzOffRevealState extends State<RizzOffReveal>
                       builder: (_, stage, __) => stage == 0
                           ? _breath()
                           : stage == 1
-                              ? _axesList()
-                              : _scoreBlock(grade),
+                              ? (_axesCache ??= _axesList())
+                              : (_scoreCache ??= _scoreBlock(grade)),
                     ),
                   ),
                 ),
@@ -328,8 +348,9 @@ class _RizzOffRevealState extends State<RizzOffReveal>
                             ),
                           ),
                         ),
-                      if (stage >= 3 && _hasSquad) _squadSlam(),
-                      if (stage >= 4) _actions(grade),
+                      if (stage >= 3 && _hasSquad)
+                        _slamCache ??= _squadSlam(),
+                      if (stage >= 4) _actionsCache ??= _actions(grade),
                     ],
                   ),
                 ),

@@ -45,6 +45,29 @@ class BattleMeta {
   //  THE RECORD
   // ══════════════════════════════════════════════════════════════════
 
+  /// One score ceremony per duel, EVER, atomically.
+  ///
+  /// The reveal used to be guarded by "is there a parked result", and
+  /// the result is parked by a fire-and-forget submit — so a grade that
+  /// landed late sat there and fired the ceremony again on the NEXT
+  /// visit, for a conversation from twenty minutes ago. Check-and-set
+  /// in one call, keyed on the battle id, ends it: the second caller —
+  /// same visit or next week — reads a stamp the first already wrote.
+  static const _kRevealed = 'bat.revealed.v1';
+
+  static Future<bool> claimReveal(String battleId) async {
+    final p = await SharedPreferences.getInstance();
+    final done = p.getStringList(_kRevealed) ?? const [];
+    if (done.contains(battleId)) return false;
+    // Capped so ten years of duels can't grow the pref forever —
+    // dropping from the FRONT, because the old ids are the ones whose
+    // ceremonies can no longer replay anyway.
+    final kept =
+        done.length > 199 ? done.sublist(done.length - 199) : done;
+    await p.setStringList(_kRevealed, [...kept, battleId]);
+    return true;
+  }
+
   static Future<Standing> standing() async {
     final p = await SharedPreferences.getInstance();
     return Standing(

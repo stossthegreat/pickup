@@ -143,6 +143,15 @@ class _BattleVerdictState extends State<BattleVerdict>
   /// that listens to it.
   final ValueNotifier<int> _stage = ValueNotifier(0);
   final ValueNotifier<bool> _burst = ValueNotifier(false);
+
+  /// Built once, cached forever — same reasoning as RizzOffReveal: the
+  /// gated branch reruns its builder on every later stage tick, and a
+  /// reconstructed `.animate()` chain replays from the top. A cached
+  /// widget instance cannot be replayed because it is never rebuilt.
+  Widget? _wordCache;
+  Widget? _marginCache;
+  Widget? _rrCache;
+  Widget? _actionsCache;
   final _shakeKey = GlobalKey<ImpactShakeState>();
   final _timers = <Timer>[];
 
@@ -314,7 +323,7 @@ class _BattleVerdictState extends State<BattleVerdict>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (stage >= 2)
-                        Text(_headline,
+                        _wordCache ??= Text(_headline,
                                 style: GoogleFonts.inter(
                                   color: _tone,
                                   fontSize: 42,
@@ -335,7 +344,7 @@ class _BattleVerdictState extends State<BattleVerdict>
                                 curve: Curves.easeOutBack),
                       if (stage >= 2) ...[
                         const SizedBox(height: 8),
-                        Text(_margin,
+                        _marginCache ??= Text(_margin,
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
                                   color: AppColors.textSecondary,
@@ -348,11 +357,11 @@ class _BattleVerdictState extends State<BattleVerdict>
                       ],
                       if (stage >= 3) ...[
                         const SizedBox(height: 26),
-                        _ratingBlock(),
+                        _rrCache ??= _ratingBlock(),
                       ],
                       if (stage >= 4) ...[
                         const SizedBox(height: 26),
-                        _actions(),
+                        _actionsCache ??= _actions(),
                       ],
                     ],
                   ),

@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
 import '../../services/achievements.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/battle_service.dart';
+import '../../services/backend/chat_score_service.dart';
 import '../../services/backend/leaderboard_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../services/battle_meta_service.dart';
@@ -791,6 +792,14 @@ class _BattlesScreenState extends State<BattlesScreen> {
     HapticFeedback.heavyImpact();
     final girl = girlForVibe(b.scenario);
 
+    // CLEAR THE SLOT BEFORE THE ROOM OPENS. The submit that fills it is
+    // fired without await from the room's teardown, so a grade that
+    // landed AFTER the last visit read null has been sitting here since
+    // — and would fire the whole ceremony now, for a conversation from
+    // twenty minutes ago. Whatever is in the slot at this point is by
+    // definition stale: this visit hasn't produced anything yet.
+    BattleService.lastResult = null;
+
     // The rating BEFORE, so the movement afterwards is measured rather
     // than predicted. The server owns the Elo maths; this screen only
     // reports what it did.
@@ -849,10 +858,24 @@ class _BattlesScreenState extends State<BattlesScreen> {
 
     // Both rooms land here — the reveal, the verdict and the payout are
     // the same event whether he spoke or typed.
-    // HIS OWN NUMBER FIRST — the same count-up, axes and grade slam the
-    // Daily gets. He learns what he scored here and still doesn't know
-    // whether it was enough.
-    final r = BattleService.lastResult;
+    //
+    // WAIT FOR THE GRADE INSTEAD OF SHRUGGING AT IT. The chat room's
+    // submit runs from dispose() and cannot be awaited there, so it
+    // parks its future in ChatScoreService.grading. Reading the slot a
+    // beat too early is how a man who fought a whole duel got nothing —
+    // and how the result leaked into the NEXT visit instead.
+    var r = BattleService.lastResult;
+    if (r == null && ChatScoreService.grading != null) {
+      try {
+        await ChatScoreService.grading!.timeout(const Duration(seconds: 25));
+      } catch (_) {/* slow or dead network — fall through */}
+      r = BattleService.lastResult;
+    }
+
+    // ONE CEREMONY PER DUEL, EVER — atomic, keyed on the battle id, so
+    // no ordering of futures, taps or reloads can play it twice.
+    if (r != null && !await BattleMeta.claimReveal(b.id)) r = null;
+
     if (r != null) {
       BattleService.lastResult = null;
       // The conversation happened whether or not the other man has

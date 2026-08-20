@@ -65,16 +65,12 @@ class _SquadInviteScreenState extends State<SquadInviteScreen> {
   /// re-run onboarding, or an account that joined on another device all
   /// land here with the job already done — so it steps out of the way
   /// rather than selling him something he owns.
-  ///
-  /// It steps forward to the reel, not sideways to home. This is the
-  /// last stop before the app either way, and skipping ONE step is not
-  /// a reason to skip the step after it.
   Future<void> _skipIfAlreadyIn() async {
     try {
       if (await SquadService.mySquad() == null) return;
       if (!mounted || _left) return;
       _left = true;
-      context.go('/onboarding/what-this-is');
+      context.go('/home');
     } catch (_) {/* offline — show the pitch, it's harmless */}
   }
 
@@ -90,18 +86,19 @@ class _SquadInviteScreenState extends State<SquadInviteScreen> {
     // → he's still on the pitch, which is where he should be.
     if (await SquadService.mySquad() != null && mounted && !_left) {
       _left = true;
-      context.go('/onboarding/what-this-is');
+      context.go('/onboarding/tour');
     }
   }
 
-  /// LAST STEP IS THE REEL, NOT HOME. Skipping the squad shouldn't cost
-  /// him the explanation of what the other three quarters of the app do —
-  /// that's the man most likely to bounce, not least.
+  /// The tour is the last step, not home — he is about to be SHOWN the
+  /// rest of the app instead of left to find a tenth of it. A man who
+  /// already holds a squad (the initState skip above) still goes
+  /// straight home: he has run this app before.
   void _finish(BuildContext context) {
     if (_left) return;
     _left = true;
     HapticFeedback.mediumImpact();
-    context.go('/onboarding/what-this-is');
+    context.go('/onboarding/tour');
   }
 
   @override
