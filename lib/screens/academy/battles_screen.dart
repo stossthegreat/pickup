@@ -878,6 +878,12 @@ class _BattlesScreenState extends State<BattlesScreen> {
 
     if (r != null) {
       BattleService.lastResult = null;
+      // A fresh FINAL binding, not vanity: `r` is reassignable (the
+      // guards above null it), and Dart refuses to null-promote an
+      // assigned variable inside a closure — so `r.score` in the
+      // dialog's pageBuilder below is a compile error. A final local
+      // promotes everywhere.
+      final res = r;
       // The conversation happened whether or not the other man has
       // answered yet, so it counts toward the talking families now
       // rather than waiting on someone else to open the app.
@@ -889,9 +895,9 @@ class _BattlesScreenState extends State<BattlesScreen> {
         barrierLabel: 'battle',
         transitionDuration: const Duration(milliseconds: 320),
         pageBuilder: (ctx, _, __) => RizzOffReveal(
-          score: Economy.aiScoreFromVoice(r.score),
-          gradeScore: r.score,
-          rubric: r.rubric,
+          score: Economy.aiScoreFromVoice(res.score),
+          gradeScore: res.score,
+          rubric: res.rubric,
           rankToday: 0,
           worldAvg: 0,
           girlName: girl.name,
@@ -909,7 +915,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
       // THEN THE FIGHT. Only if the other man is already in — otherwise
       // the duel stays open and the verdict detonates whenever he
       // answers, which is the better version anyway.
-      if (r.settled) {
+      if (res.settled) {
         final fresh = await BattleService.myBattles();
         if (!mounted) return;
         Battle? settled;
