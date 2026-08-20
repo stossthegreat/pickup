@@ -73,8 +73,12 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen>
   }
 
   /// The grade hit the screen: shake, flash, confetti if it earned it.
+  /// Fire-once — same reasoning as RizzOffReveal._onImpact.
+  bool _impacted = false;
+
   void _onImpact() {
-    if (!mounted) return;
+    if (!mounted || _impacted) return;
+    _impacted = true;
     _shakeKey.currentState?.shake();
     _flash.forward(from: 0);
     HapticFeedback.heavyImpact();

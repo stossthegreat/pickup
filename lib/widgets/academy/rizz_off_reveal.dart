@@ -263,8 +263,15 @@ class _RizzOffRevealState extends State<RizzOffReveal>
     super.dispose();
   }
 
+  /// Fire-once, whatever happens below it. The impact starts a shake,
+  /// and a shake must never be able to start another impact — that
+  /// exact cycle (via ImpactShake remounting its subtree, now fixed at
+  /// the source) is what looped every score ceremony in the app.
+  bool _impacted = false;
+
   void _onImpact() {
-    if (!mounted) return;
+    if (!mounted || _impacted) return;
+    _impacted = true;
     _shakeKey.currentState?.shake();
     _flash.forward(from: 0);
     if (widget.score >= 6200) _burst.value = true;

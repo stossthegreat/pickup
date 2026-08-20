@@ -210,11 +210,36 @@ class ImpactShakeState extends State<ImpactShake>
     return AnimatedBuilder(
       animation: _c,
       builder: (_, child) {
-        if (_c.value == 0 || _c.isCompleted) return child!;
+        // ── ALWAYS THE SAME SHAPE. THIS LINE WAS THE WHOLE PLAGUE ────
+        //
+        // This used to return `child!` bare when idle and wrap it in a
+        // Transform while shaking. Same child, different WRAPPER — and
+        // Flutter reconciles by type at each slot, so every time the
+        // wrapper appeared or vanished the ENTIRE subtree underneath
+        // was unmounted and inflated fresh. This widget wraps the whole
+        // score ceremony.
+        //
+        // Which built a perfect perpetual-motion machine: the grade
+        // stamp lands → onImpact → shake() → shape changes → subtree
+        // remounts → a NEW stamp waits its delay and lands again →
+        // onImpact → shake() → … forever. Every score screen in the app
+        // "kept counting again and again" — and every fix inside the
+        // tree (per-day claims, notifiers, caches, owned controllers,
+        // finally a static number) was real, and none could hold,
+        // because this line kept throwing the whole tree away from the
+        // outside. Ten reports; this line.
+        //
+        // A Transform at Offset.zero costs nothing to compose and keeps
+        // the tree the same shape from the first frame to the last, so
+        // the subtree is never remounted at all.
+        final v = _c.value;
+        if (v == 0 || _c.isCompleted) {
+          return Transform.translate(offset: Offset.zero, child: child);
+        }
         // Decaying sine — big first swing, gone in half a second.
-        final decay = 1 - _c.value;
-        final dx = math.sin(_c.value * math.pi * 7) * 13 * decay * decay;
-        final dy = math.cos(_c.value * math.pi * 5) * 7 * decay * decay;
+        final decay = 1 - v;
+        final dx = math.sin(v * math.pi * 7) * 13 * decay * decay;
+        final dy = math.cos(v * math.pi * 5) * 7 * decay * decay;
         return Transform.translate(offset: Offset(dx, dy), child: child);
       },
       child: widget.child,
