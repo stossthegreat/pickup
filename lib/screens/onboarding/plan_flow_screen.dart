@@ -459,8 +459,7 @@ class _VoiceState extends State<_Voice> with SingleTickerProviderStateMixin {
     return _pad([
       _kicker('LIVE VOICE'),
       const SizedBox(height: 18),
-      _headline('Not typing.
-Talking.'),
+      _headline('Not typing.\nTalking.'),
       const SizedBox(height: 18),
       _body('Put the phone to your ear and actually speak. She hears your '
           'voice — the pauses, the nerves, the moment you find your feet — '
@@ -616,8 +615,7 @@ class _TheGame extends StatelessWidget {
     return _pad([
       _kicker('THE GAME'),
       const SizedBox(height: 18),
-      _headline('Every rep
-scored out of 100.'),
+      _headline('Every rep\nscored out of 100.'),
       const SizedBox(height: 16),
       _body('Not a vibe. Five numbers that tell you exactly which part of '
           'your game is letting you down.'),
