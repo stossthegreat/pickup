@@ -4,8 +4,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/backend/chat_score_service.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/academy/rizz_off_reveal.dart';
 import '../roleplay/girl_chat_screen.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
@@ -27,10 +29,21 @@ import '../roleplay/girl_chat_screen.dart';
 /// from a marketing beat is jarring — he needs one breath to understand
 /// that the pitch is over and this is now HIM. One line of framing, one
 /// button, then it is a conversation.
-class FirstRepScreen extends StatelessWidget {
+class FirstRepScreen extends StatefulWidget {
   const FirstRepScreen({super.key});
 
+  @override
+  State<FirstRepScreen> createState() => _FirstRepScreenState();
+}
+
+class _FirstRepScreenState extends State<FirstRepScreen> {
+  /// Re-entry guard only: one tap opens one rep, and NOT RIGHT NOW
+  /// stops working the moment the rep is under way.
+  bool _busy = false;
+
   Future<void> _start(BuildContext context) async {
+    if (_busy) return;
+    _busy = true;
     HapticFeedback.mediumImpact();
     final g = girlById('into_you');
     await Navigator.of(context, rootNavigator: true).push<bool>(
@@ -45,19 +58,96 @@ class FirstRepScreen extends StatelessWidget {
             accent: g.accent,
             opener: g.opener,
             // A REP, NOT A DEMO. taskMode gives the completion bar and
-            // ends on the real scorecard — the number is what turns a
-            // man from evaluating an app into owning a result.
+            // the real ending.
             taskMode: true,
             taskGoal: 5,
             scoreSurface: 'first_rep',
+            // ASK LUCIEN, ON. This defaults to FALSE and the first build
+            // of this screen never set it — so the one beat the whole
+            // funnel promises ("stuck? tap Lucien") was missing from the
+            // only place it had to appear.
+            coachAllowed: true,
+            // This screen owns the ending: the /100 with the five axes,
+            // not the girl-verdict ceremony. A man being sold on the
+            // score has to actually SEE a score.
+            verdictOnFinish: false,
           ),
         ),
       ),
     );
-    if (!context.mounted) return;
+    if (!mounted) return;
+
+    // ── SHOW HIM THE NUMBER ───────────────────────────────────────────
+    //
+    // The grade is fired without await from the chat's teardown, so the
+    // result is often still in the air the instant this screen comes
+    // back. Reading it now and shrugging is how a man who ran the whole
+    // rep gets no score — the single most valuable screen in the funnel,
+    // lost to a race. So we wait for the parked future, capped, and only
+    // then give up.
+    var r = ChatScoreService.lastResult;
+    if (r == null && ChatScoreService.grading != null) {
+      // No setState — nothing on this screen renders off _busy, and a
+      // rebuild while a route is mid-transition buys only risk.
+      try {
+        await ChatScoreService.grading!.timeout(const Duration(seconds: 20));
+      } catch (_) {/* slow or dead network — fall through to the price */}
+      r = ChatScoreService.lastResult;
+    }
+    if (!mounted) return;
+
+    if (r != null) {
+      ChatScoreService.lastResult = null;
+      // A FINAL binding before the closure. `r` is reassignable (the
+      // wait above rewrites it), and Dart refuses to null-promote an
+      // assigned local inside a closure — so r.score in the dialog's
+      // pageBuilder would be a compile error, not a runtime one. This
+      // exact trap failed an iOS archive earlier in the week.
+      final res = r;
+      final g = girlById('into_you');
+      await showGeneralDialog<void>(
+        context: context,
+        barrierColor: Colors.black,
+        barrierDismissible: false,
+        barrierLabel: 'first-rep',
+        transitionDuration: const Duration(milliseconds: 320),
+        pageBuilder: (_, __, ___) => RizzOffReveal(
+          score: res.score,
+          // The grade bands are cut against the 0..9999 rubric, so the
+          // 0..100 chat score is put back on that band for the LETTER
+          // only. The number on screen stays out of 100.
+          gradeScore: (res.score * 99.99).round(),
+          rubric: res.rubric,
+          rankToday: 0,
+          worldAvg: res.average,
+          girlName: g.name,
+          girlAccent: g.accent,
+          divisor: 1,
+          decimals: 0,
+          suffix: '/ 100',
+          kicker: 'YOUR FIRST REP',
+        ),
+        transitionBuilder: (_, a, __, child) =>
+            FadeTransition(opacity: a, child: child),
+      );
+    }
+    if (!mounted) return;
     // Scored or bailed, the funnel ends the same way: at the price. A
     // man who quit his first rep after two lines is not a man to send
     // to a home screen he has no reason to open again.
+    context.go('/paywall');
+  }
+
+  /// THE WAY OUT, AND IT STILL ENDS AT THE PRICE.
+  ///
+  /// Forcing the rep is the design — a man who has done it converts far
+  /// better than a man who has been told about it. But a screen with no
+  /// exit at all is a trap, and a trapped man does not buy, he uninstalls
+  /// and leaves one star. This is deliberately quiet, deliberately not a
+  /// button, and it goes exactly where the rep goes.
+  void _skip() {
+    if (_busy) return;
+    HapticFeedback.selectionClick();
     context.go('/paywall');
   }
 
@@ -162,6 +252,17 @@ class FirstRepScreen extends StatelessWidget {
                   ),
                 ),
               ).animate().fadeIn(delay: 700.ms, duration: 420.ms),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: _skip,
+                child: Text('NOT RIGHT NOW',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textMuted,
+                      fontSize: 11,
+                      letterSpacing: 2.2,
+                      fontWeight: FontWeight.w800,
+                    )),
+              ).animate().fadeIn(delay: 1100.ms, duration: 420.ms),
             ]),
           ),
         ),

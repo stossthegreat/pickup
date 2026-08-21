@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -21,10 +23,11 @@ import '../../theme/app_colors.dart';
 /// These four screens are the plan. They sit after the handle and before
 /// the first rep, and they are written to do one job each:
 ///
-///   1 THE GUT PUNCH  — name the thing he already knows about himself
-///   2 THE LADDER     — ten women, INTO YOU to ICE QUEEN, the whole climb
-///   3 THE MACHINE    — why reps + help + competition + a squad WORKS
-///   4 THE VERDICT    — his own onboarding answers, turned on him
+///   1 THE TRUTH      — name the thing he already knows about himself
+///   2 THE CLIMB      — ten women, INTO YOU to ICE QUEEN, the whole ladder
+///   3 LIVE VOICE     — the hook, SHOWN: a call running, Lucien cutting in
+///   4 THE GAME       — scored /100, the board, duels, streaks. And fun.
+///   5 YOUR STARTING POINT — his own onboarding answer, turned on him
 ///
 /// ── WHY THE GUT PUNCH IS FAIR ───────────────────────────────────────
 ///
@@ -38,10 +41,14 @@ import '../../theme/app_colors.dart';
 ///
 /// ── AND IT SAYS THE FUN PART OUT LOUD ───────────────────────────────
 ///
-/// Every screen here carries the second promise: this is a GAME. Duels,
-/// leaderboards, a squad, a score you want to beat. Men do not sustain
-/// sixty days of self-improvement. They sustain sixty days of something
-/// they enjoy that happens to improve them.
+/// The second promise, carried on every screen: this is a GAME. Scores,
+/// ranks, duels, a streak. Men do not sustain sixty days of
+/// self-improvement — they sustain sixty days of something they enjoy
+/// that happens to improve them.
+///
+/// Squads get ONE line, at the end, framed as a multiplier. Most men
+/// will run this alone and it works alone; leaning on squads would both
+/// overstate them and scare off the man who has nobody to bring.
 class PlanFlowScreen extends StatefulWidget {
   const PlanFlowScreen({super.key});
 
@@ -52,7 +59,7 @@ class PlanFlowScreen extends StatefulWidget {
 class _PlanFlowScreenState extends State<PlanFlowScreen> {
   final _pages = PageController();
   int _i = 0;
-  static const _count = 4;
+  static const _count = 5;
 
   /// His answer to onboarding beat 05 — "How confident are you
   /// approaching someone you're attracted to?" 0..3. Already collected,
@@ -92,7 +99,8 @@ class _PlanFlowScreenState extends State<PlanFlowScreen> {
 
   static const _ctas = [
     'I WANT THAT',
-    'SHOW ME THE METHOD',
+    'SHOW ME THE CLIMB',
+    'WHAT ELSE?',
     'WHERE DO I START?',
     'START MY FIRST REP',
   ];
@@ -140,7 +148,8 @@ class _PlanFlowScreenState extends State<PlanFlowScreen> {
                 children: [
                   const _GutPunch(),
                   const _Ladder(),
-                  const _Machine(),
+                  const _Voice(),
+                  const _TheGame(),
                   _Verdict(level: _level),
                 ],
               ),
@@ -410,131 +419,356 @@ class _Ladder extends StatelessWidget {
   }
 }
 
-/// ── 3 · THE MACHINE ─────────────────────────────────────────────────
+/// ── 3 · LIVE VOICE ──────────────────────────────────────────────────
 ///
-/// Why the climb actually happens, in the four parts that make it work
-/// — and the sentence that says the quiet part: this is fun. Sixty days
-/// of homework is not a product anybody finishes.
-class _Machine extends StatelessWidget {
-  const _Machine();
+/// THE BIGGEST HOOK IN THE PRODUCT, AND IT WAS A BULLET POINT.
+///
+/// Everyone has seen an AI that types. Almost nobody has held a phone
+/// to their ear and had a woman push back on them out loud, in real
+/// time, in a real voice. That is the thing that makes a man show
+/// somebody else the app, and it is what the marketing will be built
+/// on — so it gets a screen of its own, and the screen SHOWS the call
+/// rather than describing it: a live waveform, a running timer, and
+/// Lucien cutting in mid-sentence with the line.
+///
+/// It is also the honest reason the product costs money. Text is cheap;
+/// a live voice conversation is not. Showing its worth here is what
+/// makes the price feel like a price instead of a wall.
+class _Voice extends StatefulWidget {
+  const _Voice();
+  @override
+  State<_Voice> createState() => _VoiceState();
+}
 
-  static const _parts = [
-    (
-      Icons.forum_rounded,
-      'PRACTICE',
-      'Talk to her — text or live voice. Get it wrong here, where wrong '
-          'costs you nothing.',
-    ),
-    (
-      Icons.bolt_rounded,
-      'LUCIEN, LIVE',
-      'Stuck mid-sentence? One tap and he hands you the exact line — '
-          'then tells you why it works.',
-    ),
-    (
-      Icons.assessment_rounded,
-      'SCORED, EVERY TIME',
-      'Confidence. Flow. Wit. Recovery. Close. You will know exactly '
-          'which one is holding you back.',
-    ),
-    (
-      Icons.sports_mma_rounded,
-      'DUELS & LEADERBOARDS',
-      'Fight other men on the same woman. Climb the board. This is the '
-          'part men come back for.',
-    ),
-    (
-      Icons.groups_rounded,
-      'YOUR SQUAD',
-      'Two to five men who see whether you showed up. Nobody quits in '
-          'front of an audience.',
-    ),
-  ];
+class _VoiceState extends State<_Voice> with SingleTickerProviderStateMixin {
+  /// Never stops while the screen is up. A "live call" that is not
+  /// moving is a screenshot, and a screenshot cannot sell a live call.
+  late final AnimationController _wave = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1500),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _wave.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return _pad([
-      _kicker('THE METHOD'),
+      _kicker('LIVE VOICE'),
       const SizedBox(height: 18),
-      _headline('Reps. Then\nreal pressure.'),
+      _headline('Not typing.
+Talking.'),
       const SizedBox(height: 18),
-      // The evidence, stated honestly — this is the clinical mechanism,
-      // not a claim we invented, and it is the reason the product works
-      // on both halves of his problem at once.
+      _body('Put the phone to your ear and actually speak. She hears your '
+          'voice — the pauses, the nerves, the moment you find your feet — '
+          'and she answers out loud, instantly, like a person.'),
+      const SizedBox(height: 22),
+      // The call, running.
       Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: AppColors.surface1,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.red.withValues(alpha: 0.4)),
+          boxShadow: [
+            BoxShadow(
+                color: AppColors.red.withValues(alpha: 0.12), blurRadius: 40)
+          ],
         ),
-        child: Text(
-            'Rehearsing real conversations over and over is the same method '
-            'used to train people out of social fear. The fear fades because '
-            'nothing bad happens. The skill grows because you keep swinging.',
-            style: GoogleFonts.inter(
-              color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 13.5,
-              height: 1.5,
-              fontWeight: FontWeight.w600,
-            )),
-      ).animate().fadeIn(delay: 200.ms, duration: 460.ms),
-      const SizedBox(height: 22),
-      for (final (i, (icon, title, note)) in _parts.indexed)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              width: 38,
-              height: 38,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.red.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-                border:
-                    Border.all(color: AppColors.red.withValues(alpha: 0.4)),
+        child: Column(children: [
+          Row(children: [
+            AnimatedBuilder(
+              animation: _wave,
+              builder: (_, __) => Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: AppColors.red.withValues(
+                      alpha: 0.45 + 0.55 * _wave.value),
+                  shape: BoxShape.circle,
+                ),
               ),
-              child: Icon(icon, size: 18, color: AppColors.red),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 12.5,
-                          letterSpacing: 2,
-                          fontWeight: FontWeight.w900,
-                        )),
-                    const SizedBox(height: 5),
-                    Text(note,
-                        style: GoogleFonts.inter(
-                          color: Colors.white.withValues(alpha: 0.68),
-                          fontSize: 13.5,
-                          height: 1.45,
-                          fontWeight: FontWeight.w500,
-                        )),
-                  ]),
-            ),
+            const SizedBox(width: 8),
+            Text('LIVE · SERAPHINA',
+                style: GoogleFonts.inter(
+                  color: AppColors.red,
+                  fontSize: 10.5,
+                  letterSpacing: 2.6,
+                  fontWeight: FontWeight.w900,
+                )),
+            const Spacer(),
+            Text('01:24',
+                style: GoogleFonts.inter(
+                  color: AppColors.textMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                )),
           ]),
-        )
-            .animate()
-            .fadeIn(delay: (420 + i * 130).ms, duration: 420.ms)
-            .slideX(begin: -0.04, end: 0, curve: Curves.easeOut),
-      Text('And the truth nobody says out loud: it is fun. '
-          'You will be doing this because you want to, not because you '
-          'should.',
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 44,
+            child: AnimatedBuilder(
+              animation: _wave,
+              builder: (_, __) => Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < 26; i++)
+                    Container(
+                      width: 3,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      height: 7 +
+                          30 *
+                              (0.5 +
+                                      0.5 *
+                                          math.sin(_wave.value * 2 * math.pi +
+                                              i * 0.8))
+                                  .abs(),
+                      decoration: BoxDecoration(
+                        color: i % 3 == 0
+                            ? AppColors.red
+                            : Colors.white.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+            decoration: BoxDecoration(
+              color: AppColors.red.withValues(alpha: 0.11),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.red.withValues(alpha: 0.4)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.bolt_rounded, size: 15, color: AppColors.red),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text('LUCIEN: "she went quiet on purpose — let it '
+                    'sit, do not fill it"',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 12.5,
+                      height: 1.35,
+                      fontStyle: FontStyle.italic,
+                      fontWeight: FontWeight.w700,
+                    )),
+              ),
+            ]),
+          ),
+        ]),
+      )
+          .animate()
+          .fadeIn(delay: 260.ms, duration: 520.ms)
+          .slideY(begin: 0.06, end: 0, curve: Curves.easeOutCubic),
+      const SizedBox(height: 20),
+      Text('Ten women. Ten real voices. The ice queen sounds nothing like '
+          'the sweet one, and neither of them goes easy on you.',
+          style: GoogleFonts.inter(
+            color: Colors.white.withValues(alpha: 0.8),
+            fontSize: 15,
+            height: 1.5,
+            fontWeight: FontWeight.w600,
+          )).animate().fadeIn(delay: 700.ms, duration: 480.ms),
+      const SizedBox(height: 14),
+      Text('Freeze on a call and Lucien is one tap away — the master of '
+          'game, in your ear, telling you exactly what to say next.',
           style: GoogleFonts.inter(
             color: AppColors.red,
             fontSize: 15,
             height: 1.5,
             fontWeight: FontWeight.w800,
-          )).animate().fadeIn(delay: 1200.ms, duration: 520.ms),
+          )).animate().fadeIn(delay: 900.ms, duration: 480.ms),
       const SizedBox(height: 8),
     ]);
   }
+}
+
+/// ── 4 · THE GAME ────────────────────────────────────────────────────
+///
+/// Everything that turns practice into something he WANTS to open. The
+/// order is deliberate: the score is the hook (a number he wants to
+/// beat), the board makes it public, duels make it a fight, and the
+/// squad is one line at the end — offered as a multiplier, never as a
+/// requirement. Most men will run this alone and it works alone; saying
+/// otherwise would be a lie and would scare off the man who has nobody
+/// to bring.
+class _TheGame extends StatelessWidget {
+  const _TheGame();
+
+  static const _axes = [
+    ('CONFIDENCE', 78, kNeon),
+    ('FLOW', 71, kNeon),
+    ('WIT', 34, AppColors.red),
+    ('RECOVERY', 62, AppColors.signalAmber),
+    ('CLOSE', 45, AppColors.signalAmber),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return _pad([
+      _kicker('THE GAME'),
+      const SizedBox(height: 18),
+      _headline('Every rep
+scored out of 100.'),
+      const SizedBox(height: 16),
+      _body('Not a vibe. Five numbers that tell you exactly which part of '
+          'your game is letting you down.'),
+      const SizedBox(height: 20),
+      for (final (i, (label, v, tone)) in _axes.indexed)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 11),
+          child: Row(children: [
+            SizedBox(
+              width: 92,
+              child: Text(label,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 9.5,
+                    letterSpacing: 1.8,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: Stack(children: [
+                  Container(height: 6, color: AppColors.surface2),
+                  FractionallySizedBox(
+                    widthFactor: v / 100,
+                    child: Container(height: 6, color: tone),
+                  ),
+                ]),
+              ),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 26,
+              child: Text('$v',
+                  textAlign: TextAlign.right,
+                  style: GoogleFonts.inter(
+                    color: tone,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ),
+          ]),
+        )
+            .animate()
+            .fadeIn(delay: (240 + i * 90).ms, duration: 400.ms)
+            .slideX(begin: -0.04, end: 0, curve: Curves.easeOut),
+      const SizedBox(height: 6),
+      Text('WIT 34. Now you know what to work on tonight.',
+          style: GoogleFonts.inter(
+            color: AppColors.red,
+            fontSize: 14,
+            height: 1.4,
+            fontWeight: FontWeight.w800,
+          )).animate().fadeIn(delay: 760.ms, duration: 440.ms),
+      const SizedBox(height: 26),
+      _Feature(
+        icon: Icons.leaderboard_rounded,
+        title: 'THE LEADERBOARD',
+        note: 'Every score you earn puts you on it. Watch your name climb '
+            'past men who started before you.',
+        delayMs: 880,
+      ),
+      _Feature(
+        icon: Icons.sports_mma_rounded,
+        title: 'RIZZ BATTLES',
+        note: 'Duel another man on the SAME woman — both blind, better '
+            'conversation wins. Send a friend the code and settle it.',
+        delayMs: 1010,
+      ),
+      _Feature(
+        icon: Icons.local_fire_department_rounded,
+        title: 'MISSIONS & STREAKS',
+        note: 'Daily reps with no help and no safety net. That is where the '
+            'game actually hardens.',
+        delayMs: 1140,
+      ),
+      const SizedBox(height: 4),
+      Text('And yes — it is a game. Scores, ranks, duels, a streak you will '
+          'not want to break. You will run the reps because you want to, '
+          'not because you should.',
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 15,
+            height: 1.5,
+            fontWeight: FontWeight.w800,
+          )).animate().fadeIn(delay: 1280.ms, duration: 520.ms),
+      const SizedBox(height: 12),
+      Text('Bring two friends into a squad if you want the extra pressure. '
+          'Most men run it alone and it works just as well.',
+          style: GoogleFonts.inter(
+            color: AppColors.textTertiary,
+            fontSize: 12.5,
+            height: 1.45,
+            fontWeight: FontWeight.w500,
+          )).animate().fadeIn(delay: 1420.ms, duration: 480.ms),
+      const SizedBox(height: 8),
+    ]);
+  }
+}
+
+class _Feature extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String note;
+  final int delayMs;
+  const _Feature(
+      {required this.icon,
+      required this.title,
+      required this.note,
+      required this.delayMs});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 15),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.red.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: AppColors.red.withValues(alpha: 0.4)),
+            ),
+            child: Icon(icon, size: 16, color: AppColors.red),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 12,
+                        letterSpacing: 1.8,
+                        fontWeight: FontWeight.w900,
+                      )),
+                  const SizedBox(height: 4),
+                  Text(note,
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withValues(alpha: 0.66),
+                        fontSize: 13,
+                        height: 1.42,
+                        fontWeight: FontWeight.w500,
+                      )),
+                ]),
+          ),
+        ]),
+      ).animate().fadeIn(delay: delayMs.ms, duration: 420.ms).slideX(
+          begin: -0.04, end: 0, curve: Curves.easeOut);
 }
 
 /// ── 4 · THE VERDICT ─────────────────────────────────────────────────
@@ -628,15 +862,24 @@ class _Verdict extends StatelessWidget {
             height: 1.45,
             fontWeight: FontWeight.w500,
           )).animate().fadeIn(delay: 800.ms, duration: 480.ms),
+      const SizedBox(height: 22),
+      Text('That is not talent. That is a man who kept showing up when it '
+          'was still awkward.',
+          style: GoogleFonts.inter(
+            color: AppColors.red,
+            fontSize: 14.5,
+            height: 1.45,
+            fontWeight: FontWeight.w800,
+          )).animate().fadeIn(delay: 950.ms, duration: 480.ms),
       const SizedBox(height: 24),
       Text('One conversation. Right now.\nLet\'s see where you actually are.',
           style: GoogleFonts.inter(
             color: Colors.white,
-            fontSize: 19,
+            fontSize: 20,
             height: 1.4,
             letterSpacing: -0.3,
             fontWeight: FontWeight.w900,
-          )).animate().fadeIn(delay: 1000.ms, duration: 520.ms),
+          )).animate().fadeIn(delay: 1120.ms, duration: 520.ms),
       const SizedBox(height: 8),
     ]);
   }
