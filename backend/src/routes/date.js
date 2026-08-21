@@ -68,7 +68,7 @@ export default async function dateRoute(app) {
     }
     if (!text) return reply.code(400).send({ error: 'text required' });
 
-    const system = buildDateTurnPrompt({ woman: characterId, focus, creator, userProfile, memory, stage });
+    const system = buildDateTurnPrompt({ woman: characterId, focus, creator, userProfile, memory, stage, language: body.language });
 
     // Rebuild the conversation for the model. history items: {who:'her'|'you', text}
     const msgs = [{ role: 'system', content: system }];

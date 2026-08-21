@@ -1031,20 +1031,21 @@ const ARC_AND_REACTION_RULES = `
 ═══════════════════════════════════════════════════════════════════
 # LANGUAGE LOCK — ABSOLUTE — READ TWICE
 ═══════════════════════════════════════════════════════════════════
-You respond ONLY in English. Every reply, every word, every laugh
-cue, every gasp, every sound — English only. Never switch into
-Spanish, French, Portuguese, Italian, German, or any other language
-mid-conversation regardless of what the user says or what a single
-syllable sounds like.
+You respond ONLY in {{LANG}}. Every reply, every word, every laugh
+cue, every gasp, every sound — {{LANG}} only. Never switch into any
+other language mid-conversation regardless of what the user says or
+what a single syllable sounds like. You speak {{LANG}} like a native
+— natural slang, natural rhythm, a real young woman from that
+culture, never textbook.
 
 If the user's transcribed input looks like another language because
-of mic noise or accent, treat it as misheard English and react in
-English ("wait what" / "sorry — what did you just say" / playful
-confused tease). NEVER reply in the misheard language.
+of mic noise or accent, treat it as misheard {{LANG}} and react in
+{{LANG}} (a playful confused tease). NEVER reply in the misheard
+language.
 
 If the user explicitly speaks to you in another language, respond
-in ENGLISH only, in character ("english only here, sorry. say it
-again, in english"). You do not code-switch under any circumstance.
+in {{LANG}} only, in character. You do not code-switch under any
+circumstance.
 
 ═══════════════════════════════════════════════════════════════════
 # SPEECH PRODUCTION — ABSOLUTE RULE — READ THREE TIMES
@@ -3998,11 +3999,12 @@ warm girl — it means HER version of enjoying the game.`.trim();
 // deploys in either direction. Creator mode is untouched by this
 // switch — it stays behind the owner password either way.
 //
-// DEFAULT IS SAFE. The app is IN REVIEW right now, so the lock is on
-// unless the env var explicitly says otherwise — a fresh deploy with
-// no dashboard action ships PG. Unlock after approval: set
-// REVIEW_SAFE_MODE=0.
-const REVIEW_SAFE = process.env.REVIEW_SAFE_MODE !== '0';
+// DEFAULT IS UNLOCKED (founder call): the flirt engine runs unless the
+// dashboard explicitly sets REVIEW_SAFE_MODE=1 — flip it to 1 for the
+// next App Review window, delete it (or 0) after approval. The
+// extreme-case floor (crude commands → cold clapback; she never writes
+// explicit content) lives in the flirt prime itself and is ALWAYS on.
+const REVIEW_SAFE = process.env.REVIEW_SAFE_MODE === '1';
 
 const REVIEW_SAFE_PRIME = `
 # CONTENT FLOOR — READ FIRST. THIS CHANGES WHAT YOU SAY, NEVER WHO YOU ARE.
@@ -4033,9 +4035,23 @@ gonna say next. Only a crude degrading COMMAND gets one cold clapback
 — then you stay in it. You never write explicit content yourself.
 Be her. Be fun. Make him leave the call wanting another one.`.trim();
 
+// BCP-47 primary tag → the name the prompt locks to. Mirrors the app's
+// LanguageService.supported list; anything unknown falls back to English.
+const LANGUAGE_NAMES = {
+  en: 'English', es: 'Spanish', pt: 'Portuguese', fr: 'French',
+  de: 'German', it: 'Italian', nl: 'Dutch', tr: 'Turkish',
+  pl: 'Polish', ru: 'Russian', ar: 'Arabic', hi: 'Hindi',
+  id: 'Indonesian', ja: 'Japanese', ko: 'Korean',
+};
+export function languageNameFor(code) {
+  return LANGUAGE_NAMES[String(code || 'en').toLowerCase().slice(0, 2)]
+      || 'English';
+}
+
 export function buildFreeFlowInstructions({
-  vibeLabel, scenarioSetting, memoryBlock, creator, userProfile,
+  vibeLabel, scenarioSetting, memoryBlock, creator, userProfile, language,
 }) {
+  const langName = languageNameFor(language);
   const aboutHim = freeFlowAboutHim(userProfile);
   if (creator) {
     // Creator mode = single structured archetype (Taylor / Raven /
@@ -4049,7 +4065,9 @@ export function buildFreeFlowInstructions({
     if (scenarioSetting && scenarioSetting.trim().length > 0) {
       parts.push('', '# ADDITIONAL SCENE NOTE', scenarioSetting);
     }
-    return parts.join('\n');
+    // Creator prompts carry no {{LANG}} token (they run their own
+    // English character sheets) — the replace is a no-op there.
+    return parts.join('\n').split('{{LANG}}').join(langName);
   }
 
   // Normal mode = one of five fully-realised characters, each with
@@ -4069,7 +4087,9 @@ export function buildFreeFlowInstructions({
     parts.push('', '# ADDITIONAL SCENE NOTE', scenarioSetting);
   }
   parts.push('', REVIEW_SAFE ? REVIEW_SAFE_CODA : NORMAL_MODE_CODA);
-  return parts.join('\n');
+  // The character sheet's LANGUAGE LOCK is tokenized — lock it to the
+  // user's chosen language (English when unset, exactly as before).
+  return parts.join('\n').split('{{LANG}}').join(langName);
 }
 
 // ABOUT-HIM block for the live voice personas — his name (so she can say

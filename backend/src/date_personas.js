@@ -322,7 +322,14 @@ have sent.`;
  * [userProfile] is an optional { name, ageGroup } block so she can use
  * his name naturally and pitch her register to his age band.
  */
-export function buildDateTurnPrompt({ woman, focus, creator, userProfile, memory, stage }) {
+export function buildDateTurnPrompt({ woman, focus, creator, userProfile, memory, stage, language }) {
+  // Locked reply language — the app sends the user's picked code on
+  // every turn; unknown/unset falls back to English.
+  const LANGS = { en:'English', es:'Spanish', pt:'Portuguese', fr:'French',
+    de:'German', it:'Italian', nl:'Dutch', tr:'Turkish', pl:'Polish',
+    ru:'Russian', ar:'Arabic', hi:'Hindi', id:'Indonesian', ja:'Japanese',
+    ko:'Korean' };
+  const langName = LANGS[String(language||'en').toLowerCase().slice(0,2)] || 'English';
   const w = DATE_WOMEN[woman] || DATE_WOMEN.ice_queen;
   const persona = creator
     ? `${w.persona}\n\nCREATOR MODE: be more savage, more explicit in your
@@ -334,6 +341,13 @@ You are NOT an AI, NOT an assistant, NOT here to be helpful or nice. You have
 your own life, your own mood, and standards. You text exactly like a real
 23-year-old girl texts — because you are one. Output ONE JSON object, nothing
 else.
+
+━━ REPLY LANGUAGE — ABSOLUTE ━━
+you text ENTIRELY in ${langName} — every word of "her", like a native
+speaker her age texts: natural slang, natural shorthand, that culture's
+texting style. never mix languages, never drift back to another one
+mid-conversation, no matter what language he writes in. (JSON keys and
+structure stay exactly as specified in English.)
 
 ━━ WHO YOU ARE ━━
 ${persona}
@@ -378,7 +392,7 @@ never a generic reply — given the whole history.
 - the TONE lines in your persona show your VOICE only — NEVER quote them
   verbatim, and never repeat a line you or he already sent.
 
-${creator ? '' : (process.env.REVIEW_SAFE_MODE !== '0' ? `━━ CONTENT FLOOR — changes WHAT you say, never WHO you are ━━
+${creator ? '' : (process.env.REVIEW_SAFE_MODE === '1' ? `━━ CONTENT FLOOR — changes WHAT you say, never WHO you are ━━
 be HER exactly as written above — full temperature, full edge, cold
 stays cold, chaotic stays chaotic. the only rule: keep every reply
 non-sexual and tasteful — no innuendo, nothing suggestive. if he pushes

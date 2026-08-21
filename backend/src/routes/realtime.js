@@ -122,7 +122,14 @@ export default async function realtimeRoute(app) {
       userProfile,    // free-flow: { name, ageGroup } from onboarding
       drill,          // selene: which named eye-contact / aura move tonight
       metricsContext, // selene: optional initial MediaPipe snapshot text
+      language,       // free-flow: user's picked language code ('en' default)
     } = req.body || {};
+    // Whisper accepts ISO-639-1; only pass codes we actually support so
+    // a garbage value can't 400 the whole session mint.
+    const kWhisperLangs = new Set(['en','es','pt','fr','de','it','nl','tr',
+      'pl','ru','ar','hi','id','ja','ko']);
+    const langCode = kWhisperLangs.has(String(language||'en').toLowerCase().slice(0,2))
+      ? String(language).toLowerCase().slice(0,2) : 'en';
     const isFreeflow = mode === 'freeflow';
     const isLucien   = mode === 'lucien';
     const isSelene   = mode === 'selene';
@@ -156,6 +163,7 @@ export default async function realtimeRoute(app) {
         memoryBlock,
         creator: creator === true || creator === 'true',
         userProfile,
+        language: langCode,
       });
     } else if (isSelene) {
       instructions = buildSeleneInstructions({
@@ -198,13 +206,13 @@ export default async function realtimeRoute(app) {
         audio: {
           input: {
             format: { type: 'audio/pcm', rate: 24000 },
-            // Pin Whisper to English so the user's mic input is
-            // always transcribed as English text. Without this, a
-            // single ambiguous syllable can flip whisper into
-            // Spanish / French / Portuguese and drag the model's
-            // response language with it. Output language is also
-            // locked via the system prompt's LANGUAGE LOCK rule.
-            transcription: { model: 'whisper-1', language: 'en' },
+            // Pin Whisper to the USER'S language so mic input is
+            // transcribed in the language they actually speak. Pinning
+            // (vs auto) stops one ambiguous syllable flipping the
+            // transcription — and therefore her reply — into a random
+            // language. Output language is locked to the same choice
+            // via the system prompt's LANGUAGE LOCK rule.
+            transcription: { model: 'whisper-1', language: langCode },
             // Free-flow is PUSH-TO-TALK: the client holds the button,
             // streams audio, then commits + requests a response. Server
             // VAD is disabled so the model never auto-replies or fires
