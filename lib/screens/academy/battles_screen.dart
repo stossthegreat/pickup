@@ -951,6 +951,130 @@ class _BattlesScreenState extends State<BattlesScreen> {
     if (mounted) await PayoutScreen.cashOut(context);
   }
 
+  /// ── HAND HIM HIS CODE BACK ────────────────────────────────────────
+  ///
+  /// The mint sheet promises "The code is saved on your Battles screen"
+  /// and that was only half true: the code rode on the not-yet-played
+  /// card, so the moment he ran his own attempt the row flipped to
+  /// WAITING and the code disappeared with it. He was left holding a
+  /// challenge he could no longer send to anyone.
+  ///
+  /// A queue duel never had a code — he was matched with a stranger —
+  /// so that case gets the honest explanation instead of an empty box.
+  Future<void> _showCode(Battle b) async {
+    HapticFeedback.selectionClick();
+    final girl = girlForVibe(b.scenario);
+    final code = b.inviteCode;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
+        decoration: BoxDecoration(
+          color: AppColors.surface1,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.signalAmber.withValues(alpha: 0.4)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(code != null ? 'YOUR CHALLENGE CODE' : 'STILL WAITING',
+              style: GoogleFonts.inter(
+                color: AppColors.signalAmber,
+                fontSize: 10.5,
+                letterSpacing: 3,
+                fontWeight: FontWeight.w900,
+              )),
+          const SizedBox(height: 14),
+          if (code != null) ...[
+            GestureDetector(
+              // The code itself copies. It is the biggest thing on the
+              // sheet and the thing he came for, so it should not need
+              // a separate button to be useful.
+              onTap: () async {
+                await Clipboard.setData(ClipboardData(text: code));
+                HapticFeedback.mediumImpact();
+                if (!ctx.mounted) return;
+                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                  content: Text('Code $code copied.'),
+                  backgroundColor: AppColors.toastBg,
+                  behavior: SnackBarBehavior.floating,
+                ));
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: AppColors.red.withValues(alpha: 0.55)),
+                ),
+                child: Text(code,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 30,
+                      letterSpacing: 10,
+                      fontWeight: FontWeight.w900,
+                    )),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text('Tap the code to copy it.',
+                style: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                )),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: 250,
+              child: GameButton(
+                label: 'SEND IT AGAIN',
+                icon: Icons.ios_share_rounded,
+                onTap: () => ShareService.shareRizzCard(
+                  context: ctx,
+                  data: RizzShareData(
+                    kicker: 'CHALLENGE',
+                    hero: code,
+                    heroSub: 'ENTER THIS CODE',
+                    line: '${girl.name}. Same woman, both blind. '
+                        'Higher AI Score takes the ${Economy.rrShort}.',
+                    accent: girl.accent,
+                    faces: [(asset: girl.asset, owned: true)],
+                  ),
+                  text: 'I challenge you on ImHim Rizz — ${girl.name}. '
+                      'Same woman, both blind, higher score wins. '
+                      'Code: $code',
+                ),
+              ),
+            ),
+          ] else
+            Text('You were matched from the queue, so there is no code — '
+                'he just has not answered ${girl.name} yet. It settles the '
+                'moment he does.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: AppColors.textSecondary,
+                  fontSize: 13.5,
+                  height: 1.45,
+                  fontWeight: FontWeight.w600,
+                )),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('CLOSE',
+                style: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 11.5,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w800,
+                )),
+          ),
+        ]),
+      ),
+    );
+  }
+
   void _shareResult(Battle b) {
     HapticFeedback.selectionClick();
     final vs = _handles[b.opponentId] ?? 'RIVAL';
@@ -1169,6 +1293,7 @@ class _BattlesScreenState extends State<BattlesScreen> {
                         battle: b,
                         opponent: _handles[b.opponentId],
                         onCancel: () => _cancel(b),
+                        onShowCode: () => _showCode(b),
                       ),
                     const SizedBox(height: 10),
                   ],
@@ -1755,10 +1880,15 @@ class _Waiting extends StatelessWidget {
   /// action in battle-action.
   final VoidCallback onCancel;
 
+  /// Tapping the pulsing ? — hands back the invite code he minted, or
+  /// explains the wait when there was never a code to hand back.
+  final VoidCallback onShowCode;
+
   const _Waiting({
     required this.battle,
     required this.opponent,
     required this.onCancel,
+    required this.onShowCode,
   });
 
   @override
@@ -1822,15 +1952,43 @@ class _Waiting extends StatelessWidget {
             ],
           ),
         ),
-        Text('?',
+        // ── THE ? IS THE BUTTON NOW ──────────────────────────────
+        //
+        // A minted code was shown once, at mint time, and then only
+        // ever reappeared on the not-yet-played card. The moment he ran
+        // his own attempt the row became this one — and the code was
+        // gone, with no way back to it. He is left holding a challenge
+        // he cannot send to anybody.
+        //
+        // The ? was already the right thing to press: it is the
+        // unanswered question on the card, it already pulses, and it
+        // sits exactly where the eye goes. It keeps its size, its
+        // colour and its breath — it just gains a ring so it reads as
+        // pressable rather than decorative.
+        GestureDetector(
+          onTap: onShowCode,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.signalAmber.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
+              border: Border.all(
+                  color: AppColors.signalAmber.withValues(alpha: 0.4)),
+            ),
+            child: Text('?',
                 style: GoogleFonts.inter(
                   color: AppColors.signalAmber,
-                  fontSize: 24,
+                  fontSize: 20,
                   height: 1,
                   fontWeight: FontWeight.w900,
-                ))
+                )),
+          ),
+        )
             .animate(onPlay: (c) => c.repeat(reverse: true))
-            .fade(begin: 0.35, end: 1, duration: 900.ms),
+            .fade(begin: 0.45, end: 1, duration: 900.ms),
         GestureDetector(
           onTap: onCancel,
           behavior: HitTestBehavior.opaque,
