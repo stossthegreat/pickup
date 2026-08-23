@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/backend/tiers.dart' show kNeon;
-import '../../services/local_store_service.dart';
 import '../../theme/app_colors.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
@@ -23,11 +22,17 @@ import '../../theme/app_colors.dart';
 /// These four screens are the plan. They sit after the handle and before
 /// the first rep, and they are written to do one job each:
 ///
-///   1 THE TRUTH      — name the thing he already knows about himself
-///   2 THE CLIMB      — ten women, INTO YOU to ICE QUEEN, the whole ladder
-///   3 LIVE VOICE     — the hook, SHOWN: a call running, Lucien cutting in
-///   4 THE GAME       — scored /100, the board, duels, streaks. And fun.
-///   5 YOUR STARTING POINT — his own onboarding answer, turned on him
+///   1 THE TRUTH   — you are not shy, you are untrained
+///   2 THE CLIMB   — how we train you: progressively harder conversations
+///   3 LIVE VOICE  — and you actually SPEAK, not just type
+///   4 THE GAME    — every rep measured, scored, turned into progression
+///   5 THE HABIT   — keep taking reps until what made you freeze is normal
+///
+/// One idea has to survive the whole thing: GAME IS TRAINABLE, AND THIS
+/// GIVES ME THE REPS TO TRAIN IT UNTIL IT IS NATURAL. Nothing else gets
+/// sold here — not XP, not achievements, not rescues, not the coach's
+/// full range. Every extra feature added to this flow dilutes the one
+/// sentence it exists to leave behind.
 ///
 /// ── WHY THE GUT PUNCH IS FAIR ───────────────────────────────────────
 ///
@@ -46,9 +51,12 @@ import '../../theme/app_colors.dart';
 /// self-improvement — they sustain sixty days of something they enjoy
 /// that happens to improve them.
 ///
-/// Squads get ONE line, at the end, framed as a multiplier. Most men
-/// will run this alone and it works alone; leaning on squads would both
-/// overstate them and scare off the man who has nobody to bring.
+/// Squads are the third item on the last page and a quiet secondary
+/// action — never a step of their own. This flow used to end on a squad
+/// pitch, which implied the product needs other men to work. It does
+/// not: most users run it alone and it is fully effective alone, and
+/// implying otherwise both overstates squads and loses the man who has
+/// nobody to bring.
 class PlanFlowScreen extends StatefulWidget {
   const PlanFlowScreen({super.key});
 
@@ -60,23 +68,6 @@ class _PlanFlowScreenState extends State<PlanFlowScreen> {
   final _pages = PageController();
   int _i = 0;
   static const _count = 5;
-
-  /// His answer to onboarding beat 05 — "How confident are you
-  /// approaching someone you're attracted to?" 0..3. Already collected,
-  /// already stored, and until now never shown to him again. The last
-  /// screen reads it back.
-  int _level = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadLevel();
-  }
-
-  Future<void> _loadLevel() async {
-    final l = await LocalStoreService.userLevel();
-    if (mounted) setState(() => _level = l);
-  }
 
   @override
   void dispose() {
@@ -97,12 +88,20 @@ class _PlanFlowScreenState extends State<PlanFlowScreen> {
         duration: const Duration(milliseconds: 420), curve: Curves.easeOutCubic);
   }
 
+  /// The squad door, from the last page. PUSH not go, so backing out of
+  /// the squad room returns him to the flow rather than dropping him
+  /// somewhere with no way forward.
+  Future<void> _openSquad() async {
+    HapticFeedback.selectionClick();
+    await context.push('/squad');
+  }
+
   static const _ctas = [
     'I WANT THAT',
     'SHOW ME THE CLIMB',
     'WHAT ELSE?',
-    'WHERE DO I START?',
-    'START MY FIRST REP',
+    'HOW DO I START?',
+    'START TRAINING',
   ];
 
   @override
@@ -150,7 +149,7 @@ class _PlanFlowScreenState extends State<PlanFlowScreen> {
                   const _Ladder(),
                   const _Voice(),
                   const _TheGame(),
-                  _Verdict(level: _level),
+                  _Habit(onSquad: _openSquad),
                 ],
               ),
             ),
@@ -254,8 +253,9 @@ class _GutPunch extends StatelessWidget {
       const SizedBox(height: 18),
       _headline('It was never\nyour looks.'),
       const SizedBox(height: 20),
-      _body('Every man you envy learned this. None of them were born '
-          'knowing what to say to a woman who gives him nothing back.'),
+      _body('Every man who makes it look effortless learned it. None of '
+          'them were born knowing what to say to a woman who gives him '
+          'nothing back.'),
       const SizedBox(height: 26),
       // The loop, as three beats with the trap named at the end.
       _LoopLine('You freeze, so you never get the reps.', 0),
@@ -282,8 +282,8 @@ class _GutPunch extends StatelessWidget {
       ).animate().fadeIn(delay: 1100.ms, duration: 520.ms).slideY(
           begin: 0.08, end: 0, curve: Curves.easeOutCubic),
       const SizedBox(height: 18),
-      _body('Sixty days from now you are either still guessing, or you are '
-          'the man who always knows what to say.',
+      _body('Enough reps and the answer stops being something you search '
+          'for. It just arrives.',
           delayMs: 1500),
       const SizedBox(height: 8),
     ]);
@@ -331,7 +331,7 @@ class _Ladder extends StatelessWidget {
   static const _rungs = [
     ('INTO YOU', 'Already a little into you. Easy — on purpose.', false),
     ('SWEET', 'Warm and genuine. Kill the arrogance.', false),
-    ('THE DITSY ONE', 'Scattered. Keep it fun, never deep.', false),
+    ('UNPREDICTABLE', 'Scattered. Keep it fun, never deep.', false),
     ('CHAOS', 'Fast, loud, jumps topics. Keep up.', false),
     ('SOCIAL MAGNET', 'Everyone wants her. Stand out or blend in.', false),
     ('TESTING YOU', 'Smart. Testing you constantly.', false),
@@ -347,8 +347,8 @@ class _Ladder extends StatelessWidget {
       const SizedBox(height: 18),
       _headline('From into you\nto ice queen.'),
       const SizedBox(height: 18),
-      _body('Ten women. Every personality that exists. Each one harder than '
-          'the last, each one teaching you something the last could not.'),
+      _body('Ten women. Ten completely different personalities. Each one '
+          'harder than the last.'),
       const SizedBox(height: 24),
       for (final (i, (name, note, locked)) in _rungs.indexed)
         Padding(
@@ -412,7 +412,8 @@ class _Ladder extends StatelessWidget {
             .fadeIn(delay: (260 + i * 70).ms, duration: 380.ms)
             .slideY(begin: 0.1, end: 0, curve: Curves.easeOut),
       const SizedBox(height: 14),
-      _body('Beat the ice queen and there is no woman alive who throws you.',
+      _body('Get comfortable with the Ice Queen and you stop panicking '
+          'when someone gives you nothing back.',
           color: Colors.white, delayMs: 1100),
       const SizedBox(height: 8),
     ]);
@@ -461,9 +462,9 @@ class _VoiceState extends State<_Voice> with SingleTickerProviderStateMixin {
       const SizedBox(height: 18),
       _headline('Not typing.\nTalking.'),
       const SizedBox(height: 18),
-      _body('Put the phone to your ear and actually speak. She hears your '
-          'voice — the pauses, the nerves, the moment you find your feet — '
-          'and she answers out loud, instantly, like a person.'),
+      _body('Put the phone to your ear and actually speak. She hears the '
+          'pauses, the hesitation and the confidence — and answers '
+          'instantly.'),
       const SizedBox(height: 22),
       // The call, running.
       Container(
@@ -568,8 +569,8 @@ class _VoiceState extends State<_Voice> with SingleTickerProviderStateMixin {
           .fadeIn(delay: 260.ms, duration: 520.ms)
           .slideY(begin: 0.06, end: 0, curve: Curves.easeOutCubic),
       const SizedBox(height: 20),
-      Text('Ten women. Ten real voices. The ice queen sounds nothing like '
-          'the sweet one, and neither of them goes easy on you.',
+      Text('Ten women. Ten different voices. Each one feels completely '
+          'different to talk to.',
           style: GoogleFonts.inter(
             color: Colors.white.withValues(alpha: 0.8),
             fontSize: 15,
@@ -577,8 +578,7 @@ class _VoiceState extends State<_Voice> with SingleTickerProviderStateMixin {
             fontWeight: FontWeight.w600,
           )).animate().fadeIn(delay: 700.ms, duration: 480.ms),
       const SizedBox(height: 14),
-      Text('Freeze on a call and Lucien is one tap away — the master of '
-          'game, in your ear, telling you exactly what to say next.',
+      Text('Freeze? Lucien is one tap away with live coaching in your ear.',
           style: GoogleFonts.inter(
             color: AppColors.red,
             fontSize: 15,
@@ -617,8 +617,8 @@ class _TheGame extends StatelessWidget {
       const SizedBox(height: 18),
       _headline('Every rep\nscored out of 100.'),
       const SizedBox(height: 16),
-      _body('Not a vibe. Five numbers that tell you exactly which part of '
-          'your game is letting you down.'),
+      _body('Not a vibe. Five scores that show exactly where your game is '
+          'strong — and where it breaks down.'),
       const SizedBox(height: 20),
       for (final (i, (label, v, tone)) in _axes.indexed)
         Padding(
@@ -693,24 +693,14 @@ class _TheGame extends StatelessWidget {
         delayMs: 1140,
       ),
       const SizedBox(height: 4),
-      Text('And yes — it is a game. Scores, ranks, duels, a streak you will '
-          'not want to break. You will run the reps because you want to, '
-          'not because you should.',
+      Text('Every rep counts. Every score gives you something to beat next '
+          'time.',
           style: GoogleFonts.inter(
             color: Colors.white,
             fontSize: 15,
             height: 1.5,
             fontWeight: FontWeight.w800,
           )).animate().fadeIn(delay: 1280.ms, duration: 520.ms),
-      const SizedBox(height: 12),
-      Text('Bring two friends into a squad if you want the extra pressure. '
-          'Most men run it alone and it works just as well.',
-          style: GoogleFonts.inter(
-            color: AppColors.textTertiary,
-            fontSize: 12.5,
-            height: 1.45,
-            fontWeight: FontWeight.w500,
-          )).animate().fadeIn(delay: 1420.ms, duration: 480.ms),
       const SizedBox(height: 8),
     ]);
   }
@@ -769,159 +759,113 @@ class _Feature extends StatelessWidget {
           begin: -0.04, end: 0, curve: Curves.easeOut);
 }
 
-/// ── 4 · THE VERDICT ─────────────────────────────────────────────────
+/// ── 5 · THE HABIT ───────────────────────────────────────────────────
 ///
-/// His own answer from onboarding beat 05, read back to him with a
-/// starting point attached. He told us where he is; this is the first
-/// time the app proves it was listening — which is what makes the plan
-/// feel like HIS plan rather than a brochure.
-class _Verdict extends StatelessWidget {
-  final int level;
-  const _Verdict({required this.level});
+/// THE LAST PAGE SELLS THE HABIT, NOT THE SQUAD.
+///
+/// This slot used to be the squad pitch, and its underlying message was
+/// wrong rather than merely long: it implied the product needs other
+/// men to work. It does not. Most users will run this alone and it is
+/// fully effective alone — saying otherwise both overstates squads and
+/// loses the man who has nobody to bring.
+///
+/// So the final beat is the loop itself: one rep a day, watch the number
+/// move, come back and beat it. Squads keep their place as the third
+/// item and a quiet secondary action — an enhancement to the core
+/// product, which is exactly what they are.
+///
+/// It also carries no new features. Coach, XP, achievements, rescues and
+/// the rest do not need selling here; the flow has to leave exactly one
+/// idea behind, and every extra thing dilutes it: GAME IS TRAINABLE, AND
+/// THIS GIVES ME THE REPS TO TRAIN IT UNTIL IT IS NATURAL.
+class _Habit extends StatelessWidget {
+  final VoidCallback onSquad;
+  const _Habit({required this.onSquad});
 
-  /// 0 never · 1 once or twice · 2 sometimes · 3 comfortable.
-  static const _said = [
-    'I never do it.',
-    'I\'ve done it once or twice.',
-    'Sometimes.',
-    'I\'m already comfortable.',
+  static const _steps = [
+    (
+      '01',
+      'ONE REP EVERY DAY',
+      'Your challenge is waiting. Run it, get scored, come back tomorrow '
+          'and beat it.',
+    ),
+    (
+      '02',
+      'WATCH YOUR GAME CHANGE',
+      'Scores, streaks and rank make progress impossible to miss.',
+    ),
+    (
+      '03',
+      'WANT MORE PRESSURE?',
+      'Bring 2–5 mates into a Squad. Same challenge, blind attempts, '
+          'scores revealed side by side.',
+    ),
   ];
-  static const _reads = [
-    'So every rep from here is ground you have never stood on.',
-    'So you know the feeling — you just have not made it a habit yet.',
-    'So you have the nerve. What you are missing is the sharpness.',
-    'Then this is about going from good to untouchable.',
-  ];
-  static const _startScore = ['1', '2', '3', '4'];
 
   @override
   Widget build(BuildContext context) {
-    final i = level.clamp(0, 3);
     return _pad([
-      _kicker('YOUR STARTING POINT'),
+      _kicker('ONE LAST THING'),
       const SizedBox(height: 18),
-      _headline('Day 1 of 60.'),
-      const SizedBox(height: 20),
-      Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.surface1,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.divider),
+      _headline('Get good by\nshowing up.'),
+      const SizedBox(height: 26),
+      for (final (i, (num, title, note)) in _steps.indexed)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(
+              width: 34,
+              child: Text(num,
+                  style: GoogleFonts.inter(
+                    color: AppColors.red,
+                    fontSize: 15,
+                    letterSpacing: -0.5,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 13,
+                          letterSpacing: 1.8,
+                          fontWeight: FontWeight.w900,
+                        )),
+                    const SizedBox(height: 6),
+                    Text(note,
+                        style: GoogleFonts.inter(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 14.5,
+                          height: 1.45,
+                          fontWeight: FontWeight.w500,
+                        )),
+                  ]),
+            ),
+          ]),
+        )
+            .animate()
+            .fadeIn(delay: (240 + i * 180).ms, duration: 460.ms)
+            .slideY(begin: 0.08, end: 0, curve: Curves.easeOut),
+      const SizedBox(height: 4),
+      // The squad door, kept open and kept quiet. Secondary by design:
+      // it is the one action here that is genuinely optional.
+      Center(
+        child: TextButton(
+          onPressed: onSquad,
+          child: Text('START / JOIN A SQUAD',
+              style: GoogleFonts.inter(
+                color: AppColors.textTertiary,
+                fontSize: 11.5,
+                letterSpacing: 2.2,
+                fontWeight: FontWeight.w800,
+              )),
         ),
-        child:
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('YOU TOLD US',
-              style: GoogleFonts.inter(
-                color: AppColors.textMuted,
-                fontSize: 9.5,
-                letterSpacing: 2.6,
-                fontWeight: FontWeight.w900,
-              )),
-          const SizedBox(height: 8),
-          Text('"${_said[i]}"',
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 18,
-                height: 1.35,
-                fontStyle: FontStyle.italic,
-                fontWeight: FontWeight.w700,
-              )),
-          const SizedBox(height: 12),
-          Text(_reads[i],
-              style: GoogleFonts.inter(
-                color: AppColors.red,
-                fontSize: 14,
-                height: 1.45,
-                fontWeight: FontWeight.w700,
-              )),
-        ]),
-      ).animate().fadeIn(delay: 200.ms, duration: 480.ms),
-      const SizedBox(height: 20),
-      // The honest curve. Voice scores out of 10 — most men open at one
-      // or two, and daily reps put them at seven or eight inside two
-      // months. Real numbers from the real scale, which is exactly why
-      // it will ring true to anyone who has done it.
-      Row(children: [
-        _Milestone(
-            label: 'TODAY', value: _startScore[i], tone: AppColors.textMuted),
-        const _Arrow(),
-        _Milestone(label: 'WEEK 2', value: '4', tone: Colors.white),
-        const _Arrow(),
-        _Milestone(label: 'MONTH 2', value: '8', tone: kNeon),
-      ]).animate().fadeIn(delay: 620.ms, duration: 520.ms),
-      const SizedBox(height: 10),
-      Text('Voice score, out of 10. Most men open at one or two. '
-          'Daily reps put them at seven or eight inside two months.',
-          style: GoogleFonts.inter(
-            color: AppColors.textTertiary,
-            fontSize: 12,
-            height: 1.45,
-            fontWeight: FontWeight.w500,
-          )).animate().fadeIn(delay: 800.ms, duration: 480.ms),
-      const SizedBox(height: 22),
-      Text('That is not talent. That is a man who kept showing up when it '
-          'was still awkward.',
-          style: GoogleFonts.inter(
-            color: AppColors.red,
-            fontSize: 14.5,
-            height: 1.45,
-            fontWeight: FontWeight.w800,
-          )).animate().fadeIn(delay: 950.ms, duration: 480.ms),
-      const SizedBox(height: 24),
-      Text('One conversation. Right now.\nLet\'s see where you actually are.',
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontSize: 20,
-            height: 1.4,
-            letterSpacing: -0.3,
-            fontWeight: FontWeight.w900,
-          )).animate().fadeIn(delay: 1120.ms, duration: 520.ms),
+      ).animate().fadeIn(delay: 900.ms, duration: 460.ms),
       const SizedBox(height: 8),
     ]);
   }
 }
 
-class _Milestone extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color tone;
-  const _Milestone(
-      {required this.label, required this.value, required this.tone});
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-        child: Column(children: [
-          Text(value,
-              style: GoogleFonts.inter(
-                color: tone,
-                fontSize: 34,
-                height: 1,
-                letterSpacing: -1.5,
-                fontWeight: FontWeight.w900,
-                shadows: tone == kNeon
-                    ? const [Shadow(color: Color(0x662EE87A), blurRadius: 26)]
-                    : null,
-              )),
-          const SizedBox(height: 6),
-          Text(label,
-              style: GoogleFonts.inter(
-                color: AppColors.textMuted,
-                fontSize: 8.5,
-                letterSpacing: 1.8,
-                fontWeight: FontWeight.w900,
-              )),
-        ]),
-      );
-}
-
-class _Arrow extends StatelessWidget {
-  const _Arrow();
-  @override
-  Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.only(bottom: 16),
-        child: Icon(Icons.arrow_forward_rounded,
-            size: 14, color: AppColors.textMuted),
-      );
-}

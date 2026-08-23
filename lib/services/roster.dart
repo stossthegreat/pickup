@@ -43,7 +43,7 @@ const kRoster = <GirlBrief>[
     opener: 'okay you actually came over. bold. i respect bold.',
     asset: 'assets/characters/women/amara.png', accent: Color(0xFFFB7185), tier: 2, unlockDay: 10),
   GirlBrief(
-    id: 'daisy', vibeKey: 'daisy', name: 'Daisy', type: 'THE DITSY ONE',
+    id: 'daisy', vibeKey: 'daisy', name: 'Daisy', type: 'UNPREDICTABLE',
     archetype: 'Bubbly and scattered. Keep it fun, not deep.',
     opener: 'omg hi — wait okay i totally forgot what i was gonna say. hi.',
     asset: 'assets/characters/women/daisy.png', accent: Color(0xFFFDBA74), tier: 1, unlockDay: 1),
