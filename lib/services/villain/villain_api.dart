@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../../config/auralay_dev_flags.dart';
 import '../auralay_api.dart' show AuralayApiError;
+import '../install_id.dart';
 
 /// Thin HTTP client for the /v1/villain/* family.
 ///
@@ -40,7 +41,7 @@ abstract final class VillainApi {
     final uri = Uri.parse('$_base/v1/villain/scene/intro');
     final resp = await http.post(
       uri,
-      headers: const {'content-type': 'application/json'},
+      headers: BackendHeaders.json,
       body: jsonEncode({'sceneId': sceneId, 'creator': creator}),
     ).timeout(const Duration(seconds: 60));
     if (resp.statusCode != 200) throw _err(resp);
@@ -60,7 +61,7 @@ abstract final class VillainApi {
     final uri = Uri.parse('$_base/v1/villain/scene/open');
     final resp = await http.post(
       uri,
-      headers: const {'content-type': 'application/json'},
+      headers: BackendHeaders.json,
       body: jsonEncode({'sceneId': sceneId, 'opening': opening}),
     ).timeout(const Duration(seconds: 45));
     if (resp.statusCode != 200) throw _err(resp);
@@ -114,7 +115,7 @@ abstract final class VillainApi {
     final uri = Uri.parse('$_base/v1/villain/scene/coach');
     final resp = await http.post(
       uri,
-      headers: const {'content-type': 'application/json'},
+      headers: BackendHeaders.json,
       body: jsonEncode({
         'sceneId':            sceneId,
         'lastApprenticeLine': lastApprenticeLine,
@@ -242,7 +243,7 @@ abstract final class VillainApi {
     final uri = Uri.parse('$_base/v1/villain/council');
     final resp = await http.post(
       uri,
-      headers: const {'content-type': 'application/json'},
+      headers: BackendHeaders.json,
       body: jsonEncode({
         'text':    text,
         'history': history.map((h) => {'role': h.role, 'text': h.text}).toList(),
@@ -272,7 +273,7 @@ abstract final class VillainApi {
     final uri = Uri.parse('$_base/v1/villain/freeflow/score');
     final resp = await http.post(
       uri,
-      headers: const {'content-type': 'application/json'},
+      headers: BackendHeaders.json,
       body: jsonEncode({
         'transcript': transcript,
         'vibeLabel':  vibeLabel,

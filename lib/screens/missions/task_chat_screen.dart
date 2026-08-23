@@ -14,6 +14,7 @@ import '../../config/api_config.dart';
 import '../../services/backend/chat_score_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/ai_consent_dialog.dart';
+import '../../services/install_id.dart';
 
 /// Config that turns a real-world mission into a coached chat.
 ///
@@ -202,7 +203,7 @@ class _TaskChatScreenState extends State<TaskChatScreen> {
       final res = await http
           .post(
             Uri.parse('${ApiConfig.backendBaseUrl}/rizz/chat'),
-            headers: {'Content-Type': 'application/json'},
+            headers: BackendHeaders.json,
             body: jsonEncode({
               'messages': history,
               if (image != null) 'imageBase64': base64Encode(image),

@@ -13,6 +13,7 @@ import 'services/backend/squad_live_service.dart';
 import 'services/progress_sync.dart';
 import 'services/daily_nudge_service.dart';
 import 'services/language_service.dart';
+import 'services/install_id.dart';
 import 'services/local_store_service.dart';
 import 'services/notification_service.dart';
 import 'services/purchase_service.dart';
@@ -62,6 +63,11 @@ void main() async {
   // Roleplay language — hydrated before any voice session can start so
   // the synchronous cache is always right. English default.
   await LanguageService.hydrate();
+
+  // Anonymous per-install id — must be cached before the first backend
+  // call so our rate limiting can key on the install rather than on a
+  // carrier's shared NAT address. See InstallId.
+  await InstallId.hydrate();
 
   // RevenueCat is DISABLED for this launch (PurchaseConfig.enabled = false).
   // This call stays but no-ops while disabled — the SDK is never configured
