@@ -10,7 +10,6 @@ import '../screens/academy/leaderboard_screen.dart';
 import '../screens/academy/rolodex_screen.dart';
 import '../screens/academy/score_reveal_screen.dart';
 import '../screens/academy/daily_chat_screen.dart';
-import '../screens/onboarding/squad_invite_screen.dart';
 import '../screens/onboarding/plan_flow_screen.dart';
 import '../screens/onboarding/first_rep_screen.dart';
 import '../screens/academy/squad_day_screen.dart';
@@ -118,10 +117,6 @@ final appRouter = GoRouter(
     // ── The Academy layer — squads, the board, the reveal ────────────
     // TODAY — the standing + both daily challenges. Home's single card
     // opens here; the full squad room is one more tap in.
-    // The squad pitch — one page, straight after he picks a name.
-    GoRoute(
-        path: '/onboarding/squad',
-        builder: (_, __) => const SquadInviteScreen()),
     // THE 60-DAY PLAN — the four screens that finally deliver what the
     // story funnel's last button promises, then the first rep, then the
     // price. See plan_flow_screen.dart.

@@ -140,7 +140,7 @@ class _HandleScreenState extends State<HandleScreen> {
       // exist before he starts or the whole social layer may as well not
       // ship — nobody hunts through a menu for something they were never
       // told about. It's one page and the skip is real.
-      context.go('/onboarding/squad');
+      context.go('/onboarding/plan');
     } else {
       context.pop();
     }
