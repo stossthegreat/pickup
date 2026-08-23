@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +12,9 @@ import 'streak_service.dart';
 import 'rolodex_service.dart';
 import 'protocol_service.dart';
 import 'win_back_service.dart';
+import 'notification_media.dart';
+import 'notification_channels.dart';
+import 'roster.dart';
 
 /// THE RETENTION ENGINE — a rolling 14-day notification horizon, two
 /// beats a day, refreshed on every app open.
@@ -107,6 +112,14 @@ class DailyNudgeService {
   /// to call repeatedly — every call is a clean rebuild.
   static Future<void> reschedule() async {
     try {
+      // 0) Faces on disk before anything is scheduled. Deliberately here
+      // and not in main(): iOS bakes the attachment in at SCHEDULE time,
+      // so a horizon laid down before the images exist is faceless for
+      // the next 14 days, and reschedule() has four call sites — one of
+      // them would eventually forget. Guarded internally, so every call
+      // after the first costs nothing.
+      await NotificationMedia.prime();
+
       // 1) Clear legacy schedulers (streak/training/rescan) + the old
       // single daily nudge + any previous horizon we laid down.
       await NotificationService.cancelAllProtocolNotifications();
@@ -148,7 +161,7 @@ class DailyNudgeService {
       if (retreat != null) {
         final at = tz.TZDateTime.now(tz.local).add(const Duration(hours: 2));
         await _schedule(
-            _eveningBase, retreat.$1, retreat.$2, at, morning: false);
+            _eveningBase, retreat.$1, retreat.$2, at, slot: _Slot.streak);
         return; // and NOTHING else for the blackout window
       }
       if (await RetentionService.isQuiet()) return;
@@ -166,6 +179,15 @@ class DailyNudgeService {
       final tone =
           await RetentionService.tone(streak: streak, daysAway: away);
 
+      // The next woman he has NOT earned yet — the face on the climb
+      // tease. Null once he's unlocked the whole roster, in which case
+      // the tease goes out without one rather than showing him someone
+      // he already has.
+      final ascensionDay = await _ascensionDay();
+      final locked = [for (final g in kRoster) if (ascensionDay < g.unlockDay) g]
+        ..sort((a, b) => a.unlockDay.compareTo(b.unlockDay));
+      final nextLocked = locked.isEmpty ? null : locked.first;
+
       final now = tz.TZDateTime.now(tz.local);
 
       // 3) Lay down the horizon. Each slot is a distinct one-shot with its
@@ -176,14 +198,33 @@ class DailyNudgeService {
         final morningAt = _slot(now, d, _morningHour, 0);
         if (morningAt.isAfter(now)) {
           final (t, b) = _dreamCopy(sig, d);
-          await _schedule(_morningBase + d, t, b, morningAt, morning: true);
+          await _schedule(_morningBase + d, t, b, morningAt, slot: _Slot.dream);
         }
         // MIDDAY — the climb / unlock tease. New women unlock as he climbs
         // the 60-day map; this is the retention hook to that loop.
         final middayAt = _slot(now, d, _middayHour, 0);
         if (middayAt.isAfter(now)) {
+          // THE FACE IS THE MESSAGE.
+          //
+          // "Amara — you've gone quiet on me" with her photo is a text
+          // from someone he knows. The identical words with no picture
+          // are an app pretending to be one, and he can tell in the
+          // quarter-second it takes to swipe. This is the whole reason
+          // the slot exists, and it was the half that was missing.
+          //
+          // With nobody cooling, the climb tease carries the face of the
+          // next woman he has NOT unlocked — "the ones who test you are
+          // further up" lands differently when he can see who.
           final (t, b) = cold != null ? _herCopy(cold, d) : _climbCopy(d);
-          await _schedule(_middayBase + d, t, b, middayAt, morning: true);
+          final face = cold != null
+              ? NotificationMedia.pathForGirl(cold.girlId)
+              : (nextLocked == null
+                  ? null
+                  : NotificationMedia.pathForAsset(nextLocked.asset));
+          await _schedule(_middayBase + d, t, b, middayAt,
+              slot: cold != null ? _Slot.her : _Slot.dream,
+              facePath: face,
+              payload: cold != null ? 'her:${cold.girlId}' : 'dream');
         }
         // EVENING — streak / loss, escalating with projected dormancy.
         // Unless he's mid-win-back, in which case the sharper reason wins
@@ -208,7 +249,11 @@ class DailyNudgeService {
           final (t, b) = winBack != null
               ? WinBackService.ladderCopy(winBack, dayOffset: d)
               : Lucien.forTone(tone, d * 7 + tone.index);
-          await _schedule(_eveningBase + d, t, b, eveningAt, morning: false);
+          // Lucien's face. He is the one character the man has an
+          // actual relationship with, and the coach saying it is a
+          // different object to the app saying it.
+          await _schedule(_eveningBase + d, t, b, eveningAt,
+              slot: _Slot.streak, facePath: NotificationMedia.lucienPath);
         }
       }
       // Tally what we just laid down. The trust stop measures pushes
@@ -218,6 +263,17 @@ class DailyNudgeService {
       await RetentionService.noteSent(_horizonDays);
     } catch (e) {
       debugPrint('DailyNudgeService.reschedule failed: $e');
+    }
+  }
+
+  /// Earned ascension day, or 1 if progress can't be read. Day 1 means
+  /// only the starters count as unlocked, so a failure here shows him a
+  /// tier-2 face rather than crashing the reschedule.
+  static Future<int> _ascensionDay() async {
+    try {
+      return (await StreakService.progress()).ascensionDay;
+    } catch (_) {
+      return 1;
     }
   }
 
@@ -234,35 +290,64 @@ class DailyNudgeService {
     String title,
     String body,
     tz.TZDateTime at, {
-    required bool morning,
+    required _Slot slot,
+    // Absolute path to a face on disk (NotificationMedia). When present
+    // the push renders as a MESSAGE FROM A PERSON — her avatar on
+    // Android, the attachment thumbnail on iOS — instead of an
+    // announcement from an app. Null is always safe: the notification
+    // goes out exactly as it did before, copy intact. A face is never
+    // worth losing a send over.
+    String? facePath,
+    // Where the tap should land. Null falls back to the slot's own
+    // default, which is what every push here wants; the HER slot passes
+    // her id so the route can name her.
+    String? payload,
   }) async {
+    // Verify on the way in rather than trusting the cache: on Android
+    // the file is read at DISPLAY time, up to 14 days from now, and a
+    // path pointing at nothing is a broken-image notification. iOS is
+    // stricter still — it rejects the whole scheduling call on a bad
+    // attachment, which would silently cost us the send.
+    String? face = facePath;
+    if (face != null && !File(face).existsSync()) face = null;
+
     await _plugin.zonedSchedule(
       id,
       title,
       body,
       at,
       NotificationDetails(
-        iOS: const DarwinNotificationDetails(
+        iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
           // Red app-icon dot until the user opens the app; cleared by
           // NotificationService.clearIconBadge on foreground.
           badgeNumber: 1,
+          attachments: face == null
+              ? null
+              : <DarwinNotificationAttachment>[
+                  DarwinNotificationAttachment(face),
+                ],
         ),
         android: AndroidNotificationDetails(
-          morning ? 'daily_dream' : 'daily_streak',
-          morning ? 'Daily motivation' : 'Streak reminders',
-          channelDescription: morning
-              ? 'Morning push toward the man you\'re building.'
-              : 'Evening nudge to keep your streak alive.',
+          slot.channelId,
+          slot.channelName,
+          channelDescription: slot.channelDescription,
           importance: Importance.high,
           priority: Priority.high,
+          // The avatar slot — the same place every messaging app puts
+          // the sender's photo. Deliberately NOT BigPictureStyle: the
+          // art is a square portrait, and Android crops a big picture
+          // to a wide banner, which would take her face off. The small
+          // round avatar is both safer and the more convincing object.
+          largeIcon: face == null ? null : FilePathAndroidBitmap(face),
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
+      payload: payload ?? slot.name,
     );
   }
 
@@ -624,4 +709,28 @@ enum _NudgeState {
   dormant7d,
   dormant14d,
   defaultState,
+}
+
+/// Which of the three daily beats a notification belongs to. Carries the
+/// Android channel with it so a slot can never be filed under the wrong
+/// one — see NotifChannels for why that matters.
+enum _Slot {
+  /// Morning identity pump, and the midday climb tease. The app's own
+  /// voice.
+  dream(NotifChannels.dream, 'Daily motivation',
+      'Morning push toward the man you\'re building.'),
+
+  /// A woman from his Rolodex, by name and face. Its own channel so it
+  /// survives him muting the motivation.
+  her(NotifChannels.her, 'Messages',
+      'When a woman you\'ve been talking to goes quiet.'),
+
+  /// Evening streak / loss nudge, delivered by Lucien.
+  streak(NotifChannels.streak, 'Streak reminders',
+      'Evening nudge to keep your streak alive.');
+
+  const _Slot(this.channelId, this.channelName, this.channelDescription);
+  final String channelId;
+  final String channelName;
+  final String channelDescription;
 }

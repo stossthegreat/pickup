@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
@@ -6,6 +7,8 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../models/protocol.dart';
 import '../providers/auralay_app_provider.dart';
+import 'notification_channels.dart';
+import '../navigation/app_router.dart';
 
 /// Local-notification retention engine.
 ///
@@ -74,13 +77,99 @@ class NotificationService {
           requestSoundPermission: false,
         ),
       );
-      await _plugin.initialize(init);
+      await _plugin.initialize(
+        init,
+        onDidReceiveNotificationResponse: _onTap,
+      );
+
+      // COLD START. If the app was launched BY a notification, the tap
+      // never reaches the callback above — the process didn't exist when
+      // it happened. Without reading this, tapping "Amara — you've gone
+      // quiet on me" from a killed app dropped the man on the home
+      // screen, which is the illusion breaking in the first second.
+      // Stashed rather than navigated: the router isn't built yet, and
+      // the man may still be mid-onboarding, where hijacking his
+      // navigation would be worse than doing nothing.
+      final launch = await _plugin.getNotificationAppLaunchDetails();
+      if (launch?.didNotificationLaunchApp ?? false) {
+        _pendingRoute = routeForPayload(launch?.notificationResponse?.payload);
+      }
+      // Retire the old `mirrorly.*` channels. Renaming an Android
+      // channel ID creates a SECOND channel rather than renaming the
+      // first, so without this the user is left with dead duplicates in
+      // their notification settings — and a channel they had muted
+      // reappears un-muted under its new ID, which reads as the app
+      // ignoring their choice. Deleting is the only way to remove one.
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      if (android != null) {
+        for (final id in NotifChannels.retired) {
+          try {
+            await android.deleteNotificationChannel(id);
+          } catch (_) {/* channel never existed on this device */}
+        }
+      }
       _initialized = true;
     } catch (e) {
       // Plugin init can fail on web/desktop or in restricted test
       // environments. Never fatal — retention degrades to in-app only.
       debugPrint('NotificationService.init failed: $e');
     }
+  }
+
+  // ───────────────────────────────────────────────────────────────────
+  //  TAPS — a notification that goes nowhere is half a notification
+  // ───────────────────────────────────────────────────────────────────
+
+  /// Route captured from a cold-start launch, waiting for a screen to be
+  /// alive enough to honour it. See [takePendingRoute].
+  static String? _pendingRoute;
+
+  /// Where a payload should land the user. Public so the scheduler and
+  /// the tests can agree on the contract.
+  ///
+  /// Payloads are `slot` or `slot:arg` — `her:amara`, `streak`, `dream`.
+  /// Anything unrecognised returns null and the tap just opens the app,
+  /// which is what happened before any of this existed.
+  static String? routeForPayload(String? payload) {
+    final p = (payload ?? '').trim();
+    if (p.isEmpty) return null;
+    final slot = p.split(':').first;
+    switch (slot) {
+      // She's the one who went quiet, so send him to his women — the
+      // Rolodex leads on the coldest card, which is her.
+      case 'her':
+        return '/rolodex';
+      case 'streak':
+      case 'dream':
+        return '/home';
+      default:
+        return null;
+    }
+  }
+
+  /// Warm tap — the app is already running, so navigate straight away.
+  static void _onTap(NotificationResponse response) {
+    final route = routeForPayload(response.payload);
+    if (route == null) return;
+    // Post-frame because a tap can arrive while the app is still
+    // restoring and the navigator may not be mounted this instant.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        appRouter.go(route);
+      } catch (e) {
+        debugPrint('NotificationService tap route failed: $e');
+      }
+    });
+  }
+
+  /// Take the cold-start route, if a notification launched the app.
+  /// Returns null on every ordinary launch. Consumed once — a second
+  /// caller gets null — so it can't re-navigate later in the session.
+  static String? takePendingRoute() {
+    final r = _pendingRoute;
+    _pendingRoute = null;
+    return r;
   }
 
   /// Request notification permission from the user. Called lazily the
@@ -333,7 +422,7 @@ class NotificationService {
 
   static NotificationDetails _streakDetails() => const NotificationDetails(
     android: AndroidNotificationDetails(
-      'mirrorly.streak', 'Streak reminders',
+      NotifChannels.protocolStreak, 'Streak reminders',
       channelDescription: 'Daily nudge to log your protocol before midnight.',
       importance: Importance.high, priority: Priority.high,
     ),
@@ -346,7 +435,7 @@ class NotificationService {
 
   static NotificationDetails _rescanDetails() => const NotificationDetails(
     android: AndroidNotificationDetails(
-      'mirrorly.rescan', 'Rescan reminders',
+      NotifChannels.rescan, 'Rescan reminders',
       channelDescription: 'Milestone prompts to rescan and check your deltas.',
       importance: Importance.defaultImportance, priority: Priority.defaultPriority,
     ),
@@ -455,7 +544,7 @@ class NotificationService {
 
   static NotificationDetails _trainingDetails() => const NotificationDetails(
     android: AndroidNotificationDetails(
-      'mirrorly.training', 'Training streak',
+      NotifChannels.training, 'Training streak',
       channelDescription:
           'Daily nudge to run an Eyes / Game drill and keep the streak alive.',
       importance: Importance.high, priority: Priority.high,

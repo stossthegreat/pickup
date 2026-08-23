@@ -140,6 +140,14 @@ class _HomeScreenState extends State<HomeScreen> {
       // ignore: discarded_futures
       NotificationService.requestPermissionIfNeeded()
           .then((_) => DailyNudgeService.reschedule());
+      // A notification that launched the app from cold gets honoured
+      // HERE rather than at init: this is the first moment the router
+      // is alive and the man is past onboarding, so sending him to her
+      // Rolodex card is a continuation of the message he tapped rather
+      // than a hijack of a flow he was in the middle of. Null on every
+      // ordinary launch.
+      final tapped = NotificationService.takePendingRoute();
+      if (tapped != null) context.go(tapped);
       ReviewPromptService.maybePrompt(context);
     });
   }
