@@ -78,11 +78,57 @@ class RealtimeSession {
     final sessionConfig = await _mintSession(body: body);
     final ephemeralKey = (sessionConfig['client_secret']
             as Map<String, dynamic>?)?['value'] as String?;
-    final model = (sessionConfig['model'] as String?) ?? 'gpt-realtime';
     _sessionId = sessionConfig['id'] as String?;
     if (ephemeralKey == null || ephemeralKey.isEmpty) {
       throw const RealtimeError('no_client_secret',
           'Backend did not return a client_secret. Check the realtime route.');
+    }
+
+    // ── THE MODEL GATE — NORMAL MODE NEVER OPENS THE FULL MODEL ────────
+    //
+    // Both voice paths in the app land here: the woman (mode freeflow)
+    // and Lucien's step-in (mode lucien). Whatever else changes, this
+    // is the single place a billable socket gets opened, so it is the
+    // only place the rule can actually be enforced.
+    //
+    // THE HOLE THIS CLOSES. The model came straight from the backend's
+    // mint response with `?? 'gpt-realtime'` behind it — the FULL model
+    // as the fallback. So any response that omitted the field (a deploy,
+    // a config change, an error path, an older route) silently put every
+    // ordinary user on a model costing roughly three times mini, with no
+    // error, no log, and nothing visible until an invoice weeks later.
+    // The app also simply trusted the value: a backend bug returning the
+    // full model for a normal session would have been obeyed.
+    //
+    // Trust is now gone. A non-creator session must come back on a mini
+    // model or it does not connect at all. Bro's instruction was exact:
+    // it can never use the full model, even if that means voice goes
+    // down. A refused session costs nothing and shows a clear error; a
+    // wrong session costs money on every user who ever calls.
+    //
+    // MATCHED BY SHAPE, NOT BY EXACT ID. The check is "does the name say
+    // mini", not a hardcoded id, because the backend owns the id and it
+    // will change — gpt-realtime-mini, gpt-4o-mini-realtime-preview, and
+    // whatever replaces them all pass, while every full model fails.
+    // Pinning one string here would break voice the day OpenAI renames
+    // it, which is the failure that gets "fixed" by deleting the guard.
+    //
+    // CREATOR MODE IS UNTOUCHED. It is the one mode that is SUPPOSED to
+    // run the full model, it is switched on by hand behind a password,
+    // and bro controls who has it. It keeps the old behaviour exactly,
+    // including the historical fallback.
+    final creator = body['creator'] == true;
+    var model = (sessionConfig['model'] as String?)?.trim() ?? '';
+    if (creator) {
+      if (model.isEmpty) model = 'gpt-realtime';
+    } else if (!model.toLowerCase().contains('mini')) {
+      throw RealtimeError(
+        'model_not_mini',
+        'Refusing to open a voice session: normal mode must use a mini '
+        'realtime model and the backend returned '
+        '"${model.isEmpty ? '(nothing)' : model}". Check the model the '
+        '/v1/realtime/session route returns for creator=false.',
+      );
     }
 
     // 2) Open WebSocket to OpenAI with the ephemeral token.
