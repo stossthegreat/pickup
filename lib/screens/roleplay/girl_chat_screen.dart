@@ -32,6 +32,7 @@ import '../../widgets/academy/verdict.dart';
 import '../../widgets/common/ai_consent_dialog.dart';
 import '../academy/rolodex_screen.dart';
 import '../game/freeflow/free_flow_screen.dart';
+import '../../services/install_id.dart';
 
 /// A story / post the AI girl dropped — the "scenario ready" for a
 /// COMMENT-ON-HER-POST mission. When present, the chat opens on her post
@@ -897,7 +898,7 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       final res = await http
           .post(
             Uri.parse('$base/v1/date/turn'),
-            headers: {'content-type': 'application/json'},
+            headers: BackendHeaders.json,
             body: jsonEncode({
               'characterId': widget.config.characterId,
               // Her language. Voice has sent this since day one and the
@@ -975,10 +976,14 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       final res = await http
           .post(
             Uri.parse('$base/v1/date/help'),
-            headers: {'content-type': 'application/json'},
+            headers: BackendHeaders.json,
             body: jsonEncode({
               'characterId': widget.config.characterId,
               'creator': _creator,
+              // The coach hands him the exact line to SEND her. She's
+              // already texting in his language — an English line pasted
+              // into that conversation is worse than no help at all.
+              'language': LanguageService.cachedCode,
               'history': history,
               if (_profilePayload != null) 'userProfile': _profilePayload,
             }),

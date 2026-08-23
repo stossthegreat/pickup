@@ -1,3 +1,5 @@
+import { languageOverrideBlock } from './personas.js';
+
 // LUCIEN + the woman — persona prompt builders for The Consigliere.
 //
 // THE CHARACTER IS THE MOAT.
@@ -1239,8 +1241,15 @@ job". Make him feel it.`, creator, UNCHAINED_LUCIEN);
 // out "ja ja ja". This builds the realtime session instructions: his
 // persona + the exchange he's reacting to. He speaks ONE turn.
 
-export function buildLucienRealtimeInstructions({ lastHer, lastYou, vibeLabel, creator }) {
+export function buildLucienRealtimeInstructions({
+  lastHer, lastYou, vibeLabel, creator, language,
+}) {
   const base = unchain(LUCIEN_CORE, creator, UNCHAINED_LUCIEN);
+  // The coach speaks the language the man is training in. Appended at
+  // the very end for the same reason as the women's — see
+  // languageOverrideBlock in personas.js. English returns '' and this
+  // prompt is unchanged.
+  const langBlock = languageOverrideBlock(language);
   return `${base}
 
 ═══════════════════════════════════════════════════════════════════
@@ -1385,7 +1394,8 @@ of this same core performance — the SAVAGERY and the SWAGGER below
 never get dialled down.
 
 Goal is ALWAYS the same: he walks out with a line he could actually
-deliver, in a cadence he can copy. Sharp. Magnetic. Spoken. King.`;
+deliver, in a cadence he can copy. Sharp. Magnetic. Spoken. King.
+${langBlock}`;
 }
 
 export {

@@ -9,7 +9,7 @@
 // system prompts below — same arsenal across both surfaces so the
 // in-pocket coach speaks the same language as the live voice one.
 
-import OpenAI from 'openai';
+import { openai as sharedOpenAI } from '../openai.js';
 
 const MODEL = 'gpt-4o-mini';
 
@@ -84,8 +84,11 @@ again.", "lines": [] }.
 `.trim();
 
 export default async function rizzRoute(app) {
+  // Shared singleton — same reasoning as rizz_brain.js: a bare
+  // `new OpenAI({ apiKey })` inherits the SDK's no-timeout default and
+  // can pin a request slot on a hung upstream call.
   const apiKey = process.env.OPENAI_API_KEY;
-  const openai = apiKey ? new OpenAI({ apiKey }) : null;
+  const openai = apiKey ? sharedOpenAI : null;
 
   app.post('/analyze', async (req, reply) => {
     if (!openai) {

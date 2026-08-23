@@ -8,6 +8,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../config/auralay_dev_flags.dart';
 import 'local_store_service.dart';
+import 'install_id.dart';
 
 /// OpenAI Realtime API session — sub-second turn-taking voice
 /// conversation with Diablo. Architecture:
@@ -239,7 +240,7 @@ class RealtimeSession {
     final uri = Uri.parse('${AuralayDevFlags.apiBaseUrl}/v1/realtime/session');
     final resp = await http.post(
       uri,
-      headers: {'content-type': 'application/json'},
+      headers: BackendHeaders.json,
       body: jsonEncode(body),
     ).timeout(const Duration(seconds: 15));
     if (resp.statusCode != 200) {

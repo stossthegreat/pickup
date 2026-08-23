@@ -1,6 +1,10 @@
-import OpenAI from 'openai';
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Use the shared singleton, not a second client. A private
+// `new OpenAI({ apiKey })` here had two faults: it threw at import when
+// the key was unset (crash-looping the whole server before it could
+// listen), and it carried the SDK defaults — NO timeout and 2 retries —
+// so a hung upstream call held one of our request slots forever. The
+// singleton is configured once with a 45s timeout and a single retry.
+import { openai } from './openai.js';
 
 /**
  * RIZZ — Mirrorly's dating-text coach.

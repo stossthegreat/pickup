@@ -8,6 +8,7 @@ import '../data/rizz_lines.dart';
 import 'rizz_memory_service.dart';
 import 'screenshot_ocr_service.dart';
 import 'villain/villain_api.dart';
+import 'install_id.dart';
 
 /// One rewritten reply suggestion.
 class RizzReply {
@@ -268,7 +269,7 @@ class RizzReplyService {
       final res = await http
           .post(
             Uri.parse('${ApiConfig.backendBaseUrl}/rizz/reply'),
-            headers: {'Content-Type': 'application/json'},
+            headers: BackendHeaders.json,
             body: jsonEncode({
               'her':      her,
               'vibe':     vibe.name,

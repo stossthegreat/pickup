@@ -4033,10 +4033,68 @@ gonna say next. Only a crude degrading COMMAND gets one cold clapback
 — then you stay in it. You never write explicit content yourself.
 Be her. Be fun. Make him leave the call wanting another one.`.trim();
 
+// ─── LANGUAGE OVERRIDE ───────────────────────────────────────────────
+//
+// ARC_AND_REACTION_RULES carries a LANGUAGE LOCK that says English only,
+// twice, in capitals — written to stop one misheard syllable flipping
+// her mid-call. It works, and it also made the Settings language picker
+// a lie: she was scripted to answer a Spanish speaker with "english
+// only here, sorry".
+//
+// This block supersedes it when the user has chosen something else. It
+// is APPENDED LAST on purpose — the model weights the end of the prompt
+// heavily, and naming the conflict explicitly ("the LANGUAGE LOCK above
+// is overridden") beats hoping two contradictory rules resolve the way
+// we want. The anti-drift discipline is repeated here so nothing is
+// lost: still pinned, still no code-switching, just pinned to HIM.
+//
+// English returns '' — the prompt is then byte-for-byte what it is
+// today for the overwhelming majority of users.
+const LANGUAGE_NAMES_FOR_PROMPT = {
+  en: 'English',    es: 'Spanish',    pt: 'Portuguese', fr: 'French',
+  de: 'German',     it: 'Italian',    nl: 'Dutch',      tr: 'Turkish',
+  pl: 'Polish',     ru: 'Russian',    ar: 'Arabic',     hi: 'Hindi',
+  id: 'Indonesian', ja: 'Japanese',   ko: 'Korean',
+};
+export function languageOverrideBlock(code) {
+  // Split the primary subtag so 'pt-BR' / 'en_US' resolve. The route
+  // normalises before calling this, so it cannot bite today — but a
+  // helper that silently returns '' for a valid tag is exactly what a
+  // future caller trips over.
+  const raw = (typeof code === 'string' ? code.trim().toLowerCase() : 'en');
+  const key = raw.split(/[-_]/)[0];
+  if (!key || key === 'en') return '';
+  const name = LANGUAGE_NAMES_FOR_PROMPT[key];
+  if (!name) return '';
+  return `
+═══════════════════════════════════════════════════════════════════
+# LANGUAGE OVERRIDE — SUPERSEDES THE LANGUAGE LOCK ABOVE
+═══════════════════════════════════════════════════════════════════
+The LANGUAGE LOCK section earlier in this prompt says English. It is
+OVERRIDDEN for this conversation. Ignore it completely.
+
+You speak ONLY ${name}. Every reply, every word, every laugh cue,
+every gasp, every sound — ${name} only. This is not a translation
+of English lines: you think, flirt, tease, test and push back
+natively in ${name}, with its own slang, rhythm and humour.
+
+The anti-drift rule still stands, pointed at ${name}: never switch
+into English or any other language mid-conversation, no matter what
+a single syllable sounds like. If his input is garbled or looks like
+another language, treat it as misheard ${name} and react in ${name}
+("¿qué?" equivalent — in character, in ${name}).
+
+The ONLY exception: if he clearly and deliberately speaks English to
+you for a whole sentence, you may answer that one line in English,
+then return to ${name}.
+`;
+}
+
 export function buildFreeFlowInstructions({
-  vibeLabel, scenarioSetting, memoryBlock, creator, userProfile,
+  vibeLabel, scenarioSetting, memoryBlock, creator, userProfile, language,
 }) {
   const aboutHim = freeFlowAboutHim(userProfile);
+  const langBlock = languageOverrideBlock(language);
   if (creator) {
     // Creator mode = single structured archetype (Taylor / Raven /
     // Maya creator-mode) per OpenAI's Realtime template. Three
@@ -4049,6 +4107,7 @@ export function buildFreeFlowInstructions({
     if (scenarioSetting && scenarioSetting.trim().length > 0) {
       parts.push('', '# ADDITIONAL SCENE NOTE', scenarioSetting);
     }
+    if (langBlock) parts.push('', langBlock);
     return parts.join('\n');
   }
 
@@ -4069,6 +4128,10 @@ export function buildFreeFlowInstructions({
     parts.push('', '# ADDITIONAL SCENE NOTE', scenarioSetting);
   }
   parts.push('', REVIEW_SAFE ? REVIEW_SAFE_CODA : NORMAL_MODE_CODA);
+  // Dead last — after the CODA — because recency is the position the
+  // model actually obeys, and this has to beat a rule stated twice in
+  // capitals further up.
+  if (langBlock) parts.push('', langBlock);
   return parts.join('\n');
 }
 
