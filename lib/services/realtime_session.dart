@@ -118,16 +118,49 @@ class RealtimeSession {
     // and bro controls who has it. It keeps the old behaviour exactly,
     // including the historical fallback.
     final creator = body['creator'] == true;
-    var model = (sessionConfig['model'] as String?)?.trim() ?? '';
+    var model = _modelIdFrom(sessionConfig);
+    final tier = _tierFrom(sessionConfig);
+
+    // A tier label that says anything other than mini is a server
+    // regression the app can catch even when no model id is echoed.
+    if (!creator && tier.isNotEmpty && !_isMini(tier)) {
+      throw RealtimeError(
+        'model_not_mini',
+        'Refusing to open a voice session: the backend reported '
+        'modelTier "$tier" for a normal session. Check what '
+        '/v1/realtime/session returns for creator=false.',
+      );
+    }
+
     if (creator) {
+      // Untouched. Creator is the one mode meant to run the full model.
       if (model.isEmpty) model = 'gpt-realtime';
-    } else if (!model.toLowerCase().contains('mini')) {
+    } else if (model.isEmpty) {
+      // COULD NOT VERIFY — so ASK FOR MINI, never full.
+      //
+      // The backend picks the tier itself (its logs show
+      // modelTier: mini for creator=false) and the ephemeral key binds
+      // the session to that choice before this socket opens, so a model
+      // in the URL is a request, not a decision. The old code put
+      // 'gpt-realtime' here, which meant the app's own fallback was
+      // asking for the expensive model. Naming mini instead means the
+      // app can never be the thing that requests full.
+      //
+      // Refusing outright would be the stricter reading, but it would
+      // take voice down over a field the backend simply might not echo
+      // — punishing a server that is doing the right thing. Asking for
+      // mini satisfies the rule with none of that risk.
+      model = _kMiniModel;
+    } else if (!_isMini(model)) {
+      // VERIFIED WRONG. The backend named a model and it is not a mini
+      // one. That is a real regression on the server, and the only safe
+      // answer is not to open the socket: a refused session costs
+      // nothing, a wrong one costs money on every user who calls.
       throw RealtimeError(
         'model_not_mini',
         'Refusing to open a voice session: normal mode must use a mini '
-        'realtime model and the backend returned '
-        '"${model.isEmpty ? '(nothing)' : model}". Check the model the '
-        '/v1/realtime/session route returns for creator=false.',
+        'realtime model and the backend returned "$model". Check what '
+        '/v1/realtime/session returns for creator=false.',
       );
     }
 
@@ -161,6 +194,44 @@ class RealtimeSession {
       cancelOnError: false,
     );
   }
+
+  /// The model the app asks for when it cannot read one from the mint
+  /// response. Never a full model — see the gate in [connect].
+  static const _kMiniModel = 'gpt-realtime-mini';
+
+  /// Mini by SHAPE, not by exact id. The backend owns the id and it will
+  /// change; gpt-realtime-mini, gpt-4o-mini-realtime-preview and
+  /// whatever replaces them all pass, while every full model fails.
+  /// Pinning one string here would break voice the day OpenAI renames
+  /// it — and that is the failure people "fix" by deleting the guard.
+  static bool _isMini(String m) => m.toLowerCase().contains('mini');
+
+  /// The model ID from the mint response — an ID ONLY, never a tier.
+  ///
+  /// Two known shapes, because the app must not depend on a single field
+  /// name it does not own: a top-level `model`, and the `session` object
+  /// OpenAI returns from client_secret create, which carries the model
+  /// the session was actually bound to. Empty means "no id given".
+  ///
+  /// `modelTier` is deliberately NOT read here. It is a tier label, not
+  /// an id — sending `?model=mini` to OpenAI would be nonsense, and an
+  /// earlier draft of this did exactly that. It is read separately by
+  /// [_tierFrom] and used only to VERIFY.
+  static String _modelIdFrom(Map<String, dynamic> cfg) {
+    final direct = (cfg['model'] as String?)?.trim();
+    if (direct != null && direct.isNotEmpty) return direct;
+    final session = cfg['session'];
+    if (session is Map) {
+      final nested = (session['model'] as String?)?.trim();
+      if (nested != null && nested.isNotEmpty) return nested;
+    }
+    return '';
+  }
+
+  /// The backend's own tier label, if it sends one — its logs carry
+  /// `modelTier: mini` beside the model. Verification signal only.
+  static String _tierFrom(Map<String, dynamic> cfg) =>
+      (cfg['modelTier'] as String?)?.trim() ?? '';
 
   Future<Map<String, dynamic>> _mintSession({
     required Map<String, dynamic> body,
