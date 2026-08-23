@@ -122,6 +122,22 @@ class GirlChatConfig {
   /// teaches.
   final bool coachAllowed;
 
+  /// ── OUTSIDE THE FREE-TEXT FUNNEL ENTIRELY ─────────────────────────
+  ///
+  /// Set ONLY by the onboarding first rep. That rep asks for five
+  /// messages and the free allowance is three, so the paywall fired on
+  /// message four — halfway through the one conversation the whole sales
+  /// flow is built to deliver. He never reached his score, which is the
+  /// screen that actually sells, and the funnel closed on a man who had
+  /// been interrupted rather than convinced.
+  ///
+  /// This is a call-site exemption and nothing more. PaywallGate, the
+  /// counter, RevenueCat and every other surface are untouched: the rep
+  /// simply neither CHECKS the cap nor SPENDS it, so a man who declines
+  /// at the end still walks into the app with his full free allowance
+  /// intact and a second chance to convert.
+  final bool bypassTextCap;
+
   const GirlChatConfig({
     required this.characterId,
     required this.vibeKey,
@@ -138,6 +154,7 @@ class GirlChatConfig {
     this.battleId,
     this.verdictOnFinish = true,
     this.coachAllowed = false,
+    this.bypassTextCap = false,
   });
 }
 
@@ -602,7 +619,7 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     // they pay. Pro + creator text unlimited. Voice is paid separately at
     // every _goLive. The user's typed line stays in the box so they don't
     // lose it if they come back as Pro.
-    if (await PaywallGate.textCapReached()) {
+    if (!widget.config.bypassTextCap && await PaywallGate.textCapReached()) {
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       await PaywallGate.open(context, source: 'text_cap');
@@ -638,8 +655,11 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     // Count this successful send toward the free text allowance (the funnel).
     // No-op weight for Pro/creator — textCapReached() ignores the counter
     // for them, so an over-count never matters; we just always tally.
-    // ignore: discarded_futures
-    LocalStoreService.markFreeTextUsed();
+    // The onboarding rep is a sample, not a spend — see bypassTextCap.
+    if (!widget.config.bypassTextCap) {
+      // ignore: discarded_futures
+      LocalStoreService.markFreeTextUsed();
+    }
     // Real girls double-text. The model marks separate bubbles with '\n';
     // reveal them one at a time so it reads like she's firing off texts.
     final bubbles = result.her

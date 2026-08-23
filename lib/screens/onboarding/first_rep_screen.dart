@@ -71,6 +71,12 @@ class _FirstRepScreenState extends State<FirstRepScreen> {
             // not the girl-verdict ceremony. A man being sold on the
             // score has to actually SEE a score.
             verdictOnFinish: false,
+            // THE REP MUST REACH ITS SCORE. Five messages against a
+            // three-message allowance meant the paywall landed on
+            // message four, mid-conversation — the funnel closing on a
+            // man who was interrupted instead of convinced. Exempt at
+            // the call site only; the gate itself is untouched.
+            bypassTextCap: true,
           ),
         ),
       ),
