@@ -65,10 +65,10 @@ import '../../../widgets/safe_close_button.dart';
 /// used, then you carry on.
 ///
 /// NOTE FOR DEVICE TESTING: real-time audio is the one thing that needs
-/// tuning on a physical device — echo cancellation, mic/speaker levels,
-/// and latency vary by phone. `echoCancel` is on to stop her hearing
-/// herself; if barge-in feels off we tune silence_duration / threshold
-/// server-side.
+/// tuning on a physical device — mic/speaker levels and latency vary by
+/// phone. `echoCancel` is OFF on purpose: iOS voice-processing ducks all
+/// playback ~10-15dB (the "why is she so quiet" bug) and push-to-talk
+/// doesn't need it — she stops speaking the moment the user holds.
 class FreeFlowScreen extends StatefulWidget {
   /// When true, the screen renders as the GAME tab body — no close
   /// button, no picker phase. INTO YOU is auto-loaded as the default
@@ -893,6 +893,11 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         print('[FREEFLOW] PCM engine first-time setup…');
         await FlutterPcmSound.setup(sampleRate: 24000, channelCount: 1);
         FlutterPcmSound.setFeedThreshold(6000);
+        // pcm_sound's setup() just called setCategory with NO options,
+        // wiping defaultToSpeaker — re-assert our context so audio
+        // routes to the LOUDSPEAKER, not the earpiece.
+        AudioSession.invalidate();
+        await AudioSession.configureForPlayAndRecord();
         _pcmEngineReady = true;
         _log('ok', 'PCM', 'engine setup done');
         // ignore: avoid_print
@@ -1191,13 +1196,21 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // means another app on the device is holding the audio
       // session in exclusive mode — surface the user-facing
       // message so they know to pause Spotify / end the call.
+      // VOLUME FIX (founder: "why is she so quiet"). echoCancel/
+      // noiseSuppress/autoGain switch iOS into voice-processing mode,
+      // and Apple's voice processing DUCKS ALL PLAYBACK by ~10-15dB —
+      // and because the mic stream stays hot for the whole screen
+      // (v261), her voice was ducked for the entire call. This app is
+      // PUSH-TO-TALK: she stops speaking the moment the user holds the
+      // button (barge-in clears the PCM queue), so echo cancellation
+      // buys nothing here — full playback loudness buys everything.
       const cfg = RecordConfig(
         encoder:       AudioEncoder.pcm16bits,
         sampleRate:    24000,
         numChannels:   1,
-        echoCancel:    true,
-        autoGain:      true,
-        noiseSuppress: true,
+        echoCancel:    false,
+        autoGain:      false,
+        noiseSuppress: false,
       );
       Stream<Uint8List>? raw;
       Object? lastErr;
