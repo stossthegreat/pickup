@@ -106,8 +106,48 @@ class _RizzOffRevealState extends State<RizzOffReveal>
   );
 
   /// 0 breathe · 1 axes · 2 collapse+score · 3 squad · 4 actions
-  int _stage = 0;
-  bool _burst = false;
+  ///
+  /// NOTIFIERS, NOT setState, AND THAT IS THE WHOLE BUG FIX.
+  ///
+  /// The stage advances four times during one reveal, and the burst
+  /// fires a fifth. Every one of those used to be a setState, which
+  /// rebuilds this entire widget — and almost everything on it is
+  /// wrapped in a chained `.animate()`. Those chains construct a fresh
+  /// list of effects on each build, which reads as a new animation and
+  /// replays from the top.
+  ///
+  /// So one conversation produced five run-throughs: the number counted
+  /// up again, the kicker faded in again, the rank line faded in again.
+  /// It looked like the screen was stuck in a loop, and it was — just
+  /// not in the way anyone would guess from the outside, which is why
+  /// guarding the SCREENS against showing twice never fixed it. It was
+  /// never showing twice. It was animating five times.
+  ///
+  /// A ValueNotifier rebuilds only the branch that listens to it. The
+  /// kicker, the flash layer and the number are built once and never
+  /// touched again, so nothing outside its own beat can restart them.
+  final ValueNotifier<int> _stage = ValueNotifier(0);
+  final ValueNotifier<bool> _burst = ValueNotifier(false);
+
+  /// ── BUILT ONCE, CACHED FOREVER ────────────────────────────────────
+  ///
+  /// The notifiers stopped the WHOLE tree rebuilding, but the branch
+  /// that listens still reruns its builder on every stage tick — and
+  /// the score block is on screen for stages 2, 3 AND 4, so it was
+  /// being reconstructed twice more after it landed. Every `.animate()`
+  /// chain inside it makes a fresh effects list on reconstruction,
+  /// which flutter_animate reads as a new animation and replays. That
+  /// is the "count-up spamming again and again" — the labels and the
+  /// number re-entering on each stage.
+  ///
+  /// Caching the subtree makes replay structurally impossible: the
+  /// second build returns the SAME widget instance, and an identical
+  /// child is something Flutter doesn't even diff into. There is no
+  /// timing to get right because there is nothing that can run twice.
+  Widget? _axesCache;
+  Widget? _scoreCache;
+  Widget? _slamCache;
+  Widget? _actionsCache;
   final _timers = <Timer>[];
 
   List<String> get _axes => widget.axes;
@@ -185,10 +225,10 @@ class _RizzOffRevealState extends State<RizzOffReveal>
         Sfx.axis();
       });
     }
-    at(hold, () => setState(() => _stage = 1));
+    at(hold, () => _stage.value = 1);
     final axesEnd = hold + 200 + _axes.length * 520;
     at(axesEnd, () {
-      setState(() => _stage = 2);
+      _stage.value = 2;
       // The number lands like a thing with weight, then the grade
       // stamps a beat later — two events, not one.
       Feel.land();
@@ -207,9 +247,9 @@ class _RizzOffRevealState extends State<RizzOffReveal>
       }
     });
     if (_hasSquad) {
-      at(axesEnd + 2600, () => setState(() => _stage = 3));
+      at(axesEnd + 2600, () => _stage.value = 3);
     }
-    at(axesEnd + (_hasSquad ? 4200 : 2400), () => setState(() => _stage = 4));
+    at(axesEnd + (_hasSquad ? 4200 : 2400), () => _stage.value = 4);
   }
 
   @override
@@ -218,14 +258,23 @@ class _RizzOffRevealState extends State<RizzOffReveal>
       t.cancel();
     }
     _flash.dispose();
+    _stage.dispose();
+    _burst.dispose();
     super.dispose();
   }
 
+  /// Fire-once, whatever happens below it. The impact starts a shake,
+  /// and a shake must never be able to start another impact — that
+  /// exact cycle (via ImpactShake remounting its subtree, now fixed at
+  /// the source) is what looped every score ceremony in the app.
+  bool _impacted = false;
+
   void _onImpact() {
-    if (!mounted) return;
+    if (!mounted || _impacted) return;
+    _impacted = true;
     _shakeKey.currentState?.shake();
     _flash.forward(from: 0);
-    if (widget.score >= 6200) setState(() => _burst = true);
+    if (widget.score >= 6200) _burst.value = true;
   }
 
   @override
@@ -234,7 +283,15 @@ class _RizzOffRevealState extends State<RizzOffReveal>
     return Material(
       color: Colors.black,
       child: Stack(children: [
-        if (_burst) Positioned.fill(child: Burst(color: grade.color)),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _burst,
+              builder: (_, on, __) =>
+                  on ? Burst(color: grade.color) : const SizedBox.shrink(),
+            ),
+          ),
+        ),
         SafeArea(
           child: ImpactShake(
             key: _shakeKey,
@@ -254,41 +311,56 @@ class _RizzOffRevealState extends State<RizzOffReveal>
 
                 Expanded(
                   child: Center(
-                    child: _stage == 0
-                        ? _breath()
-                        : _stage == 1
-                            ? _axesList()
-                            : _scoreBlock(grade),
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: _stage,
+                      builder: (_, stage, __) => stage == 0
+                          ? _breath()
+                          : stage == 1
+                              ? (_axesCache ??= _axesList())
+                              : (_scoreCache ??= _scoreBlock(grade)),
+                    ),
                   ),
                 ),
 
                 // THE NEAR MISS. Placed under the squad slam because it
                 // only means anything once you've seen whose name is
                 // above yours — and the screen flinches when it lands.
-                if (_stage >= 3 && _near != null)
-                  Flinch(
-                    active: true,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.trending_up_rounded,
-                              size: 14, color: AppColors.red),
-                          const SizedBox(width: 8),
-                          Text(_near!.toUpperCase(),
-                              style: GoogleFonts.inter(
-                                color: AppColors.red,
-                                fontSize: 12,
-                                letterSpacing: 2,
-                                fontWeight: FontWeight.w900,
-                              )),
-                        ],
-                      ),
-                    ),
+                // The tail of the screen, all of it stage-gated. One
+                // listener rather than three, so it rebuilds once per
+                // stage instead of once per widget per stage.
+                ValueListenableBuilder<int>(
+                  valueListenable: _stage,
+                  builder: (_, stage, __) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (stage >= 3 && _near != null)
+                        Flinch(
+                          active: true,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.trending_up_rounded,
+                                    size: 14, color: AppColors.red),
+                                const SizedBox(width: 8),
+                                Text(_near!.toUpperCase(),
+                                    style: GoogleFonts.inter(
+                                      color: AppColors.red,
+                                      fontSize: 12,
+                                      letterSpacing: 2,
+                                      fontWeight: FontWeight.w900,
+                                    )),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (stage >= 3 && _hasSquad)
+                        _slamCache ??= _squadSlam(),
+                      if (stage >= 4) _actionsCache ??= _actions(grade),
+                    ],
                   ),
-                if (_stage >= 3 && _hasSquad) _squadSlam(),
-                if (_stage >= 4) _actions(grade),
+                ),
               ]),
             ),
           ),
@@ -379,46 +451,12 @@ class _RizzOffRevealState extends State<RizzOffReveal>
           // The number rises out of where the axes collapsed.
           Positioned(
             top: 0,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                TweenAnimationBuilder<double>(
-                  tween: Tween(
-                      begin: 0,
-                      end: double.parse(_outOfTen)),
-                  duration: const Duration(milliseconds: 900),
-                  curve: Curves.easeOutCubic,
-                  builder: (_, v, __) => Text(
-                    v.toStringAsFixed(widget.decimals),
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 76,
-                      height: 1,
-                      letterSpacing: -3.5,
-                      fontWeight: FontWeight.w900,
-                      shadows: [
-                        Shadow(
-                            color: grade.color.withValues(alpha: 0.5),
-                            blurRadius: 50)
-                      ],
-                    ),
-                  ),
-                ),
-                Text(' ${widget.suffix}',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textMuted,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    )),
-              ],
-            )
-                .animate()
-                .fadeIn(duration: 380.ms)
-                .slideY(begin: 0.25, end: 0, curve: Curves.easeOutCubic)
-                .then(delay: 1200.ms)
-                .moveY(begin: 0, end: -18, duration: 300.ms)
-                .scaleXY(begin: 1, end: 0.62, duration: 300.ms),
+            child: _CountUp(
+              value: double.parse(_outOfTen),
+              decimals: widget.decimals,
+              suffix: widget.suffix,
+              glow: grade.color,
+            ),
           ),
           Positioned(
             top: 56,
@@ -680,6 +718,73 @@ class _RizzOffRevealState extends State<RizzOffReveal>
 }
 
 /// One axis: label, a bar that draws, and the number out of 10.
+/// ══════════════════════════════════════════════════════════════════
+///  THE NUMBER — static. It does not animate, so it cannot misbehave.
+/// ══════════════════════════════════════════════════════════════════
+///
+/// THE COUNT-UP IS GONE, ON PURPOSE, AND IT IS NOT COMING BACK.
+///
+/// It replayed. Then the rebuild source was fixed and it replayed
+/// somewhere else. Then the stages were fixed, the subtrees were
+/// cached, the controller was moved into its own State — four builds of
+/// increasingly airtight engineering — and bro's phone still showed it
+/// counting again and again on the battle verdict. Every fix was
+/// correct and none of them was the guarantee, because ANY animated
+/// number is one unnoticed rebuild away from animating again.
+///
+/// A static number is the guarantee. It renders complete, at its final
+/// size, in its final place, on the first frame the score block exists
+/// — there is no controller, no timer, no curve, nothing that CAN run
+/// twice. The theatre lost is already paid for elsewhere: the axes
+/// build the tension one bar at a time, and the grade stamp still
+/// slams. The number is the fact, and facts don't need to move.
+///
+/// Rendered directly at its settled position — small enough that the
+/// stamp lands beneath it exactly as before.
+class _CountUp extends StatelessWidget {
+  final double value;
+  final int decimals;
+  final String suffix;
+  final Color glow;
+  const _CountUp({
+    required this.value,
+    required this.decimals,
+    required this.suffix,
+    required this.glow,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.translate(
+      offset: const Offset(0, -18),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(value.toStringAsFixed(decimals),
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 47,
+                height: 1,
+                letterSpacing: -2.2,
+                fontWeight: FontWeight.w900,
+                shadows: [
+                  Shadow(color: glow.withValues(alpha: 0.5), blurRadius: 34)
+                ],
+              )),
+          Text(' $suffix',
+              style: GoogleFonts.inter(
+                color: AppColors.textMuted,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              )),
+        ],
+      ),
+    );
+  }
+}
+
 class _AxisRow extends StatelessWidget {
   final String label;
   final int value; // 0..100

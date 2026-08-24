@@ -72,6 +72,24 @@
 				<string>imhim</string>
 			</array>
 		</dict>
+		<!--
+			Google Sign-In. This is REVERSED_CLIENT_ID from
+			GoogleService-Info.plist, and it is how the Google sheet
+			hands control back to the app once the user picks an
+			account. Without this entry the sheet opens and then hangs
+			with no error anywhere — it has nowhere to return to.
+			Must stay in step with BackendConfig.googleIosClientId.
+		-->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.googleusercontent.apps.94590135779-37sj39doa8rikv9it3d9o5n8oahb14uj</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.94590135779-37sj39doa8rikv9it3d9o5n8oahb14uj</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../config/auralay_dev_flags.dart';
+import 'install_id.dart';
 
 /// Thin HTTP client over the AURALAY Railway backend.
 ///
@@ -80,7 +81,7 @@ class AuralayApi {
     try {
       resp = await http.post(
         uri,
-        headers: {'content-type': 'application/json'},
+        headers: BackendHeaders.json,
         body: jsonEncode({'text': text, 'mode': mode}),
       ).timeout(const Duration(seconds: 30));
     } catch (e) {
@@ -160,7 +161,7 @@ class AuralayApi {
     final uri = Uri.parse('$_base/v1/rhetoric/score');
     final resp = await http.post(
       uri,
-      headers: {'content-type': 'application/json'},
+      headers: BackendHeaders.json,
       body: jsonEncode({'lessonId': lessonId, 'transcript': transcript}),
     ).timeout(const Duration(seconds: 30));
     if (resp.statusCode != 200) {

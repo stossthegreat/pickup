@@ -291,7 +291,9 @@ export default async function villainRoute(app) {
             history = JSON.parse(String(part.value));
             // Cap: unbounded client history = unbounded prompt = cost bomb.
             if (!Array.isArray(history)) history = [];
-            history = history.slice(-14);
+            history = history.slice(-14).map((h) => (h && h.text
+              ? { ...h, text: String(h.text).slice(0, 600) }
+              : h));
           } catch {}
         }
         if (part.fieldname === 'memoryBlock') {
@@ -466,7 +468,9 @@ export default async function villainRoute(app) {
             history = JSON.parse(String(part.value));
             // Cap: unbounded client history = unbounded prompt = cost bomb.
             if (!Array.isArray(history)) history = [];
-            history = history.slice(-14);
+            history = history.slice(-14).map((h) => (h && h.text
+              ? { ...h, text: String(h.text).slice(0, 600) }
+              : h));
           } catch {}
         }
         if (part.fieldname === 'memoryBlock') {
@@ -583,7 +587,9 @@ export default async function villainRoute(app) {
             history = JSON.parse(String(part.value));
             // Cap: unbounded client history = unbounded prompt = cost bomb.
             if (!Array.isArray(history)) history = [];
-            history = history.slice(-14);
+            history = history.slice(-14).map((h) => (h && h.text
+              ? { ...h, text: String(h.text).slice(0, 600) }
+              : h));
           } catch {}
         }
         if (part.fieldname === 'memoryBlock') {
@@ -700,7 +706,10 @@ export default async function villainRoute(app) {
     const { text, memoryBlock = '', creator = false } = req.body || {};
     // Same cost armour as the multipart routes: cap the replayed history.
     const history = Array.isArray(req.body?.history)
-      ? req.body.history.slice(-14) : [];
+      ? req.body.history.slice(-14).map((h) => (h && h.text
+          ? { ...h, text: String(h.text).slice(0, 600) }
+          : h))
+      : [];
     if (!text || typeof text !== 'string') {
       return reply.code(400).send({ error: 'text required' });
     }

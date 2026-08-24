@@ -1031,21 +1031,20 @@ const ARC_AND_REACTION_RULES = `
 ═══════════════════════════════════════════════════════════════════
 # LANGUAGE LOCK — ABSOLUTE — READ TWICE
 ═══════════════════════════════════════════════════════════════════
-You respond ONLY in {{LANG}}. Every reply, every word, every laugh
-cue, every gasp, every sound — {{LANG}} only. Never switch into any
-other language mid-conversation regardless of what the user says or
-what a single syllable sounds like. You speak {{LANG}} like a native
-— natural slang, natural rhythm, a real young woman from that
-culture, never textbook.
+You respond ONLY in English. Every reply, every word, every laugh
+cue, every gasp, every sound — English only. Never switch into
+Spanish, French, Portuguese, Italian, German, or any other language
+mid-conversation regardless of what the user says or what a single
+syllable sounds like.
 
 If the user's transcribed input looks like another language because
-of mic noise or accent, treat it as misheard {{LANG}} and react in
-{{LANG}} (a playful confused tease). NEVER reply in the misheard
-language.
+of mic noise or accent, treat it as misheard English and react in
+English ("wait what" / "sorry — what did you just say" / playful
+confused tease). NEVER reply in the misheard language.
 
 If the user explicitly speaks to you in another language, respond
-in {{LANG}} only, in character. You do not code-switch under any
-circumstance.
+in ENGLISH only, in character ("english only here, sorry. say it
+again, in english"). You do not code-switch under any circumstance.
 
 ═══════════════════════════════════════════════════════════════════
 # SPEECH PRODUCTION — ABSOLUTE RULE — READ THREE TIMES
@@ -4035,24 +4034,68 @@ gonna say next. Only a crude degrading COMMAND gets one cold clapback
 — then you stay in it. You never write explicit content yourself.
 Be her. Be fun. Make him leave the call wanting another one.`.trim();
 
-// BCP-47 primary tag → the name the prompt locks to. Mirrors the app's
-// LanguageService.supported list; anything unknown falls back to English.
-const LANGUAGE_NAMES = {
-  en: 'English', es: 'Spanish', pt: 'Portuguese', fr: 'French',
-  de: 'German', it: 'Italian', nl: 'Dutch', tr: 'Turkish',
-  pl: 'Polish', ru: 'Russian', ar: 'Arabic', hi: 'Hindi',
-  id: 'Indonesian', ja: 'Japanese', ko: 'Korean',
+// ─── LANGUAGE OVERRIDE ───────────────────────────────────────────────
+//
+// ARC_AND_REACTION_RULES carries a LANGUAGE LOCK that says English only,
+// twice, in capitals — written to stop one misheard syllable flipping
+// her mid-call. It works, and it also made the Settings language picker
+// a lie: she was scripted to answer a Spanish speaker with "english
+// only here, sorry".
+//
+// This block supersedes it when the user has chosen something else. It
+// is APPENDED LAST on purpose — the model weights the end of the prompt
+// heavily, and naming the conflict explicitly ("the LANGUAGE LOCK above
+// is overridden") beats hoping two contradictory rules resolve the way
+// we want. The anti-drift discipline is repeated here so nothing is
+// lost: still pinned, still no code-switching, just pinned to HIM.
+//
+// English returns '' — the prompt is then byte-for-byte what it is
+// today for the overwhelming majority of users.
+const LANGUAGE_NAMES_FOR_PROMPT = {
+  en: 'English',    es: 'Spanish',    pt: 'Portuguese', fr: 'French',
+  de: 'German',     it: 'Italian',    nl: 'Dutch',      tr: 'Turkish',
+  pl: 'Polish',     ru: 'Russian',    ar: 'Arabic',     hi: 'Hindi',
+  id: 'Indonesian', ja: 'Japanese',   ko: 'Korean',
 };
-export function languageNameFor(code) {
-  return LANGUAGE_NAMES[String(code || 'en').toLowerCase().slice(0, 2)]
-      || 'English';
+export function languageOverrideBlock(code) {
+  // Split the primary subtag so 'pt-BR' / 'en_US' resolve. The route
+  // normalises before calling this, so it cannot bite today — but a
+  // helper that silently returns '' for a valid tag is exactly what a
+  // future caller trips over.
+  const raw = (typeof code === 'string' ? code.trim().toLowerCase() : 'en');
+  const key = raw.split(/[-_]/)[0];
+  if (!key || key === 'en') return '';
+  const name = LANGUAGE_NAMES_FOR_PROMPT[key];
+  if (!name) return '';
+  return `
+═══════════════════════════════════════════════════════════════════
+# LANGUAGE OVERRIDE — SUPERSEDES THE LANGUAGE LOCK ABOVE
+═══════════════════════════════════════════════════════════════════
+The LANGUAGE LOCK section earlier in this prompt says English. It is
+OVERRIDDEN for this conversation. Ignore it completely.
+
+You speak ONLY ${name}. Every reply, every word, every laugh cue,
+every gasp, every sound — ${name} only. This is not a translation
+of English lines: you think, flirt, tease, test and push back
+natively in ${name}, with its own slang, rhythm and humour.
+
+The anti-drift rule still stands, pointed at ${name}: never switch
+into English or any other language mid-conversation, no matter what
+a single syllable sounds like. If his input is garbled or looks like
+another language, treat it as misheard ${name} and react in ${name}
+("¿qué?" equivalent — in character, in ${name}).
+
+The ONLY exception: if he clearly and deliberately speaks English to
+you for a whole sentence, you may answer that one line in English,
+then return to ${name}.
+`;
 }
 
 export function buildFreeFlowInstructions({
   vibeLabel, scenarioSetting, memoryBlock, creator, userProfile, language,
 }) {
-  const langName = languageNameFor(language);
   const aboutHim = freeFlowAboutHim(userProfile);
+  const langBlock = languageOverrideBlock(language);
   if (creator) {
     // Creator mode = single structured archetype (Taylor / Raven /
     // Maya creator-mode) per OpenAI's Realtime template. Three
@@ -4065,9 +4108,8 @@ export function buildFreeFlowInstructions({
     if (scenarioSetting && scenarioSetting.trim().length > 0) {
       parts.push('', '# ADDITIONAL SCENE NOTE', scenarioSetting);
     }
-    // Creator prompts carry no {{LANG}} token (they run their own
-    // English character sheets) — the replace is a no-op there.
-    return parts.join('\n').split('{{LANG}}').join(langName);
+    if (langBlock) parts.push('', langBlock);
+    return parts.join('\n');
   }
 
   // Normal mode = one of five fully-realised characters, each with
@@ -4087,9 +4129,11 @@ export function buildFreeFlowInstructions({
     parts.push('', '# ADDITIONAL SCENE NOTE', scenarioSetting);
   }
   parts.push('', REVIEW_SAFE ? REVIEW_SAFE_CODA : NORMAL_MODE_CODA);
-  // The character sheet's LANGUAGE LOCK is tokenized — lock it to the
-  // user's chosen language (English when unset, exactly as before).
-  return parts.join('\n').split('{{LANG}}').join(langName);
+  // Dead last — after the CODA — because recency is the position the
+  // model actually obeys, and this has to beat a rule stated twice in
+  // capitals further up.
+  if (langBlock) parts.push('', langBlock);
+  return parts.join('\n');
 }
 
 // ABOUT-HIM block for the live voice personas — his name (so she can say

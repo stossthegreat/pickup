@@ -2,15 +2,31 @@
 
 import OpenAI from 'openai';
 
-if (!process.env.OPENAI_API_KEY) {
+// A MISSING KEY MUST DEGRADE, NOT CRASH.
+//
+// The warning below used to be a lie. The OpenAI SDK constructor THROWS
+// when apiKey is empty, and this module is imported at boot — so an
+// unset or briefly-empty OPENAI_API_KEY did not "make those routes
+// fail", it killed the process before app.listen(). On Railway that is
+// an unrecoverable crash-loop: every replica dies on import, /health
+// never answers, the platform sees no healthy target and there is
+// nothing serving at all. The single most likely trigger is the most
+// ordinary operation there is — rotating the key.
+//
+// Booting with a placeholder means the server comes up, /health and
+// /version answer, the load balancer keeps a healthy target, and the
+// AI routes return their normal clean error until the key is restored.
+export const hasOpenAIKey = Boolean(process.env.OPENAI_API_KEY);
+if (!hasOpenAIKey) {
   console.warn(
-    '[auralay] WARNING: OPENAI_API_KEY not set — the /v1/diablo/turn and ' +
-    '/v1/rhetoric/score routes will fail until you set it in Railway.'
+    '[auralay] WARNING: OPENAI_API_KEY not set — the AI routes will ' +
+    'return errors until you set it in Railway. The server is up and ' +
+    'serving /health so the platform keeps this instance alive.'
   );
 }
 
 export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY || 'missing-openai-api-key',
   // Scale hardening: a hung OpenAI call must never hold one of our
   // request slots indefinitely. 45s covers the slowest legitimate
   // completion; one retry keeps transient 5xx recovery without

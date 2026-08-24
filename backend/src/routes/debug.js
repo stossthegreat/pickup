@@ -15,7 +15,34 @@
 
 import { TEACHERS } from '../personas.js';
 
-const REALTIME_MODEL = 'gpt-realtime';
+// THE SECOND DOOR TO THE FULL MODEL.
+//
+// The rule is absolute: outside creator mode nothing may ever touch
+// `gpt-realtime`. routes/realtime.js enforces that — and this file
+// quietly walked around it, because it hardcoded its OWN copy of the
+// model name instead of importing the picker. `GET /v1/debug/openai-test`
+// was a public, unauthenticated endpoint that minted a real FULL-model
+// ephemeral key on our account and handed it to whoever asked. Anyone
+// who found the URL could mint them in a loop and burn full-model
+// realtime minutes on our bill.
+//
+// It now mints the mini model — the same one real users get — so the
+// probe still answers the only question it exists to answer ("can this
+// account mint a realtime key at all") without ever being a route to
+// the expensive model.
+const REALTIME_MODEL = 'gpt-realtime-mini';
+
+// …and the probe is no longer free to call. It is the one endpoint here
+// that spends money, so it requires DEBUG_TOKEN (set it in Railway) in
+// an `x-debug-token` header. With no DEBUG_TOKEN configured the probe
+// is simply off — fail closed, never open. The read-only endpoints
+// below cost nothing and stay open.
+function debugAuthed(req) {
+  const want = process.env.DEBUG_TOKEN;
+  if (!want) return false;
+  const got = req.headers['x-debug-token'];
+  return typeof got === 'string' && got === want;
+}
 
 export default async function debugRoute(app) {
 
@@ -53,9 +80,12 @@ export default async function debugRoute(app) {
   }));
 
   // ── /echo ───────────────────────────────────────────────────────────
+  // Headers are deliberately NOT reflected: this endpoint is public and
+  // an echo of arbitrary request headers is a gift to anyone probing
+  // what the proxy in front of us injects. The body is what we ever
+  // needed to see.
   app.post('/echo', async (req) => ({
     receivedBody: req.body,
-    receivedHeaders: req.headers,
     method: req.method,
     url:    req.url,
     ts:     Date.now(),
@@ -66,7 +96,12 @@ export default async function debugRoute(app) {
   // the verbatim OpenAI response so you can see exactly what's failing
   // and why. No persona, no instructions, no syllabus — just "can we
   // even mint an ephemeral key with this account + model".
-  app.get('/openai-test', async (_, reply) => {
+  app.get('/openai-test', async (req, reply) => {
+    if (!debugAuthed(req)) {
+      // 404, not 401 — an unauthenticated caller learns nothing about
+      // whether this endpoint exists.
+      return reply.code(404).send({ error: 'not_found' });
+    }
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return reply.send({
@@ -87,6 +122,10 @@ export default async function debugRoute(app) {
       },
     };
 
+    // A hung upstream call must never hold a request slot open — same
+    // 15s ceiling the real mint uses.
+    const ac = new AbortController();
+    const killer = setTimeout(() => ac.abort(), 15_000);
     try {
       const resp = await fetch(url, {
         method: 'POST',
@@ -95,6 +134,7 @@ export default async function debugRoute(app) {
           'Content-Type':  'application/json',
         },
         body: JSON.stringify(body),
+        signal: ac.signal,
       });
       const text = await resp.text();
       let parsed;
@@ -115,8 +155,9 @@ export default async function debugRoute(app) {
         stage: 'fetch',
         url,
         error: String(e.message || e),
-        stack: e.stack,
       });
+    } finally {
+      clearTimeout(killer);
     }
   });
 }

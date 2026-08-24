@@ -31,7 +31,7 @@ import coachRoute from './src/routes/coach.js';  // ported im-him rizz brain (Br
 // Bumped on every backend push so we can confirm at runtime which build
 // Railway is actually serving. Do NOT remove — diagnostic checks rely on
 // this string.
-const BUILD_VERSION = '2026-07-11-pickup-unified-date+coach';
+const BUILD_VERSION = '2026-08-23-mini-only+languages+scale';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const HOST = '0.0.0.0';
@@ -56,16 +56,81 @@ const app = Fastify({
 });
 
 await app.register(cors, { origin: true });
-// Global per-IP rate limit — cost armour, not UX. Every request here
-// fans out to a paid OpenAI call, so one abusive client (or one bug in
-// a retry loop) can burn real money at line rate. 120 req/min is far
-// above any human's real usage (voice minting is ~1/session, a text
-// turn every few seconds at worst) and far below what a runaway script
-// would attempt. Health/version stay unthrottled for Railway probes.
+
+// ── RATE LIMITING — TWO LAYERS, AND THE KEY MATTERS MORE THAN THE MAX ──
+//
+// Every request here fans out to a paid OpenAI call, so one abusive
+// client (or one retry loop bug shipped to production) burns real money
+// at line rate. That is what the limit is for. It is NOT a UX feature,
+// and a limit that fires on innocent users is worse than no limit.
+//
+// Which is exactly what keying on IP alone would do at scale. Mobile
+// carriers run carrier-grade NAT: tens of thousands of subscribers
+// share a handful of egress addresses. To this server an entire
+// network reads as ONE client. At a few thousand users nothing trips.
+// At a few hundred thousand, one carrier's users collectively cross
+// 120/min within seconds and the app dies for all of them at once,
+// with nothing in the logs but a wall of 429s and no way to tell it
+// apart from an attack. That is the failure mode that only appears
+// once the app is actually successful.
+//
+// LAYER 1 (this one) — keyed per install. The app sends an anonymous
+// random id in `x-client-id` (see lib/services/install_id.dart). Two
+// users on the same carrier no longer share a budget, so 120/min is a
+// real per-person ceiling: voice minting is ~1 per session and a text
+// turn every few seconds at worst, so a human never comes close while
+// a runaway loop trips instantly.
+//
+// LAYER 2 (below) — a per-IP backstop, because `x-client-id` is
+// client-supplied and an attacker can simply rotate it. Layer 1 can't
+// stop that; layer 2 can, at a ceiling high enough that a real carrier
+// never reaches it.
+const CLIENT_ID_RE = /^[a-f0-9]{16,64}$/i;
 await app.register(rateLimit, {
   max: 120,
   timeWindow: '1 minute',
+  keyGenerator: (req) => {
+    const id = req.headers['x-client-id'];
+    // Validated, not trusted: a junk or oversized header must never
+    // become a Map key, or the header itself is the memory-exhaustion
+    // attack. Anything malformed falls back to IP — which is the old
+    // behaviour, so an older app build keeps working unchanged.
+    if (typeof id === 'string' && CLIENT_ID_RE.test(id)) return `c:${id}`;
+    return `i:${req.ip}`;
+  },
   allowList: (req) => req.url === '/health' || req.url === '/version',
+});
+
+// ── LAYER 2: PER-IP BACKSTOP ─────────────────────────────────────────
+// Deliberately hand-rolled rather than a second rate-limit plugin
+// instance, because the memory behaviour is the whole point: an
+// unbounded Map keyed by attacker-chosen IPs is itself the DoS. This
+// one is swept on a fixed cadence and hard-capped.
+//
+// 3000/min is ~25x the per-install limit: unreachable for one carrier's
+// legitimate traffic hitting one replica, and a hard stop on a single
+// box rotating client ids in a loop.
+const IP_MAX = parseInt(process.env.IP_RATE_MAX || '3000', 10);
+const IP_WINDOW_MS = 60_000;
+const IP_MAP_CAP = 50_000;      // ~ a few MB worst case
+let ipHits = new Map();
+// Swap-and-drop instead of iterating to expire: O(1), no scan over a
+// large Map on the event loop, and it cannot grow across windows.
+const ipSweep = setInterval(() => { ipHits = new Map(); }, IP_WINDOW_MS);
+ipSweep.unref();
+
+app.addHook('onRequest', async (req, reply) => {
+  if (req.url === '/health' || req.url === '/version') return;
+  const ip = req.ip || 'unknown';
+  const n = (ipHits.get(ip) || 0) + 1;
+  // Past the cap we stop recording new IPs but keep counting known
+  // ones — a flood of spoofed keys can't push out the entry that is
+  // actually being abused.
+  if (n > 1 || ipHits.size < IP_MAP_CAP) ipHits.set(ip, n);
+  if (n > IP_MAX) {
+    req.log.warn({ ip, n }, 'per-IP backstop tripped');
+    return reply.code(429).send({ error: 'rate_limited' });
+  }
 });
 await app.register(multipart, {
   limits: { fileSize: 25 * 1024 * 1024 },

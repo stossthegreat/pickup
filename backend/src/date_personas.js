@@ -322,14 +322,52 @@ have sent.`;
  * [userProfile] is an optional { name, ageGroup } block so she can use
  * his name naturally and pitch her register to his age band.
  */
-export function buildDateTurnPrompt({ woman, focus, creator, userProfile, memory, stage, language }) {
-  // Locked reply language — the app sends the user's picked code on
-  // every turn; unknown/unset falls back to English.
-  const LANGS = { en:'English', es:'Spanish', pt:'Portuguese', fr:'French',
-    de:'German', it:'Italian', nl:'Dutch', tr:'Turkish', pl:'Polish',
-    ru:'Russian', ar:'Arabic', hi:'Hindi', id:'Indonesian', ja:'Japanese',
-    ko:'Korean' };
-  const langName = LANGS[String(language||'en').toLowerCase().slice(0,2)] || 'English';
+// Same fifteen languages the app's picker offers. Text chat had the
+// same fault voice did: the app sent `language` and the prompt never
+// mentioned it, so she replied in English to a man who had chosen
+// Spanish. Appended LAST so it wins against everything above it.
+const DATE_LANGUAGE_NAMES = {
+  en: 'English',    es: 'Spanish',    pt: 'Portuguese', fr: 'French',
+  de: 'German',     it: 'Italian',    nl: 'Dutch',      tr: 'Turkish',
+  pl: 'Polish',     ru: 'Russian',    ar: 'Arabic',     hi: 'Hindi',
+  id: 'Indonesian', ja: 'Japanese',   ko: 'Korean',
+};
+function dateLanguageBlock(code) {
+  const raw = (typeof code === 'string' ? code.trim().toLowerCase() : 'en');
+  const key = raw.split(/[-_]/)[0];
+  if (!key || key === 'en') return '';
+  const name = DATE_LANGUAGE_NAMES[key];
+  if (!name) return '';
+  return `
+
+━━ LANGUAGE — OVERRIDES EVERYTHING ABOVE ━━
+Write ONLY in ${name}. Every message, every tease, every "lol", every
+emoji caption. Not translated English — text the way a real
+23-year-old ${name} speaker actually texts, with her own slang and
+abbreviations. The JSON keys stay exactly as specified in English;
+only the VALUES she says are in ${name}.`;
+}
+
+// THE COACH SPEAKS HIS LANGUAGE TOO. A Spanish user got a Spanish-
+// speaking woman in the chat and an English-only coach one tap away —
+// and the coach's whole job is to hand him the exact line to SEND her.
+// An English line pasted into a Spanish conversation is worse than no
+// help at all. Rides on the user turn (not the system prompt) so the
+// cached rizz_brain system prompt is untouched.
+export function coachLanguageBlock(code) {
+  const raw = (typeof code === 'string' ? code.trim().toLowerCase() : 'en');
+  const key = raw.split(/[-_]/)[0];
+  if (!key || key === 'en') return '';
+  const name = DATE_LANGUAGE_NAMES[key];
+  if (!name) return '';
+  return `\n\nreply to me in ${name}, and the exact lines you give me to ` +
+    `send MUST be in ${name} — natural ${name}, how a real guy there texts, ` +
+    `not translated English.`;
+}
+
+export function buildDateTurnPrompt({
+  woman, focus, creator, userProfile, memory, stage, language,
+}) {
   const w = DATE_WOMEN[woman] || DATE_WOMEN.ice_queen;
   const persona = creator
     ? `${w.persona}\n\nCREATOR MODE: be more savage, more explicit in your
@@ -341,13 +379,6 @@ You are NOT an AI, NOT an assistant, NOT here to be helpful or nice. You have
 your own life, your own mood, and standards. You text exactly like a real
 23-year-old girl texts — because you are one. Output ONE JSON object, nothing
 else.
-
-━━ REPLY LANGUAGE — ABSOLUTE ━━
-you text ENTIRELY in ${langName} — every word of "her", like a native
-speaker her age texts: natural slang, natural shorthand, that culture's
-texting style. never mix languages, never drift back to another one
-mid-conversation, no matter what language he writes in. (JSON keys and
-structure stay exactly as specified in English.)
 
 ━━ WHO YOU ARE ━━
 ${persona}
@@ -443,6 +474,8 @@ you now know about him worth remembering next time — his name, a callback,
 whether he made you laugh, whether he got needy, where you left things.
 UPDATE the note you were given; don't restart it. This is how you remember
 him when he comes back.
+
+${dateLanguageBlock(language)}
 
 Output ONLY this JSON, nothing else (for a double-text put a \\n inside "her"):
 {"her": "...", "delta": 0, "strong": false, "memory": "..."}`;

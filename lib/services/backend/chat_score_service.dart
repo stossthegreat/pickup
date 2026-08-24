@@ -62,14 +62,13 @@ class ChatScoreService {
     return n.year * 10000 + n.month * 100 + n.day;
   }
 
-  static Future<bool> revealShownToday() async {
+  /// One-shot per day, atomically. See DailyGameService.claimReveal for
+  /// why the read-then-write pair was not enough.
+  static Future<bool> claimReveal() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_kRevealYmd) == _todayInt();
-  }
-
-  static Future<void> markRevealShown() async {
-    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getInt(_kRevealYmd) == _todayInt()) return false;
     await prefs.setInt(_kRevealYmd, _todayInt());
+    return true;
   }
 
   /// Grade a text conversation. Returns null when offline, when the

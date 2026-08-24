@@ -12,12 +12,6 @@
 //  because the total is never trusted, only recomputed.
 // ═════════════════════════════════════════════════════════════════════
 
-/// Flat bonus for taking a duel. Volume climbs the board; winning climbs
-/// it faster. Kept well above a single conversation's ceiling (100) but
-/// below what a genuinely active day of practice pays, so battles are
-/// worth seeking out without making everything else pointless.
-export const WIN_BONUS = 50;
-
 export interface ChatStanding {
   points: number;
   best: number;
@@ -57,7 +51,21 @@ export async function rollChatStanding(
   // incremented values here, and both only ever move forward.
   const battles = (prev?.battles ?? 0) + (addBattle ? 1 : 0);
   const wins = (prev?.wins ?? 0) + (addWin ? 1 : 0);
-  const points = sum + wins * WIN_BONUS;
+  // ── POINTS ARE SCORES. NOTHING ELSE. ────────────────────────────
+  //
+  // This used to add 50 per battle win, which quietly made the CHAT
+  // board part battle board — a man could out-rank a better writer by
+  // winning duels. Wins have their own ladder now (the BATTLES tab
+  // ranks on them outright), so each board measures exactly one thing:
+  //
+  //   VOICE    the scores you got talking
+  //   CHAT     the scores you got writing
+  //   BATTLES  the men you beat
+  //
+  // A battle still feeds a score board — the duel's own score lands on
+  // voice or chat depending on the room it was fought in (see
+  // battle-action) — it just doesn't pay a bonus on top of it.
+  const points = sum;
 
   await admin.from("chat_score").upsert({
     user_id: userId,

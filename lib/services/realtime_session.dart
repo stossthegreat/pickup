@@ -8,6 +8,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../config/auralay_dev_flags.dart';
 import 'local_store_service.dart';
+import 'install_id.dart';
 
 /// OpenAI Realtime API session — sub-second turn-taking voice
 /// conversation with Diablo. Architecture:
@@ -78,11 +79,90 @@ class RealtimeSession {
     final sessionConfig = await _mintSession(body: body);
     final ephemeralKey = (sessionConfig['client_secret']
             as Map<String, dynamic>?)?['value'] as String?;
-    final model = (sessionConfig['model'] as String?) ?? 'gpt-realtime';
     _sessionId = sessionConfig['id'] as String?;
     if (ephemeralKey == null || ephemeralKey.isEmpty) {
       throw const RealtimeError('no_client_secret',
           'Backend did not return a client_secret. Check the realtime route.');
+    }
+
+    // ── THE MODEL GATE — NORMAL MODE NEVER OPENS THE FULL MODEL ────────
+    //
+    // Both voice paths in the app land here: the woman (mode freeflow)
+    // and Lucien's step-in (mode lucien). Whatever else changes, this
+    // is the single place a billable socket gets opened, so it is the
+    // only place the rule can actually be enforced.
+    //
+    // THE HOLE THIS CLOSES. The model came straight from the backend's
+    // mint response with `?? 'gpt-realtime'` behind it — the FULL model
+    // as the fallback. So any response that omitted the field (a deploy,
+    // a config change, an error path, an older route) silently put every
+    // ordinary user on a model costing roughly three times mini, with no
+    // error, no log, and nothing visible until an invoice weeks later.
+    // The app also simply trusted the value: a backend bug returning the
+    // full model for a normal session would have been obeyed.
+    //
+    // Trust is now gone. A non-creator session must come back on a mini
+    // model or it does not connect at all. Bro's instruction was exact:
+    // it can never use the full model, even if that means voice goes
+    // down. A refused session costs nothing and shows a clear error; a
+    // wrong session costs money on every user who ever calls.
+    //
+    // MATCHED BY SHAPE, NOT BY EXACT ID. The check is "does the name say
+    // mini", not a hardcoded id, because the backend owns the id and it
+    // will change — gpt-realtime-mini, gpt-4o-mini-realtime-preview, and
+    // whatever replaces them all pass, while every full model fails.
+    // Pinning one string here would break voice the day OpenAI renames
+    // it, which is the failure that gets "fixed" by deleting the guard.
+    //
+    // CREATOR MODE IS UNTOUCHED. It is the one mode that is SUPPOSED to
+    // run the full model, it is switched on by hand behind a password,
+    // and bro controls who has it. It keeps the old behaviour exactly,
+    // including the historical fallback.
+    final creator = body['creator'] == true;
+    var model = _modelIdFrom(sessionConfig);
+    final tier = _tierFrom(sessionConfig);
+
+    // A tier label that says anything other than mini is a server
+    // regression the app can catch even when no model id is echoed.
+    if (!creator && tier.isNotEmpty && !_isMini(tier)) {
+      throw RealtimeError(
+        'model_not_mini',
+        'Refusing to open a voice session: the backend reported '
+        'modelTier "$tier" for a normal session. Check what '
+        '/v1/realtime/session returns for creator=false.',
+      );
+    }
+
+    if (creator) {
+      // Untouched. Creator is the one mode meant to run the full model.
+      if (model.isEmpty) model = 'gpt-realtime';
+    } else if (model.isEmpty) {
+      // COULD NOT VERIFY — so ASK FOR MINI, never full.
+      //
+      // The backend picks the tier itself (its logs show
+      // modelTier: mini for creator=false) and the ephemeral key binds
+      // the session to that choice before this socket opens, so a model
+      // in the URL is a request, not a decision. The old code put
+      // 'gpt-realtime' here, which meant the app's own fallback was
+      // asking for the expensive model. Naming mini instead means the
+      // app can never be the thing that requests full.
+      //
+      // Refusing outright would be the stricter reading, but it would
+      // take voice down over a field the backend simply might not echo
+      // — punishing a server that is doing the right thing. Asking for
+      // mini satisfies the rule with none of that risk.
+      model = _kMiniModel;
+    } else if (!_isMini(model)) {
+      // VERIFIED WRONG. The backend named a model and it is not a mini
+      // one. That is a real regression on the server, and the only safe
+      // answer is not to open the socket: a refused session costs
+      // nothing, a wrong one costs money on every user who calls.
+      throw RealtimeError(
+        'model_not_mini',
+        'Refusing to open a voice session: normal mode must use a mini '
+        'realtime model and the backend returned "$model". Check what '
+        '/v1/realtime/session returns for creator=false.',
+      );
     }
 
     // 2) Open WebSocket to OpenAI with the ephemeral token.
@@ -116,13 +196,51 @@ class RealtimeSession {
     );
   }
 
+  /// The model the app asks for when it cannot read one from the mint
+  /// response. Never a full model — see the gate in [connect].
+  static const _kMiniModel = 'gpt-realtime-mini';
+
+  /// Mini by SHAPE, not by exact id. The backend owns the id and it will
+  /// change; gpt-realtime-mini, gpt-4o-mini-realtime-preview and
+  /// whatever replaces them all pass, while every full model fails.
+  /// Pinning one string here would break voice the day OpenAI renames
+  /// it — and that is the failure people "fix" by deleting the guard.
+  static bool _isMini(String m) => m.toLowerCase().contains('mini');
+
+  /// The model ID from the mint response — an ID ONLY, never a tier.
+  ///
+  /// Two known shapes, because the app must not depend on a single field
+  /// name it does not own: a top-level `model`, and the `session` object
+  /// OpenAI returns from client_secret create, which carries the model
+  /// the session was actually bound to. Empty means "no id given".
+  ///
+  /// `modelTier` is deliberately NOT read here. It is a tier label, not
+  /// an id — sending `?model=mini` to OpenAI would be nonsense, and an
+  /// earlier draft of this did exactly that. It is read separately by
+  /// [_tierFrom] and used only to VERIFY.
+  static String _modelIdFrom(Map<String, dynamic> cfg) {
+    final direct = (cfg['model'] as String?)?.trim();
+    if (direct != null && direct.isNotEmpty) return direct;
+    final session = cfg['session'];
+    if (session is Map) {
+      final nested = (session['model'] as String?)?.trim();
+      if (nested != null && nested.isNotEmpty) return nested;
+    }
+    return '';
+  }
+
+  /// The backend's own tier label, if it sends one — its logs carry
+  /// `modelTier: mini` beside the model. Verification signal only.
+  static String _tierFrom(Map<String, dynamic> cfg) =>
+      (cfg['modelTier'] as String?)?.trim() ?? '';
+
   Future<Map<String, dynamic>> _mintSession({
     required Map<String, dynamic> body,
   }) async {
     final uri = Uri.parse('${AuralayDevFlags.apiBaseUrl}/v1/realtime/session');
     final resp = await http.post(
       uri,
-      headers: {'content-type': 'application/json'},
+      headers: BackendHeaders.json,
       body: jsonEncode(body),
     ).timeout(const Duration(seconds: 15));
     if (resp.statusCode != 200) {

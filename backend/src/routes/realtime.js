@@ -43,37 +43,75 @@ import {
 // If OpenAI renames again, change here only.
 const OPENAI_REALTIME_MODEL = 'gpt-realtime';
 // `gpt-realtime-mini` is the smaller/cheaper sibling of the GA model
-// (~3× cheaper on audio I/O at the cost of weaker character
+// (~3x cheaper on audio I/O at the cost of weaker character
 // maintenance and shallower instruction-following on big prompts).
-// We use it for normal-mode women in Free Flow / The Arena, where
-// the prompt is ~1.2k tokens and the character is a simple
-// archetype. Creator-mode Vixen (5k-token persona + bipolar trigger
-// scripts + screech cues) and Lucien step-in (king-of-seduction
-// performance cadence) BOTH stay on the full model — that's where
-// the bigger model earns its keep.
+// It is the model for EVERYTHING except creator mode — every woman,
+// every Lucien step-in, every other mode. See pickRealtimeModel.
 const OPENAI_REALTIME_MINI_MODEL = 'gpt-realtime-mini';
 
-/// Pick the right realtime model for the session.
+/// Pick the realtime model. CREATOR IS THE ONLY PATH TO THE FULL MODEL.
 ///
-/// COST SPLIT (the lever that makes the voice allowance affordable):
-///   • NORMAL-MODE women  → gpt-realtime-mini (~3× cheaper audio I/O).
-///     With the directive per-character prompts (identity + temperature
-///     + reward/punish + "never quote the tone samples verbatim") the
-///     quality gap is negligible for tight push-to-talk turns — this is
-///     the same setup that held up in production before.
-///   • CREATOR-MODE women → full gpt-realtime. Creator is a premium
-///     unlock (the unhinged Vixen personas), low volume, so the bigger
-///     model earns its keep there.
-///   • LUCIEN step-in     → full gpt-realtime. Coach cadence matters and
-///     volume is low.
+/// THE RULE, AND IT IS ABSOLUTE: creator mode gets gpt-realtime.
+/// Everything else — every woman, every Lucien step-in, every mode —
+/// gets mini. No exceptions, no "low volume" carve-outs.
 ///
-/// Note: if mini ever reads a stage-direction token (e.g. "[laughter]")
-/// out loud, strip those tokens from the normal-mode VOICE prompt rather
-/// than reverting the model — the cost delta is too big to give back.
-function pickRealtimeModel({ mode, creator, isLucien }) {
-  if (isLucien) return OPENAI_REALTIME_MODEL;   // coach → full
-  if (creator)  return OPENAI_REALTIME_MODEL;   // creator mode → full
-  return OPENAI_REALTIME_MINI_MODEL;            // normal-mode women → mini
+/// WHAT THIS FIXES. Lucien used to return the full model for EVERYONE,
+/// on the reasoning that coach cadence matters and volume is low. Both
+/// halves were wrong. Lucien is one tap away inside every single voice
+/// call and he is sold as a headline feature in onboarding — "Freeze?
+/// Lucien is one tap away" — so his volume is not low, it scales with
+/// every call the platform serves. That carve-out was quietly the most
+/// expensive line in the product.
+///
+/// Creator is genuinely different: it is off by default, password-gated
+/// in Settings, hand-granted, and its Vixen personas are 5k-token
+/// prompts that mini does hold worse. That is the one place the bigger
+/// model earns its keep, and it is the one place it runs.
+///
+/// If mini ever reads a stage-direction token ("[laughter]") aloud,
+/// strip those tokens from the prompt — do NOT reach for the full model.
+/// The cost delta is too big to give back.
+function pickRealtimeModel({ creator }) {
+  // `=== true`, not a truthy check. The only caller passes an already
+  // coerced boolean, but a truthy test means any FUTURE caller that
+  // forwards a raw body value hands the full model to anything
+  // non-empty — `creator: "no"` and `creator: "0"` both read as yes.
+  // The rule is absolute, so the gate is exact: one value opens it.
+  return creator === true ? OPENAI_REALTIME_MODEL : OPENAI_REALTIME_MINI_MODEL;
+}
+
+// ── CREATOR MINT THROTTLE ────────────────────────────────────────────
+//
+// `creator` arrives in the request body, and this backend has no user
+// auth — so the app's password gate on creator mode is a gate on the
+// CLIENT, not on the server. Anyone who pulls the base URL out of the
+// binary can post `creator: true` and mint full-model sessions on our
+// account. That is the one remaining path by which the expensive model
+// can be reached outside creator mode, and it cannot be fully closed
+// without real accounts (any secret shipped in the app is extractable).
+//
+// What CAN be done is cap the blast radius. Creator mode is off by
+// default, hand-granted, and used by a handful of people who each start
+// a session at a time — 60 mints/hour per install is far past any real
+// use and turns "unlimited full-model minting" into a trickle. Normal
+// mini traffic is untouched.
+//
+// Bounded and swept on a fixed cadence: an unbounded Map keyed by
+// caller-chosen ids would itself be the attack.
+const CREATOR_MAX_PER_HOUR = parseInt(process.env.CREATOR_MINT_MAX || '60', 10);
+const CREATOR_MAP_CAP = 10_000;
+let creatorHits = new Map();
+const creatorSweep = setInterval(() => { creatorHits = new Map(); }, 3_600_000);
+creatorSweep.unref();
+
+function creatorMintAllowed(req) {
+  const id = req.headers['x-client-id'];
+  const key = (typeof id === 'string' && /^[a-f0-9]{16,64}$/i.test(id))
+    ? `c:${id}`
+    : `i:${req.ip}`;
+  const n = (creatorHits.get(key) || 0) + 1;
+  if (n > 1 || creatorHits.size < CREATOR_MAP_CAP) creatorHits.set(key, n);
+  return n <= CREATOR_MAX_PER_HOUR;
 }
 
 // Free Flow women are ALWAYS female. Older / merged app builds send some
@@ -92,6 +130,37 @@ const MALE_TO_FEMALE_VOICE = {
   echo:   'coral',
   cedar:  'shimmer',
 };
+// ─── LANGUAGE ────────────────────────────────────────────────────────
+//
+// THE FEATURE THAT DID NOTHING. Settings has a language picker, the app
+// has always sent the chosen code, and voice ignored it twice over:
+// Whisper was pinned to `language: 'en'`, so a Spanish speaker's mic was
+// transcribed AS English; and the prompt carried a LANGUAGE LOCK telling
+// her to reply in English no matter what — literally scripting her to
+// answer a Spanish speaker with "english only here, sorry".
+//
+// Both were fixes for a real bug: one misheard syllable used to flip her
+// into another language mid-call. But the cure removed the feature. The
+// answer is not to unlock the language — it is to lock it to HIS
+// language instead of to English. The anti-drift protection survives
+// intact; it just points at the right target.
+//
+// Whisper's own codes. Anything unknown falls back to English, which is
+// today's behaviour byte for byte.
+const LANGUAGE_NAMES = {
+  en: 'English',    es: 'Spanish',    pt: 'Portuguese', fr: 'French',
+  de: 'German',     it: 'Italian',    nl: 'Dutch',      tr: 'Turkish',
+  pl: 'Polish',     ru: 'Russian',    ar: 'Arabic',     hi: 'Hindi',
+  id: 'Indonesian', ja: 'Japanese',   ko: 'Korean',
+};
+function normaliseLanguage(v) {
+  const raw = (typeof v === 'string' ? v.trim().toLowerCase() : '');
+  // Accept 'pt-BR' / 'en_US' style tags — the primary subtag is what
+  // both Whisper and the prompt need.
+  const primary = raw.split(/[-_]/)[0];
+  return LANGUAGE_NAMES[primary] ? primary : 'en';
+}
+
 function forceFemaleVoice(v) {
   const key = (typeof v === 'string' ? v.trim().toLowerCase() : '');
   if (FEMALE_REALTIME_VOICES.has(key)) return key;
@@ -122,14 +191,9 @@ export default async function realtimeRoute(app) {
       userProfile,    // free-flow: { name, ageGroup } from onboarding
       drill,          // selene: which named eye-contact / aura move tonight
       metricsContext, // selene: optional initial MediaPipe snapshot text
-      language,       // free-flow: user's picked language code ('en' default)
+      language,       // BCP-47 tag from the app's Settings language picker
     } = req.body || {};
-    // Whisper accepts ISO-639-1; only pass codes we actually support so
-    // a garbage value can't 400 the whole session mint.
-    const kWhisperLangs = new Set(['en','es','pt','fr','de','it','nl','tr',
-      'pl','ru','ar','hi','id','ja','ko']);
-    const langCode = kWhisperLangs.has(String(language||'en').toLowerCase().slice(0,2))
-      ? String(language).toLowerCase().slice(0,2) : 'en';
+    const lang = normaliseLanguage(language);
     const isFreeflow = mode === 'freeflow';
     const isLucien   = mode === 'lucien';
     const isSelene   = mode === 'selene';
@@ -146,7 +210,7 @@ export default async function realtimeRoute(app) {
     let instructions;
     if (isLucien) {
       instructions = buildLucienRealtimeInstructions({
-        lastHer, lastYou, vibeLabel,
+        lastHer, lastYou, vibeLabel, language: lang,
         creator: creator === true || creator === 'true',
       });
     } else if (mode === 'freeflow') {
@@ -163,7 +227,7 @@ export default async function realtimeRoute(app) {
         memoryBlock,
         creator: creator === true || creator === 'true',
         userProfile,
-        language: langCode,
+        language: lang,
       });
     } else if (isSelene) {
       instructions = buildSeleneInstructions({
@@ -188,13 +252,18 @@ export default async function realtimeRoute(app) {
       });
     }
 
-    // Model split: full gpt-realtime for Lucien + creator-mode women,
-    // gpt-realtime-mini for everyone else (saves ~3× on audio I/O
-    // without losing character quality on simple archetypes).
-    const creatorFlag = creator === true || creator === 'true';
-    const realtimeModel = pickRealtimeModel({
-      mode, creator: creatorFlag, isLucien,
-    });
+    // Model split: full gpt-realtime for creator mode ONLY. Everything
+    // else — including Lucien — runs mini. See pickRealtimeModel.
+    let creatorFlag = creator === true || creator === 'true';
+    if (creatorFlag && !creatorMintAllowed(req)) {
+      // Past the cap we do NOT fail the call — we serve the session on
+      // mini. A real creator user gets a working session with a weaker
+      // model; a forger gets nothing they couldn't already have. The
+      // expensive outcome is the only one denied.
+      req.log.warn({ ip: req.ip }, 'creator mint throttled — serving mini');
+      creatorFlag = false;
+    }
+    const realtimeModel = pickRealtimeModel({ creator: creatorFlag });
 
     const openAIUrl = 'https://api.openai.com/v1/realtime/client_secrets';
     const requestBody = {
@@ -206,13 +275,15 @@ export default async function realtimeRoute(app) {
         audio: {
           input: {
             format: { type: 'audio/pcm', rate: 24000 },
-            // Pin Whisper to the USER'S language so mic input is
-            // transcribed in the language they actually speak. Pinning
-            // (vs auto) stops one ambiguous syllable flipping the
-            // transcription — and therefore her reply — into a random
-            // language. Output language is locked to the same choice
-            // via the system prompt's LANGUAGE LOCK rule.
-            transcription: { model: 'whisper-1', language: langCode },
+            // PINNED TO HIS LANGUAGE, NOT TO ENGLISH. Pinning matters —
+            // leaving Whisper to auto-detect is what let one ambiguous
+            // syllable flip the transcript mid-call and drag her reply
+            // with it. Pinning it to the WRONG language is what made the
+            // picker useless: a Spanish speaker was transcribed as
+            // English, so she answered gibberish. It follows the picker
+            // now, and 'en' is the default, so nothing changes for the
+            // overwhelming majority.
+            transcription: { model: 'whisper-1', language: lang },
             // Free-flow is PUSH-TO-TALK: the client holds the button,
             // streams audio, then commits + requests a response. Server
             // VAD is disabled so the model never auto-replies or fires
@@ -251,6 +322,7 @@ export default async function realtimeRoute(app) {
       model:  realtimeModel,
       modelTier: realtimeModel === OPENAI_REALTIME_MODEL ? 'full' : 'mini',
       creator: creatorFlag,
+      language: lang,
       instructionsLen: instructions.length,
     });
 
@@ -377,8 +449,10 @@ export default async function realtimeRoute(app) {
         userTranscript,
         currentState,
         scenarioSetting,
+        language,       // BCP-47 tag from the app's Settings language picker
       } = req.body || {};
       const text = (userTranscript || '').toString();
+      const lang = normaliseLanguage(language);
 
       // Initialize from starting vector on first call.
       const baseState = currentState
@@ -399,7 +473,7 @@ export default async function realtimeRoute(app) {
       // keep working at the old (expensive) cost until the user
       // updates the app. New builds use stateNote and ignore this.
       const character = buildFreeFlowInstructions({
-        vibeLabel, scenarioSetting, creator: false,
+        vibeLabel, scenarioSetting, creator: false, language: lang,
       });
       const instructions = `${character}\n\n${stateBlock}`;
 
@@ -416,6 +490,7 @@ export default async function realtimeRoute(app) {
         hasFlipped: nextState.hasFlipped,
         stateNoteLen: stateNote.length,
         instructionsLen: instructions.length,
+        language: lang,
       });
 
       return reply.send({

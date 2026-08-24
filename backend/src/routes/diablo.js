@@ -74,7 +74,9 @@ export default async function diabloRoute(app) {
             history = JSON.parse(String(part.value));
             // Cap: unbounded client history = unbounded prompt = cost bomb.
             if (!Array.isArray(history)) history = [];
-            history = history.slice(-14);
+            history = history.slice(-14).map((h) => (h && h.text
+              ? { ...h, text: String(h.text).slice(0, 600) }
+              : h));
           } catch {}
         }
       }

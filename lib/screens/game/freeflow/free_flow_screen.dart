@@ -13,6 +13,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../config/dev_flags.dart';
+import '../../../services/mission_catalog.dart';
+import '../../../services/today_targets.dart';
 import '../../../services/achievements.dart';
 import '../../../services/analytics_service.dart';
 import '../../../services/milestone_service.dart';
@@ -658,6 +660,30 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
   /// stage / interest / remembered notes. Returns '' when there's no real
   /// history so she stays a fresh pickup — only once he's actually built
   /// something (over text or a past call) does she pick up from there.
+  /// ── MAKE HER SPEAK HIS LANGUAGE, WHATEVER THE SERVER READS ────────
+  ///
+  /// The picker in Settings writes a code, the app sends it as
+  /// `language`, and nothing happens — because the roleplay backend is
+  /// a separate service outside this repository and it ignores fields it
+  /// was not written for. From the user's side that is simply a setting
+  /// that does not work, which is worse than not offering it.
+  ///
+  /// So the instruction goes where the server already looks. memoryBlock
+  /// is folded into her persona prompt — it is how she remembers you
+  /// between calls — so a directive at the top of it reaches the model
+  /// by a route that is already proven to work.
+  ///
+  /// English returns the block untouched: today's behaviour, byte for
+  /// byte, for the overwhelming majority of users.
+  static String _withLanguage(String block) {
+    final lang = LanguageService.current;
+    if (lang.code == 'en') return block;
+    return 'LANGUAGE: speak ONLY ${lang.native} (${lang.code}) for this '
+        'entire conversation — every line, including flirting, teasing '
+        'and pushing back. Never switch to English unless he writes in '
+        'English first.\n\n$block';
+  }
+
   Future<String> _girlMemoryBlock(String vibeKey) async {
     GirlBrief? girl;
     for (final g in kRoster) {
@@ -974,7 +1000,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // → she stays a fresh pickup, exactly as before. (Replaces the old
       // rizz-topic UserMemory block, which made every persona "remember"
       // Arena/Diabla conversations she was never part of.)
-      final memoryBlock = await _girlMemoryBlock(vibe.key);
+      final memoryBlock = _withLanguage(await _girlMemoryBlock(vibe.key));
       _log('info', 'WS',
           'girl memory block built (${memoryBlock.length} chars)');
       // ignore: avoid_print
@@ -998,8 +1024,16 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         'creator':         _creator,
         'memoryBlock':     memoryBlock,
         // She speaks the user's language — the single biggest retention
-        // lever for non-English markets. Server folds this into the
-        // persona prompt ('en' = today's behaviour, unchanged).
+        // lever for non-English markets.
+        //
+        // SENT TWICE, ON PURPOSE. This field is the clean way and it is
+        // what the server should read. It plainly doesn't yet: the
+        // roleplay backend lives outside this repo and drops anything
+        // it wasn't written for, so a man who picked Español got an
+        // English woman and the setting looked broken. The directive
+        // therefore ALSO rides in memoryBlock below, which the server
+        // demonstrably does fold into the persona prompt. When the
+        // server learns this field the duplicate line is harmless.
         'language':        LanguageService.cachedCode,
         if (userName != null || userAge != null)
           'userProfile': {
@@ -1921,6 +1955,20 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         // screen pops, and popping (below) before the grade lands would
         // hand it null.
         await DailyGameService.submit(academyTranscript);
+        // ── THE TICK FOLLOWS THE WORK, NOT THE CEREMONY ────────────
+        //
+        // This used to live inside the Daily screen's reveal block, so
+        // it only ran when `lastResult != null && !alreadyRevealed`.
+        // Both of those can be false after a conversation that actually
+        // happened: submit() returns null whenever the grader or the
+        // network hiccups, and the reveal stamp is per-day and one-way,
+        // so a single failure locked the tick out until tomorrow. The
+        // man had the conversation either way, and watching a
+        // count-up animation is not what completes a mission.
+        //
+        // Credited here, at the point the transcript exists, with no
+        // conditions on it at all. Idempotent — see today_targets.dart.
+        await TodayTargets.credit(MissionKind.aiVoice);
       }
       // Blend the five dimension scores into the running total so The Five
       // CLIMBS over the 60 days instead of snapping to the last session.
@@ -1929,17 +1977,25 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       }
       if (_disposed || !mounted) return;
 
-      // ── ONE CEREMONY PER PERFORMANCE ─────────────────────────────
+      // ── ONE CEREMONY PER PERFORMANCE, AND THE DAILY KEEPS THIS ONE ──
       //
-      // An armed session — the Daily or a duel — already has a reveal
-      // waiting on the screen that launched it: the count-up, the rank,
-      // the share card. This scorecard is the SOLO practice ending, and
-      // showing both meant a man got two dramatic score screens
-      // back-to-back for one conversation. The second one reads as a
-      // glitch, and a ceremony that repeats stops being a ceremony.
-      // So an armed session skips the local scorecard and pops straight
-      // back to the reveal that owns the moment.
-      if ((armedBattle != null || wasDaily) && !widget.tabMode) {
+      // A duel still hands off: it has its own verdict screen waiting,
+      // built around a second man's score, and this scorecard has
+      // nothing to say about that.
+      //
+      // THE DAILY USED TO HAND OFF TOO, and it was the wrong call. What
+      // it handed off to was a count-up and a rank — a good ceremony,
+      // and it taught nothing. This scorecard is the one with the
+      // verdict line, what LANDED, what FLOPPED, and the dimension
+      // scores that feed the same voice progression practice feeds.
+      // Sending the Daily to the other screen meant the flagship
+      // conversation of the day was the ONE voice session that came
+      // back with no coaching attached to it.
+      //
+      // So the Daily now ends here, the same way practice does. The
+      // squad standing hasn't gone anywhere — it's on the Daily screen
+      // itself, which is what he pops back to.
+      if (armedBattle != null && !widget.tabMode) {
         Navigator.of(context).pop();
         return;
       }
@@ -2824,7 +2880,12 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
             children: [
               Row(
                 children: [
-                  Text('FREE FLOW · ${_vibe?.label ?? ''}',
+                  // The Daily lands on this card now, and calling the
+                  // flagship event of the day FREE FLOW would read as
+                  // the wrong screen having opened.
+                  Text(widget.assigned
+                          ? 'THE DAILY · ${_vibe?.label ?? ''}'
+                          : 'FREE FLOW · ${_vibe?.label ?? ''}',
                       style: AppTypography.label.copyWith(
                         color: AppColors.accent,
                         fontSize: 11,

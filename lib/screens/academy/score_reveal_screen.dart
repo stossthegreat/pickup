@@ -42,8 +42,13 @@ class ScoreRevealScreen extends StatefulWidget {
 
 class _ScoreRevealScreenState extends State<ScoreRevealScreen>
     with SingleTickerProviderStateMixin {
-  int _lastTick = 0;
-  bool _celebrated = false;
+  /// A notifier, not a field flipped in setState. The one setState this
+  /// screen had — flipping this at grade impact — rebuilt the whole
+  /// tree, and every chained `.animate()` on it reconstructs its effects
+  /// on rebuild and replays from the top. So the score counted itself up
+  /// twice: once on entry, once when its own grade landed. The notifier
+  /// rebuilds the confetti layer and nothing else.
+  final ValueNotifier<bool> _celebrated = ValueNotifier(false);
   final _shakeKey = GlobalKey<ImpactShakeState>();
 
   /// White-out on the frame the grade lands. One frame of pure light is
@@ -63,17 +68,22 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen>
   @override
   void dispose() {
     _flash.dispose();
+    _celebrated.dispose();
     super.dispose();
   }
 
   /// The grade hit the screen: shake, flash, confetti if it earned it.
+  /// Fire-once — same reasoning as RizzOffReveal._onImpact.
+  bool _impacted = false;
+
   void _onImpact() {
-    if (!mounted) return;
+    if (!mounted || _impacted) return;
+    _impacted = true;
     _shakeKey.currentState?.shake();
     _flash.forward(from: 0);
     HapticFeedback.heavyImpact();
     // A win throws confetti; anything below a B just takes the hit.
-    if (_good || p.score >= 680) setState(() => _celebrated = true);
+    if (_good || p.score >= 680) _celebrated.value = true;
   }
 
   void _share() {
@@ -120,7 +130,16 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen>
             ),
           ),
         ),
-        if (_celebrated) Positioned.fill(child: Burst(color: grade.color)),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _celebrated,
+              builder: (_, on, __) => on
+                  ? Burst(color: grade.color)
+                  : const SizedBox.shrink(),
+            ),
+          ),
+        ),
         SafeArea(
           child: ImpactShake(
             key: _shakeKey,
@@ -153,46 +172,30 @@ class _ScoreRevealScreenState extends State<ScoreRevealScreen>
                 Expanded(
                   flex: 5,
                   child: Stack(alignment: Alignment.center, children: [
-                    // Number rides up, then slides out of the way so the
-                    // letter owns the centre of the screen.
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0, end: p.score.toDouble()),
-                      duration: const Duration(milliseconds: 1400),
-                      curve: Curves.easeOutQuart,
-                      builder: (_, v, __) {
-                        final tick =
-                            (v / (p.score.clamp(1, 9999) / 14)).floor();
-                        if (tick != _lastTick) {
-                          _lastTick = tick;
-                          HapticFeedback.selectionClick();
-                        }
-                        return Text(
-                          v.round().toString(),
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 104,
-                            height: 1,
-                            letterSpacing: -4,
-                            fontWeight: FontWeight.w900,
-                            shadows: [
-                              Shadow(
-                                  color: accent.withValues(alpha: 0.55),
-                                  blurRadius: 70),
-                            ],
-                          ),
-                        );
-                      },
-                    )
-                        .animate()
-                        .fadeIn(duration: 200.ms)
-                        // Clears the middle for the stamp on impact.
-                        .then(delay: 1700.ms)
-                        .moveY(
-                            begin: 0,
-                            end: -74,
-                            duration: 320.ms,
-                            curve: Curves.easeOutBack)
-                        .scaleXY(begin: 1, end: 0.44, duration: 320.ms),
+                    // STATIC. Score numbers are never animated anywhere
+                    // in this app any more — every counting number
+                    // eventually found a rebuild to replay off, and this
+                    // one carried a haptic per tick, so a replay BUZZED
+                    // while it spammed. Rendered at its final size and
+                    // resting place; the grade stamp still lands below.
+                    Transform.translate(
+                      offset: const Offset(0, -74),
+                      child: Text(
+                        p.score.toString(),
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 46,
+                          height: 1,
+                          letterSpacing: -1.8,
+                          fontWeight: FontWeight.w900,
+                          shadows: [
+                            Shadow(
+                                color: accent.withValues(alpha: 0.55),
+                                blurRadius: 34),
+                          ],
+                        ),
+                      ),
+                    ),
 
                     // THE GRADE.
                     Padding(

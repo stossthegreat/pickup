@@ -9,7 +9,7 @@
 // so the app gets opponent + teacher in a single round-trip.
 
 import { openai } from '../openai.js';
-import { DATE_WOMEN, buildDateTurnPrompt } from '../date_personas.js';
+import { DATE_WOMEN, buildDateTurnPrompt, coachLanguageBlock } from '../date_personas.js';
 import { rizzChat } from '../rizz_brain.js';
 
 // Text roleplay runs on gpt-4o-mini: cheap, fast, and — because the turn
@@ -59,6 +59,12 @@ export default async function dateRoute(app) {
     const userProfile = normaliseProfile(body.userProfile);
     const memory = typeof body.memory === 'string' ? body.memory.slice(0, 400) : '';
     const stage = Number(body.stage) || 1;
+    // The app has always sent this and the prompt never used it — so a
+    // man who picked Espanol in Settings got English texts back. It is
+    // a first-class prompt input now instead of something smuggled
+    // inside `memory`, which is capped at 400 chars and needed for what
+    // it is actually for.
+    const language = typeof body.language === 'string' ? body.language : 'en';
 
     if (!DATE_WOMEN[characterId]) {
       return reply.code(400).send({
@@ -68,7 +74,9 @@ export default async function dateRoute(app) {
     }
     if (!text) return reply.code(400).send({ error: 'text required' });
 
-    const system = buildDateTurnPrompt({ woman: characterId, focus, creator, userProfile, memory, stage, language: body.language });
+    const system = buildDateTurnPrompt({
+      woman: characterId, focus, creator, userProfile, memory, stage, language,
+    });
 
     // Rebuild the conversation for the model. history items: {who:'her'|'you', text}
     const msgs = [{ role: 'system', content: system }];
@@ -128,8 +136,15 @@ export default async function dateRoute(app) {
     const body = req.body || {};
     const w = DATE_WOMEN[body.characterId];
     const creator = body.creator === true || body.creator === 'true';
-    const history = Array.isArray(body.history) ? body.history.slice(-14) : [];
+    // Per-item cap as well as the turn cap — see /turn above. Without
+    // it 14 items inside a 25MB body is still a monster prompt.
+    const history = Array.isArray(body.history)
+      ? body.history.slice(-14).map((h) => (h && h.text
+          ? { ...h, text: String(h.text).slice(0, 600) }
+          : h))
+      : [];
     const profile = normaliseProfile(body.userProfile);
+    const langLine = coachLanguageBlock(body.language);
 
     const convo = history
       .filter((h) => h && h.text)
@@ -140,7 +155,7 @@ export default async function dateRoute(app) {
     const ask =
       `i'm texting a girl — the ${archetype} type.${who} here's the convo so far:\n\n` +
       `${convo || '(i haven\'t said anything yet)'}\n\n` +
-      `what do i send back right now? give me the exact line.`;
+      `what do i send back right now? give me the exact line.${langLine}`;
 
     try {
       const out = await rizzChat({

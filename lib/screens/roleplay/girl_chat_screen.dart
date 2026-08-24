@@ -32,6 +32,7 @@ import '../../widgets/academy/verdict.dart';
 import '../../widgets/common/ai_consent_dialog.dart';
 import '../academy/rolodex_screen.dart';
 import '../game/freeflow/free_flow_screen.dart';
+import '../../services/install_id.dart';
 
 /// A story / post the AI girl dropped — the "scenario ready" for a
 /// COMMENT-ON-HER-POST mission. When present, the chat opens on her post
@@ -122,6 +123,22 @@ class GirlChatConfig {
   /// teaches.
   final bool coachAllowed;
 
+  /// ── OUTSIDE THE FREE-TEXT FUNNEL ENTIRELY ─────────────────────────
+  ///
+  /// Set ONLY by the onboarding first rep. That rep asks for five
+  /// messages and the free allowance is three, so the paywall fired on
+  /// message four — halfway through the one conversation the whole sales
+  /// flow is built to deliver. He never reached his score, which is the
+  /// screen that actually sells, and the funnel closed on a man who had
+  /// been interrupted rather than convinced.
+  ///
+  /// This is a call-site exemption and nothing more. PaywallGate, the
+  /// counter, RevenueCat and every other surface are untouched: the rep
+  /// simply neither CHECKS the cap nor SPENDS it, so a man who declines
+  /// at the end still walks into the app with his full free allowance
+  /// intact and a second chance to convert.
+  final bool bypassTextCap;
+
   const GirlChatConfig({
     required this.characterId,
     required this.vibeKey,
@@ -138,6 +155,7 @@ class GirlChatConfig {
     this.battleId,
     this.verdictOnFinish = true,
     this.coachAllowed = false,
+    this.bypassTextCap = false,
   });
 }
 
@@ -230,6 +248,28 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   /// Relationship arc: what she remembers about him + which stage they're
   /// at (1 Matched → 5 Together). Loaded on open, saved as it moves.
   String _memory = '';
+
+  /// ── MAKE HER WRITE IN HIS LANGUAGE ────────────────────────────────
+  ///
+  /// Settings has a language picker. The app sends the code. Nothing
+  /// happens, because the roleplay backend is a separate service that
+  /// ignores fields it was not written for — so from the user's side it
+  /// is a setting that does nothing, which is worse than not offering
+  /// one.
+  ///
+  /// `memory` IS folded into her prompt (it is how she remembers him
+  /// between conversations), so the directive rides in on that. English
+  /// returns the memory untouched — today's behaviour, unchanged, for
+  /// almost everyone.
+  String _withLanguage(String memory) {
+    final lang = LanguageService.current;
+    if (lang.code == 'en') return memory;
+    final directive = 'LANGUAGE: write ONLY in ${lang.native} '
+        '(${lang.code}) — every message, including flirting, teasing and '
+        'pushing back. Never switch to English unless he writes in '
+        'English first.';
+    return memory.isEmpty ? directive : '$directive\n\n$memory';
+  }
   int _stage = 1;
 
   /// How hard SHE is to win over. >1 = every degree of warmth costs more;
@@ -404,6 +444,9 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
 
   bool _submitted = false;
 
+  // The mirror's state fields are gone with it — see the note further
+  // down in the send handler for why, and for how to switch it back on.
+
   /// Hand the conversation to the text grader on the way out.
   ///
   /// This is what turns a text mission from a flat +50 XP into a real
@@ -577,7 +620,7 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     // they pay. Pro + creator text unlimited. Voice is paid separately at
     // every _goLive. The user's typed line stays in the box so they don't
     // lose it if they come back as Pro.
-    if (await PaywallGate.textCapReached()) {
+    if (!widget.config.bypassTextCap && await PaywallGate.textCapReached()) {
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       await PaywallGate.open(context, source: 'text_cap');
@@ -613,8 +656,11 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     // Count this successful send toward the free text allowance (the funnel).
     // No-op weight for Pro/creator — textCapReached() ignores the counter
     // for them, so an over-count never matters; we just always tally.
-    // ignore: discarded_futures
-    LocalStoreService.markFreeTextUsed();
+    // The onboarding rep is a sample, not a spend — see bypassTextCap.
+    if (!widget.config.bypassTextCap) {
+      // ignore: discarded_futures
+      LocalStoreService.markFreeTextUsed();
+    }
     // Real girls double-text. The model marks separate bubbles with '\n';
     // reveal them one at a time so it reads like she's firing off texts.
     final bubbles = result.her
@@ -683,14 +729,45 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     final reachBack = _herLines.length > 1
         ? _herLines.sublist(0, _herLines.length - 1)
         : const <String>[];
-    for (final id in Tactics.detect(
+    final demonstrated = Tactics.detect(
       line: text,
       herEarlier: reachBack,
       hisPrevious: _hisPrevious,
       delta: result.delta,
-    )) {
+    );
+    for (final id in demonstrated) {
       if (!_tacticsSeen.contains(id)) _tacticsSeen.add(id);
     }
+
+    // ── LUCIEN'S MIRROR IS OFF ────────────────────────────────────────
+    //
+    // Removed after testing, not because the idea was wrong but because
+    // the output never got good enough to earn its interruption. Three
+    // prompt passes (a rule table, then a model call, then worked
+    // examples) each improved it and none made it something worth
+    // stopping a conversation for.
+    //
+    // The honest read on why: this chat already had a tactic reveal, a
+    // score reveal, a coaching line, a payout and a verdict commenting
+    // on it. A seventh voice cannot be specific because the six before
+    // it already said everything general. Making Lucien louder was
+    // never going to fix a room that crowded.
+    //
+    // WHAT SURVIVES, deliberately: the lucien-mirror Edge Function is
+    // still deployed and still good, and MirrorCard/LucienMirror are
+    // still in the tree. Turning this back on is uncommenting the block
+    // below — worth doing once the end-of-chat noise is cut down and
+    // there is room for one voice to be heard.
+    //
+    // if (!_mirrorOff) {
+    //   final mark = await LucienMirror.mark(...);
+    //   if (mark != null && mounted) setState(() => _mirror = mark);
+    // }
+    //
+    // THE COACH IN PRACTICE IS UNTOUCHED. "Get help from your coach"
+    // hands him a genuinely sharp line and men like it — that one works
+    // because he ASKED for it, which is the whole difference.
+
     _hisPrevious = text;
     if (bubbles.isNotEmpty) _herLines.add(bubbles.first);
 
@@ -821,7 +898,7 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       final res = await http
           .post(
             Uri.parse('$base/v1/date/turn'),
-            headers: {'content-type': 'application/json'},
+            headers: BackendHeaders.json,
             body: jsonEncode({
               'characterId': widget.config.characterId,
               // Her language. Voice has sent this since day one and the
@@ -830,13 +907,20 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
               // texts. Same field name the realtime session config
               // uses; a server that predates it just ignores it.
               'language': LanguageService.cachedCode,
+              // AND AGAIN, WHERE THE SERVER ACTUALLY LOOKS. The field
+              // above is the clean way and the roleplay backend — a
+              // separate service outside this repo — ignores it, so the
+              // setting silently did nothing. `memory` is folded into
+              // her prompt, so the directive rides in on that instead.
+              // English sends nothing extra and behaves exactly as
+              // before.
+              'memory': _withLanguage(_memory),
               'focus': widget.config.focus,
               'creator': _creator,
               'history': history,
               'text': text,
               'turnIndex': _turnIndex,
               'stage': _stage,
-              if (_memory.isNotEmpty) 'memory': _memory,
               if (_profilePayload != null) 'userProfile': _profilePayload,
             }),
           )
@@ -892,10 +976,14 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       final res = await http
           .post(
             Uri.parse('$base/v1/date/help'),
-            headers: {'content-type': 'application/json'},
+            headers: BackendHeaders.json,
             body: jsonEncode({
               'characterId': widget.config.characterId,
               'creator': _creator,
+              // The coach hands him the exact line to SEND her. She's
+              // already texting in his language — an English line pasted
+              // into that conversation is worse than no help at all.
+              'language': LanguageService.cachedCode,
               'history': history,
               if (_profilePayload != null) 'userProfile': _profilePayload,
             }),

@@ -126,6 +126,10 @@ class FiveBoard extends StatelessWidget {
           day: day,
           rank: i,
           onTap: () => _open(context, m),
+          onNudge: () {
+            Feel.tick();
+            onNudge(m);
+          },
         ).animate().fadeIn(delay: (60 * i).ms, duration: 280.ms),
       // Empty seats read as an invitation, not a gap.
       for (var i = 0; i < day.openSeats; i++) const _EmptySeat(),
@@ -173,11 +177,16 @@ class _ManRow extends StatelessWidget {
 
   final VoidCallback onTap;
 
+  /// Fired by the row's own NUDGE button — the one that only appears on
+  /// a man who is dragging. See the note on the button itself.
+  final VoidCallback onNudge;
+
   const _ManRow({
     required this.member,
     required this.day,
     required this.rank,
     required this.onTap,
+    required this.onNudge,
   });
 
   @override
@@ -193,6 +202,39 @@ class _ManRow extends StatelessWidget {
         : behind
             ? AppColors.red
             : AppColors.signalAmber;
+
+    // ── THE HALF THAT WAS MISSING ──────────────────────────────────
+    //
+    // This table crowned the leader and said nothing at all about the
+    // man who hadn't shown up. Colour alone doesn't carry it: a red
+    // ring on a row of four empty pips is the same SHAPE as everyone
+    // else's row, and shape is what the eye reads in half a second.
+    // Accountability that only ever points upward is a scoreboard, not
+    // a squad — the whole reason men do this together is that going
+    // quiet has to be visible and has to be answerable.
+    //
+    // GHOST is the man on nothing. He gets a word instead of four empty
+    // squares, because "he has done nothing" and "he has done one" are
+    // different conversations and empty pips collapse them.
+    //
+    // BUT NOT AT SIX IN THE MORNING. At the top of the day every man is
+    // on zero, and a table of NOTHING TODAY tags accusing the entire
+    // squad of nothing is noise — and noise is how a signal like this
+    // dies. The gate is the squad itself rather than a clock: nobody is
+    // behind until somebody is ahead. One man moving is what turns the
+    // rest into men who haven't, which is the same standard the room
+    // would apply on its own, and it self-calibrates to a squad that
+    // plays at night as readily as one that plays at breakfast.
+    final squadMoving = day.complete > 0;
+    final ghost = moves == 0 && squadMoving;
+
+    // And the answer to it: a nudge, on the row, one tap, from anyone
+    // who isn't him. It was buried two taps deep behind the row sheet,
+    // which meant the room could see a man slipping and had no obvious
+    // way to say so. Nudges are squad-visible events (see _nudge in
+    // squad_day_screen) — the point isn't that he gets told, it's that
+    // the room watched you tell him.
+    final canNudge = !me && behind && squadMoving;
 
     final handle = (member.handle ?? 'ANON').toUpperCase();
     final initials = handle.length >= 2 ? handle.substring(0, 2) : handle;
@@ -270,23 +312,34 @@ class _ManRow extends StatelessWidget {
           ),
           const Spacer(),
 
-          // ── The four missions ────────────────────────────────────
-          for (var i = 0; i < SquadDay.missionsPerDay; i++) ...[
-            _Pip(filled: i < missionMoves, tone: tone),
-            const SizedBox(width: 5),
+          // ── What he's done, or the fact that he hasn't ───────────
+          //
+          // A ghost's row would otherwise be four empty squares, a rule
+          // and a dash — the same furniture as everyone else, just
+          // unfilled, which reads as "not yet" rather than "not at
+          // all". He gets the word instead. Nothing is lost: a man on
+          // zero has no duel score either, so the slot it replaces was
+          // empty too.
+          if (ghost)
+            const _GhostTag()
+          else ...[
+            for (var i = 0; i < SquadDay.missionsPerDay; i++) ...[
+              _Pip(filled: i < missionMoves, tone: tone),
+              const SizedBox(width: 5),
+            ],
+
+            // A rule, because the next slot is a different KIND of
+            // thing — scored, not ticked.
+            Container(
+              width: 1,
+              height: 16,
+              margin: const EdgeInsets.symmetric(horizontal: 7),
+              color: AppColors.divider,
+            ),
+
+            // ── The Rizz-Off ───────────────────────────────────────
+            _Duel(mark: mark),
           ],
-
-          // A rule, because the next slot is a different KIND of thing —
-          // scored, not ticked.
-          Container(
-            width: 1,
-            height: 16,
-            margin: const EdgeInsets.symmetric(horizontal: 7),
-            color: AppColors.divider,
-          ),
-
-          // ── The Rizz-Off ─────────────────────────────────────────
-          _Duel(mark: mark),
 
           const SizedBox(width: 10),
           SizedBox(
@@ -294,16 +347,88 @@ class _ManRow extends StatelessWidget {
             child: Text('$moves/${SquadDay.movesPerMember}',
                 textAlign: TextAlign.right,
                 style: GoogleFonts.inter(
-                  color: done ? kNeon : AppColors.textTertiary,
+                  // Red on a ghost. The count is the one thing on the
+                  // row every man reads, so it carries the state.
+                  color: done
+                      ? kNeon
+                      : ghost
+                          ? AppColors.red
+                          : AppColors.textTertiary,
                   fontSize: 11.5,
                   letterSpacing: -0.2,
                   fontWeight: FontWeight.w900,
                 )),
           ),
+
+          // ── The answer to it ─────────────────────────────────────
+          if (canNudge) _NudgeDot(onTap: onNudge),
         ]),
       ),
     );
   }
+}
+
+/// NOTHING TODAY, said in words.
+///
+/// Sized to sit in the space the four pips, the rule and the duel slot
+/// would have used, so a ghost's row is the same height and the table
+/// stays a table. It is deliberately the only text on any row that is
+/// red — the leader gets a gold cup, this man gets this, and between
+/// them the board says both halves of what a squad is for.
+class _GhostTag extends StatelessWidget {
+  const _GhostTag();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.red.withValues(alpha: 0.13),
+          borderRadius: BorderRadius.circular(7),
+          border:
+              Border.all(color: AppColors.red.withValues(alpha: 0.45), width: 1),
+        ),
+        child: Text('NOTHING TODAY',
+            style: GoogleFonts.inter(
+              color: AppColors.red,
+              fontSize: 8.5,
+              letterSpacing: 1.4,
+              fontWeight: FontWeight.w900,
+            )),
+      );
+}
+
+/// THE ONE-TAP CALL-OUT, on the row of the man who needs it.
+///
+/// Small on purpose. It has to be reachable without thinking and
+/// invisible until it's relevant, because a nudge button on every row
+/// all day is spam and spam gets ignored — which is exactly how a
+/// squad stops holding anyone to anything.
+class _NudgeDot extends StatelessWidget {
+  final VoidCallback onTap;
+  const _NudgeDot({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          margin: const EdgeInsets.only(left: 8),
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.red.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(9),
+            border:
+                Border.all(color: AppColors.red.withValues(alpha: 0.4), width: 1),
+          ),
+          // campaign_rounded — a megaphone. The nudge is a public
+          // announcement to the squad, not a private message, and the
+          // icon should say so before he taps it.
+          child: const Icon(Icons.campaign_rounded,
+              size: 15, color: AppColors.red),
+        ),
+      );
 }
 
 /// One mission move. A filled square, not a tick — at 9pt a tick is
