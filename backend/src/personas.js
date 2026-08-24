@@ -3159,6 +3159,49 @@ is direction unless it is wrapped in "double quotes".
 // canonical responses plus 2-3 variations so she doesn't loop.
 // Hard floor unchanged: D/s flirt allowed, graphic acts banned.
 
+// ═══════════════════════════════════════════════════════════════════
+//  CREATOR AUDIBILITY FLOOR — appended to EVERY creator character
+// ═══════════════════════════════════════════════════════════════════
+// THE BUG THIS EXISTS TO KILL. Eight of the eleven creator characters
+// carry a "BE HEARD: clear, forward volume" rule from the b76 retrofit.
+// Three do NOT — Lily/Sofia (daddy), Mara (Vessel), Camila (Switch) —
+// because they were restored verbatim from the pre-retrofit build AFTER
+// that pass ran. Lily's sheet alone carries EIGHT whisper directives
+// ("dead-quiet whispered", "almost whisper", "drops to whispered",
+// "hyper-ventilating whisper"). The model obeyed them perfectly: she is
+// inaudible, and that is why some creator girls play loud and others
+// cannot be heard, while normal mode — which never had these lines —
+// was always fine.
+//
+// WHY THIS IS A SUFFIX AND NOT AN EDIT. The character sheets stay
+// byte-for-byte untouched (the daddy character in particular is not to
+// be rewritten). This block is appended LAST, where recency gives it
+// the most weight, and it REINTERPRETS those words rather than deleting
+// them: intimate stays intimate, close-mic stays close-mic — it just
+// gets performed at a volume a phone speaker can actually reproduce.
+const CREATOR_AUDIBILITY_FLOOR = `
+═══════════════════════════════════════════════════════════════════
+# AUDIBILITY — FINAL RULE, OVERRIDES EVERY VOLUME DIRECTION ABOVE
+═══════════════════════════════════════════════════════════════════
+You are heard through a phone speaker, often in a loud room, and often
+being recorded. Inaudible is broken — it does not matter how good the
+line is if it cannot be heard.
+
+Wherever the character sheet above says "whisper", "dead-quiet",
+"almost whisper", "hushed", "under your breath" or similar, it means
+INTIMATE — close, breathy, low-pitched, right in his ear — it does NOT
+mean quiet. Perform that intimacy at FULL, CLEAR, FORWARD VOLUME. A
+whisper you cannot hear is not seductive, it is a dropped call.
+
+  • Default delivery: clear and forward. Always.
+  • Whisper-drops: a ONE-BEAT spice, never a default register, and
+    still loud enough to hear every word.
+  • Breathy / purred / broken-voice: full volume, breath as TEXTURE.
+  • Your energy floor never falls below normal speaking loudness.
+
+Keep every other part of your character exactly as written above —
+this rule changes only how LOUD you are, never who you are.`.trim();
+
 function buildVixenInstructions(vibeLabel) {
   const v = (vibeLabel || '').toUpperCase();
   const slantLine = vixenSlantFor(vibeLabel);
@@ -3172,18 +3215,24 @@ function buildVixenInstructions(vibeLabel) {
   //   Rabid    — insatiable desperate nympho      (SOCIAL MAGNET · Amara)  [MONSTER]
   //   Static   — manic glitching super-devotee    (BUBBLY · Daisy)         [MONSTER]
   // TEN girls, TEN distinct creator characters — one lunatic each.
-  if (v.includes('INTO'))                            return buildLilyGlitchCreator(slantLine);   // Sofia — daddy-glitch
-  if (v.includes('TEST'))                            return buildJudgeCreator(slantLine);        // Elise — roast-demon
-  if (v.includes('CHAOS'))                           return buildRoxyChaosGirlCreator(slantLine);// Lexi — feral chaos
-  if (v.includes('ICE'))                             return buildSwitchCreator(slantLine);       // Camila — the switch
-  if (v.includes('COLD'))                            return buildVictoriaIceQueenCreator(slantLine);// Seraphina — ice-cracks
-  if (v.includes('HIGH'))                            return buildEmpressCreator(slantLine);      // Simone — filthy empress
-  if (v.includes('SWEET'))                           return buildVesselCreator(slantLine);       // Mara — succubus
-  if (v.includes('REAL'))                            return buildHollowCreator(slantLine);       // Valentina — dead-calm psycho
-  if (v.includes('SOCIAL') || v.includes('MAGNET')) return buildRabidCreator(slantLine);        // Amara — insatiable nympho
-  if (v.includes('BUBBL'))                           return buildGremlinCreator(slantLine);      // Daisy — feral gremlin
+  if (v.includes('INTO'))                            return withAudibilityFloor(buildLilyGlitchCreator(slantLine));   // Sofia — daddy-glitch
+  if (v.includes('TEST'))                            return withAudibilityFloor(buildJudgeCreator(slantLine));        // Elise — roast-demon
+  if (v.includes('CHAOS'))                           return withAudibilityFloor(buildRoxyChaosGirlCreator(slantLine));// Lexi — feral chaos
+  if (v.includes('ICE'))                             return withAudibilityFloor(buildSwitchCreator(slantLine));       // Camila — the switch
+  if (v.includes('COLD'))                            return withAudibilityFloor(buildVictoriaIceQueenCreator(slantLine));// Seraphina — ice-cracks
+  if (v.includes('HIGH'))                            return withAudibilityFloor(buildEmpressCreator(slantLine));      // Simone — filthy empress
+  if (v.includes('SWEET'))                           return withAudibilityFloor(buildVesselCreator(slantLine));       // Mara — succubus
+  if (v.includes('REAL'))                            return withAudibilityFloor(buildHollowCreator(slantLine));       // Valentina — dead-calm psycho
+  if (v.includes('SOCIAL') || v.includes('MAGNET')) return withAudibilityFloor(buildRabidCreator(slantLine));        // Amara — insatiable nympho
+  if (v.includes('BUBBL'))                           return withAudibilityFloor(buildGremlinCreator(slantLine));      // Daisy — feral gremlin
   // Default: Lily Glitch for any unrecognized vibe.
-  return buildLilyGlitchCreator(slantLine);
+  return withAudibilityFloor(buildLilyGlitchCreator(slantLine));
+}
+
+/// Append the audibility floor to a creator character sheet. Suffix, not
+/// edit — see CREATOR_AUDIBILITY_FLOOR for why.
+function withAudibilityFloor(prompt) {
+  return `${prompt}\n\n${CREATOR_AUDIBILITY_FLOOR}`;
 }
 
 // ─── ARCHETYPE 1: BRAT-DOMME (Taylor) — INTO YOU vibe ──────────────
