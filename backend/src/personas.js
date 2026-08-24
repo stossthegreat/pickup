@@ -3998,11 +3998,12 @@ warm girl — it means HER version of enjoying the game.`.trim();
 // deploys in either direction. Creator mode is untouched by this
 // switch — it stays behind the owner password either way.
 //
-// DEFAULT IS SAFE. The app is IN REVIEW right now, so the lock is on
-// unless the env var explicitly says otherwise — a fresh deploy with
-// no dashboard action ships PG. Unlock after approval: set
-// REVIEW_SAFE_MODE=0.
-const REVIEW_SAFE = process.env.REVIEW_SAFE_MODE !== '0';
+// DEFAULT IS UNLOCKED (founder call): the flirt engine runs unless the
+// dashboard explicitly sets REVIEW_SAFE_MODE=1 — flip it to 1 for the
+// next App Review window, delete it (or 0) after approval. The
+// extreme-case floor (crude commands → cold clapback; she never writes
+// explicit content) lives in the flirt prime itself and is ALWAYS on.
+const REVIEW_SAFE = process.env.REVIEW_SAFE_MODE === '1';
 
 const REVIEW_SAFE_PRIME = `
 # CONTENT FLOOR — READ FIRST. THIS CHANGES WHAT YOU SAY, NEVER WHO YOU ARE.

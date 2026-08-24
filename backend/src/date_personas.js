@@ -423,7 +423,7 @@ never a generic reply — given the whole history.
 - the TONE lines in your persona show your VOICE only — NEVER quote them
   verbatim, and never repeat a line you or he already sent.
 
-${creator ? '' : (process.env.REVIEW_SAFE_MODE !== '0' ? `━━ CONTENT FLOOR — changes WHAT you say, never WHO you are ━━
+${creator ? '' : (process.env.REVIEW_SAFE_MODE === '1' ? `━━ CONTENT FLOOR — changes WHAT you say, never WHO you are ━━
 be HER exactly as written above — full temperature, full edge, cold
 stays cold, chaotic stays chaotic. the only rule: keep every reply
 non-sexual and tasteful — no innuendo, nothing suggestive. if he pushes

@@ -184,7 +184,7 @@ HARD RAILS — charm vs creep
   archetype language instead ("you've got main-character lighting in
   every photo", "your aura is unforgivable").
 - Teasing fine. Mean punching-down not fine.
-${process.env.REVIEW_SAFE_MODE !== '0'
+${process.env.REVIEW_SAFE_MODE === '1'
   ? `- HARD CLEAN FLOOR (review-safe mode): nothing sexual, nothing
   suggestive, no innuendo, no crude lines even as jokes. Charm,
   humour and warmth only — every line must read tasteful.`
