@@ -413,6 +413,20 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
   // you start talking.
   final List<int> _pcmQueue = [];
 
+  /// PLAYBACK GAIN — the device-independent half of the loudness fix.
+  ///
+  /// Routing to the loudspeaker only decides WHERE she plays; this
+  /// decides HOW LOUD. OpenAI's realtime PCM arrives well below full
+  /// scale (peaks around -6 to -10 dBFS), so even perfectly routed she
+  /// sounds like a podcast recorded in a cupboard — useless for the
+  /// creator clips this app is built to produce.
+  ///
+  /// 1.9x is about +5.5 dB: a large, obvious jump that still leaves
+  /// headroom under her natural peaks. Every sample is hard-limited to
+  /// the int16 range on the way in, so a loud laugh clips flat rather
+  /// than wrapping around into a click.
+  static const double _kPlaybackGain = 1.9;
+
   // Session length.
   /// Default session length for Pro users — 3 minutes per session.
   // 2-minute voice sessions. At 14 voice minutes/week (see
@@ -919,11 +933,6 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         print('[FREEFLOW] PCM engine first-time setup…');
         await FlutterPcmSound.setup(sampleRate: 24000, channelCount: 1);
         FlutterPcmSound.setFeedThreshold(6000);
-        // pcm_sound's setup() just called setCategory with NO options,
-        // wiping defaultToSpeaker — re-assert our context so audio
-        // routes to the LOUDSPEAKER, not the earpiece.
-        AudioSession.invalidate();
-        await AudioSession.configureForPlayAndRecord();
         _pcmEngineReady = true;
         _log('ok', 'PCM', 'engine setup done');
         // ignore: avoid_print
@@ -945,6 +954,20 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       _lastFeedMs = DateTime.now().millisecondsSinceEpoch;
       // ignore: discarded_futures
       FlutterPcmSound.start();
+
+      // ── LOUDSPEAKER, EVERY SESSION (b223) ──────────────────────────
+      // b185 re-asserted the route INSIDE the `if (!_pcmEngineReady)`
+      // block, so it ran on the first call of the process and never
+      // again — which is exactly the bug: session one loud, every one
+      // after it quiet. Both plugins (flutter_pcm_sound's setup and
+      // record_darwin's startStream) call setCategory themselves, and
+      // whoever spoke last owns the route. So we claim it back HERE,
+      // unconditionally, after the engine is armed on every single
+      // _goLive. invalidate() first because configureForPlayAndRecord
+      // short-circuits on its cached flag and would otherwise no-op.
+      AudioSession.invalidate();
+      // ignore: discarded_futures
+      AudioSession.configureForPlayAndRecord();
 
       // Safety net for the tail of a turn: if audio is still queued but the
       // engine has stopped asking for it (stalled), revive it. Per-delta
@@ -1444,7 +1467,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // Append int16 samples to the playback queue.
       final b = e.pcm16leBytes;
       final i16 = b.buffer.asInt16List(b.offsetInBytes, b.lengthInBytes ~/ 2);
-      _pcmQueue.addAll(i16);
+      // Amplify + hard-limit on the way into the queue — see
+      // _kPlaybackGain. Done here rather than in the feed callback so
+      // it costs nothing on the latency-critical playback path.
+      for (var i = 0; i < i16.length; i++) {
+        final v = (i16[i] * _kPlaybackGain).round();
+        _pcmQueue.add(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));
+      }
       _audioDeltaCount++;
       if (_audioDeltaCount == 1) _log('ok', 'AUDIO', 'her audio started');
       _kickPcmIfStalled();
@@ -1477,6 +1506,20 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       _lastFeedMs = DateTime.now().millisecondsSinceEpoch;
       // ignore: discarded_futures
       FlutterPcmSound.start();
+
+      // ── LOUDSPEAKER, EVERY SESSION (b223) ──────────────────────────
+      // b185 re-asserted the route INSIDE the `if (!_pcmEngineReady)`
+      // block, so it ran on the first call of the process and never
+      // again — which is exactly the bug: session one loud, every one
+      // after it quiet. Both plugins (flutter_pcm_sound's setup and
+      // record_darwin's startStream) call setCategory themselves, and
+      // whoever spoke last owns the route. So we claim it back HERE,
+      // unconditionally, after the engine is armed on every single
+      // _goLive. invalidate() first because configureForPlayAndRecord
+      // short-circuits on its cached flag and would otherwise no-op.
+      AudioSession.invalidate();
+      // ignore: discarded_futures
+      AudioSession.configureForPlayAndRecord();
       _log('info', 'RESP', 'response.created · pcm restarted');
       setState(() => _herCaption = '');
     } else if (e is ResponseDone) {
