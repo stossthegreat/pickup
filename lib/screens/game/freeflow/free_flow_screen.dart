@@ -413,19 +413,43 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
   // you start talking.
   final List<int> _pcmQueue = [];
 
-  /// PLAYBACK GAIN — the device-independent half of the loudness fix.
+/// ══════════════════════════════════════════════════════════════════
+  ///  AUTO-GAIN — why creator sounded like a phone call and normal
+  ///  mode never did
+  /// ══════════════════════════════════════════════════════════════════
   ///
-  /// Routing to the loudspeaker only decides WHERE she plays; this
-  /// decides HOW LOUD. OpenAI's realtime PCM arrives well below full
-  /// scale (peaks around -6 to -10 dBFS), so even perfectly routed she
-  /// sounds like a podcast recorded in a cupboard — useless for the
-  /// creator clips this app is built to produce.
+  /// Normal mode and creator mode run the SAME screen, the same audio
+  /// session, the same route, the same 24kHz PCM config. Verified line
+  /// by line: the ONLY difference anywhere in the stack is the model —
+  /// creator gets full `gpt-realtime`, normal gets `gpt-realtime-mini`
+  /// (backend pickRealtimeModel). The full model simply returns audio
+  /// at a much lower level than mini does.
   ///
-  /// 1.9x is about +5.5 dB: a large, obvious jump that still leaves
-  /// headroom under her natural peaks. Every sample is hard-limited to
-  /// the int16 range on the way in, so a loud laugh clips flat rather
-  /// than wrapping around into a click.
-  static const double _kPlaybackGain = 1.9;
+  /// That is why every routing fix failed: the route was never wrong.
+  /// One model is quiet at the source, and a fixed multiplier can't fix
+  /// it either — it lifts both by the same amount and leaves creator
+  /// just as far behind.
+  ///
+  /// So this measures what actually arrives and normalises it. Peaks are
+  /// tracked with a fast attack and a slow release, gain is smoothed
+  /// toward whatever hits the target, and every sample is hard-limited.
+  /// A quiet model gets lifted hard, a loud one is left alone, and any
+  /// future model change levels itself with no code edit.
+
+  /// Target peak, ~-2 dBFS. High enough to be loud through a phone
+  /// speaker in a noisy room, with headroom left so limiting is rare.
+  static const int _kAgcTargetPeak = 26000;
+
+  /// Ceiling on the lift. 8x (+18 dB) covers the full model's deficit
+  /// with room to spare; the clamp stops near-silence being amplified
+  /// into a wall of hiss.
+  static const double _kAgcMaxGain = 8.0;
+
+  /// Running peak of her recent audio (fast attack, slow release).
+  int _agcPeak = 0;
+
+  /// The gain actually applied, smoothed so it never pumps audibly.
+  double _agcGain = 1.0;
 
   // Session length.
   /// Default session length for Pro users — 3 minutes per session.
@@ -950,6 +974,10 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // holds it alive), so playback is live the instant this session opens
       // — NOT only when the first reply arrives. This is what fixes "works
       // once": every new session re-arms the shared engine here.
+      // Fresh AGC per session — a new call must never inherit the gain
+      // measured from the previous character (or the previous model).
+      _agcPeak = 0;
+      _agcGain = 1.0;
       _pcmStarted = true;
       _lastFeedMs = DateTime.now().millisecondsSinceEpoch;
       // ignore: discarded_futures
@@ -1467,11 +1495,30 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // Append int16 samples to the playback queue.
       final b = e.pcm16leBytes;
       final i16 = b.buffer.asInt16List(b.offsetInBytes, b.lengthInBytes ~/ 2);
-      // Amplify + hard-limit on the way into the queue — see
-      // _kPlaybackGain. Done here rather than in the feed callback so
-      // it costs nothing on the latency-critical playback path.
+      // ── AUTO-GAIN (see _kAgcTargetPeak) ──────────────────────────
+      // Measure this chunk, adapt, then apply. Done on ingestion rather
+      // than in the feed callback so the latency-critical playback path
+      // stays untouched.
+      var chunkPeak = 0;
       for (var i = 0; i < i16.length; i++) {
-        final v = (i16[i] * _kPlaybackGain).round();
+        final a = i16[i] < 0 ? -i16[i] : i16[i];
+        if (a > chunkPeak) chunkPeak = a;
+      }
+      // Fast attack, slow release (~1s): the gain tracks her real level
+      // without ducking every time she pauses for breath.
+      final decayed = (_agcPeak * 0.97).round();
+      _agcPeak = chunkPeak > decayed ? chunkPeak : decayed;
+      // Adapt on real speech only — near-silence would ask for maximum
+      // gain and turn room tone into hiss.
+      if (_agcPeak > 800) {
+        final want =
+            (_kAgcTargetPeak / _agcPeak).clamp(1.0, _kAgcMaxGain).toDouble();
+        // Smooth toward the target so a loud laugh doesn't audibly yank
+        // the level down mid-sentence.
+        _agcGain += (want - _agcGain) * 0.3;
+      }
+      for (var i = 0; i < i16.length; i++) {
+        final v = (i16[i] * _agcGain).round();
         _pcmQueue.add(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));
       }
       _audioDeltaCount++;
@@ -1502,6 +1549,10 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // silence (if anything) is playing; restarting can't glitch audible
       // speech. (The mid-playback watchdog stays conservative at 500ms.)
       _pcmQueue.clear();
+      // Fresh AGC per session — a new call must never inherit the gain
+      // measured from the previous character (or the previous model).
+      _agcPeak = 0;
+      _agcGain = 1.0;
       _pcmStarted = true;
       _lastFeedMs = DateTime.now().millisecondsSinceEpoch;
       // ignore: discarded_futures
