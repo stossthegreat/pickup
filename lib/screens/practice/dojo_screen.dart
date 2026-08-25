@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../theme/app_colors.dart';
+import '../academy/tactics_screen.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
 ///  THE DOJO — the rules of the game
@@ -19,8 +19,18 @@ import '../../theme/app_colors.dart';
 /// The tone is the product: certain, masculine, a little dangerous,
 /// never sleazy. Every law is true — it has to survive contact with a
 /// real woman on a real Saturday, or it's out.
-class DojoScreen extends StatelessWidget {
+class DojoScreen extends StatefulWidget {
   const DojoScreen({super.key});
+
+  @override
+  State<DojoScreen> createState() => _DojoScreenState();
+}
+
+class _DojoScreenState extends State<DojoScreen> {
+  /// 0 = the laws, 1 = the playbook. Both bodies stay mounted in an
+  /// IndexedStack so switching is instant and the playbook keeps the
+  /// collection it already loaded.
+  int _tab = 0;
 
   static const _laws = <({String name, String law, String line})>[
     (
@@ -111,127 +121,73 @@ class DojoScreen extends StatelessWidget {
       backgroundColor: AppColors.base,
       body: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Material(
-                        color: Colors.transparent,
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          onTap: () => Navigator.of(context).maybePop(),
-                          customBorder: const CircleBorder(),
-                          child: const SizedBox(
-                            width: 40,
-                            height: 40,
-                            child: Icon(Icons.arrow_back_ios_new_rounded,
-                                color: Colors.white, size: 18),
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      const Icon(Icons.whatshot_rounded,
-                          color: AppColors.red, size: 18),
-                    ]),
-                    const SizedBox(height: 6),
-                    Text('THE DOJO',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 34,
-                          height: 1,
-                          letterSpacing: -0.5,
-                          fontWeight: FontWeight.w900,
-                        )),
-                    const SizedBox(height: 8),
-                    Text(
-                        'Ten laws. Every conversation in this app is a rep '
-                        'on one of them. Learn them here — earn them in '
-                        'the room.',
-                        style: GoogleFonts.inter(
-                          color: AppColors.textSecondary,
-                          fontSize: 13.5,
-                          height: 1.5,
-                          fontWeight: FontWeight.w500,
-                        )),
-                  ],
-                ),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, i) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _LawCard(index: i + 1, law: _laws[i])
-                        .animate()
-                        .fadeIn(delay: (60 * i).ms, duration: 300.ms)
-                        .slideY(begin: 0.05, curve: Curves.easeOut),
-                  ),
-                  childCount: _laws.length,
-                ),
-              ),
-            ),
-            // The arsenal — every named tactic he's discovered (and the
-            // silhouettes of the ones he hasn't) lives in the playbook.
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-                child: Material(
-                  color: AppColors.red.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            // ── ONE back button for both tabs, always to Practice ──────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 2, 20, 0),
+              child: Row(children: [
+                Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      context.push('/playbook');
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                            color: AppColors.red.withValues(alpha: 0.45)),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.style_rounded,
-                            color: AppColors.red, size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('THE ARSENAL',
-                                  style: GoogleFonts.inter(
-                                    color: AppColors.red,
-                                    fontSize: 12,
-                                    letterSpacing: 2,
-                                    fontWeight: FontWeight.w900,
-                                  )),
-                              const SizedBox(height: 3),
-                              Text(
-                                  'Every named tactic — the ones you\'ve '
-                                  'earned, and the ones still waiting.',
-                                  style: GoogleFonts.inter(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w500,
-                                  )),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.arrow_forward_rounded,
-                            color: AppColors.red, size: 18),
-                      ]),
+                    onTap: () => Navigator.of(context).maybePop(),
+                    customBorder: const CircleBorder(),
+                    child: const SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Icon(Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white, size: 18),
                     ),
                   ),
                 ),
+                const Spacer(),
+                const Icon(Icons.whatshot_rounded,
+                    color: AppColors.red, size: 18),
+              ]),
+            ),
+            // ── THE TOGGLE — two peers, not a buried link ──────────────
+            // The playbook used to be a card at the BOTTOM of the laws,
+            // which made it feel like a footnote to the Dojo rather than
+            // the other half of it. Two rectangles at the top say what
+            // this screen actually is: doctrine on one side, your
+            // collection on the other.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+              child: Row(children: [
+                Expanded(
+                  child: _TabCard(
+                    label: 'THE DOJO',
+                    active: _tab == 0,
+                    onTap: () {
+                      if (_tab == 0) return;
+                      HapticFeedback.selectionClick();
+                      setState(() => _tab = 0);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _TabCard(
+                    label: 'THE PLAYBOOK',
+                    active: _tab == 1,
+                    onTap: () {
+                      if (_tab == 1) return;
+                      HapticFeedback.selectionClick();
+                      setState(() => _tab = 1);
+                    },
+                  ),
+                ),
+              ]),
+            ),
+            Expanded(
+              child: IndexedStack(
+                index: _tab,
+                sizing: StackFit.expand,
+                children: [
+                  _lawsBody(),
+                  const TacticsScreen(embedded: true),
+                ],
               ),
             ),
           ],
@@ -239,10 +195,93 @@ class DojoScreen extends StatelessWidget {
       ),
     );
   }
+
+  /// The ten laws. No masthead — the toggle above already names it.
+  Widget _lawsBody() {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+      itemCount: _laws.length + 1,
+      itemBuilder: (context, i) {
+        if (i == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Text(
+                'Ten laws. Every conversation in this app is a rep on one '
+                'of them. Learn them here — earn them in the room.',
+                style: GoogleFonts.inter(
+                  color: AppColors.textSecondary,
+                  fontSize: 13.5,
+                  height: 1.5,
+                  fontWeight: FontWeight.w500,
+                )),
+          );
+        }
+        final k = i - 1;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _LawCard(index: k + 1, law: _laws[k])
+              .animate()
+              .fadeIn(delay: (40 * k).ms, duration: 280.ms)
+              .slideY(begin: 0.05, curve: Curves.easeOut),
+        );
+      },
+    );
+  }
 }
 
-/// One law: number, name, the doctrine, and the line — the example set
-/// like ammunition, tinted bar on the left, impossible to skim past.
+/// One half of the toggle. Red fill when it's the tab you're on, quiet
+/// surface when it isn't — the same red the rest of the app uses for
+/// "this is the live one".
+class _TabCard extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _TabCard({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active ? AppColors.red : AppColors.surface1,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: active ? AppColors.red : AppColors.divider,
+              width: active ? 2 : 1,
+            ),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                        color: AppColors.red.withValues(alpha: 0.35),
+                        blurRadius: 16),
+                  ]
+                : null,
+          ),
+          child: Text(label,
+              style: GoogleFonts.inter(
+                color: active ? Colors.white : AppColors.textSecondary,
+                fontSize: 12.5,
+                letterSpacing: 1.8,
+                fontWeight: FontWeight.w900,
+              )),
+        ),
+      ),
+    );
+  }
+}
+
 class _LawCard extends StatelessWidget {
   final int index;
   final ({String name, String law, String line}) law;
