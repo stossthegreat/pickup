@@ -29,6 +29,7 @@ import '../../../services/local_store_service.dart';
 import '../../../services/paywall_gate.dart';
 import '../../../services/extra_service.dart';
 import '../../paywall/extra_sheet.dart';
+import '../../paywall/minutes_paywall.dart';
 import '../../../services/realtime_session.dart';
 import '../../../services/daily_nudge_service.dart';
 import '../../../services/review_prompt_service.dart';
@@ -1644,7 +1645,14 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
           // more — and it was being spent on an apology. Now there's
           // something to sell, and if he declines he still gets the
           // honest renewal notice.
-          final bought = await ExtraSheet.show(context, remainingMinutes: 0);
+          // THE WALL gets the full-screen moment, not a sheet. He is
+          // mid-conversation and what he is buying is the rest of it,
+          // so it opens on HER. The SOFT NUDGE below deliberately stays
+          // a bottom sheet — a man with minutes left is still enjoying
+          // himself and a takeover there is the interruption the nudge
+          // exists to avoid.
+          final bought = await MinutesPaywall.show(context,
+              girlId: _vibe == null ? null : girlForVibe(_vibe!.key).id);
           if (!mounted) return;
           if (bought) {
             _beginHold();
@@ -1776,7 +1784,8 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         // ignore: discarded_futures
         AnalyticsService.freeflowVoiceCapHit();
         HapticFeedback.mediumImpact();
-        final bought = await ExtraSheet.show(context, remainingMinutes: 0);
+        final bought = await MinutesPaywall.show(context,
+            girlId: _vibe == null ? null : girlForVibe(_vibe!.key).id);
         if (!mounted) return;
         if (!bought) {
           _capNotice('Weekly roleplay minutes used. They renew at the '

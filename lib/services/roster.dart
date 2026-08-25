@@ -98,6 +98,20 @@ const kRelationshipStages = <String>[
 GirlBrief girlById(String id) =>
     kRoster.firstWhere((g) => g.id == id, orElse: () => kRoster.first);
 
+/// The roster girl behind a FreeFlow vibe key.
+///
+/// Lived in widgets/academy/daily_card.dart, which meant any screen
+/// needing it had to import a card widget — free_flow_screen did not,
+/// and a call to it there was an undefined name the analyzer would have
+/// caught and the checkers here could not (they only track `Symbol.`
+/// usage, and a bare function call has no dot). It belongs next to the
+/// roster it reads; daily_card re-exports it so existing callers are
+/// untouched.
+GirlBrief girlForVibe(String vibeKey) => kRoster.firstWhere(
+      (g) => g.vibeKey == vibeKey,
+      orElse: () => kRoster.first,
+    );
+
 /// Ascension day a FreeFlow vibe persona unlocks on (defaults to 1 if the
 /// vibe isn't a roster girl). Used to gate the Free Flow picker the same way
 /// Practice gates the grid.

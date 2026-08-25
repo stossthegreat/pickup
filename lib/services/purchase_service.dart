@@ -201,9 +201,15 @@ class PurchaseService {
       }
 
       Package? weekly;
+      Package? annual;
       Package? rescue;
-      Package? extra10;
-      Package? extra20;
+      // A LIST, NOT TWO SLOTS. The old code bucketed packs as
+      // `mins <= 10 → extra10` / `mins > 10 → extra20`, first one wins.
+      // Adding a third pack meant 20 and 60 minutes fought for the same
+      // slot and whichever the store listed first silently won. The
+      // packs are now collected and sorted by size, so any number of
+      // them can exist.
+      final extras = <Package>[];
 
       // v285 — WEEKLY ONLY. The app sells exactly ONE subscription:
       // mirrorly_pro_weekly. The legacy monthly/yearly SKUs still
@@ -245,12 +251,18 @@ class PurchaseService {
         // someone for.
         final rawProd = pkg.storeProduct.identifier;
         if (PurchaseConfig.isExtra(rawProd)) {
-          final mins = PurchaseConfig.minutesFor(rawProd);
-          if (mins <= 10 && extra10 == null) {
-            extra10 = pkg;
-          } else if (mins > 10 && extra20 == null) {
-            extra20 = pkg;
-          }
+          extras.add(pkg);
+          continue;
+        }
+
+        // ANNUAL — matched on the WHOLE product id, never a substring.
+        // The dead-SKU guard above deliberately rejects anything with
+        // "year"/"annual" in it because the legacy mirrorly_pro_yearly
+        // is still live in both stores for existing subscribers. An
+        // exact comparison is the only way to sell the new tier without
+        // ever being able to sell the old one by accident.
+        if (annual == null && rawProd == PurchaseConfig.productIds.annual) {
+          annual = pkg;
           continue;
         }
 
@@ -263,12 +275,13 @@ class PurchaseService {
         // dropped on the floor.
       }
 
+      extras.sort((a, b) => PurchaseConfig.minutesFor(a.storeProduct.identifier)
+          .compareTo(PurchaseConfig.minutesFor(b.storeProduct.identifier)));
       _cached = PurchaseOfferings(
         weekly: weekly,
-        annual: null, // voided — never populated, never purchasable
+        annual: annual,
         rescue: rescue,
-        extra10: extra10,
-        extra20: extra20,
+        extras: extras,
       );
       return _cached!;
     } catch (err) {
@@ -303,10 +316,18 @@ class PurchaseService {
     // defence: no code path may ever charge a user for them again.
     final blockPkg  = pkg.identifier.toLowerCase();
     final blockProd = pkg.storeProduct.identifier.toLowerCase();
-    final isDeadSku =
+    // THE LIVE ANNUAL IS NOT A DEAD SKU. This guard matches on the
+    // substring "annual", so the new `imhim_pro_annual` tripped it and
+    // came back "This plan is no longer available" — a product that
+    // could be listed, selected and never bought. The exemption is an
+    // EXACT id comparison, so the legacy mirrorly_pro_yearly it was
+    // written to stop is still stopped.
+    final isLiveAnnual =
+        pkg.storeProduct.identifier == PurchaseConfig.productIds.annual;
+    final isDeadSku = !isLiveAnnual && (
            blockPkg.contains('month')  || blockProd.contains('month')
         || blockPkg.contains('annual') || blockProd.contains('annual')
-        || blockPkg.contains('year')   || blockProd.contains('year');
+        || blockPkg.contains('year')   || blockProd.contains('year'));
     if (isDeadSku) {
       lastErrorMessage = 'This plan is no longer available.';
       AnalyticsService.purchaseFailed(pkg.identifier, 'dead_sku_blocked');
@@ -710,25 +731,29 @@ class PurchaseOfferings {
   final Package? annual;
   final Package? rescue;
 
-  /// EXTRA voice-minute packs. Null when the store hasn't published
-  /// them yet — on iOS that's the normal state until the consumables
-  /// are created in App Store Connect, and the sheet must say so
-  /// rather than render a button that can't transact.
-  final Package? extra10;
-  final Package? extra20;
+  /// EXTRA voice-minute packs, smallest first. Empty when the store
+  /// hasn't published them — on iOS that's the normal state until the
+  /// consumables are created in App Store Connect, and every surface
+  /// must say so rather than render a button that can't transact.
+  final List<Package> extras;
 
   const PurchaseOfferings({
     required this.weekly,
     required this.annual,
     required this.rescue,
-    this.extra10,
-    this.extra20,
+    this.extras = const [],
   });
 
   factory PurchaseOfferings.empty() => const PurchaseOfferings(
     weekly: null, annual: null, rescue: null,
   );
 
+  /// Back-compat accessors for the two-pack surfaces written before
+  /// there could be three. Smallest and largest, so they keep meaning
+  /// "the cheap one" and "the good-value one" however many exist.
+  Package? get extra10 => extras.isEmpty ? null : extras.first;
+  Package? get extra20 => extras.length < 2 ? null : extras.last;
+
   /// True when at least one pack can actually be bought right now.
-  bool get hasExtra => extra10 != null || extra20 != null;
+  bool get hasExtra => extras.isNotEmpty;
 }
