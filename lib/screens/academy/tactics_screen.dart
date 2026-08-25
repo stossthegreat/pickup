@@ -34,7 +34,12 @@ import '../../theme/app_colors.dart';
 /// whole teaching mechanism: you never forget a lesson you had already
 /// passed before it was taught to you.
 class TacticsScreen extends StatefulWidget {
-  const TacticsScreen({super.key});
+  /// When true the screen renders as a BODY only — no Scaffold, no back
+  /// row, no title — so the Dojo can host it under its own tab toggle.
+  /// The standalone /playbook route (reached from the trophy cabinet)
+  /// leaves this false and keeps its own header.
+  final bool embedded;
+  const TacticsScreen({super.key, this.embedded = false});
 
   @override
   State<TacticsScreen> createState() => _TacticsScreenState();
@@ -76,10 +81,22 @@ class _TacticsScreenState extends State<TacticsScreen> {
     final total = Tactics.all.length;
     final got = _found.length;
 
-    return Scaffold(
-      backgroundColor: AppColors.base,
-      body: SafeArea(
-        child: Column(children: [
+    final tally = Text('$got / $total',
+        style: GoogleFonts.inter(
+          color: AppColors.measure,
+          fontSize: 14,
+          fontWeight: FontWeight.w900,
+        ));
+
+    final body = Column(children: [
+          // Embedded under the Dojo's toggle the title would just repeat
+          // the tab that got you here, so only the tally shows.
+          if (widget.embedded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: Row(children: [const Spacer(), tally]),
+            )
+          else
           Padding(
             padding: const EdgeInsets.fromLTRB(6, 2, 16, 2),
             child: Row(children: [
@@ -96,12 +113,7 @@ class _TacticsScreenState extends State<TacticsScreen> {
                     fontWeight: FontWeight.w900,
                   )),
               const Spacer(),
-              Text('$got / $total',
-                  style: GoogleFonts.inter(
-                    color: AppColors.measure,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  )),
+              tally,
             ]),
           ),
           if (_loading)
@@ -173,8 +185,12 @@ class _TacticsScreenState extends State<TacticsScreen> {
                 ],
               ),
             ),
-        ]),
-      ),
+        ]);
+
+    if (widget.embedded) return body;
+    return Scaffold(
+      backgroundColor: AppColors.base,
+      body: SafeArea(child: body),
     );
   }
 }
