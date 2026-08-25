@@ -132,6 +132,17 @@ class _FirstRepScreenState extends State<FirstRepScreen> {
           decimals: 0,
           suffix: '/ 100',
           kicker: 'YOUR FIRST REP',
+          // THE FIVE BARS THAT ALL READ ZERO.
+          //
+          // RizzOffReveal defaults to the VOICE axes. This is a TEXT
+          // score, graded on a different five entirely, so without
+          // these the reveal looked up confidence/flow/wit/recovery/
+          // close, found none of them, and animated five bars to 0 —
+          // then showed him a real number out of 100 underneath. On the
+          // first rep in onboarding, which is the screen the whole
+          // funnel is built to reach.
+          axes: kChatAxes,
+          axisLabels: kChatAxisLabels,
         ),
         transitionBuilder: (_, a, __, child) =>
             FadeTransition(opacity: a, child: child),

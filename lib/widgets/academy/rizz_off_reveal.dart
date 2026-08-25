@@ -150,8 +150,36 @@ class _RizzOffRevealState extends State<RizzOffReveal>
   Widget? _actionsCache;
   final _timers = <Timer>[];
 
-  List<String> get _axes => widget.axes;
-  Map<String, String> get _labels => widget.axisLabels;
+  /// THE AXES ACTUALLY IN THIS RUBRIC.
+  ///
+  /// The defaults here are the VOICE rubric — confidence, flow, wit,
+  /// recovery, close. Text is graded on a completely different five
+  /// (opening, relevance, personality, momentum, restraint) because you
+  /// cannot hear a written line's delivery. A caller that passes a text
+  /// rubric and forgets `axes:` therefore looks up five keys that do not
+  /// exist, `rubric[axis] ?? 0` returns 0 for every one, and the man
+  /// watches five bars animate to nothing before being shown a real
+  /// score. That shipped, on the first rep in onboarding — the single
+  /// most important screen in the funnel.
+  ///
+  /// Fixed at the call site, and fixed again here so it cannot come
+  /// back: if the declared axes match nothing in the rubric, the rubric's
+  /// own keys win. A caller can be wrong; the screen still can't lie.
+  List<String> get _axes {
+    final declared = widget.axes;
+    if (widget.rubric.isEmpty) return declared;
+    final anyMatch = declared.any(widget.rubric.containsKey);
+    if (anyMatch) return declared;
+    return widget.rubric.keys.toList();
+  }
+
+  /// Labels for whichever axes won above. An axis with no supplied label
+  /// falls back to its own key, upper-cased — never a crash, and never a
+  /// blank row.
+  Map<String, String> get _labels => {
+        for (final a in _axes)
+          a: widget.axisLabels[a] ?? a.toUpperCase(),
+      };
 
   RizzGrade get _grade => RizzGrade.of(widget.gradeScore ?? widget.score);
 
@@ -431,7 +459,7 @@ class _RizzOffRevealState extends State<RizzOffReveal>
           Padding(
             padding: const EdgeInsets.only(bottom: 18),
             child: _AxisRow(
-              label: _labels[axis]!,
+              label: _labels[axis] ?? axis.toUpperCase(),
               value: widget.rubric[axis] ?? 0,
             )
                 .animate()

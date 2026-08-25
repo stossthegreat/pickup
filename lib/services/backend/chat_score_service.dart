@@ -21,6 +21,33 @@ class ChatResult {
   });
 }
 
+/// THE TEXT RUBRIC'S AXES, AND THEIR LABELS.
+///
+/// Must stay in step with CHAT_AXES in
+/// supabase/functions/_shared/grade-chat.ts — that function decides
+/// them and this is only how they are spelled on screen.
+///
+/// They live here rather than at each call site because every screen
+/// that shows a text score has to pass them to RizzOffReveal, whose
+/// defaults are the VOICE five. Onboarding's first rep forgot, so it
+/// looked up confidence/flow/wit/recovery/close against a rubric that
+/// has none of them and rendered five zeros.
+const kChatAxes = <String>[
+  'opening',
+  'relevance',
+  'personality',
+  'momentum',
+  'restraint',
+];
+
+const kChatAxisLabels = <String, String>{
+  'opening': 'OPENING',
+  'relevance': 'RELEVANCE',
+  'personality': 'PERSONALITY',
+  'momentum': 'MOMENTUM',
+  'restraint': 'RESTRAINT',
+};
+
 /// THE TEXT LADDER — client for the score-chat Edge Function.
 ///
 /// Text used to pay a flat +50 XP whether you wrote something devastating

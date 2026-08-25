@@ -1,16 +1,18 @@
 /// The app's numeric App Store ID (Apple's "Apple ID" for the app record).
 ///
-/// Find it once the ImHim app exists in App Store Connect:
-///   App Store Connect → your app → App Information → "Apple ID"
-///   (a number like 6712345678). It's assigned the moment you create the
-///   app record — you do NOT have to wait for the app to go live.
+/// From the live listing URL:
+///   https://apps.apple.com/gb/app/imhim-rizz-master-rizz/id6798386010
 ///
-/// Fill this in and BOTH review paths — Settings → "Rate us" and the 5-star
-/// review prompt — deep-link straight to the real ImHim listing's review tab.
+/// WHY THIS BEING EMPTY COST EVERY iOS REVIEW.
 ///
-/// While it's EMPTY (as now), both paths fall back to the NATIVE in-app review
-/// prompt, which StoreKit auto-targets to whatever app is actually installed —
-/// so it can never send a user to the wrong (old Mirrorly) app. The old
-/// hard-coded ID (6762532788) has been removed. The whole review system stays
-/// wired and ready; this is the only value to update when you have the ID.
-const String kAppStoreId = '';
+/// With no ID, both review paths fell back to `requestReview()` — the
+/// NATIVE StoreKit sheet. Apple rate-limits that to roughly three
+/// prompts per user per YEAR and, past the cap, it does not fail, throw
+/// or return anything: it silently draws nothing. So a man tapped five
+/// stars, tapped "Write a Review", and the card just closed. It looked
+/// like a working button and it was a no-op.
+///
+/// With the ID set, `openStoreListing(appStoreId:)` deep-links straight
+/// to the listing's review composer. That path is NOT rate-limited —
+/// it is just a URL — so the button does what it says every single time.
+const String kAppStoreId = '6798386010';

@@ -245,6 +245,11 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
   /// the app into a dialog.
   bool _verdictShown = false;
 
+  /// The task hit its goal and the grade is in flight. Drives the
+  /// "SCORING YOUR REP" overlay — see _finishTask for why a silent wait
+  /// here read as the app having frozen.
+  bool _scoring = false;
+
   /// Relationship arc: what she remembers about him + which stage they're
   /// at (1 Matched → 5 Together). Loaded on open, saved as it moves.
   String _memory = '';
@@ -601,12 +606,31 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       }
     }
 
+    // ── THE WAIT THAT LOOKED LIKE A FREEZE ────────────────────────────
+    //
+    // `await grading` with no timeout and nothing on screen. When the
+    // ceremony above runs there is something to watch while the grade
+    // lands — but the onboarding rep sets verdictOnFinish: false, so
+    // NOTHING was drawn. The bar hit 100%, the screen went still, and a
+    // man's only move was the back arrow, which is the one exit that
+    // does not pop `true`. He had to leave to be scored, and leaving is
+    // what made it look like he had not been.
+    //
+    // Now: an overlay that says what is happening, and a ceiling on the
+    // wait. Past the ceiling we pop anyway — the grade keeps running and
+    // is parked on ChatScoreService.grading, which every caller already
+    // waits for on the other side.
+    if (mounted) setState(() => _scoring = true);
+    try {
+      await grading.timeout(const Duration(seconds: 12));
+    } catch (_) {/* slow or dead network — the caller waits too */}
+    if (!mounted) return;
+    setState(() => _scoring = false);
     // Pop with TRUE — this is the only path that proves the task was
     // genuinely run, and Missions completes on that result alone. Every
     // other exit (back arrow, swipe) returns null and leaves the mission
     // open, which is the point: opening a chat is not doing it.
-    await grading;
-    if (mounted) Navigator.of(context).pop(true);
+    Navigator.of(context).pop(true);
   }
 
   Future<void> _send(String raw) async {
@@ -1020,7 +1044,8 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
     final post = widget.config.post;
     return Scaffold(
       backgroundColor: AppColors.base,
-      body: GestureDetector(
+      body: Stack(children: [
+      GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => FocusScope.of(context).unfocus(),
         child: SafeArea(
@@ -1084,6 +1109,49 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
           ),
         ),
       ),
+      // ── SCORING ───────────────────────────────────────────────────
+      // Shown only while the grade is in flight after the task hits its
+      // goal. Before this the screen simply stopped responding and the
+      // man's only move was the back arrow — the one exit that does not
+      // count the rep. Absorbs taps on purpose: he cannot send a sixth
+      // message into a conversation that is already being marked.
+      if (_scoring)
+        Positioned.fill(
+          child: AbsorbPointer(
+            child: ColoredBox(
+              color: Colors.black.withValues(alpha: 0.72),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 34,
+                      height: 34,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.2, color: widget.config.accent),
+                    ),
+                    const SizedBox(height: 18),
+                    Text('SCORING YOUR REP',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 13,
+                          letterSpacing: 3,
+                          fontWeight: FontWeight.w900,
+                        )),
+                    const SizedBox(height: 8),
+                    Text('She is deciding what she made of you.',
+                        style: GoogleFonts.inter(
+                          color: AppColors.textTertiary,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                        )),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ]),
     );
   }
 }

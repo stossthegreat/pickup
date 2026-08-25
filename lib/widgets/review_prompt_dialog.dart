@@ -7,6 +7,7 @@ import 'package:in_app_review/in_app_review.dart';
 
 import '../config/app_store_config.dart';
 import '../services/analytics_service.dart';
+import '../services/review_prompt_service.dart';
 
 /// v249 — smooth two-stage iOS-style review prompt.
 ///
@@ -34,11 +35,37 @@ import '../services/analytics_service.dart';
 /// chrome behind. iOS users recognise this floating white-card
 /// pattern as "the rate prompt", which lifts tap-through.
 class ReviewPromptDialog extends StatefulWidget {
-  const ReviewPromptDialog({super.key});
+  /// Which ask this is, 1-based. The copy sharpens as it climbs: the
+  /// first is a polite question, the last says out loud that it is the
+  /// last. A man who has ignored three asks does not need a fourth
+  /// identical one — he needs a different sentence.
+  final int ask;
+  const ReviewPromptDialog({super.key, this.ask = 1});
 
   @override
   State<ReviewPromptDialog> createState() => _ReviewPromptDialogState();
 }
+
+/// THE ASK, ESCALATING.
+///
+/// Never names a number of stars and never offers anything for one.
+/// App Store Review Guideline 1.1.7 and Play policy both forbid
+/// soliciting a specific rating or paying for reviews, and a listing
+/// pulled for it would cost more than every review it ever bought.
+/// What IS allowed — and what actually works — is telling a man the
+/// truth about why it matters.
+const _asks = <(String, String)>[
+  ('Enjoying ImHim?',
+   'Tap a star. Ten seconds, and it genuinely helps.'),
+  ('Do us one favour.',
+   'Ratings are the only reason the next man ever finds this.'),
+  ('Still worth it?',
+   'You have put the reps in. Thirty seconds says whether it worked.'),
+  ('One rating. That is the whole ask.',
+   'No app grows without them. This one included.'),
+  ('Last time we will ask.',
+   'If it has helped you, say so. If it has not, say that instead.'),
+];
 
 class _ReviewPromptDialogState extends State<ReviewPromptDialog> {
   int _rating = 0;
@@ -55,8 +82,12 @@ class _ReviewPromptDialogState extends State<ReviewPromptDialog> {
     if (_opening) return;
     setState(() => _opening = true);
     HapticFeedback.mediumImpact();
+    // The only signal either platform gives us that he acted — neither
+    // will say whether a review was actually written. The ladder backs
+    // off on this, so it has to be recorded before the store takes over
+    // the screen.
     // ignore: discarded_futures
-    AnalyticsService.reviewNativeOpened();
+    ReviewPromptService.markSentToStore();
     try {
       final reviewer = InAppReview.instance;
       // Mirror Settings → Rate us so "Write a Review" actually lands the
@@ -134,8 +165,9 @@ class _ReviewPromptDialogState extends State<ReviewPromptDialog> {
                     children: [
                       Text(
                         tapped
-                          ? 'Thanks for your feedback.'
-                          : 'Enjoying ImHim?',
+                          ? 'Thanks. One more thing.'
+                          : _asks[(widget.ask - 1)
+                              .clamp(0, _asks.length - 1)].$1,
                         style: GoogleFonts.inter(
                           color: Colors.black,
                           fontSize: 17, fontWeight: FontWeight.w700,
@@ -145,8 +177,15 @@ class _ReviewPromptDialogState extends State<ReviewPromptDialog> {
                       const SizedBox(height: 4),
                       Text(
                         tapped
-                          ? 'You can also write a review.'
-                          : 'Tap a star to rate it on the App Store.',
+                          // The stars are the easy half. Written reviews
+                          // are what a man actually reads before he
+                          // downloads, so the second stage pushes for
+                          // the words rather than thanking him and
+                          // getting out of the way.
+                          ? 'The stars help. The words are what make '
+                            'another man try it.'
+                          : _asks[(widget.ask - 1)
+                              .clamp(0, _asks.length - 1)].$2,
                         style: GoogleFonts.inter(
                           color: Colors.black.withValues(alpha: 0.65),
                           fontSize: 13.5, fontWeight: FontWeight.w400,
