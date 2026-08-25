@@ -33,6 +33,7 @@ import '../../widgets/academy/squad_grade.dart';
 import '../../widgets/academy/squad_gauge.dart';
 import '../../widgets/academy/today_board.dart';
 import '../../widgets/academy/your_five.dart';
+import '../../services/my_moves.dart';
 
 /// THE SQUAD ROOM. Not a settings page — a room you walk into. The
 /// banner tells you who you are, the WEEK BOARD tells you who showed
@@ -57,6 +58,11 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
   Map<String, MissionPulse> _squadStates = const {};
   List<DailyMark> _daily = const [];
   SquadHistory _history = SquadHistory.empty;
+  /// Missions this phone knows he finished today. Home writes to local
+  /// prefs and the squad board reads the server, and the two systems
+  /// share no ids — without this the room reported his own work as zero.
+  /// See MyMoves.
+  int _myMoves = 0;
   RealtimeChannel? _pulseChannel;
   RealtimeChannel? _rosterChannel;
 
@@ -122,6 +128,10 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
       _myStates = myStates;
       _loading = false;
     });
+    // Local and cheap — read after the frame rather than blocking it,
+    // exactly as Squad home does.
+    final mine = await MyMoves.today();
+    if (mounted) setState(() => _myMoves = mine);
     // ignore: discarded_futures
     _moments(ids);
   }
@@ -167,6 +177,15 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
         board: _board,
         squadStates: _squadStates,
         daily: _daily,
+        // THE TWO ARGUMENTS THIS SCREEN WAS MISSING.
+        //
+        // SquadDay has carried the local-mission bridge since it was
+        // written, and Squad home passed it. This screen — the one
+        // whose entire job is showing what the squad did — did not, so
+        // it read the server alone and told a man who had done all five
+        // missions that nobody had moved yet.
+        myMoves: _myMoves,
+        myUserId: AuthService.userId,
       );
 
   bool _wonShown = false;
@@ -681,12 +700,7 @@ class _SquadRoomScreenState extends State<SquadRoomScreen> {
                   sub: 'Everyone, everything, one look.',
                   accent: accent,
                 ),
-                TodayBoard(
-                  roster: _roster,
-                  board: _board,
-                  squadStates: _squadStates,
-                  daily: _daily,
-                ),
+                TodayBoard(day: day),
                 const SizedBox(height: 26),
 
                 // ── THE RIZZ-OFF — her, and who's faced her ─────────

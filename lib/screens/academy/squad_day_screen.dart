@@ -14,8 +14,6 @@ import '../../services/comeback_service.dart';
 import '../../services/economy.dart';
 import '../../services/achievements.dart';
 import '../../services/milestone_service.dart';
-import '../../services/local_store_service.dart';
-import '../../services/mission_engine.dart';
 import '../../services/mirror_service.dart';
 import '../../services/rolodex_service.dart';
 import '../../theme/app_colors.dart';
@@ -31,6 +29,7 @@ import '../../widgets/academy/rolodex_shelf.dart';
 import '../../widgets/academy/squad_hero.dart';
 import '../../widgets/academy/streak_chain.dart';
 import '../roleplay/girl_chat_screen.dart';
+import '../../services/my_moves.dart';
 
 /// SQUAD HOME — not a menu for squad features.
 ///
@@ -147,7 +146,7 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
       _loading = false;
     });
     // Cheap and local — read after the frame rather than blocking it.
-    final mine = await _localMoves();
+    final mine = await MyMoves.today();
     if (mounted) setState(() => _myMoves = mine);
     // ignore: discarded_futures
     _squadMilestone();
@@ -240,19 +239,6 @@ class _SquadDayScreenState extends State<SquadDayScreen> {
 
   /// Count today's completed Home missions, plus the daily if he's run
   /// it — the same five moves the squad board is trying to describe.
-  Future<int> _localMoves() async {
-    try {
-      final missions = await MissionEngine.loadToday();
-      var n = 0;
-      for (final m in missions) {
-        if (await LocalStoreService.isMissionDoneToday(m.id)) n++;
-      }
-      return n;
-    } catch (_) {
-      return 0;
-    }
-  }
-
   SquadDay get _day => SquadDay(
         roster: _roster,
         board: _board,

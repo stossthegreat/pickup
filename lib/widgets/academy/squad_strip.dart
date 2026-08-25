@@ -9,6 +9,8 @@ import '../../services/backend/squad_day.dart';
 import '../../services/backend/squad_service.dart';
 import '../../theme/app_colors.dart';
 import 'squad_chrome.dart';
+import '../../services/my_moves.dart';
+import '../../services/backend/auth_service.dart';
 
 /// THE SQUAD STRIP — the liveness engine, at the top of home.
 ///
@@ -34,6 +36,10 @@ class _SquadStripState extends State<SquadStrip> {
   List<Mission> _board = const [];
   Map<String, MissionPulse> _squadStates = const {};
   List<DailyMark> _daily = const [];
+  /// See MyMoves — Home's missions never reach the server, so without
+  /// this the strip under his own missions reported his own day as
+  /// untouched.
+  int _myMoves = 0;
   RealtimeChannel? _pulse;
 
   @override
@@ -75,6 +81,8 @@ class _SquadStripState extends State<SquadStrip> {
       _squadStates = results[1] as Map<String, MissionPulse>;
       _daily = results[2] as List<DailyMark>;
     });
+    final mine = await MyMoves.today();
+    if (mounted) setState(() => _myMoves = mine);
   }
 
   @override
@@ -156,6 +164,8 @@ class _SquadStripState extends State<SquadStrip> {
       board: _board,
       squadStates: _squadStates,
       daily: _daily,
+      myMoves: _myMoves,
+      myUserId: AuthService.userId,
     );
     final won = day.won;
     final accent = won ? AppColors.signalGreen : AppColors.red;
