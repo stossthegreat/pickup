@@ -77,10 +77,18 @@ class PurchaseConfig {
   ///                             approved on App Store Connect)
   static const productIds = (
     weekly:  'imhim_pro_weekly',   // ImHim weekly sub (primary)
+    // NEW — the annual tier. Matched on this EXACT id and nothing else.
+    // The stores still carry the legacy `mirrorly_pro_yearly`, which
+    // long-standing subscribers keep access through but which must
+    // never be sold again; a `contains('year')` match would pick it up
+    // and charge someone for the wrong product, so the matcher in
+    // PurchaseService compares the whole string.
+    annual:  'imhim_pro_annual',
     yearly:  'mirrorly_pro_yearly',
     rescue:  'mirrorly_pro_rescue',
     extra10: 'imhim_extra_10',     // 10 voice minutes, consumable
     extra20: 'imhim_extra_20',     // 20 voice minutes, consumable
+    extra60: 'imhim_extra_60',     // 60 voice minutes, consumable
   );
 
   // ── EXTRA — voice-minute packs ──────────────────────────────────────
@@ -105,6 +113,10 @@ class PurchaseConfig {
   static const extraMinutes = <String, int>{
     'imhim_extra_10': 10,
     'imhim_extra_20': 20,
+    // The pack for the man who has already run out twice. He is the
+    // highest-intent buyer the app will ever have and 20 minutes was
+    // the ceiling on what he could give us.
+    'imhim_extra_60': 60,
     'mirrorly_pro_rescue': 20,
   };
 
@@ -126,6 +138,7 @@ class PurchaseConfig {
     rescuePackage:  'rescue',
     extra10Package: 'extra10',
     extra20Package: 'extra20',
+    extra60Package: 'extra60',
   );
 
   /// Convenience — true only when RevenueCat is [enabled] AND keys are

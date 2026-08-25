@@ -12,10 +12,9 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 
 /// Today's opponent, resolved from the daily scenario key.
-GirlBrief girlForVibe(String vibeKey) => kRoster.firstWhere(
-      (g) => g.vibeKey == vibeKey,
-      orElse: () => kRoster.first,
-    );
+// girlForVibe moved to services/roster.dart — see the note there.
+// Re-exported so the screens that import this file for it keep working.
+export '../../services/roster.dart' show girlForVibe;
 
 /// The daily rotation, computed client-side with the SAME rule the
 /// server uses, so the card renders today's real woman before (or
