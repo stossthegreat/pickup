@@ -22,6 +22,7 @@ import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/game_feel.dart';
 import '../../widgets/academy/rizz_off_reveal.dart';
 import '../roleplay/girl_chat_screen.dart';
+import '../../services/review_prompt_service.dart';
 
 /// THE CHAT CHALLENGE — the Daily, in writing.
 ///
@@ -199,20 +200,8 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
         decimals: 0,
         suffix: '/ 100',
         kicker: 'THE CHAT CHALLENGE',
-        axes: const [
-          'opening',
-          'relevance',
-          'personality',
-          'momentum',
-          'restraint'
-        ],
-        axisLabels: const {
-          'opening': 'OPENING',
-          'relevance': 'RELEVANCE',
-          'personality': 'PERSONALITY',
-          'momentum': 'MOMENTUM',
-          'restraint': 'RESTRAINT',
-        },
+        axes: kChatAxes,
+        axisLabels: kChatAxisLabels,
       ),
       transitionBuilder: (ctx, a, __, child) =>
           FadeTransition(opacity: a, child: child),
@@ -230,6 +219,15 @@ class _DailyChatScreenState extends State<DailyChatScreen> {
       MilestoneService.pushTrophies(await Achievements.bump(Stat.nineties));
     }
     if (mounted) await PayoutScreen.cashOut(context);
+    // THE BEST MOMENT THERE IS TO ASK. He has just been graded well,
+    // been paid for it, and is still holding the phone. Gated on the
+    // score inside the service: asking a man to rate you ninety seconds
+    // after telling him he scored 41 is how you get a 41 back.
+    //
+    // Deliberately NOT wired into onboarding's first rep — a man who has
+    // not paid yet and is mid-funnel should be looking at the price, not
+    // at a rating card.
+    if (mounted) await ReviewPromptService.maybePromptAfterScore(context, r.score);
   }
 
   @override
