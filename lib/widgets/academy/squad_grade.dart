@@ -20,7 +20,24 @@ class SquadGrade {
   static const _neon = Color(0xFF2EE87A);
   static const _gold = Color(0xFFF5C542);
 
-  /// [done] squares filled, [possible] members × 7.
+  /// Nothing has happened YET — not a bad grade, no grade.
+  ///
+  /// Used on the first day of the week only. A squad formed this morning
+  /// reading DEAD is a lie, and it is the first thing a new squad sees.
+  /// From Tuesday on, a week with nothing in it earns the F: the whole
+  /// product is accountability, and a grade that never says the hard
+  /// thing is worth nothing.
+  static const pending = SquadGrade('—', 'NO GRADE YET',
+      'First run of the week puts it on the board.',
+      AppColors.textSecondary, 0.0);
+
+  /// [done] squares filled, [possible] members × days elapsed.
+  ///
+  /// DAYS ELAPSED, NOT SEVEN. This divided by the whole week no matter
+  /// what day it was, so the grade was arithmetically incapable of
+  /// being good before Friday: a squad that did every single move on
+  /// Monday scored 1/7 and got told it was DEAD. The denominator has to
+  /// be what was actually available to them so far.
   factory SquadGrade.of(int done, int possible) {
     final pct = possible == 0 ? 0.0 : done / possible;
     if (pct >= 0.85) {
@@ -58,8 +75,15 @@ class SquadReport extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final done = marks.where((m) => m.completed).length;
-    final possible = roster.length * 7;
-    final g = SquadGrade.of(done, possible);
+    // Days of this week that have actually happened, 1..7 — see the note
+    // on SquadGrade.of. Monday is 1, not 7.
+    final elapsed = DateTime.now().weekday;
+    final possible = roster.length * elapsed;
+    // Day one with nothing on the board is "not yet", not "dead".
+    // Any later, silence is the verdict.
+    final g = (done == 0 && elapsed <= 1)
+        ? SquadGrade.pending
+        : SquadGrade.of(done, possible);
 
     // Per-man contribution, best first — the pecking order, visible.
     final rows = [

@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/mission_service.dart';
 import '../../services/backend/squad_service.dart';
+import '../../services/backend/squad_day.dart';
 import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
 
@@ -23,36 +24,37 @@ import '../../theme/app_colors.dart';
 /// see one man's day; read down a column to see who's carrying a
 /// mission and who's ducking it.
 class TodayBoard extends StatelessWidget {
-  final List<SquadMember> roster;
-  final List<Mission> board;
-  final Map<String, MissionPulse> squadStates;
-  final List<DailyMark> daily;
+  /// The whole day, one model. It used to take the four raw pieces and
+  /// tally them itself, which meant it read the server alone and could
+  /// not see the missions he does on Home — see MyMoves. Taking the
+  /// model instead means the reconciliation happens once, in SquadDay,
+  /// and this widget cannot drift away from the number the gauge above
+  /// it is showing.
+  final SquadDay day;
 
-  const TodayBoard({
-    super.key,
-    required this.roster,
-    required this.board,
-    required this.squadStates,
-    required this.daily,
-  });
+  const TodayBoard({super.key, required this.day});
 
-  DailyMark? _dailyFor(String userId) {
-    for (final d in daily) {
-      if (d.userId == userId) return d;
-    }
-    return null;
-  }
+  List<SquadMember> get roster => day.roster;
+  List<Mission> get board => day.board;
+  Map<String, MissionPulse> get squadStates => day.squadStates;
+  List<DailyMark> get daily => day.daily;
+
+  DailyMark? _dailyFor(String userId) => day.dailyFor(userId);
 
   String _nameOf(SquadMember m) =>
       m.userId == AuthService.userId ? 'YOU' : (m.handle ?? 'ANON');
 
-  /// Missions done today across the whole squad, over the possible max.
+  /// Moves done today across the whole squad, over the possible max.
+  ///
+  /// Counted through the model so his own Home missions are included.
+  /// Summing `squadStates` directly — which is what this did — is
+  /// exactly the read that made the room report zero.
   (int, int) get _tally {
     var done = 0;
-    for (final m in board) {
-      done += squadStates[m.id]?.completed.length ?? 0;
+    for (final m in roster) {
+      done += day.movesFor(m.userId);
     }
-    return (done, board.length * roster.length);
+    return (done, day.possible);
   }
 
   @override
@@ -78,7 +80,7 @@ class TodayBoard extends StatelessWidget {
                 fontWeight: FontWeight.w900,
               )),
           const Spacer(),
-          _Stat(label: 'MISSIONS', value: '$done/$possible',
+          _Stat(label: 'MOVES', value: '$done/$possible',
               color: done > 0 ? kNeon : AppColors.textMuted),
           const SizedBox(width: 14),
           _Stat(label: 'VOICE RUN', value: '$ran/${roster.length}',
@@ -140,12 +142,13 @@ class TodayBoard extends StatelessWidget {
   Widget _row(BuildContext context, SquadMember m) {
     final mine = m.userId == AuthService.userId;
     final d = _dailyFor(m.userId);
-    var mineDone = 0;
-    for (final mission in board) {
-      if (squadStates[mission.id]?.completed.contains(m.userId) ?? false) {
-        mineDone++;
-      }
-    }
+    // Through the model, for the same reason as _tally. Out of five
+    // moves rather than the board length: five is what a move IS here,
+    // it matches the gauge and the header, and the local bridge counts
+    // in fives. The per-mission ticks to the right still come straight
+    // off the server — they are about specific missions and cannot be
+    // reconciled, since the two systems share no ids.
+    final mineDone = day.movesFor(m.userId);
 
     return Row(children: [
       // Name + personal tally
@@ -182,7 +185,7 @@ class TodayBoard extends StatelessWidget {
                       fontSize: 10.5,
                       fontWeight: FontWeight.w900,
                     )),
-                Text('$mineDone/${board.length}',
+                Text('$mineDone/${SquadDay.movesPerMember}',
                     style: GoogleFonts.inter(
                       color: AppColors.textMuted,
                       fontSize: 8.5,
