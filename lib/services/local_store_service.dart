@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'extra_service.dart';
 import '../models/scan_record.dart';
+import 'trial_service.dart';
 
 /// v279 — active Pro subscription type. Lives here (not in
 /// PurchaseService) so LocalStoreService can read it for cap-window
@@ -648,6 +649,25 @@ class LocalStoreService {
   /// someone in the direction of "you got less than you thought".
   static Future<void> addVoiceMs(int deltaMs) async {
     if (deltaMs <= 0) return;
+    // TRIAL SPENDS ITS OWN BUDGET FIRST. During the store's free trial
+    // the `pro` entitlement is active, so without this branch a trial
+    // user would spend the full paid weekly allowance — a free week of
+    // the only expensive feature in the app. TrialService.spend returns
+    // whatever it could not cover, which falls through to the paid
+    // paths below so a man who BOUGHT an EXTRA pack mid-trial can still
+    // speak the minutes he paid for.
+    if (await TrialService.isTrial()) {
+      final leftover = await TrialService.spend(deltaMs);
+      // ANYTHING BEYOND THE TRIAL MINUTE COMES OUT OF MINUTES HE BOUGHT,
+      // AND NOTHING ELSE. Falling through to the paid weekly allowance —
+      // which the first version of this did — handed a trial user one
+      // trial minute PLUS the full fourteen, i.e. a free week of the
+      // only expensive feature in the app, to everyone who never
+      // intended to pay. The bank is the one pool a trial user can
+      // legitimately draw on, because he paid cash for it.
+      if (leftover > 0) await ExtraService.spend(leftover);
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     final bucket = _rollingBucket(await _capAnchor(prefs), await _windowMs(prefs));
     final stored = prefs.getInt(_kVoiceWeekBucket) ?? 0;
@@ -668,6 +688,11 @@ class LocalStoreService {
   /// Every millisecond he can still speak — free allowance plus bank.
   static Future<int> voiceMsRemaining() async {
     if (await isCreatorActive()) return 1 << 30;
+    // In trial: the one trial minute, plus anything he actually bought.
+    // Deliberately NOT the weekly allowance — see TrialService.
+    if (await TrialService.isTrial()) {
+      return await TrialService.remainingMs() + await ExtraService.bankedMs();
+    }
     final used = await voiceMsThisWeek();
     final weeklyCapMs = kVoiceMinutesPerWeek * 60 * 1000;
     final weeklyLeft = (weeklyCapMs - used).clamp(0, weeklyCapMs);

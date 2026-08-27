@@ -14,6 +14,7 @@ import '../../services/purchase_service.dart';
 import '../../services/review_prompt_service.dart';
 import '../../services/win_back_service.dart';
 import '../../theme/app_colors.dart';
+import '../../services/trial_service.dart';
 
 /// ImHim paywall — "paywall-final" carousel.
 ///
@@ -75,6 +76,10 @@ const Color _tile = Color(0xFF111113);
 class _PaywallScreenState extends State<PaywallScreen> {
   PurchaseOfferings _offerings = PurchaseOfferings.empty();
   bool _purchasing = false;
+  /// Defaults FALSE, deliberately. Until we've read the flag we show
+  /// the paid copy — over-promising a trial reads as a bait; under-
+  /// promising is a slightly duller headline for half a second.
+  bool _trialEligible = false;
 
   final PageController _pager = PageController();
   static const int _panelCount = 3;
@@ -160,8 +165,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   Future<void> _loadOfferings() async {
     final off = await PurchaseService.loadOfferings();
+    // Both stores allow one intro offer per subscription group, ever.
+    // A device that has already been in a trial is not getting another.
+    final eligible = !(await TrialService.everStarted());
     if (!mounted) return;
-    setState(() => _offerings = off);
+    setState(() {
+      _offerings = off;
+      _trialEligible = eligible;
+    });
   }
 
   // ── Auto-tour ─────────────────────────────────────────────────────
@@ -220,6 +231,44 @@ class _PaywallScreenState extends State<PaywallScreen> {
     final pkg = _packageFor(t);
     if (pkg != null) return pkg.storeProduct.priceString;
     return _placeholderDash;
+  }
+
+  /// The free trial attached to the weekly product, if the store is
+  /// offering one and this device has not already used one.
+  ///
+  /// WHY NOT checkTrialOrIntroductoryPriceEligibility(): its return type
+  /// is not exported from purchases_flutter, and RevenueCat's own docs
+  /// say "Android always returns introEligibilityStatusUnknown" — so it
+  /// answers on one platform out of two and cannot be named on either.
+  /// The local "has this device ever been in a trial" flag is the same
+  /// answer in the overwhelming case and works everywhere.
+  ///
+  /// THE STORE REMAINS THE AUTHORITY. If he reinstalls and we get this
+  /// wrong, Apple's and Google's own purchase sheets still show the real
+  /// terms before he confirms, and bill him correctly. This copy is
+  /// best-effort; the sheet after it is not.
+  IntroductoryPrice? get _trial {
+    if (!_trialEligible) return null;
+    final intro = _packageFor(_Tier.weekly)?.storeProduct.introductoryPrice;
+    if (intro == null) return null;
+    // A discounted intro period is NOT a free trial. Only a zero price
+    // may be called free.
+    if (intro.price > 0) return null;
+    return intro;
+  }
+
+  /// "3 days" / "1 week" — built from the store's own numbers so it can
+  /// never contradict what Apple actually charges.
+  String _trialLength(IntroductoryPrice t) {
+    final n = t.periodNumberOfUnits;
+    final unit = switch (t.periodUnit) {
+      PeriodUnit.day   => 'day',
+      PeriodUnit.week  => 'week',
+      PeriodUnit.month => 'month',
+      PeriodUnit.year  => 'year',
+      _                => 'day',
+    };
+    return '$n $unit${n == 1 ? '' : 's'}';
   }
 
   Future<void> _buy() async {
@@ -534,7 +583,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
                                         AlwaysStoppedAnimation(Colors.white)),
                               )
                             : Text(
-                                'BECOME HIM',
+                                _trial == null
+                                    ? 'BECOME HIM'
+                                    : 'START FREE TRIAL',
                                 style: GoogleFonts.inter(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 16,
@@ -581,8 +632,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
   /// number in Settings → TestFlight instead.)
   Widget _priceLine() {
     final price = _priceFor(_Tier.weekly);
+    final t = _trial;
     return Text(
-      '$price per week · auto-renews · cancel anytime',
+      t == null
+          ? '$price per week · auto-renews · cancel anytime'
+          // Apple 3.1.2 requires the length, what happens after, and the
+          // renewing price, in that order and before the tap.
+          : '${_trialLength(t)} free, then $price per week · '
+            'auto-renews · cancel anytime',
       textAlign: TextAlign.center,
       style: GoogleFonts.inter(
         color: AppColors.textSecondary,
