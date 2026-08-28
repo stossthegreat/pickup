@@ -463,145 +463,176 @@ class _PaywallScreenState extends State<PaywallScreen> {
   // ── Build ─────────────────────────────────────────────────────────
 
   @override
+  /// The per-day cost of a package, in the store's own currency.
+  ///
+  /// Derived from the LOCALISED priceString rather than formatted from
+  /// the raw double: there is no intl package here, and hand-formatting
+  /// a currency puts the symbol on the wrong side in half of Europe and
+  /// the decimal separator on the wrong character in the other half.
+  /// Swapping the number inside the string the store already gave us
+  /// keeps the symbol, its position and the separator exactly right.
+  ///
+  /// Returns null rather than guessing — a wrong price is a review
+  /// issue; a missing line is a gap.
+  String? _perDay(_Tier t, int days) {
+    final p = _packageFor(t)?.storeProduct;
+    if (p == null || p.price <= 0) return null;
+    final m = RegExp(r'\d[\d.,  ]*\d|\d').firstMatch(p.priceString);
+    if (m == null) return null;
+    final numeric = p.priceString.substring(m.start, m.end);
+    // The LAST separator is the decimal one, so "1.234,56" and
+    // "1,234.56" both resolve correctly.
+    final cut = numeric.lastIndexOf(',') > numeric.lastIndexOf('.')
+        ? numeric.lastIndexOf(',')
+        : numeric.lastIndexOf('.');
+    // …unless it is followed by exactly THREE digits, in which case it
+    // is a thousands separator and this currency has no minor unit.
+    // "¥2,999" was becoming "¥99,97" — a yen price with pence in it.
+    final tail = cut < 0 ? 0 : numeric.length - cut - 1;
+    final zeroDecimal = cut < 0 || tail == 3;
+    final sep = cut < 0 ? '.' : numeric[cut];
+    final raw = p.price / days;
+    final per = zeroDecimal
+        ? raw.round().toString()
+        : raw.toStringAsFixed(2).replaceAll('.', sep);
+    return p.priceString.replaceRange(m.start, m.end, per);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final t = _trial;
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
         child: Column(children: [
-          // ── Chrome: close only. No share — a man has nothing to share
-          //    yet, and the button that dismisses the price should not
-          //    have a twin next to it competing for the same tap.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(6, 2, 6, 0),
-            child: Row(children: [
-              _CloseX(onTap: _close),
-              const Spacer(),
-            ]),
-          ),
+          _topBar(),
+          // ONE SCREEN, ALWAYS. scaleDown only ever shrinks: on a 6.7"
+          // nothing moves, on a 4.7" the whole block steps down together
+          // instead of scrolling or clipping. The CTA lives OUTSIDE this,
+          // so it is pinned and visible on every device — the one thing
+          // on this screen that must never need a scroll to reach.
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Column(children: [
-                _kicker('YOUR FIRST TEST IS READY'),
-                const SizedBox(height: 10),
-                _headline(),
-                const SizedBox(height: 6),
-                const _ScoreMark(),
-                const SizedBox(height: 10),
-                Text('One live conversation. No scripts. No hints.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      color: AppColors.textSecondary,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w500,
-                    )),
-                const SizedBox(height: 18),
-                const _AxisRow(),
-                const SizedBox(height: 26),
-                _sectionRule(t == null
-                    ? 'WHAT YOU GET'
-                    : 'TRY THE FULL SYSTEM FREE'),
-                const SizedBox(height: 18),
-                // Every line is something the app actually does. "Unlimited
-                // voice" and "all characters" were both false — voice is
-                // metered at 14 min/week and the roster unlocks by
-                // ascension day, not by paying.
-                const _Feature(
-                  icon: Icons.mic_rounded,
-                  title: 'VOICE GAME TEST',
-                  body: 'Get your score and find your weakest skill',
-                ),
-                const _Feature(
-                  icon: Icons.chat_bubble_rounded,
-                  title: 'UNLIMITED CHAT PRACTICE',
-                  body: 'Train your game with unlimited reps',
-                ),
-                const _Feature(
-                  icon: Icons.group_rounded,
-                  title: '10 AI WOMEN',
-                  body: 'Progress from Into You  →  Ice Queen',
-                ),
-                const SizedBox(height: 6),
-                Text('+ Coaching · Missions · Battles · Squads · Ranks',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      color: AppColors.textTertiary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    )),
-                const SizedBox(height: 22),
-                _tier(_Tier.monthly, 'MONTH', trial: t),
-                const SizedBox(height: 10),
-                _tier(_Tier.weekly, 'WEEK', trial: null),
-              ]),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: MediaQuery.sizeOf(context).width - 36,
+                child: Column(children: [
+                  const SizedBox(height: 2),
+                  _headline(),
+                  const SizedBox(height: 8),
+                  Text('Stop guessing. Start training.',
+                      style: GoogleFonts.inter(
+                        color: AppColors.textSecondary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      )),
+                  const SizedBox(height: 18),
+                  const _Step(
+                    n: '1',
+                    title: 'GET TESTED ACROSS KEY METRICS',
+                    body: 'Get your score across 5 key skills:',
+                    axes: 'Confidence  |  Flow  |  Wit  |  Recovery  |  Close',
+                  ),
+                  const _Step(
+                    n: '2',
+                    title: 'TRAIN WITH AI & GET PERSONAL ADVICE',
+                    body: 'Practice real conversations, get scored and '
+                        'receive tailored advice on exactly what to '
+                        'improve next.',
+                  ),
+                  const _Step(
+                    n: '3',
+                    title: 'COMPLETE REAL WORLD MISSIONS',
+                    body: 'Take your game into the real world, build '
+                        'confidence through reps and watch your game '
+                        'level up.',
+                    last: true,
+                  ),
+                  const SizedBox(height: 12),
+                  const _ScoreStrip(),
+                  const SizedBox(height: 11),
+                  Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: _tierCard(_Tier.monthly, 'MONTH', t, 30)),
+                        const SizedBox(width: 10),
+                        Expanded(child: _tierCard(_Tier.weekly, 'WEEK', null, 7)),
+                      ]),
+                  const SizedBox(height: 2),
+                ]),
+              ),
             ),
           ),
-          _bottom(t),
+          _cta(t),
         ]),
       ),
     );
   }
 
-  Widget _kicker(String text) => Row(children: [
-        Expanded(child: Container(height: 1, color: AppColors.red.withValues(alpha: 0.35))),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(text,
-              style: GoogleFonts.inter(
-                color: AppColors.red,
-                fontSize: 11.5,
-                letterSpacing: 2.2,
-                fontWeight: FontWeight.w900,
-              )),
-        ),
-        Expanded(child: Container(height: 1, color: AppColors.red.withValues(alpha: 0.35))),
-      ]);
+  Widget _topBar() => Padding(
+        padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
+        child: Row(children: [
+          _CloseX(onTap: _close),
+          Expanded(
+            child: Text('IMHIM PRO',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: AppColors.red,
+                  fontSize: 15,
+                  letterSpacing: 3,
+                  fontWeight: FontWeight.w900,
+                )),
+          ),
+          GestureDetector(
+            onTap: _restore,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Text('Restore',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  )),
+            ),
+          ),
+        ]),
+      );
 
   Widget _headline() => Column(children: [
-        Text('HOW GOOD IS',
+        Text('LEVEL UP',
             style: GoogleFonts.inter(
               color: Colors.white,
-              fontSize: 42,
-              height: 1.0,
-              letterSpacing: -1.6,
+              fontSize: 52,
+              height: 0.98,
+              letterSpacing: -2,
               fontWeight: FontWeight.w900,
               fontStyle: FontStyle.italic,
             )),
-        Text('YOUR GAME?',
+        Text('YOUR GAME.',
             style: GoogleFonts.inter(
               color: AppColors.red,
-              fontSize: 42,
-              height: 1.05,
-              letterSpacing: -1.6,
+              fontSize: 52,
+              height: 1.0,
+              letterSpacing: -2,
               fontWeight: FontWeight.w900,
               fontStyle: FontStyle.italic,
             )),
       ]);
 
-  Widget _sectionRule(String label) => Row(children: [
-        Expanded(child: Container(height: 1, color: Colors.white24)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(label,
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 14,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w900,
-              )),
-        ),
-        Expanded(child: Container(height: 1, color: Colors.white24)),
-      ]);
-
-  /// One price row. Price and period come from the store, never from
-  /// here — a hardcoded figure is wrong the moment someone opens the app
-  /// outside your country, and both stores treat that as a review issue.
-  Widget _tier(_Tier tier, String period, {IntroductoryPrice? trial}) {
+  /// One price card. Every figure on it comes from the store.
+  Widget _tierCard(
+      _Tier tier, String period, IntroductoryPrice? trial, int daysInPeriod) {
     final pkg = _packageFor(tier);
-    final sel = _picked == tier;
-    final price = _priceFor(tier);
     final live = pkg != null;
+    final sel = _picked == tier;
+    final perDay = _perDay(tier, daysInPeriod);
     return Opacity(
       opacity: live ? 1 : 0.4,
       child: GestureDetector(
@@ -613,112 +644,147 @@ class _PaywallScreenState extends State<PaywallScreen> {
             : null,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
           decoration: BoxDecoration(
             color: sel
-                ? AppColors.red.withValues(alpha: 0.12)
+                ? AppColors.red.withValues(alpha: 0.10)
                 : const Color(0xFF121216),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
                 color: sel ? AppColors.red : Colors.white12,
                 width: sel ? 2 : 1),
             boxShadow: sel
-                ? [BoxShadow(color: AppColors.red.withValues(alpha: 0.28), blurRadius: 22)]
+                ? [
+                    BoxShadow(
+                        color: AppColors.red.withValues(alpha: 0.30),
+                        blurRadius: 22)
+                  ]
                 : null,
           ),
-          child: Row(children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (trial != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.red,
-                        borderRadius: BorderRadius.circular(6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // The badge and its absence take the same height, so the
+              // two cards stay level whichever one carries the trial.
+              SizedBox(
+                height: 20,
+                child: trial == null
+                    ? null
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.red,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                            '${_trialLength(trial).toUpperCase()} FREE',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 9.5,
+                              letterSpacing: 0.5,
+                              fontWeight: FontWeight.w900,
+                            )),
                       ),
-                      child: Text('${_trialLength(trial).toUpperCase()} FREE',
+              ),
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(_priceFor(tier),
                           style: GoogleFonts.inter(
                             color: Colors.white,
-                            fontSize: 10,
-                            letterSpacing: 0.8,
+                            fontSize: 27,
                             fontWeight: FontWeight.w900,
                           )),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  Row(crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic, children: [
-                    Text(price,
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                        )),
-                    const SizedBox(width: 5),
-                    Text('/ $period',
-                        style: GoogleFonts.inter(
-                          color: Colors.white70,
-                          fontSize: 15,
-                          letterSpacing: 0.6,
-                          fontWeight: FontWeight.w700,
-                        )),
-                  ]),
-                  const SizedBox(height: 3),
-                  Text(
-                      !live
-                          ? 'Not available on this store yet'
-                          : trial != null
-                              ? 'Then $price/${period.toLowerCase()} after your trial'
-                              : 'No free trial',
+                      const SizedBox(width: 4),
+                      Text('/ $period',
+                          style: GoogleFonts.inter(
+                            color: Colors.white70,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          )),
+                    ]),
+              ),
+              const SizedBox(height: 3),
+              // THE PER-DAY LINE. The monthly price is a decision; the
+              // same money said per day is a rounding error, and it is
+              // the unit he already thinks about spending in.
+              Text(
+                  !live
+                      ? 'Not on this store yet'
+                      : perDay != null
+                          ? 'Just $perDay a day'
+                          : '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: perDay != null
+                        ? AppColors.red
+                        : AppColors.textTertiary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  )),
+              const SizedBox(height: 8),
+              Row(children: [
+                Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                        color: sel ? AppColors.red : Colors.white30, width: 2),
+                    color: sel ? AppColors.red : Colors.transparent,
+                  ),
+                  child: sel
+                      ? const Icon(Icons.check_rounded,
+                          size: 12, color: Colors.white)
+                      : null,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(trial != null ? 'Most Popular' : 'No free trial',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         color: trial != null
                             ? AppColors.red
                             : AppColors.textTertiary,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                       )),
-                ],
-              ),
-            ),
-            Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                    color: sel ? AppColors.red : Colors.white30, width: 2),
-                color: sel ? AppColors.red : Colors.transparent,
-              ),
-              child: sel
-                  ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
-                  : null,
-            ),
-          ]),
+                ),
+              ]),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// CTA + the disclosure Apple 3.1.2 requires: length, what follows,
-  /// and the renewing price, before the tap.
-  Widget _bottom(IntroductoryPrice? t) {
+  /// Pinned. Never inside anything that can scroll or scale away.
+  Widget _cta(IntroductoryPrice? t) {
     final price = _priceFor(_picked);
     final period = _picked == _Tier.monthly ? 'month' : 'week';
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
+      padding: const EdgeInsets.fromLTRB(18, 6, 18, 2),
       child: Column(children: [
         SizedBox(
           width: double.infinity,
-          height: 64,
+          height: 66,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
-                    color: AppColors.red.withValues(alpha: 0.45),
-                    blurRadius: 28, spreadRadius: 1),
+                    color: AppColors.red.withValues(alpha: 0.5),
+                    blurRadius: 30,
+                    spreadRadius: 1),
               ],
             ),
             child: ElevatedButton(
@@ -727,103 +793,83 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+                    borderRadius: BorderRadius.circular(18)),
               ),
               onPressed: _purchasing ? null : _buy,
               child: _purchasing
                   ? const SizedBox(
-                      width: 20, height: 20,
+                      width: 22,
+                      height: 22,
                       child: CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation(Colors.white)))
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
+                  : Column(mainAxisSize: MainAxisSize.min, children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
                             t == null
                                 ? 'START TRAINING'
                                 : 'START MY ${_trialLength(t).toUpperCase()} FREE TRIAL',
                             style: GoogleFonts.inter(
-                              fontSize: 16,
-                              letterSpacing: 0.4,
+                              fontSize: 19,
+                              letterSpacing: 0.2,
                               fontWeight: FontWeight.w900,
                             )),
-                        const SizedBox(height: 1),
-                        Text('Take your first voice test now',
-                            style: GoogleFonts.inter(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white70,
-                            )),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text('Take your first voice test now',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withValues(alpha: 0.85),
+                          )),
+                    ]),
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
             t == null
                 ? '$price per $period · auto-renews · cancel anytime'
                 : '${_trialLength(t)} free, then $price/$period. '
-                  'Subscription auto-renews. Cancel anytime.',
+                    'Auto-renews. Cancel anytime.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               color: AppColors.textSecondary,
-              fontSize: 11.5,
-              height: 1.35,
+              fontSize: 11,
+              height: 1.3,
               fontWeight: FontWeight.w600,
             )),
-        // The one limit that would otherwise be a surprise. A man who
-        // starts a trial expecting unlimited voice, hits the wall after a
-        // minute and refunds costs more than the one who never converted.
         if (t != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Text(
-                'Trial includes ${TrialService.trialVoiceMinutes} minute of '
-                'live voice. Texting is unlimited.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  color: AppColors.textTertiary,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w600,
-                )),
-          ),
-        const SizedBox(height: 6),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _LinkButton(label: 'Restore', onTap: _restore),
-            _LinkButton(
-                label: 'Terms of Use',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  context.push('/terms');
-                }),
-            _LinkButton(
-                label: 'Privacy Policy',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  context.push('/privacy');
-                }),
-          ],
-        ),
+          Text(
+              'Trial includes ${TrialService.trialVoiceMinutes} minute of live '
+              'voice. Texting is unlimited.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                color: AppColors.textTertiary,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              )),
+        const SizedBox(height: 3),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          _LinkButton(label: 'Restore Purchases', onTap: _restore),
+          _LinkButton(
+              label: 'Terms of Use',
+              onTap: () {
+                HapticFeedback.selectionClick();
+                context.push('/terms');
+              }),
+          _LinkButton(
+              label: 'Privacy Policy',
+              onTap: () {
+                HapticFeedback.selectionClick();
+                context.push('/privacy');
+              }),
+        ]),
       ]),
     );
   }
 }
-
-// ══════════════════════════════════════════════════════════════════════
-//  HEADER
-// ══════════════════════════════════════════════════════════════════════
-
-
-
-// ══════════════════════════════════════════════════════════════════════
-//  PANEL 1 — THE AI GIRLS (roleplay showcase)
-// ══════════════════════════════════════════════════════════════════════
-
-
 
 // ══════════════════════════════════════════════════════════════════════
 //  PANEL (legacy) — PHOTO + SCORE  ·  no longer in the carousel
@@ -846,14 +892,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
 
 // ══════════════════════════════════════════════════════════════════════
-//  PANEL 3 — ORB / HOLD TO SPEAK
-// ══════════════════════════════════════════════════════════════════════
-
-
-
-
-
-// ══════════════════════════════════════════════════════════════════════
 //  PANEL (legacy) — RIZZ ACTIONS  ·  no longer in the carousel
 // ══════════════════════════════════════════════════════════════════════
 
@@ -864,159 +902,15 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
 
 // ══════════════════════════════════════════════════════════════════════
-//  PANEL 5 — ASCENSION LADDER
-// ══════════════════════════════════════════════════════════════════════
-
-
-
-
-
-// ══════════════════════════════════════════════════════════════════════
-//  CLASSIFIED PROGRESS TRACKER
-// ══════════════════════════════════════════════════════════════════════
-
-
-
-// ══════════════════════════════════════════════════════════════════════
 //  SHARED
 // ══════════════════════════════════════════════════════════════════════
 
-/// The withheld number. Same object as onboarding beat 4 — the whole
-/// funnel asks one question and this is the last place it goes
-/// unanswered.
-class _ScoreMark extends StatelessWidget {
-  const _ScoreMark();
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        Text('?',
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 96,
-              height: 1.0,
-              fontWeight: FontWeight.w900,
-              fontStyle: FontStyle.italic,
-              shadows: [
-                BoxShadow(color: AppColors.red.withValues(alpha: 0.7), blurRadius: 40)
-                    .toShadow(),
-              ],
-            )),
-        Text('/100',
-            style: GoogleFonts.inter(
-              color: AppColors.red,
-              fontSize: 62,
-              height: 1.0,
-              fontWeight: FontWeight.w900,
-              fontStyle: FontStyle.italic,
-            )),
-      ],
-    );
-  }
-}
 
-extension _ShadowX on BoxShadow {
-  Shadow toShadow() => Shadow(color: color, blurRadius: blurRadius);
-}
 
-/// The five axes as locked tiles. Named, so he knows what is being
-/// measured; locked, so he knows he has not been measured yet.
-class _AxisRow extends StatelessWidget {
-  const _AxisRow();
-  static const _axes = <(IconData, String)>[
-    (Icons.psychology_rounded, 'CONFIDENCE'),
-    (Icons.waves_rounded, 'FLOW'),
-    (Icons.lightbulb_rounded, 'WIT'),
-    (Icons.restart_alt_rounded, 'RECOVERY'),
-    (Icons.gps_fixed_rounded, 'CLOSE'),
-  ];
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (final (i, a) in _axes.indexed) ...[
-          if (i > 0) const SizedBox(width: 7),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF121216),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Column(children: [
-                Icon(a.$1, color: AppColors.red, size: 22),
-                const SizedBox(height: 7),
-                Text(a.$2,
-                    maxLines: 1,
-                    overflow: TextOverflow.visible,
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 8.5,
-                      letterSpacing: 0.2,
-                      fontWeight: FontWeight.w900,
-                    )),
-              ]),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
 
-/// One thing he gets, with the detail underneath so the title can stay
-/// short enough to read in a glance.
-class _Feature extends StatelessWidget {
-  final IconData icon;
-  final String title, body;
-  const _Feature(
-      {required this.icon, required this.title, required this.body});
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(children: [
-        Container(
-          width: 46,
-          height: 46,
-          decoration: BoxDecoration(
-            color: AppColors.red.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(13),
-          ),
-          child: Icon(icon, color: AppColors.red, size: 22),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title,
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 15,
-                    letterSpacing: 0.4,
-                    fontWeight: FontWeight.w900,
-                  )),
-              const SizedBox(height: 2),
-              Text(body,
-                  style: GoogleFonts.inter(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  )),
-            ],
-          ),
-        ),
-      ]),
-    );
-  }
-}
+
 
 class _CloseX extends StatelessWidget {
   final VoidCallback onTap;
@@ -1065,6 +959,154 @@ class _LinkButton extends StatelessWidget {
             fontSize: 11.5,
             fontWeight: FontWeight.w600,
           )),
+    );
+  }
+}
+
+/// One numbered promise. Three of these ARE the pitch — the whole
+/// product loop stated once, in order, with nothing between them.
+class _Step extends StatelessWidget {
+  final String n, title, body;
+  final String? axes;
+  final bool last;
+  const _Step({
+    required this.n,
+    required this.title,
+    required this.body,
+    this.axes,
+    this.last = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: last ? 0 : 12),
+      child: Column(children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 30,
+            height: 30,
+            margin: const EdgeInsets.only(top: 1),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.red, width: 2),
+            ),
+            child: const Icon(Icons.check_rounded,
+                size: 17, color: AppColors.red),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('$n. $title',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 15.5,
+                      height: 1.15,
+                      letterSpacing: 0.2,
+                      fontWeight: FontWeight.w900,
+                    )),
+                const SizedBox(height: 3),
+                Text(body,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontSize: 13.5,
+                      height: 1.35,
+                      fontWeight: FontWeight.w500,
+                    )),
+                if (axes != null) ...[
+                  const SizedBox(height: 2),
+                  // Named, because the five axes ARE the product. A man
+                  // who can name what he is being marked on believes the
+                  // mark more than one who is told he gets "a score".
+                  Text(axes!,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 13,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                      )),
+                ],
+              ],
+            ),
+          ),
+        ]),
+        if (!last) ...[
+          const SizedBox(height: 12),
+          Container(
+              height: 1,
+              margin: const EdgeInsets.only(left: 42),
+              color: Colors.white.withValues(alpha: 0.08)),
+        ],
+      ]),
+    );
+  }
+}
+
+/// The withheld number, as a strip rather than a hero — the same object
+/// as onboarding beat 4, but this screen has a price to get to and the
+/// question only needs restating, not re-asking.
+class _ScoreStrip extends StatelessWidget {
+  const _ScoreStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E0E12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('YOUR FIRST GAME TEST IS READY',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 10,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.w800,
+                  )),
+              const SizedBox(height: 2),
+              Text('YOUR SCORE',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 17,
+                    letterSpacing: 0.4,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ],
+          ),
+        ),
+        Container(width: 1, height: 34, color: Colors.white12),
+        const SizedBox(width: 14),
+        Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text('?',
+                  style: GoogleFonts.inter(
+                    color: AppColors.red,
+                    fontSize: 38,
+                    height: 1.0,
+                    fontWeight: FontWeight.w900,
+                    fontStyle: FontStyle.italic,
+                  )),
+              Text('/100',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 30,
+                    height: 1.0,
+                    fontWeight: FontWeight.w900,
+                    fontStyle: FontStyle.italic,
+                  )),
+            ]),
+      ]),
     );
   }
 }
