@@ -8,6 +8,7 @@ import '../config/purchase_config.dart';
 import 'analytics_service.dart';
 import 'extra_service.dart';
 import 'local_store_service.dart' show LocalStoreService, ProTier;
+import 'trial_service.dart';
 
 /// Single front-door for all billing operations.
 ///
@@ -158,6 +159,12 @@ class PurchaseService {
         // ignore: discarded_futures
         LocalStoreService.setSubscribed(true);
       }
+      // Mirror trial state on every push too, not just at launch. This
+      // listener is what fires the moment a trial converts to paid, and
+      // without it a man who converted kept the one-minute trial cap
+      // until he next cold-started the app.
+      // ignore: discarded_futures
+      TrialService.setTrial(_isTrialFrom(info));
     });
 
     // Mirror current entitlement state into the local cache so a
@@ -201,6 +208,7 @@ class PurchaseService {
       }
 
       Package? weekly;
+      Package? monthly;
       Package? annual;
       Package? rescue;
       // A LIST, NOT TWO SLOTS. The old code bucketed packs as
@@ -255,6 +263,16 @@ class PurchaseService {
           continue;
         }
 
+        // MONTHLY — whole product id only. The dead-SKU guard above
+        // rejects anything containing "month" because the legacy
+        // mirrorly monthly is still live for old subscribers; an exact
+        // comparison is the only way to sell the new one without ever
+        // being able to sell the old one by accident.
+        if (monthly == null && rawProd == PurchaseConfig.productIds.monthly) {
+          monthly = pkg;
+          continue;
+        }
+
         // ANNUAL — matched on the WHOLE product id, never a substring.
         // The dead-SKU guard above deliberately rejects anything with
         // "year"/"annual" in it because the legacy mirrorly_pro_yearly
@@ -279,6 +297,7 @@ class PurchaseService {
           .compareTo(PurchaseConfig.minutesFor(b.storeProduct.identifier)));
       _cached = PurchaseOfferings(
         weekly: weekly,
+        monthly: monthly,
         annual: annual,
         rescue: rescue,
         extras: extras,
@@ -323,7 +342,8 @@ class PurchaseService {
     // EXACT id comparison, so the legacy mirrorly_pro_yearly it was
     // written to stop is still stopped.
     final isLiveAnnual =
-        pkg.storeProduct.identifier == PurchaseConfig.productIds.annual;
+        pkg.storeProduct.identifier == PurchaseConfig.productIds.annual ||
+        pkg.storeProduct.identifier == PurchaseConfig.productIds.monthly;
     final isDeadSku = !isLiveAnnual && (
            blockPkg.contains('month')  || blockProd.contains('month')
         || blockPkg.contains('annual') || blockProd.contains('annual')
@@ -537,6 +557,19 @@ class PurchaseService {
     await _refreshEntitlementCache();
   }
 
+  /// Is the `pro` entitlement currently running as a free trial?
+  ///
+  /// The store gives one bit for access — active or not — so this is
+  /// the only way to tell a trial apart from a paid week. PeriodType
+  /// comes straight off RevenueCat: `trial` for a free trial, `intro`
+  /// for a discounted introductory period (which IS paid, so it gets
+  /// the full allowance), `normal` for an ordinary renewal.
+  static bool _isTrialFrom(CustomerInfo info) {
+    final ent = info.entitlements.all[PurchaseConfig.proEntitlementId];
+    if (ent == null || !ent.isActive) return false;
+    return ent.periodType == PeriodType.trial;
+  }
+
   static Future<void> _refreshEntitlementCache() async {
     try {
       final info = await Purchases.getCustomerInfo();
@@ -555,6 +588,7 @@ class PurchaseService {
         return;
       }
       await LocalStoreService.setSubscribed(isPro);
+      await TrialService.setTrial(isPro && _isTrialFrom(info));
     } catch (_) {
       // Network fail on launch is not fatal — the cached flag stands.
     }
@@ -728,6 +762,7 @@ enum PurchaseOutcome { success, cancelled, error, noPriorPurchases, notConfigure
 /// shows a dash for that slot until RC delivers it.
 class PurchaseOfferings {
   final Package? weekly;
+  final Package? monthly;
   final Package? annual;
   final Package? rescue;
 
@@ -739,6 +774,7 @@ class PurchaseOfferings {
 
   const PurchaseOfferings({
     required this.weekly,
+    this.monthly,
     required this.annual,
     required this.rescue,
     this.extras = const [],

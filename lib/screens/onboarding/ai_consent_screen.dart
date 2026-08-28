@@ -77,8 +77,27 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // THIS SCREEN'S JOB CHANGED, AND THE SKIP HAD TO CHANGE WITH IT.
+      //
+      // It used to sit before any AI contact, so "consent already
+      // granted" meant "you have been here" and skipping was right. It
+      // now sits at the END of onboarding, after the first rep — and
+      // AiConsentDialog grants the very same pref during that rep. So
+      // the old check fired every time and bounced straight past the
+      // sign-in, which is the only reason the screen is still here.
+      //
+      // Skip on SIGNED IN, not on consented.
+      if (AuthService.signedIn && mounted) {
+        context.go('/onboarding/handle');
+        return;
+      }
+      // Consent given in the rep? Then don't ask twice — pre-tick and
+      // let him get on with claiming the account.
       if (await LocalStoreService.hasAiConsent() && mounted) {
-        context.go('/home');
+        setState(() {
+          _agreedTerms = true;
+          _agreedPrivacy = true;
+        });
       }
     });
     AnalyticsService.consentShown();

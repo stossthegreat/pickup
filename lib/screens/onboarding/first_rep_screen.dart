@@ -149,10 +149,16 @@ class _FirstRepScreenState extends State<FirstRepScreen> {
       );
     }
     if (!mounted) return;
-    // Scored or bailed, the funnel ends the same way: at the price. A
-    // man who quit his first rep after two lines is not a man to send
-    // to a home screen he has no reason to open again.
-    context.go('/paywall');
+    // THE REP NOW COMES AFTER THE PRICE, NOT BEFORE IT.
+    //
+    // It used to end here at the paywall — the rep was the free sample
+    // and the score was the pitch. The funnel is inverted now: the
+    // seven-beat story sells, he pays to find out his number, and this
+    // screen is the first thing he gets for the money. So it ends at
+    // home, with his score behind him.
+    // Now the account. He has a score, and "claim it" is a far better
+    // reason to sign in than "sign in to continue" ever was.
+    context.go('/onboarding/consent');
   }
 
   /// THE WAY OUT, AND IT STILL ENDS AT THE PRICE.
@@ -165,7 +171,11 @@ class _FirstRepScreenState extends State<FirstRepScreen> {
   void _skip() {
     if (_busy) return;
     HapticFeedback.selectionClick();
-    context.go('/paywall');
+    // He has already paid by the time he sees this. Skipping the test
+    // must not send him back to a price he has settled.
+    // Now the account. He has a score, and "claim it" is a far better
+    // reason to sign in than "sign in to continue" ever was.
+    context.go('/onboarding/consent');
   }
 
   @override
