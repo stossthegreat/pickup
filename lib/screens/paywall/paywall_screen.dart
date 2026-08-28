@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
@@ -56,7 +55,7 @@ class PaywallScreen extends StatefulWidget {
 // Weekly is the only sellable tier now. Annual + rescue remain in the
 // enum so the offerings plumbing / analytics stay intact, but the UI
 // only ever surfaces and purchases weekly.
-enum _Tier { weekly, annual, rescue }
+enum _Tier { weekly, monthly, annual, rescue }
 
 // Per-panel header copy — (headline, subhead). 1:1 with the mock.
 const List<(String, String)> _copy = [
@@ -80,19 +79,16 @@ class _PaywallScreenState extends State<PaywallScreen> {
   /// the paid copy — over-promising a trial reads as a bait; under-
   /// promising is a slightly duller headline for half a second.
   bool _trialEligible = false;
+  /// Monthly by default — it is the tier the trial is attached to and
+  /// the one we want him on. Falls back to weekly in _pickDefault() if
+  /// the store never delivered a monthly package.
+  _Tier _picked = _Tier.monthly;
 
-  final PageController _pager = PageController();
-  static const int _panelCount = 3;
-  int _page = 0;
-  final Set<int> _visited = {0};
 
   // Auto-tour state.
-  Timer? _tourTimer;
-  bool _interacted = false;
 
   // Drives the ladder climb on panel 5 — bumped each time that panel
   // becomes visible so the sub-widget restarts its animation.
-  int _ladderRun = 0;
 
   @override
   void initState() {
@@ -127,7 +123,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
     AnalyticsService.paywallShown(
         (widget.context?['afterPurchase'] as String?) ?? 'standalone');
     _loadOfferings();
-    _startTour();
     _autoUnlockIfAlreadyPro();
   }
 
@@ -156,71 +151,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _tourTimer?.cancel();
-    _pager.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadOfferings() async {
-    final off = await PurchaseService.loadOfferings();
-    // Both stores allow one intro offer per subscription group, ever.
-    // A device that has already been in a trial is not getting another.
-    final eligible = !(await TrialService.everStarted());
-    if (!mounted) return;
-    setState(() {
-      _offerings = off;
-      _trialEligible = eligible;
-    });
-  }
-
-  // ── Auto-tour ─────────────────────────────────────────────────────
-  //
-  // Advance one panel every 6 s. Play through all panels, wrap back to
-  // panel 0, then stop — from there it's swipe-only. Any manual touch
-  // cancels the tour early (see the Listener in build()).
-  void _startTour() {
-    _tourTimer = Timer.periodic(const Duration(seconds: 6), (t) {
-      if (_interacted || !mounted) {
-        t.cancel();
-        return;
-      }
-      final next = _page + 1;
-      if (next >= _panelCount) {
-        // One full loop done → return to the photo and stop.
-        _pager.animateToPage(0,
-            duration: const Duration(milliseconds: 450),
-            curve: Curves.easeOutCubic);
-        t.cancel();
-      } else {
-        _pager.animateToPage(next,
-            duration: const Duration(milliseconds: 450),
-            curve: Curves.easeOutCubic);
-      }
-    });
-  }
-
-  void _stopTour() {
-    if (_interacted) return;
-    _interacted = true;
-    _tourTimer?.cancel();
-  }
-
-  void _onPageChanged(int i) {
-    setState(() {
-      _page = i;
-      _visited.add(i);
-      if (i == 2) _ladderRun++; // ladder panel is now the 3rd (last)
-    });
-    // Only buzz on manual swipes — the auto-tour should stay silent.
-    if (_interacted) HapticFeedback.selectionClick();
-  }
-
   // ── Purchase actions (weekly only) ────────────────────────────────
 
   Package? _packageFor(_Tier t) => switch (t) {
         _Tier.weekly => _offerings.weekly,
+        _Tier.monthly => _offerings.monthly,
         _Tier.annual => _offerings.annual,
         _Tier.rescue => _offerings.rescue,
       };
@@ -249,7 +184,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
   /// best-effort; the sheet after it is not.
   IntroductoryPrice? get _trial {
     if (!_trialEligible) return null;
-    final intro = _packageFor(_Tier.weekly)?.storeProduct.introductoryPrice;
+    // The SELECTED tier's offer, not weekly's. The trial lives on
+    // monthly; reading weekly's would advertise a trial on the tier that
+    // does not have one and hide the one that does.
+    final intro = _packageFor(_picked)?.storeProduct.introductoryPrice;
     if (intro == null) return null;
     // A discounted intro period is NOT a free trial. Only a zero price
     // may be called free.
@@ -273,7 +211,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   Future<void> _buy() async {
     if (_purchasing) return;
-    final pkg = _packageFor(_Tier.weekly);
+    final pkg = _packageFor(_picked);
     if (pkg == null) {
       // NO PACKAGE = the store never handed us a purchasable product, so
       // there is nothing to charge. This branch used to end at a vague
@@ -510,148 +448,351 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = _trial;
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        top: true,
-        bottom: true,
-        child: Column(
-          children: [
-            // Close X — top-left.
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 6, 0, 0),
-                child: _CloseX(onTap: _close),
-              ),
-            ),
-
-            // Header copy — cross-fades on panel change.
-            _Header(page: _page),
-
-            // Carousel — takes all remaining vertical space.
-            Expanded(
-              child: Listener(
-                // Any finger-down on the carousel ends the auto-tour,
-                // exactly like the mock's touchstart handler.
-                onPointerDown: (_) => _stopTour(),
-                child: PageView(
-                  controller: _pager,
-                  onPageChanged: _onPageChanged,
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    const _GirlsPanel(),
-                    const _OrbPanel(),
-                    _LadderPanel(runToken: _page == 2 ? _ladderRun : -1),
-                  ],
+        child: Column(children: [
+          // ── Chrome: close only. No share — a man has nothing to share
+          //    yet, and the button that dismisses the price should not
+          //    have a twin next to it competing for the same tap.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 2, 6, 0),
+            child: Row(children: [
+              _CloseX(onTap: _close),
+              const Spacer(),
+            ]),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Column(children: [
+                _kicker('YOUR FIRST TEST IS READY'),
+                const SizedBox(height: 10),
+                _headline(),
+                const SizedBox(height: 6),
+                const _ScoreMark(),
+                const SizedBox(height: 10),
+                Text('One live conversation. No scripts. No hints.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w500,
+                    )),
+                const SizedBox(height: 18),
+                const _AxisRow(),
+                const SizedBox(height: 26),
+                _sectionRule(t == null
+                    ? 'WHAT YOU GET'
+                    : 'TRY THE FULL SYSTEM FREE'),
+                const SizedBox(height: 18),
+                // Every line is something the app actually does. "Unlimited
+                // voice" and "all characters" were both false — voice is
+                // metered at 14 min/week and the roster unlocks by
+                // ascension day, not by paying.
+                const _Feature(
+                  icon: Icons.mic_rounded,
+                  title: 'VOICE GAME TEST',
+                  body: 'Get your score and find your weakest skill',
                 ),
-              ),
+                const _Feature(
+                  icon: Icons.chat_bubble_rounded,
+                  title: 'UNLIMITED CHAT PRACTICE',
+                  body: 'Train your game with unlimited reps',
+                ),
+                const _Feature(
+                  icon: Icons.group_rounded,
+                  title: '10 AI WOMEN',
+                  body: 'Progress from Into You  →  Ice Queen',
+                ),
+                const SizedBox(height: 6),
+                Text('+ Coaching · Missions · Battles · Squads · Ranks',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textTertiary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    )),
+                const SizedBox(height: 22),
+                _tier(_Tier.monthly, 'MONTH', trial: t),
+                const SizedBox(height: 10),
+                _tier(_Tier.weekly, 'WEEK', trial: null),
+              ]),
             ),
+          ),
+          _bottom(t),
+        ]),
+      ),
+    );
+  }
 
-            // Classified progress tracker.
-            _Brief(page: _page, visited: _visited),
+  Widget _kicker(String text) => Row(children: [
+        Expanded(child: Container(height: 1, color: AppColors.red.withValues(alpha: 0.35))),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(text,
+              style: GoogleFonts.inter(
+                color: AppColors.red,
+                fontSize: 11.5,
+                letterSpacing: 2.2,
+                fontWeight: FontWeight.w900,
+              )),
+        ),
+        Expanded(child: Container(height: 1, color: AppColors.red.withValues(alpha: 0.35))),
+      ]);
 
-            // CTA + price + legal.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 2, 20, 4),
+  Widget _headline() => Column(children: [
+        Text('HOW GOOD IS',
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 42,
+              height: 1.0,
+              letterSpacing: -1.6,
+              fontWeight: FontWeight.w900,
+              fontStyle: FontStyle.italic,
+            )),
+        Text('YOUR GAME?',
+            style: GoogleFonts.inter(
+              color: AppColors.red,
+              fontSize: 42,
+              height: 1.05,
+              letterSpacing: -1.6,
+              fontWeight: FontWeight.w900,
+              fontStyle: FontStyle.italic,
+            )),
+      ]);
+
+  Widget _sectionRule(String label) => Row(children: [
+        Expanded(child: Container(height: 1, color: Colors.white24)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(label,
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 14,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w900,
+              )),
+        ),
+        Expanded(child: Container(height: 1, color: Colors.white24)),
+      ]);
+
+  /// One price row. Price and period come from the store, never from
+  /// here — a hardcoded figure is wrong the moment someone opens the app
+  /// outside your country, and both stores treat that as a review issue.
+  Widget _tier(_Tier tier, String period, {IntroductoryPrice? trial}) {
+    final pkg = _packageFor(tier);
+    final sel = _picked == tier;
+    final price = _priceFor(tier);
+    final live = pkg != null;
+    return Opacity(
+      opacity: live ? 1 : 0.4,
+      child: GestureDetector(
+        onTap: live
+            ? () {
+                HapticFeedback.selectionClick();
+                setState(() => _picked = tier);
+              }
+            : null,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          decoration: BoxDecoration(
+            color: sel
+                ? AppColors.red.withValues(alpha: 0.12)
+                : const Color(0xFF121216),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: sel ? AppColors.red : Colors.white12,
+                width: sel ? 2 : 1),
+            boxShadow: sel
+                ? [BoxShadow(color: AppColors.red.withValues(alpha: 0.28), blurRadius: 22)]
+                : null,
+          ),
+          child: Row(children: [
+            Expanded(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 62,
-                    child: DecoratedBox(
+                  if (trial != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.red.withValues(alpha: 0.45),
-                            blurRadius: 30,
-                            spreadRadius: 1,
-                          ),
-                        ],
+                        color: AppColors.red,
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.red,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                          elevation: 0,
-                        ),
-                        onPressed: _purchasing ? null : _buy,
-                        child: _purchasing
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor:
-                                        AlwaysStoppedAnimation(Colors.white)),
-                              )
-                            : Text(
-                                _trial == null
-                                    ? 'BECOME HIM'
-                                    : 'START FREE TRIAL',
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 16,
-                                  letterSpacing: 2.6,
-                                ),
-                              ),
-                      ),
+                      child: Text('${_trialLength(trial).toUpperCase()} FREE',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 10,
+                            letterSpacing: 0.8,
+                            fontWeight: FontWeight.w900,
+                          )),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  _priceLine(),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _LinkButton(
-                          label: 'Terms of Use',
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            context.push('/terms');
-                          }),
-                      _LinkButton(label: 'Restore Purchase', onTap: _restore),
-                      _LinkButton(
-                          label: 'Privacy Policy',
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            context.push('/privacy');
-                          }),
-                    ],
-                  ),
+                    const SizedBox(height: 8),
+                  ],
+                  Row(crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic, children: [
+                    Text(price,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        )),
+                    const SizedBox(width: 5),
+                    Text('/ $period',
+                        style: GoogleFonts.inter(
+                          color: Colors.white70,
+                          fontSize: 15,
+                          letterSpacing: 0.6,
+                          fontWeight: FontWeight.w700,
+                        )),
+                  ]),
+                  const SizedBox(height: 3),
+                  Text(
+                      !live
+                          ? 'Not available on this store yet'
+                          : trial != null
+                              ? 'Then $price/${period.toLowerCase()} after your trial'
+                              : 'No free trial',
+                      style: GoogleFonts.inter(
+                        color: trial != null
+                            ? AppColors.red
+                            : AppColors.textTertiary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      )),
                 ],
               ),
             ),
-          ],
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: sel ? AppColors.red : Colors.white30, width: 2),
+                color: sel ? AppColors.red : Colors.transparent,
+              ),
+              child: sel
+                  ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+                  : null,
+            ),
+          ]),
         ),
       ),
     );
   }
 
-  /// Single price line under the CTA. Carries the three Apple-required
-  /// essentials in one glance — real store price, weekly cadence, and
-  /// the auto-renew / cancel notice. Full disclosure lives in Terms.
-  /// (The on-device build tag was removed for launch — check the build
-  /// number in Settings → TestFlight instead.)
-  Widget _priceLine() {
-    final price = _priceFor(_Tier.weekly);
-    final t = _trial;
-    return Text(
-      t == null
-          ? '$price per week · auto-renews · cancel anytime'
-          // Apple 3.1.2 requires the length, what happens after, and the
-          // renewing price, in that order and before the tap.
-          : '${_trialLength(t)} free, then $price per week · '
-            'auto-renews · cancel anytime',
-      textAlign: TextAlign.center,
-      style: GoogleFonts.inter(
-        color: AppColors.textSecondary,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
+  /// CTA + the disclosure Apple 3.1.2 requires: length, what follows,
+  /// and the renewing price, before the tap.
+  Widget _bottom(IntroductoryPrice? t) {
+    final price = _priceFor(_picked);
+    final period = _picked == _Tier.monthly ? 'month' : 'week';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
+      child: Column(children: [
+        SizedBox(
+          width: double.infinity,
+          height: 64,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                    color: AppColors.red.withValues(alpha: 0.45),
+                    blurRadius: 28, spreadRadius: 1),
+              ],
+            ),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.red,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: _purchasing ? null : _buy,
+              child: _purchasing
+                  ? const SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(Colors.white)))
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                            t == null
+                                ? 'START TRAINING'
+                                : 'START MY ${_trialLength(t).toUpperCase()} FREE TRIAL',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              letterSpacing: 0.4,
+                              fontWeight: FontWeight.w900,
+                            )),
+                        const SizedBox(height: 1),
+                        Text('Take your first voice test now',
+                            style: GoogleFonts.inter(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white70,
+                            )),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+            t == null
+                ? '$price per $period · auto-renews · cancel anytime'
+                : '${_trialLength(t)} free, then $price/$period. '
+                  'Subscription auto-renews. Cancel anytime.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: AppColors.textSecondary,
+              fontSize: 11.5,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            )),
+        // The one limit that would otherwise be a surprise. A man who
+        // starts a trial expecting unlimited voice, hits the wall after a
+        // minute and refunds costs more than the one who never converted.
+        if (t != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(
+                'Trial includes ${TrialService.trialVoiceMinutes} minute of '
+                'live voice. Texting is unlimited.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                )),
+          ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _LinkButton(label: 'Restore', onTap: _restore),
+            _LinkButton(
+                label: 'Terms of Use',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  context.push('/terms');
+                }),
+            _LinkButton(
+                label: 'Privacy Policy',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  context.push('/privacy');
+                }),
+          ],
+        ),
+      ]),
     );
   }
 }
@@ -660,740 +801,206 @@ class _PaywallScreenState extends State<PaywallScreen> {
 //  HEADER
 // ══════════════════════════════════════════════════════════════════════
 
-class _Header extends StatelessWidget {
-  final int page;
-  const _Header({required this.page});
 
-  @override
-  Widget build(BuildContext context) {
-    final (headline, sub) = _copy[page];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 96),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 350),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
-          transitionBuilder: (child, anim) => FadeTransition(
-            opacity: anim,
-            child: SlideTransition(
-              position: Tween(
-                begin: const Offset(0, 0.06),
-                end: Offset.zero,
-              ).animate(anim),
-              child: child,
-            ),
-          ),
-          child: Column(
-            key: ValueKey(page),
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                headline,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 27,
-                  height: 1.15,
-                  letterSpacing: -0.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                sub,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  color: AppColors.textSecondary,
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ══════════════════════════════════════════════════════════════════════
 //  PANEL 1 — THE AI GIRLS (roleplay showcase)
 // ══════════════════════════════════════════════════════════════════════
 
-class _GirlsPanel extends StatelessWidget {
-  const _GirlsPanel();
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: Center(
-        child: AspectRatio(
-          // The roleplay-cast grid is portrait — its own ratio so the
-          // whole grid shows, framed like the other panels' hero image.
-          // 1125×1572 = the clean neck-up 2×2 (regenerated from the cropped
-          // portraits; no cleavage, App-Store safe for Guideline 1.1.4).
-          aspectRatio: 1125 / 1572,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Image.asset(
-              'assets/marketing/girls_grid.png',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const ColoredBox(color: _tile),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ══════════════════════════════════════════════════════════════════════
 //  PANEL (legacy) — PHOTO + SCORE  ·  no longer in the carousel
 // ══════════════════════════════════════════════════════════════════════
 
 // ignore: unused_element
-class _PhotoPanel extends StatelessWidget {
-  const _PhotoPanel();
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      // Center the whole [numbers + image] group as ONE unit so the
-      // numbers hug the image's top ledge instead of floating away from it.
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // NUMBERS sit on the black ledge directly above the image, one
-            // centered over each half (54 over current, 84 over projected).
-            // A tiny 3px gap keeps the digits right on the top ledge —
-            // close, but never overlapping under the image edge.
-            Row(
-              children: const [
-                Expanded(
-                    child: _ScoreNum(n: '54', color: Color(0xFFC4C4CB))),
-                Expanded(
-                    child: _ScoreNum(n: '84', color: _neon, glow: true)),
-              ],
-            ),
-            const SizedBox(height: 3),
-            // Aspect ratio matches the cropped before/after asset (914×778)
-            // so the baked-in NOW / FIXED labels never get clipped. Width-
-            // constrained, so its height is fixed — no Flexible/Center gap.
-            AspectRatio(
-              aspectRatio: 914 / 778,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.asset(
-                      'assets/marketing/beforeafter.jpg',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const ColoredBox(color: _tile),
-                    ),
-                    // LABELS ride ON the image at the very top, centered
-                    // over each half, on a subtle scrim for legibility.
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.only(top: 8, bottom: 16),
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Color(0xB3000000), Color(0x00000000)],
-                          ),
-                        ),
-                        child: Row(
-                          children: const [
-                            Expanded(
-                                child: _ScoreLabel(
-                                    'CURRENT', Color(0xFFC4C4CB))),
-                            Expanded(
-                                child:
-                                    _ScoreLabel('PROJECTED', Colors.white)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
-/// One big score number, centered in its half. Sits on the black ledge
-/// directly above the before/after image.
-class _ScoreNum extends StatelessWidget {
-  final String n;
-  final Color color;
-  final bool glow;
-  const _ScoreNum({required this.n, required this.color, this.glow = false});
 
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      n,
-      textAlign: TextAlign.center,
-      style: GoogleFonts.inter(
-        color: color,
-        fontSize: 46,
-        height: 1,
-        fontWeight: FontWeight.w900,
-        shadows: glow
-            ? [Shadow(color: _neon.withValues(alpha: 0.6), blurRadius: 30)]
-            : null,
-      ),
-    );
-  }
-}
 
-/// One score label (CURRENT / PROJECTED), centered in its half, overlaid
-/// on the top edge of the image.
-class _ScoreLabel extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _ScoreLabel(this.label, this.color);
 
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      textAlign: TextAlign.center,
-      style: GoogleFonts.inter(
-        color: color,
-        fontSize: 11,
-        letterSpacing: 3,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
-}
 
 // ══════════════════════════════════════════════════════════════════════
 //  PANEL (legacy) — PROTOCOL LIST  ·  no longer in the carousel
 // ══════════════════════════════════════════════════════════════════════
 
 // ignore: unused_element
-class _ProtoPanel extends StatelessWidget {
-  const _ProtoPanel();
 
-  static const _rows = <(String, String, String)>[
-    ('🔥', 'Debloat', 'Less puffiness. Visible changes can begin within days.'),
-    ('🗿', 'Jaw', 'Build a sharper, more defined profile.'),
-    ('👁', 'Eye Area', 'Look more awake, healthier and more attractive.'),
-    ('✨', 'Skin', 'Clearer skin. Better texture. Better first impressions.'),
-    ('💇', 'Hair', 'The right cut, style and long-term hair plan.'),
-  ];
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: Center(
-        child: AspectRatio(
-          aspectRatio: 680 / 538,
-          child: Column(
-            children: [
-              for (var i = 0; i < _rows.length; i++) ...[
-                if (i > 0) const SizedBox(height: 7),
-                Expanded(child: _ProtoRow(row: _rows[i])),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
-class _ProtoRow extends StatelessWidget {
-  final (String, String, String) row;
-  const _ProtoRow({required this.row});
-
-  @override
-  Widget build(BuildContext context) {
-    final (emoji, title, body) = row;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-      decoration: BoxDecoration(
-        color: _tile,
-        borderRadius: BorderRadius.circular(13),
-      ),
-      child: Row(
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 17)),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700)),
-                const SizedBox(height: 1),
-                Text(body,
-                    style: GoogleFonts.inter(
-                        color: AppColors.textSecondary,
-                        fontSize: 10.5,
-                        height: 1.25,
-                        fontWeight: FontWeight.w500)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ══════════════════════════════════════════════════════════════════════
 //  PANEL 3 — ORB / HOLD TO SPEAK
 // ══════════════════════════════════════════════════════════════════════
 
-class _OrbPanel extends StatefulWidget {
-  const _OrbPanel();
 
-  @override
-  State<_OrbPanel> createState() => _OrbPanelState();
-}
 
-class _OrbPanelState extends State<_OrbPanel> {
-  static const _lines = <(String, bool)>[
-    ('Girl interrupts.', false),
-    ('Girl rejects.', false),
-    ('Girl flirts.', false),
-    ('Girl goes cold.', false),
-    ('You adapt.', true),
-    ('You improve.', true),
-  ];
 
-  Timer? _timer;
-  int _i = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 1600), (_) {
-      if (!mounted) return;
-      setState(() => _i = (_i + 1) % _lines.length);
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final (text, you) = _lines[_i];
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 118,
-            height: 118,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const RadialGradient(
-                center: Alignment(-0.24, -0.36),
-                radius: 0.9,
-                colors: [Color(0xFFFF5A5F), AppColors.red, Color(0xFF8F1015)],
-                stops: [0.0, 0.55, 1.0],
-              ),
-              boxShadow: [
-                BoxShadow(
-                    color: AppColors.red.withValues(alpha: 0.5),
-                    blurRadius: 60),
-              ],
-            ),
-          )
-              .animate(onPlay: (c) => c.repeat(reverse: true))
-              .scale(
-                begin: const Offset(1, 1),
-                end: const Offset(1.05, 1.05),
-                duration: 1100.ms,
-                curve: Curves.easeInOut,
-              ),
-          const SizedBox(height: 18),
-          Text(
-            '🎙  HOLD TO SPEAK',
-            style: GoogleFonts.inter(
-              color: const Color(0xFFD9D9DE),
-              fontSize: 12,
-              letterSpacing: 5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 14),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            transitionBuilder: (child, anim) => FadeTransition(
-              opacity: anim,
-              child: SlideTransition(
-                position: Tween(
-                        begin: const Offset(0, 0.3), end: Offset.zero)
-                    .animate(anim),
-                child: child,
-              ),
-            ),
-            child: Text(
-              text,
-              key: ValueKey(_i),
-              style: GoogleFonts.inter(
-                color: you ? AppColors.red : Colors.white,
-                fontSize: 23,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ══════════════════════════════════════════════════════════════════════
 //  PANEL (legacy) — RIZZ ACTIONS  ·  no longer in the carousel
 // ══════════════════════════════════════════════════════════════════════
 
 // ignore: unused_element
-class _RizzPanel extends StatelessWidget {
-  const _RizzPanel();
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const _RizzBtn(
-              title: 'Upload a screenshot',
-              sub: 'Get rizz on how to respond',
-            ),
-            const SizedBox(height: 12),
-            const _RizzBtn(
-              title: 'Pickup line',
-              sub: 'One at a time. Regenerate. Done.',
-            ),
-            const SizedBox(height: 12),
-            const _RizzBtn(
-              title: 'Rizz Chat',
-              sub: 'Ask anything. We coach.',
-              ghost: true,
-              badge: 'NEW',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ignore: unused_element
-class _RizzBtn extends StatelessWidget {
-  final String title, sub;
-  final bool ghost;
-  final String? badge;
-  const _RizzBtn(
-      {required this.title, required this.sub, this.ghost = false, this.badge});
 
-  @override
-  Widget build(BuildContext context) {
-    final card = Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: ghost ? _tile : AppColors.red,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(title,
-              style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800)),
-          const SizedBox(height: 2),
-          Text(sub,
-              style: GoogleFonts.inter(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-
-    if (badge == null) return card;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        card,
-        Positioned(
-          top: -8,
-          left: 4,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(badge!,
-                style: GoogleFonts.inter(
-                    color: AppColors.red,
-                    fontSize: 8,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.w800)),
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 // ══════════════════════════════════════════════════════════════════════
 //  PANEL 5 — ASCENSION LADDER
 // ══════════════════════════════════════════════════════════════════════
 
-class _LadderPanel extends StatefulWidget {
-  /// Bumped whenever this panel becomes visible so the climb restarts.
-  /// -1 while the panel is off-screen.
-  final int runToken;
-  const _LadderPanel({required this.runToken});
 
-  @override
-  State<_LadderPanel> createState() => _LadderPanelState();
-}
 
-class _LadderPanelState extends State<_LadderPanel> {
-  static const _rungs = [
-    'OBSERVER',
-    'INITIATE',
-    'CONTENDER',
-    'DANGEROUS',
-    'HIM'
-  ];
 
-  int _lit = 0; // number of rungs currently lit
-  bool _pulse = false;
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.runToken >= 0) _climb();
-  }
-
-  @override
-  void didUpdateWidget(covariant _LadderPanel old) {
-    super.didUpdateWidget(old);
-    if (widget.runToken != old.runToken && widget.runToken >= 0) {
-      _climb();
-    }
-  }
-
-  void _climb() {
-    _timer?.cancel();
-    setState(() {
-      _lit = 1;
-      _pulse = false;
-    });
-    _timer = Timer.periodic(const Duration(milliseconds: 650), (t) {
-      if (!mounted) return;
-      if (_lit >= _rungs.length) {
-        t.cancel();
-        return;
-      }
-      setState(() => _lit++);
-      if (_lit >= _rungs.length) {
-        t.cancel();
-        Future.delayed(const Duration(milliseconds: 400), () {
-          if (mounted) setState(() => _pulse = true);
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final children = <Widget>[];
-    for (var i = 0; i < _rungs.length; i++) {
-      final on = i < _lit;
-      final isHim = i == _rungs.length - 1;
-      children.add(_rung(_rungs[i], on: on, isHim: isHim));
-      if (i != _rungs.length - 1) {
-        // Arrow i (between rung i and i+1) lights once rung i+1 is lit.
-        children.add(_arrow(on: i < _lit - 1));
-      }
-    }
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: children,
-      ),
-    );
-  }
-
-  Widget _rung(String label, {required bool on, required bool isHim}) {
-    Color color;
-    double size;
-    List<Shadow>? shadows;
-    if (isHim && on && _pulse) {
-      color = _neon;
-      size = 22;
-      shadows = [Shadow(color: _neon.withValues(alpha: 0.9), blurRadius: 40)];
-    } else if (isHim && on) {
-      color = AppColors.red;
-      size = 22;
-      shadows = [
-        Shadow(color: AppColors.red.withValues(alpha: 0.8), blurRadius: 24)
-      ];
-    } else if (on) {
-      color = Colors.white;
-      size = 16;
-    } else {
-      color = const Color(0xFF3A3A40);
-      size = 16;
-    }
-
-    Widget text = AnimatedDefaultTextStyle(
-      duration: const Duration(milliseconds: 400),
-      style: GoogleFonts.inter(
-        color: color,
-        fontSize: size,
-        letterSpacing: 3,
-        fontWeight: FontWeight.w800,
-        shadows: shadows,
-      ),
-      child: Text(label),
-    );
-
-    Widget scaled = AnimatedScale(
-      duration: const Duration(milliseconds: 400),
-      scale: on ? 1.06 : 1.0,
-      child: text,
-    );
-
-    if (isHim && on && _pulse) {
-      scaled = scaled
-          .animate(onPlay: (c) => c.repeat(reverse: true))
-          .scaleXY(begin: 1.0, end: 1.18, duration: 700.ms, curve: Curves.easeInOut);
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: scaled,
-    );
-  }
-
-  Widget _arrow({required bool on}) {
-    return AnimatedDefaultTextStyle(
-      duration: const Duration(milliseconds: 400),
-      style: TextStyle(
-        color: on ? AppColors.red : const Color(0xFF3A3A40),
-        fontSize: 12,
-        height: 1,
-      ),
-      child: const Text('↓'),
-    );
-  }
-}
 
 // ══════════════════════════════════════════════════════════════════════
 //  CLASSIFIED PROGRESS TRACKER
 // ══════════════════════════════════════════════════════════════════════
 
-class _Brief extends StatelessWidget {
-  final int page;
-  final Set<int> visited;
-  const _Brief({required this.page, required this.visited});
 
+
+// ══════════════════════════════════════════════════════════════════════
+//  SHARED
+// ══════════════════════════════════════════════════════════════════════
+
+/// The withheld number. Same object as onboarding beat 4 — the whole
+/// funnel asks one question and this is the last place it goes
+/// unanswered.
+class _ScoreMark extends StatelessWidget {
+  const _ScoreMark();
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          for (var k = 0; k < _sections.length; k++) ...[
-            if (k > 0) const SizedBox(width: 8),
-            _briefItem(k),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _briefItem(int k) {
-    final no = '0${k + 1}';
-    const noStyleBase = TextStyle(fontSize: 10, fontWeight: FontWeight.w800);
-    if (k == page) {
-      // Current: red number + white expanded section name.
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(no,
-              style: GoogleFonts.inter(
-                  textStyle: noStyleBase, color: AppColors.red)),
-          const SizedBox(width: 5),
-          Text(_sections[k],
-              style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 10,
-                  letterSpacing: 1.5,
-                  fontWeight: FontWeight.w800)),
-        ],
-      );
-    }
-    final done = visited.contains(k);
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: [
-        Text(no,
+        Text('?',
             style: GoogleFonts.inter(
-                textStyle: noStyleBase,
-                color: done ? AppColors.textSecondary : const Color(0xFF3F3F45))),
-        const SizedBox(width: 5),
-        done
-            ? const Icon(Icons.check_rounded, size: 12, color: _neon)
-            : const Icon(Icons.lock, size: 10, color: Color(0xFF3F3F45)),
+              color: Colors.white,
+              fontSize: 96,
+              height: 1.0,
+              fontWeight: FontWeight.w900,
+              fontStyle: FontStyle.italic,
+              shadows: [
+                BoxShadow(color: AppColors.red.withValues(alpha: 0.7), blurRadius: 40)
+                    .toShadow(),
+              ],
+            )),
+        Text('/100',
+            style: GoogleFonts.inter(
+              color: AppColors.red,
+              fontSize: 62,
+              height: 1.0,
+              fontWeight: FontWeight.w900,
+              fontStyle: FontStyle.italic,
+            )),
       ],
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-//  SHARED
-// ══════════════════════════════════════════════════════════════════════
+extension _ShadowX on BoxShadow {
+  Shadow toShadow() => Shadow(color: color, blurRadius: blurRadius);
+}
+
+/// The five axes as locked tiles. Named, so he knows what is being
+/// measured; locked, so he knows he has not been measured yet.
+class _AxisRow extends StatelessWidget {
+  const _AxisRow();
+  static const _axes = <(IconData, String)>[
+    (Icons.psychology_rounded, 'CONFIDENCE'),
+    (Icons.waves_rounded, 'FLOW'),
+    (Icons.lightbulb_rounded, 'WIT'),
+    (Icons.restart_alt_rounded, 'RECOVERY'),
+    (Icons.gps_fixed_rounded, 'CLOSE'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (final (i, a) in _axes.indexed) ...[
+          if (i > 0) const SizedBox(width: 7),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF121216),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Column(children: [
+                Icon(a.$1, color: AppColors.red, size: 22),
+                const SizedBox(height: 7),
+                Text(a.$2,
+                    maxLines: 1,
+                    overflow: TextOverflow.visible,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 8.5,
+                      letterSpacing: 0.2,
+                      fontWeight: FontWeight.w900,
+                    )),
+              ]),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// One thing he gets, with the detail underneath so the title can stay
+/// short enough to read in a glance.
+class _Feature extends StatelessWidget {
+  final IconData icon;
+  final String title, body;
+  const _Feature(
+      {required this.icon, required this.title, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(children: [
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: AppColors.red.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Icon(icon, color: AppColors.red, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 15,
+                    letterSpacing: 0.4,
+                    fontWeight: FontWeight.w900,
+                  )),
+              const SizedBox(height: 2),
+              Text(body,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  )),
+            ],
+          ),
+        ),
+      ]),
+    );
+  }
+}
 
 class _CloseX extends StatelessWidget {
   final VoidCallback onTap;

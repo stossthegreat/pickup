@@ -83,6 +83,12 @@ class PurchaseConfig {
     // never be sold again; a `contains('year')` match would pick it up
     // and charge someone for the wrong product, so the matcher in
     // PurchaseService compares the whole string.
+    // THE TRIAL LIVES ON MONTHLY, NOT WEEKLY. A 3-day free trial in
+    // front of a WEEKLY sub gives away nearly half the first billing
+    // period; in front of a monthly it is a tenth of it. It is also the
+    // tier we actually want him on — 34% cheaper per week than weekly,
+    // and it survives the first Sunday he forgets to open the app.
+    monthly: 'imhim_pro_monthly',
     annual:  'imhim_pro_annual',
     yearly:  'mirrorly_pro_yearly',
     rescue:  'mirrorly_pro_rescue',
@@ -134,6 +140,7 @@ class PurchaseConfig {
   /// row shows `mirrorly_pro_rescue:rescue`).
   static const offering = (
     weeklyPackage:  '\$rc_weekly',
+    monthlyPackage: '\$rc_monthly',
     annualPackage:  '\$rc_annual',
     rescuePackage:  'rescue',
     extra10Package: 'extra10',

@@ -208,6 +208,7 @@ class PurchaseService {
       }
 
       Package? weekly;
+      Package? monthly;
       Package? annual;
       Package? rescue;
       // A LIST, NOT TWO SLOTS. The old code bucketed packs as
@@ -262,6 +263,16 @@ class PurchaseService {
           continue;
         }
 
+        // MONTHLY — whole product id only. The dead-SKU guard above
+        // rejects anything containing "month" because the legacy
+        // mirrorly monthly is still live for old subscribers; an exact
+        // comparison is the only way to sell the new one without ever
+        // being able to sell the old one by accident.
+        if (monthly == null && rawProd == PurchaseConfig.productIds.monthly) {
+          monthly = pkg;
+          continue;
+        }
+
         // ANNUAL — matched on the WHOLE product id, never a substring.
         // The dead-SKU guard above deliberately rejects anything with
         // "year"/"annual" in it because the legacy mirrorly_pro_yearly
@@ -286,6 +297,7 @@ class PurchaseService {
           .compareTo(PurchaseConfig.minutesFor(b.storeProduct.identifier)));
       _cached = PurchaseOfferings(
         weekly: weekly,
+        monthly: monthly,
         annual: annual,
         rescue: rescue,
         extras: extras,
@@ -330,7 +342,8 @@ class PurchaseService {
     // EXACT id comparison, so the legacy mirrorly_pro_yearly it was
     // written to stop is still stopped.
     final isLiveAnnual =
-        pkg.storeProduct.identifier == PurchaseConfig.productIds.annual;
+        pkg.storeProduct.identifier == PurchaseConfig.productIds.annual ||
+        pkg.storeProduct.identifier == PurchaseConfig.productIds.monthly;
     final isDeadSku = !isLiveAnnual && (
            blockPkg.contains('month')  || blockProd.contains('month')
         || blockPkg.contains('annual') || blockProd.contains('annual')
@@ -749,6 +762,7 @@ enum PurchaseOutcome { success, cancelled, error, noPriorPurchases, notConfigure
 /// shows a dash for that slot until RC delivers it.
 class PurchaseOfferings {
   final Package? weekly;
+  final Package? monthly;
   final Package? annual;
   final Package? rescue;
 
@@ -760,6 +774,7 @@ class PurchaseOfferings {
 
   const PurchaseOfferings({
     required this.weekly,
+    this.monthly,
     required this.annual,
     required this.rescue,
     this.extras = const [],
