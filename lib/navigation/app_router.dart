@@ -21,6 +21,7 @@ import '../screens/onboarding/ai_consent_screen.dart';
 import '../screens/onboarding/gender_pick_screen.dart';
 import '../screens/onboarding/handle_screen.dart';
 import '../screens/onboarding/onboarding_story_screen.dart';
+import '../screens/onboarding/voice_test_screen.dart';
 import '../screens/onboarding/intro_reel_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/paywall/paywall_screen.dart';
@@ -45,6 +46,11 @@ final appRouter = GoRouter(
     GoRoute(path: '/intro',      builder: (_, __) => const IntroReelScreen()),
     // The emotional onboarding funnel (first launch lands here).
     GoRoute(path: '/onboarding/story', builder: (_, __) => const OnboardingStoryScreen()),
+    // THE VOICE TEST — the last beat, and the one that hands him to the
+    // price. It never opens a socket: pressing the mic IS the paywall.
+    GoRoute(
+        path: '/onboarding/voice-test',
+        builder: (_, __) => const VoiceTestScreen()),
     GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
     GoRoute(
       path: '/onboarding/gender',

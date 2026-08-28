@@ -462,7 +462,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   // ── Build ─────────────────────────────────────────────────────────
 
-  @override
   /// The per-day cost of a package, in the store's own currency.
   ///
   /// Derived from the LOCALISED priceString rather than formatted from
@@ -477,7 +476,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
   String? _perDay(_Tier t, int days) {
     final p = _packageFor(t)?.storeProduct;
     if (p == null || p.price <= 0) return null;
-    final m = RegExp(r'\d[\d.,  ]*\d|\d').firstMatch(p.priceString);
+    final m = RegExp(r'\d[\d.,  ]*\d|\d').firstMatch(p.priceString);
     if (m == null) return null;
     final numeric = p.priceString.substring(m.start, m.end);
     // The LAST separator is the decimal one, so "1.234,56" and
@@ -498,6 +497,13 @@ class _PaywallScreenState extends State<PaywallScreen> {
     return p.priceString.replaceRange(m.start, m.end, per);
   }
 
+  /// Natural (unscaled) height of the pitch block, in logical pixels.
+  /// Everything between the top bar and the CTA is sized as a fraction
+  /// of the room actually available, and this is the denominator. It is
+  /// measured from the laid-out design, not guessed — if the block below
+  /// grows, this number grows with it.
+  static const double _contentDesignHeight = 540;
+
   @override
   Widget build(BuildContext context) {
     final t = _trial;
@@ -506,69 +512,101 @@ class _PaywallScreenState extends State<PaywallScreen> {
       body: SafeArea(
         child: Column(children: [
           _topBar(),
-          // ONE SCREEN, ALWAYS. scaleDown only ever shrinks: on a 6.7"
-          // nothing moves, on a 4.7" the whole block steps down together
-          // instead of scrolling or clipping. The CTA lives OUTSIDE this,
-          // so it is pinned and visible on every device — the one thing
-          // on this screen that must never need a scroll to reach.
+
+          // ONE SCREEN, ALWAYS — and never a blank one.
+          //
+          // b235 did this with FittedBox(scaleDown), which hands its
+          // child UNBOUNDED height. The tier row inside used
+          // CrossAxisAlignment.stretch, which requires a bounded cross
+          // axis, so the subtree threw during layout and painted
+          // NOTHING: top bar, black void, CTA. That is the screenshot.
+          //
+          // This measures instead of scaling. LayoutBuilder reports the
+          // real room left between the bar and the CTA, every size below
+          // is a fraction of it, and a scroll view sits underneath as a
+          // safety valve — so a font fallback or a large accessibility
+          // setting overflows harmlessly instead of blanking the screen.
+          // Nothing in here is ever handed an unbounded constraint.
           Expanded(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.topCenter,
-              child: SizedBox(
-                width: MediaQuery.sizeOf(context).width - 36,
-                child: Column(children: [
-                  const SizedBox(height: 2),
-                  _headline(),
-                  const SizedBox(height: 8),
-                  Text('Stop guessing. Start training.',
-                      style: GoogleFonts.inter(
-                        color: AppColors.textSecondary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      )),
-                  const SizedBox(height: 18),
-                  const _Step(
-                    n: '1',
-                    title: 'GET TESTED ACROSS KEY METRICS',
-                    body: 'Get your score across 5 key skills:',
-                    axes: 'Confidence  |  Flow  |  Wit  |  Recovery  |  Close',
+            child: LayoutBuilder(builder: (context, box) {
+              final s =
+                  (box.maxHeight / _contentDesignHeight).clamp(0.70, 1.0).toDouble();
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: box.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: _pitch(s, t),
                   ),
-                  const _Step(
-                    n: '2',
-                    title: 'TRAIN WITH AI & GET PERSONAL ADVICE',
-                    body: 'Practice real conversations, get scored and '
-                        'receive tailored advice on exactly what to '
-                        'improve next.',
-                  ),
-                  const _Step(
-                    n: '3',
-                    title: 'COMPLETE REAL WORLD MISSIONS',
-                    body: 'Take your game into the real world, build '
-                        'confidence through reps and watch your game '
-                        'level up.',
-                    last: true,
-                  ),
-                  const SizedBox(height: 12),
-                  const _ScoreStrip(),
-                  const SizedBox(height: 11),
-                  Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: _tierCard(_Tier.monthly, 'MONTH', t, 30)),
-                        const SizedBox(width: 10),
-                        Expanded(child: _tierCard(_Tier.weekly, 'WEEK', null, 7)),
-                      ]),
-                  const SizedBox(height: 2),
-                ]),
-              ),
-            ),
+                ),
+              );
+            }),
           ),
+
           _cta(t),
         ]),
       ),
     );
   }
+
+  /// The pitch: promise, the loop, the withheld number, the price.
+  /// `s` is the density factor — 1.0 on a big phone, ~0.8 on an SE.
+  Widget _pitch(double s, IntroductoryPrice? t) => Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _headline(s),
+          SizedBox(height: 6 * s),
+          Text('Stop guessing. Start training.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 15.5 * s,
+                fontWeight: FontWeight.w500,
+              )),
+          SizedBox(height: 14 * s),
+          _Step(
+            n: '1',
+            title: 'GET TESTED ACROSS KEY METRICS',
+            body: 'Get your score across 5 key skills:',
+            axes: 'Confidence · Flow · Wit · Recovery · Close',
+            scale: s,
+          ),
+          _Step(
+            n: '2',
+            title: 'TRAIN WITH AI & GET PERSONAL ADVICE',
+            body: 'Practice real conversations, get scored, and get told '
+                'exactly what to fix next.',
+            scale: s,
+          ),
+          _Step(
+            n: '3',
+            title: 'COMPLETE REAL WORLD MISSIONS',
+            body: 'Take it into the real world with daily missions and '
+                'watch your game level up.',
+            last: true,
+            scale: s,
+          ),
+          SizedBox(height: 10 * s),
+          _ScoreStrip(scale: s),
+          SizedBox(height: 10 * s),
+          // IntrinsicHeight is what makes `stretch` legal here: it
+          // measures the taller card and passes a TIGHT height down, so
+          // the Row's cross axis is bounded and both cards match. The
+          // b235 version had the stretch without it.
+          IntrinsicHeight(
+            child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                      child: _tierCard(_Tier.monthly, 'MONTH', t, 30, s)),
+                  SizedBox(width: 10 * s),
+                  Expanded(
+                      child: _tierCard(_Tier.weekly, 'WEEK', null, 7, s)),
+                ]),
+          ),
+        ],
+      );
 
   Widget _topBar() => Padding(
         padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
@@ -605,11 +643,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
         ]),
       );
 
-  Widget _headline() => Column(children: [
+  Widget _headline(double s) => Column(children: [
         Text('LEVEL UP',
             style: GoogleFonts.inter(
               color: Colors.white,
-              fontSize: 52,
+              fontSize: 46 * s,
               height: 0.98,
               letterSpacing: -2,
               fontWeight: FontWeight.w900,
@@ -618,7 +656,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         Text('YOUR GAME.',
             style: GoogleFonts.inter(
               color: AppColors.red,
-              fontSize: 52,
+              fontSize: 46 * s,
               height: 1.0,
               letterSpacing: -2,
               fontWeight: FontWeight.w900,
@@ -627,8 +665,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
       ]);
 
   /// One price card. Every figure on it comes from the store.
-  Widget _tierCard(
-      _Tier tier, String period, IntroductoryPrice? trial, int daysInPeriod) {
+  Widget _tierCard(_Tier tier, String period, IntroductoryPrice? trial,
+      int daysInPeriod, double s) {
     final pkg = _packageFor(tier);
     final live = pkg != null;
     final sel = _picked == tier;
@@ -644,7 +682,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
             : null,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
+          padding: EdgeInsets.fromLTRB(13 * s, 10 * s, 13 * s, 10 * s),
           decoration: BoxDecoration(
             color: sel
                 ? AppColors.red.withValues(alpha: 0.10)
@@ -668,27 +706,31 @@ class _PaywallScreenState extends State<PaywallScreen> {
               // The badge and its absence take the same height, so the
               // two cards stay level whichever one carries the trial.
               SizedBox(
-                height: 20,
+                height: 18 * s,
                 child: trial == null
                     ? null
-                    : Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.red,
-                          borderRadius: BorderRadius.circular(6),
+                    : FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.red,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                              '${_trialLength(trial).toUpperCase()} FREE',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                letterSpacing: 0.5,
+                                fontWeight: FontWeight.w900,
+                              )),
                         ),
-                        child: Text(
-                            '${_trialLength(trial).toUpperCase()} FREE',
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 9.5,
-                              letterSpacing: 0.5,
-                              fontWeight: FontWeight.w900,
-                            )),
                       ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 6 * s),
               FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
@@ -699,19 +741,19 @@ class _PaywallScreenState extends State<PaywallScreen> {
                       Text(_priceFor(tier),
                           style: GoogleFonts.inter(
                             color: Colors.white,
-                            fontSize: 27,
+                            fontSize: 26 * s,
                             fontWeight: FontWeight.w900,
                           )),
                       const SizedBox(width: 4),
                       Text('/ $period',
                           style: GoogleFonts.inter(
                             color: Colors.white70,
-                            fontSize: 13,
+                            fontSize: 13 * s,
                             fontWeight: FontWeight.w700,
                           )),
                     ]),
               ),
-              const SizedBox(height: 3),
+              SizedBox(height: 3 * s),
               // THE PER-DAY LINE. The monthly price is a decision; the
               // same money said per day is a rounding error, and it is
               // the unit he already thinks about spending in.
@@ -727,14 +769,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     color: perDay != null
                         ? AppColors.red
                         : AppColors.textTertiary,
-                    fontSize: 12,
+                    fontSize: 12 * s,
                     fontWeight: FontWeight.w800,
                   )),
-              const SizedBox(height: 8),
+              SizedBox(height: 7 * s),
               Row(children: [
                 Container(
-                  width: 18,
-                  height: 18,
+                  width: 18 * s,
+                  height: 18 * s,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
@@ -742,11 +784,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     color: sel ? AppColors.red : Colors.transparent,
                   ),
                   child: sel
-                      ? const Icon(Icons.check_rounded,
-                          size: 12, color: Colors.white)
+                      ? Icon(Icons.check_rounded,
+                          size: 12 * s, color: Colors.white)
                       : null,
                 ),
-                const SizedBox(width: 7),
+                SizedBox(width: 7 * s),
                 Expanded(
                   child: Text(trial != null ? 'Most Popular' : 'No free trial',
                       maxLines: 1,
@@ -755,7 +797,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                         color: trial != null
                             ? AppColors.red
                             : AppColors.textTertiary,
-                        fontSize: 12,
+                        fontSize: 12 * s,
                         fontWeight: FontWeight.w700,
                       )),
                 ),
@@ -773,10 +815,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
     final period = _picked == _Tier.monthly ? 'month' : 'week';
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 6, 18, 2),
-      child: Column(children: [
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
         SizedBox(
           width: double.infinity,
-          height: 66,
+          height: 64,
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
@@ -792,6 +834,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 backgroundColor: AppColors.red,
                 foregroundColor: Colors.white,
                 elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18)),
               ),
@@ -810,6 +853,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                             t == null
                                 ? 'START TRAINING'
                                 : 'START MY ${_trialLength(t).toUpperCase()} FREE TRIAL',
+                            maxLines: 1,
                             style: GoogleFonts.inter(
                               fontSize: 19,
                               letterSpacing: 0.2,
@@ -818,6 +862,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text('Take your first voice test now',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -850,7 +896,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
               )),
-        const SizedBox(height: 3),
+        const SizedBox(height: 2),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           _LinkButton(label: 'Restore Purchases', onTap: _restore),
           _LinkButton(
@@ -872,45 +918,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  PANEL (legacy) — PHOTO + SCORE  ·  no longer in the carousel
-// ══════════════════════════════════════════════════════════════════════
-
-// ignore: unused_element
-
-
-
-
-
-
-// ══════════════════════════════════════════════════════════════════════
-//  PANEL (legacy) — PROTOCOL LIST  ·  no longer in the carousel
-// ══════════════════════════════════════════════════════════════════════
-
-// ignore: unused_element
-
-
-
-
-// ══════════════════════════════════════════════════════════════════════
-//  PANEL (legacy) — RIZZ ACTIONS  ·  no longer in the carousel
-// ══════════════════════════════════════════════════════════════════════
-
-// ignore: unused_element
-
-
-// ignore: unused_element
-
-
-// ══════════════════════════════════════════════════════════════════════
 //  SHARED
 // ══════════════════════════════════════════════════════════════════════
-
-
-
-
-
-
-
 
 class _CloseX extends StatelessWidget {
   final VoidCallback onTap;
@@ -969,32 +978,34 @@ class _Step extends StatelessWidget {
   final String n, title, body;
   final String? axes;
   final bool last;
+  final double scale;
   const _Step({
     required this.n,
     required this.title,
     required this.body,
+    required this.scale,
     this.axes,
     this.last = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final s = scale;
     return Padding(
-      padding: EdgeInsets.only(bottom: last ? 0 : 12),
+      padding: EdgeInsets.only(bottom: last ? 0 : 10 * s),
       child: Column(children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
-            width: 30,
-            height: 30,
-            margin: const EdgeInsets.only(top: 1),
+            width: 28 * s,
+            height: 28 * s,
+            margin: EdgeInsets.only(top: 1 * s),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(color: AppColors.red, width: 2),
             ),
-            child: const Icon(Icons.check_rounded,
-                size: 17, color: AppColors.red),
+            child: Icon(Icons.check_rounded, size: 16 * s, color: AppColors.red),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 11 * s),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1002,29 +1013,29 @@ class _Step extends StatelessWidget {
                 Text('$n. $title',
                     style: GoogleFonts.inter(
                       color: Colors.white,
-                      fontSize: 15.5,
+                      fontSize: 15 * s,
                       height: 1.15,
                       letterSpacing: 0.2,
                       fontWeight: FontWeight.w900,
                     )),
-                const SizedBox(height: 3),
+                SizedBox(height: 3 * s),
                 Text(body,
                     style: GoogleFonts.inter(
                       color: AppColors.textSecondary,
-                      fontSize: 13.5,
-                      height: 1.35,
+                      fontSize: 13.5 * s,
+                      height: 1.32,
                       fontWeight: FontWeight.w500,
                     )),
                 if (axes != null) ...[
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2 * s),
                   // Named, because the five axes ARE the product. A man
                   // who can name what he is being marked on believes the
                   // mark more than one who is told he gets "a score".
                   Text(axes!,
                       style: GoogleFonts.inter(
                         color: Colors.white,
-                        fontSize: 13,
-                        height: 1.35,
+                        fontSize: 13 * s,
+                        height: 1.32,
                         fontWeight: FontWeight.w600,
                       )),
                 ],
@@ -1033,10 +1044,10 @@ class _Step extends StatelessWidget {
           ),
         ]),
         if (!last) ...[
-          const SizedBox(height: 12),
+          SizedBox(height: 10 * s),
           Container(
               height: 1,
-              margin: const EdgeInsets.only(left: 42),
+              margin: EdgeInsets.only(left: 39 * s),
               color: Colors.white.withValues(alpha: 0.08)),
         ],
       ]),
@@ -1048,12 +1059,14 @@ class _Step extends StatelessWidget {
 /// as onboarding beat 4, but this screen has a price to get to and the
 /// question only needs restating, not re-asking.
 class _ScoreStrip extends StatelessWidget {
-  const _ScoreStrip();
+  final double scale;
+  const _ScoreStrip({required this.scale});
 
   @override
   Widget build(BuildContext context) {
+    final s = scale;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: EdgeInsets.fromLTRB(15 * s, 11 * s, 15 * s, 11 * s),
       decoration: BoxDecoration(
         color: const Color(0xFF0E0E12),
         borderRadius: BorderRadius.circular(16),
@@ -1066,25 +1079,29 @@ class _ScoreStrip extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text('YOUR FIRST GAME TEST IS READY',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     color: AppColors.textTertiary,
-                    fontSize: 10,
+                    fontSize: 10 * s,
                     letterSpacing: 1.1,
                     fontWeight: FontWeight.w800,
                   )),
-              const SizedBox(height: 2),
+              SizedBox(height: 2 * s),
               Text('YOUR SCORE',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     color: Colors.white,
-                    fontSize: 17,
+                    fontSize: 17 * s,
                     letterSpacing: 0.4,
                     fontWeight: FontWeight.w900,
                   )),
             ],
           ),
         ),
-        Container(width: 1, height: 34, color: Colors.white12),
-        const SizedBox(width: 14),
+        Container(width: 1, height: 32 * s, color: Colors.white12),
+        SizedBox(width: 13 * s),
         Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
@@ -1092,7 +1109,7 @@ class _ScoreStrip extends StatelessWidget {
               Text('?',
                   style: GoogleFonts.inter(
                     color: AppColors.red,
-                    fontSize: 38,
+                    fontSize: 36 * s,
                     height: 1.0,
                     fontWeight: FontWeight.w900,
                     fontStyle: FontStyle.italic,
@@ -1100,7 +1117,7 @@ class _ScoreStrip extends StatelessWidget {
               Text('/100',
                   style: GoogleFonts.inter(
                     color: Colors.white,
-                    fontSize: 30,
+                    fontSize: 28 * s,
                     height: 1.0,
                     fontWeight: FontWeight.w900,
                     fontStyle: FontStyle.italic,
