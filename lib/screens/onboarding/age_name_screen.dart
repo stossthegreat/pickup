@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/analytics_service.dart';
 import '../../services/language_service.dart';
 import '../../services/local_store_service.dart';
+import '../../services/paywall_gate.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 
@@ -36,6 +37,8 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
   @override
   void initState() {
     super.initState();
+    // ignore: discarded_futures
+    LocalStoreService.setOnbStep('/onboarding/profile');
     // Pre-fill when editing from Settings.
     // ignore: discarded_futures
     _prefill();
@@ -75,15 +78,23 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
       context.pop();
       return;
     }
-    // Stamp onboarding complete here (the gender picker is bypassed in
-    // the new funnel — this is a men's app, so pin male coding). Doing it
-    // now means a mid-flow bail still re-shows onboarding, but finishing
-    // this step routes returning users straight to /home.
+    // The gender picker is bypassed in the new funnel — this is a men's
+    // app, so pin male coding here.
     await LocalStoreService.setUserGender('m');
-    await LocalStoreService.setOnboarded(true);
+    // ONBOARDING IS NOT COMPLETE HERE. It used to be stamped on this
+    // line, which meant a man who quit anywhere between this screen and
+    // the end came back to /home having never signed in and never picked
+    // a handle — the account screens sit AFTER this one. The flag now
+    // gets set on the last screen of the funnel and nowhere else; the
+    // resume marker covers the mid-flow bail.
     if (!mounted) return;
-    // AI-data consent gate next, then the paywall.
-    context.go('/onboarding/first-rep');
+    // THE REP IS THE PAID GOOD. He only gets it if he bought — that was
+    // the whole point of moving it behind the price. A man who closed the
+    // paywall still needs an account, so he goes straight to the sign-in
+    // and handle screens instead. Nobody leaves the funnel accountless.
+    final pro = await PaywallGate.isPro();
+    if (!mounted) return;
+    context.go(pro ? '/onboarding/first-rep' : '/onboarding/consent');
   }
 
   @override

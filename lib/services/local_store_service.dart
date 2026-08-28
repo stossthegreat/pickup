@@ -26,6 +26,7 @@ class LocalStoreService {
   static const _kActiveProto  = 'protocol.active.v1';
   static const _kSubscribed   = 'subscription.active.v1';
   static const _kOnboarded    = 'onboarded.v1';
+  static const _kOnbStep      = 'onboarding.step.v1';
   /// AI third-party data sharing consent (App Store guideline 5.1.2(i)).
   /// User must explicitly tap ALLOW in [AiConsentDialog] before the
   /// scan flow transmits the selfie photo to OpenAI / Replicate.
@@ -735,6 +736,36 @@ class LocalStoreService {
   static Future<void> setOnboarded(bool v) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kOnboarded, v);
+    // Finishing clears the resume marker. Leaving it behind would send a
+    // finished user back into the funnel on his next launch.
+    if (v) await prefs.remove(_kOnbStep);
+  }
+
+  // ── Onboarding resume point ─────────────────────────────────────────────
+  //
+  // WHY THIS EXISTS. `onboarded` is a single bool, and it was only ever
+  // set at the far end of the funnel. Anyone who closed the app partway
+  // through — which is everyone who read the paywall and thought about
+  // it — relaunched to beat one of the story and had to walk the whole
+  // thing again. That is the "it always goes back to page one" bug, and
+  // it also meant a man could never reach the sign-in and handle screens
+  // that live AFTER the price.
+  //
+  // Each onboarding screen stamps its own route here as it opens, so a
+  // relaunch resumes exactly where he stopped. The splash validates the
+  // value against a whitelist before it routes anywhere, so a renamed or
+  // stale route can never dead-end the app.
+  static Future<String?> onbStep() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getString(_kOnbStep);
+    return (v == null || v.isEmpty) ? null : v;
+  }
+
+  static Future<void> setOnbStep(String route) async {
+    final prefs = await SharedPreferences.getInstance();
+    // Never re-arm the funnel for someone who has already finished it.
+    if (prefs.getBool(_kOnboarded) == true) return;
+    await prefs.setString(_kOnbStep, route);
   }
 
   // ── AI third-party data sharing consent ─────────────────────────────────

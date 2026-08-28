@@ -158,7 +158,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
       // isProLive already repainted the local cache to true. Forward
       // exactly like a fresh purchase so scan-gated / unlock-in-place
       // context is honoured.
-      await LocalStoreService.setOnboarded(true);
+      await _markOnboarded();
       if (!mounted) return;
       _snack('Subscription active — unlocked.');
       _forwardOnSuccess();
@@ -269,7 +269,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
           t.cancel();
           if (settled || !mounted) return;
           settled = true;
-          await LocalStoreService.setOnboarded(true);
+          await _markOnboarded();
           if (!mounted) return;
           setState(() => _purchasing = false);
           _forwardOnSuccess();
@@ -290,7 +290,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         // too (purchase() already does, but this guarantees it's on disk
         // before _forwardOnSuccess pops and the report re-reads isPro).
         await LocalStoreService.setSubscribed(true);
-        await LocalStoreService.setOnboarded(true);
+        await _markOnboarded();
         if (!mounted) return;
         _forwardOnSuccess();
         break;
@@ -319,7 +319,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         // transaction even though the purchase call errored. If the
         // flag flipped, the user PAID — forward, don't scare them.
         if (await LocalStoreService.isSubscribed()) {
-          await LocalStoreService.setOnboarded(true);
+          await _markOnboarded();
           if (mounted) _forwardOnSuccess();
           break;
         }
@@ -356,6 +356,21 @@ class _PaywallScreenState extends State<PaywallScreen> {
         _snack('Could not restore purchases.');
         break;
     }
+  }
+
+  /// Onboarding is finished on the HANDLE screen, not here.
+  ///
+  /// Paying is not the same as being set up: sign-in and handle both sit
+  /// after this screen, so stamping "onboarded" on a purchase meant a man
+  /// who paid and then closed the app came back to /home with no account
+  /// and no name, and was never asked again. Inside the funnel we leave
+  /// the flag alone and let the resume marker carry him; everywhere else
+  /// (the scan gate, the locked report, a mid-app upsell) he is already
+  /// onboarded and this is the harmless no-op it always was.
+  Future<void> _markOnboarded() async {
+    final after = widget.context?['afterPurchase'] as String?;
+    if (after == '/onboarding/profile') return;
+    await LocalStoreService.setOnboarded(true);
   }
 
   void _forwardOnSuccess() {
@@ -405,6 +420,22 @@ class _PaywallScreenState extends State<PaywallScreen> {
       await LocalStoreService.setSubscribed(true);
     }
     if (!mounted) return;
+    // CLOSING THE PRICE IS NOT LEAVING THE FUNNEL.
+    //
+    // This used to pop, or fall through to /home. Inside onboarding that
+    // meant one tap on the X dropped him at the home screen having never
+    // signed in and never picked a handle — both of those screens live
+    // AFTER the paywall. He looked like a user with no account, because
+    // he was one, and nothing ever asked him again.
+    //
+    // He does not get the product by closing this — every voice session
+    // and every mission is still gated on PaywallGate. He gets the rest
+    // of his setup, which was never the thing being sold.
+    final after = widget.context?['afterPurchase'] as String?;
+    if (after == '/onboarding/profile') {
+      context.go('/onboarding/profile');
+      return;
+    }
     if (context.canPop()) {
       context.pop();
     } else {

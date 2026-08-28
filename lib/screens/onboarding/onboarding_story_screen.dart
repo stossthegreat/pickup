@@ -35,6 +35,8 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
   void initState() {
     super.initState();
     // ignore: discarded_futures
+    LocalStoreService.setOnbStep('/onboarding/story');
+    // ignore: discarded_futures
     AnalyticsService.onbStarted();
     // ignore: discarded_futures
     AnalyticsService.onbStoryBeat(0);

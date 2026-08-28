@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/local_store_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
@@ -53,6 +54,8 @@ class _VoiceTestScreenState extends State<VoiceTestScreen>
   @override
   void initState() {
     super.initState();
+    // ignore: discarded_futures
+    LocalStoreService.setOnbStep('/onboarding/voice-test');
     // ignore: discarded_futures
     AnalyticsService.onbStoryBeat(100); // 100 = the voice test beat
   }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/backend/chat_score_service.dart';
+import '../../services/local_store_service.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/academy/rizz_off_reveal.dart';
@@ -40,6 +41,13 @@ class _FirstRepScreenState extends State<FirstRepScreen> {
   /// Re-entry guard only: one tap opens one rep, and NOT RIGHT NOW
   /// stops working the moment the rep is under way.
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // ignore: discarded_futures
+    LocalStoreService.setOnbStep('/onboarding/first-rep');
+  }
 
   Future<void> _start(BuildContext context) async {
     if (_busy) return;
