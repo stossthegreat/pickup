@@ -88,8 +88,20 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
       // the old check fired every time and bounced straight past the
       // sign-in, which is the only reason the screen is still here.
       //
-      // Skip on SIGNED IN, not on consented.
-      if (AuthService.signedIn && mounted) {
+      // Skip on CLAIMED, not on signed-in.
+      //
+      // THIS IS WHY THE SIGN-IN SCREEN VANISHED. main() fires
+      // AuthService.ensureSignedIn() on every launch, which mints an
+      // ANONYMOUS Supabase user when there isn't one — so `signedIn` is
+      // true for literally every user who has ever opened the app, from
+      // the first second of the first run. This guard therefore fired
+      // every single time and bounced straight past to the handle
+      // screen. The screen was never removed from the funnel; it was
+      // skipping itself.
+      //
+      // isClaimed is the question actually being asked: signed in with
+      // a REAL provider, not the anonymous lane.
+      if (AuthService.isClaimed && mounted) {
         context.go('/onboarding/handle');
         return;
       }
@@ -202,7 +214,7 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
 
               const Spacer(flex: 2),
 
-              Text(_anyProvider ? 'Save your progress.' : 'Before you start.',
+              Text(_anyProvider ? 'Don\'t lose your rank.' : 'Before you start.',
                       style: GoogleFonts.inter(
                         color: Colors.white,
                         fontSize: 30,
@@ -215,8 +227,11 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
               const SizedBox(height: 8),
               Text(
                   _anyProvider
-                      ? 'Sign in so your rank, streak and squad survive a '
-                          'lost phone. Or skip — everything works without it.'
+                      ? 'Battles, squads and the leaderboard all run on '
+                          'this account. It works right now without signing '
+                          'in — but it lives only on this phone, so one '
+                          'reinstall wipes your rank, streak and squad for '
+                          'good. Sign in and none of it can be lost.'
                       : 'Two things to agree to, then you\'re in. You can '
                           'claim the account later from settings.',
                   style: GoogleFonts.inter(
