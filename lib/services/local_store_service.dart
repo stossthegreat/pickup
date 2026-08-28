@@ -27,6 +27,7 @@ class LocalStoreService {
   static const _kSubscribed   = 'subscription.active.v1';
   static const _kOnboarded    = 'onboarded.v1';
   static const _kOnbStep      = 'onboarding.step.v1';
+  static const _kGameScore    = 'game.score.v1';
   /// AI third-party data sharing consent (App Store guideline 5.1.2(i)).
   /// User must explicitly tap ALLOW in [AiConsentDialog] before the
   /// scan flow transmits the selfie photo to OpenAI / Replicate.
@@ -766,6 +767,22 @@ class LocalStoreService {
     // Never re-arm the funnel for someone who has already finished it.
     if (prefs.getBool(_kOnboarded) == true) return;
     await prefs.setString(_kOnbStep, route);
+  }
+
+  // ── THE GAME SCORE ──────────────────────────────────────────────────────
+  //
+  // His last scored rep, out of 100. Kept because a score he saw once and
+  // can never look at again is a fact about a conversation; a score that
+  // sits on his screen is a number he wants to beat. Null until he has
+  // taken the test, which is also how we know whether he has.
+  static Future<int?> gameScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_kGameScore);
+  }
+
+  static Future<void> setGameScore(int v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kGameScore, v);
   }
 
   // ── AI third-party data sharing consent ─────────────────────────────────

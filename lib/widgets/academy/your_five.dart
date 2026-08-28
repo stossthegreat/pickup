@@ -246,7 +246,7 @@ class _YourFiveState extends State<YourFive> {
         ]),
         const SizedBox(height: 12),
         _Bar(
-            label: 'MISSIONS',
+            label: 'REPS',
             value: missions,
             max: SquadDay.missionsPerDay,
             color: kNeon),

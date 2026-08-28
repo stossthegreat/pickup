@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../services/game_test.dart';
 import '../../services/local_store_service.dart';
+import '../../services/paywall_gate.dart';
 import '../../services/roster.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_colors.dart';
@@ -29,6 +31,9 @@ class PracticeTabScreen extends StatefulWidget {
 
 class _PracticeTabScreenState extends State<PracticeTabScreen> {
   Map<String, int> _stages = const {};
+  /// His last GAME TEST score, out of 100. Null until he has taken one.
+  int? _score;
+  bool _testing = false;
   int _day = 1; // earned ascension day — gates who's unlocked
   bool _creator = false; // owner creator mode → every girl unlocked
 
@@ -49,13 +54,45 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
       day = (await StreakService.progress()).ascensionDay;
     } catch (_) {/* default day 1 → only the starters unlocked */}
     final creator = await LocalStoreService.isCreatorActive();
+    final score = await LocalStoreService.gameScore();
     if (mounted) {
       setState(() {
         _stages = s;
         _day = day;
         _creator = creator;
+        _score = score;
       });
     }
+  }
+
+  /// THE GAME TEST. Five messages, one number out of 100.
+  ///
+  /// THE FIRST ONE IS FREE, AND ONLY THE FIRST. A man who has never seen
+  /// his number has no reason to care about the app and every reason to
+  /// close it; a man who has seen it has a number he wants to beat. That
+  /// is worth one graded rep of text. Every retest after it is Pro —
+  /// beating the score is the product, finding out the score is the hook.
+  Future<void> _runGameTest() async {
+    if (_testing) return;
+    HapticFeedback.mediumImpact();
+    final firstEver = _score == null;
+    final pro = firstEver ? true : await PaywallGate.isPro();
+    if (!pro) {
+      if (!mounted) return;
+      final bought = await PaywallGate.open(context, source: 'game_test');
+      if (!mounted || !bought) return;
+    }
+    if (!mounted) return;
+    setState(() => _testing = true);
+    try {
+      await GameTest.run(context,
+          surface: 'game_test',
+          kicker: firstEver ? 'YOUR GAME SCORE' : 'YOUR NEW SCORE');
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
+    if (!mounted) return;
+    await _load();
   }
 
   // A girl is locked until her ascension day arrives. Creator mode
@@ -173,7 +210,7 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
-                        child: Text('PRACTICE',
+                        child: Text('TRAIN',
                             maxLines: 1,
                             style: AppTypography.masthead),
                       ),
@@ -215,6 +252,21 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                   // this screen that teaches rather than measures, so it
                   // reads as an offer sitting on top of the women rather
                   // than a fourth setting.
+                  // ── TEST YOUR GAME ───────────────────────────────────
+                  //
+                  // The score goes ABOVE the women, not behind them. It is
+                  // the one thing on this screen that answers "am I any
+                  // good", and it was buried at the end of onboarding —
+                  // seen once, never again. Here it is the first thing he
+                  // sees every time he opens the app, and once he has a
+                  // number it stops being an offer and becomes a record
+                  // he wants to beat.
+                  _GameTestCard(
+                    score: _score,
+                    busy: _testing,
+                    onTap: _runGameTest,
+                  ),
+                  const SizedBox(height: 14),
                   Align(
                     alignment: Alignment.centerRight,
                     child: _DojoPill(onTap: () {
@@ -495,6 +547,112 @@ class _DojoPill extends StatelessWidget {
                     .copyWith(color: AppColors.red, fontSize: 8.5)),
           ]),
         ),
+      ),
+    );
+  }
+}
+
+/// THE GAME TEST CARD. Before he has a score it is a question; after, it
+/// is his number with a way to beat it. Same card, two states.
+class _GameTestCard extends StatelessWidget {
+  final int? score;
+  final bool busy;
+  final VoidCallback onTap;
+  const _GameTestCard({
+    required this.score,
+    required this.busy,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final taken = score != null;
+    return GestureDetector(
+      onTap: busy ? null : onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0E0E12),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.red.withValues(alpha: 0.55)),
+          boxShadow: [
+            BoxShadow(
+                color: AppColors.red.withValues(alpha: 0.18), blurRadius: 26),
+          ],
+        ),
+        child: Row(children: [
+          // The number, or the question mark standing in for it.
+          SizedBox(
+            width: 74,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(taken ? '$score' : '?',
+                        style: AppTypography.masthead.copyWith(
+                          color: AppColors.red,
+                          fontSize: 40,
+                          height: 1.0,
+                        )),
+                    Text('/100',
+                        style: AppTypography.label.copyWith(
+                          color: AppColors.textTertiary,
+                          fontSize: 10,
+                        )),
+                  ]),
+            ]),
+          ),
+          const SizedBox(width: 14),
+          Container(width: 1, height: 44, color: Colors.white12),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(taken ? 'YOUR GAME SCORE' : 'TEST YOUR GAME',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.label.copyWith(
+                      color: Colors.white,
+                      fontSize: 13,
+                      letterSpacing: 1.4,
+                    )),
+                const SizedBox(height: 3),
+                Text(
+                    taken
+                        ? 'Run it again and beat it.'
+                        : 'Five messages. One number. Free.',
+                    maxLines: 2,
+                    style: AppTypography.bodySmall
+                        .copyWith(color: AppColors.textSecondary)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          if (busy)
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(AppColors.red)),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: AppColors.red,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(taken ? 'RETEST' : 'START',
+                  style: AppTypography.label
+                      .copyWith(color: Colors.white, fontSize: 11)),
+            ),
+        ]),
       ),
     );
   }

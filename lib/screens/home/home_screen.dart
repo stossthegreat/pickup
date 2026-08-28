@@ -1432,8 +1432,8 @@ class _NavBar extends StatelessWidget {
       // THREE THINGS YOU DO. Progress was a third of the navigation for
       // a screen you look at once a week; battles is a live competitive
       // system that was two taps deep. They swapped.
-      (label: 'Missions', icon: Icons.bolt_rounded),
-      (label: 'Practice', icon: Icons.graphic_eq_rounded),
+      (label: 'Reps', icon: Icons.bolt_rounded),
+      (label: 'Train', icon: Icons.graphic_eq_rounded),
       (label: 'Battles', icon: Icons.sports_mma_rounded),
     ];
     // Modern floating segmented pill (the reference bro sent). A dark

@@ -748,7 +748,7 @@ class _HeadingState extends State<_Heading> {
             textBaseline: TextBaseline.alphabetic,
             children: [
           Flexible(
-            child: Text('TODAY\'S MISSIONS', style: AppTypography.masthead),
+            child: Text('TODAY\'S REPS', style: AppTypography.masthead),
           ),
           if (total > 0) ...[
             const SizedBox(width: 12),
