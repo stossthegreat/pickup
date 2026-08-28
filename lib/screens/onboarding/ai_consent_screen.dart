@@ -76,6 +76,8 @@ class _AiConsentScreenState extends State<AiConsentScreen> {
   @override
   void initState() {
     super.initState();
+    // ignore: discarded_futures
+    LocalStoreService.setOnbStep('/onboarding/consent');
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // THIS SCREEN'S JOB CHANGED, AND THE SKIP HAD TO CHANGE WITH IT.
       //

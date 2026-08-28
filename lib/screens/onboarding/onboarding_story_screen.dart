@@ -35,6 +35,8 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
   void initState() {
     super.initState();
     // ignore: discarded_futures
+    LocalStoreService.setOnbStep('/onboarding/story');
+    // ignore: discarded_futures
     AnalyticsService.onbStarted();
     // ignore: discarded_futures
     AnalyticsService.onbStoryBeat(0);
@@ -47,16 +49,13 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
           duration: const Duration(milliseconds: 460),
           curve: Curves.easeOutCubic);
     } else {
-      // ignore: discarded_futures
-      AnalyticsService.onbFinished();
-      context.go('/paywall', extra: {
-      // THE CLOSE. He reaches the price with one unresolved question —
-      // what do I score? — and nothing before this answers it. That is
-      // the whole design: the test is what he is buying, so it cannot
-      // also be the free sample.
-      'source': 'onboarding',
-      'afterPurchase': '/onboarding/profile',
-    });
+      // THE CLOSE, ONE STEP LONGER. The beats end on "what do I
+      // score?", and the answer is a microphone he has to reach for.
+      // The voice test screen puts her, the scoreboard and the record
+      // ring in front of him; pressing it is the intent, and the price
+      // is what answers it. Nothing before that button is the free
+      // sample — the test IS what he is buying.
+      context.go('/onboarding/voice-test');
     }
   }
 

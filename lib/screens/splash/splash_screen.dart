@@ -23,8 +23,21 @@ class _SplashScreenState extends State<SplashScreen> {
     _boot();
   }
 
+  /// Every screen the funnel is allowed to resume at. A stored value
+  /// outside this set is ignored and he starts at the story — a stale
+  /// route must never be able to strand the app on a dead path.
+  static const _resumable = {
+    '/onboarding/story',
+    '/onboarding/voice-test',
+    '/onboarding/profile',
+    '/onboarding/first-rep',
+    '/onboarding/consent',
+    '/onboarding/handle',
+  };
+
   Future<void> _boot() async {
     final onboarded = await LocalStoreService.isOnboarded();
+    final step = await LocalStoreService.onbStep();
     await Future.delayed(const Duration(milliseconds: 2400));
     if (!mounted) return;
 
@@ -36,7 +49,15 @@ class _SplashScreenState extends State<SplashScreen> {
     // girl, starting a mission or a call), not as an entry wall. They see
     // what they're buying first.
     if (!onboarded || kForceOnboarding) {
-      context.go('/onboarding/story');
+      // RESUME, DON'T RESTART. He closed the app somewhere in the funnel
+      // — most often standing on the price, which is exactly the man we
+      // cannot afford to make walk seven beats again. Put him back on the
+      // screen he left, or at the start if we have nothing on him.
+      final resume =
+          (!kForceOnboarding && step != null && _resumable.contains(step))
+              ? step
+              : '/onboarding/story';
+      context.go(resume);
     } else {
       context.go('/home');
     }
