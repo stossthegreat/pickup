@@ -38,15 +38,45 @@ export const openai = new OpenAI({
 
 // Models — pinned so behaviour doesn't drift when OpenAI updates defaults.
 //
-// chat:   gpt-4o (full, not mini). gpt-4o-mini was too tame for the
-//         persona — it acknowledged the rules but did not execute the
-//         laughs / lean-ins / quote-the-word moves. gpt-4o follows
-//         few-shot examples reliably and stays in character.
-// judge:  gpt-4o-mini is fine (returns JSON, no character lift).
-// whisper / tts: unchanged.
+// MINI ONLY. NO EXCEPTIONS ON THE CHAT PATH.
+//
+// `chat` was gpt-4o, justified by a comment about a persona that no
+// longer ships: "mini was too tame — it didn't execute the laughs /
+// lean-ins / quote-the-word moves". That was written for the old
+// AURALAY character and inherited wholesale.
+//
+// What it actually paid for: `POST /v1/villain/freeflow/score`, which
+// free_flow_screen calls after EVERY live voice call to produce the
+// score. Not a dead legacy screen — the scoring on the main feature,
+// on the expensive model, on every session. 17x the price of mini for
+// a call that returns a JSON rubric, which is the one job mini is
+// unambiguously good at.
+//
+//   per voice call   gpt-4o $0.0185   ->   mini $0.0011
+//   100k calls       $1,846           ->   $111
+//
+// The girl chat (/v1/date/turn) and the coach were already on mini and
+// are untouched. If a persona ever genuinely needs more than mini, the
+// fix is a better prompt — the realtime voice already proves a 34k-char
+// prompt holds character on a mini model.
 export const MODELS = {
-  chat:      'gpt-4o',
+  chat:      'gpt-4o-mini',
   judge:     'gpt-4o-mini',
   whisper:   'whisper-1',
   tts:       'gpt-4o-mini-tts',
 };
+
+// The rule, enforced rather than documented. A future edit that puts a
+// full model back on a text path fails at BOOT with a named error
+// instead of quietly costing 17x per call until someone reads a bill.
+// whisper/tts are exempt — they have no mini/full split.
+for (const key of ['chat', 'judge']) {
+  const m = MODELS[key];
+  if (!m.includes('mini')) {
+    throw new Error(
+      `[auralay] MODELS.${key} is "${m}" — text models must be mini. ` +
+      'See the note above: full models on the chat path cost ~17x and ' +
+      'the one that was there scored every voice call.',
+    );
+  }
+}
