@@ -126,6 +126,22 @@ class _PaywallScreenState extends State<PaywallScreen> {
     _autoUnlockIfAlreadyPro();
   }
 
+  Future<void> _loadOfferings() async {
+    final off = await PurchaseService.loadOfferings();
+    // Both stores allow one intro offer per subscription group, ever. A
+    // device that has already been in a trial is not getting another, so
+    // do not advertise one to it.
+    final eligible = !(await TrialService.everStarted());
+    if (!mounted) return;
+    setState(() {
+      _offerings = off;
+      _trialEligible = eligible;
+      // Never sit on a tier the store did not deliver — the CTA would be
+      // a button that cannot transact.
+      if (off.monthly == null && off.weekly != null) _picked = _Tier.weekly;
+    });
+  }
+
   /// SELF-HEALING GATE. If this user ALREADY has an active subscription
   /// (bought on an earlier build whose strict entitlement check rejected
   /// it, or on another device), the paywall recognises it the moment it
