@@ -16,7 +16,7 @@ publish_to: 'none'
 # So the LEFT side has to move for any new TestFlight or release build.
 # The build number only has to be unique within its own train, so it just
 # keeps climbing.
-version: 1.1.0+230
+version: 1.1.0+231
 
 environment:
   sdk: ^3.8.0

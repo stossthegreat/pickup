@@ -416,6 +416,12 @@ class _PaywallScreenState extends State<PaywallScreen> {
         'geometry': ctx['geometry'],
         'extraImages': ctx['extraImages'] ?? const <dynamic>[],
       });
+    } else if (ctx != null && ctx['afterPurchase'] == '/onboarding/profile') {
+      // Straight on to the test, via the one screen that asks his name
+      // and age — both feed the woman he is about to be scored against,
+      // so it earns its place. Nothing else stands between the payment
+      // and the number he paid for.
+      context.go('/onboarding/profile');
     } else if (ctx != null && ctx['unlockInPlace'] == true) {
       if (context.canPop()) {
         context.pop();

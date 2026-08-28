@@ -83,7 +83,7 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
     await LocalStoreService.setOnboarded(true);
     if (!mounted) return;
     // AI-data consent gate next, then the paywall.
-    context.go('/onboarding/consent');
+    context.go('/onboarding/first-rep');
   }
 
   @override

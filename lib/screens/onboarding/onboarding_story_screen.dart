@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -47,7 +49,14 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
     } else {
       // ignore: discarded_futures
       AnalyticsService.onbFinished();
-      context.go('/onboarding/profile');
+      context.go('/paywall', extra: {
+      // THE CLOSE. He reaches the price with one unresolved question —
+      // what do I score? — and nothing before this answers it. That is
+      // the whole design: the test is what he is buying, so it cannot
+      // also be the free sample.
+      'source': 'onboarding',
+      'afterPurchase': '/onboarding/profile',
+    });
     }
   }
 
@@ -124,107 +133,115 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
   }
 
   // ── The 10 beats ──────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  //  SEVEN BEATS. No test, no paywall until the end.
+  //
+  //  The old flow was eleven beats of persuasion, then a SECOND
+  //  five-page sell, then the rep — seventeen screens of being told
+  //  before one screen of being shown. This replaces all of it.
+  //
+  //  The job of these seven is exactly four things, in order: he has
+  //  this problem, it is trainable, this is how ImHim trains it, and it
+  //  can measure him. Then voice (he cannot fake it), then progression,
+  //  then the transformation.
+  //
+  //  He arrives at the paywall with ONE unresolved question — what do I
+  //  score? — which is the entire close. Nothing before the paywall
+  //  answers it, which is why there is no free test any more.
+  // ══════════════════════════════════════════════════════════════════
   List<_Beat> _buildBeats() => const [
-        // 01 — HERO. The promise, up front.
+        // 01 — THE HOOK. Names the problem in his words, then reframes
+        // it as trainable in the same breath.
         _HeroBeat(
-          headline: 'Never be the man\nwho says nothing.',
-          body: 'You saw the opportunity. You knew what you wanted. '
-              'But you hesitated.\n\nImHim trains you to make your move.',
+          headline: 'You don\'t need better\nlines. You need\nbetter game.',
+          body: 'When it matters, you hesitate. You think of the right '
+              'thing afterwards. You play it safe instead of saying what '
+              'you actually mean.\n\n'
+              'Game isn\'t something you\'re born with. It\'s something '
+              'you train.',
           cta: 'SHOW ME HOW',
         ),
-        // 02 — THE MOMENT
-        _ImageBeat(
-          kicker: '01 — THE MOMENT',
-          asset: 'assets/onboarding/hesitation.png',
-          headline: 'You see her.',
-          body: 'You think about walking over. You search for the perfect '
-              'thing to say. Then the moment is gone.\n\n'
-              'That hesitation is costing you opportunities.',
+
+        // 02 — THE REFRAME. One screen. This replaces four separate
+        // regret/rejection beats that all made the same point.
+        _StatementBeat(
+          kicker: '01 — THE REFRAME',
+          headline: 'This isn\'t your\npersonality.\nIt\'s a skill.',
+          body: 'Nobody gets confident by thinking about being confident. '
+              'They get there through reps.\n\n'
+              'The more situations you\'ve handled before, the less there '
+              'is to freeze over.',
         ),
-        // 03 — BE HONEST (the one pick-to-continue question)
-        _QuestionBeat(
-          kicker: '02 — BE HONEST',
-          question: 'What usually\nstops you?',
-          note: 'We\'re going to train that out of you.',
-          options: [
-            'I don\'t know what to say.',
-            'I overthink the approach.',
-            'I\'m afraid of rejection.',
-            'I wait until it\'s too late.',
+
+        // 03 — THE PRODUCT. The whole loop on one screen. This is the
+        // clarity beat: if he only reads one, it should be this.
+        _LoopBeat(
+          kicker: '02 — THE METHOD',
+          headline: 'Train your game\nlike you\'d train\nanything else.',
+          steps: [
+            ('PRACTICE', 'Real AI conversations by voice or text.'),
+            ('GET SCORED', 'See exactly where your game is strong and '
+                'where it breaks.'),
+            ('GET COACHED', 'Learn what went wrong and what to do '
+                'differently.'),
+            ('REPEAT', 'Run another rep and watch the numbers move.'),
           ],
+          cta: 'HOW AM I SCORED?',
         ),
-        // 04 — THE REGRET
-        _ImageBeat(
-          kicker: '03 — THE REGRET',
-          asset: 'assets/onboarding/1am.png',
-          headline: 'Rejection lasts\na moment.',
-          body: 'Regret stays with you. Not knowing what would\'ve happened. '
-              'Replaying the moment.\n\nWishing you\'d just made your move.',
+
+        // 04 — THE SCORE. The axes are shown with their values HIDDEN.
+        // A filled-in example would answer the question we want him
+        // carrying to the paywall.
+        _ScoreBeat(
+          kicker: '03 — THE MEASURE',
+          headline: 'Five parts of\nyour game.\nOne score.',
+          axes: ['CONFIDENCE', 'FLOW', 'WIT', 'RECOVERY', 'CLOSE'],
+          footerTitle: 'What\'s costing you points?',
+          footer: 'Your first test finds the weakest part of your game and '
+              'gives you something specific to train.',
+          cta: 'FIND MY WEAKNESS',
         ),
-        // 05 — ASK YOURSELF
-        _StatementBeat(
-          kicker: '04 — ASK YOURSELF',
-          headline: 'How important is\nbeing good with\nwomen to you?',
-          body: 'What other skill this important would you never practise?\n\n'
-              'You train your body. You train your career. You train almost '
-              'everything that matters.\n\nWhy should this be any different?',
+
+        // 05 — VOICE. The differentiator, and the reason the score is
+        // honest: typing lets him draft, talking does not.
+        _VoiceBeat(
+          kicker: '04 — LIVE VOICE',
+          headline: 'Typing gives you\ntime. Talking\ndoesn\'t.',
+          body: 'Talk to her in real time. She hears the pauses. The '
+              'hesitation. The confidence. The moment you lose your '
+              'flow.\n\nAnd she responds immediately.',
+          footer: 'This is where you find out how good your game actually is.',
+          cta: 'I WANT MY SCORE',
         ),
-        // 06 — YOUR LEVEL (sets where Day 1 begins)
-        _QuestionBeat(
-          kicker: '05 — YOUR LEVEL',
-          question: 'Let\'s start where\nyou actually are.',
-          sub: 'How confident are you approaching someone you\'re attracted to?',
-          note: 'This sets where your Day 1 begins.',
-          options: [
-            'I never do it.',
-            'I\'ve done it once or twice.',
-            'Sometimes.',
-            'I\'m already comfortable.',
+
+        // 06 — THE CLIMB. Progression, not a roster. Five rungs, not
+        // ten profiles — the point is that they get harder, not who
+        // they are.
+        _ClimbBeat(
+          kicker: '05 — THE CLIMB',
+          headline: 'They get harder\nas you get better.',
+          rungs: [
+            ('INTO YOU', 'Easy. She\'s already interested.'),
+            ('SWEET', ''),
+            ('CHAOS', ''),
+            ('TESTING YOU', ''),
+            ('ICE QUEEN', 'Gives you nothing. Earn every inch.'),
           ],
+          footer: 'Your scores decide what you need to work on. Your '
+              'progress takes you further up the climb.',
+          cta: 'HOW FAR CAN I GET?',
         ),
-        // 07 — HOW YOU TRAIN (three features)
-        _HowBeat(
-          kicker: '06 — THE METHOD',
-          headline: 'This is where\nyou train.',
-          footer: 'Practise here. Prove it out there.',
-        ),
-        // 07 — PRACTISE
-        _StatementBeat(
-          kicker: '07 — PRACTISE',
-          headline: 'Practise before\nthe moment comes.',
-          body: 'Handle awkward silences. Recover from bad conversations. '
-              'Learn what works. Repeat until it feels natural.\n\n'
-              'Make your mistakes here. Build your game out there.',
-        ),
-        // 08 — REAL LIFE
-        _StatementBeat(
-          kicker: '08 — REAL LIFE',
-          headline: 'Then take it\ninto real life.',
-          body: 'Your missions turn practice into action. Before the '
-              'approach. During the conversation. After the text.\n\n'
-              'Your coach becomes your wingman.',
-        ),
-        // 09 — THE SHIFT
-        _BarsBeat(
-          kicker: '09 — THE SHIFT',
-          headline: 'Every rep\nchanges you.',
-          body: 'Less hesitation. Better conversations. More confidence. '
-              'Stronger humour. More opportunities.\n\n'
-              'You won\'t wonder if you\'re improving. You\'ll see it.',
-        ),
-        // 10 — THE CHOICE
-        _StatementBeat(
-          kicker: '10 — THE CHOICE',
-          headline: 'Stop hoping you\'ll\nknow what to say.',
-          body: 'Practise until you do.\n\nTrain with AI. Complete real-world '
-              'missions. Get help whenever it matters. Build real-life game.',
-        ),
-        // 11 — FINALE
-        _FinaleBeat(
-          headline: 'The next 60 days\nwill pass anyway.',
-          body: 'At the end of them you\'ll either still be on the sidelines…'
-              '\n\nor you\'ll be him.',
-          cta: 'SEE MY 60-DAY PLAN',
+
+        // 07 — THE TRANSFORMATION. Day 1 is deliberately unknown — the
+        // question marks are the close. The retention mechanics get one
+        // line each here and nowhere else; they are not why he buys.
+        _TransformBeat(
+          kicker: '06 — 60 DAYS',
+          headline: 'Your first score is\nonly the beginning.',
+          extras: 'Practice with AI. Take real-world missions. Get coached. '
+              'Battle other players. Build your streak.',
+          closer: 'First, let\'s find out where you actually stand.',
+          cta: 'TAKE MY FIRST TEST',
         ),
       ];
 }
@@ -457,6 +474,88 @@ class _BarsBeat extends _Beat {
       {required this.kicker, required this.headline, required this.body});
 }
 
+/// The product loop — four named steps with a rule between each.
+class _LoopBeat extends _Beat {
+  final String kicker, headline;
+  final List<(String, String)> steps;
+  final String _cta;
+  const _LoopBeat({
+    required this.kicker,
+    required this.headline,
+    required this.steps,
+    required String cta,
+  }) : _cta = cta;
+  @override
+  String get cta => _cta;
+}
+
+/// The five axes with their values DELIBERATELY hidden. Showing a
+/// worked example here would answer the one question we want him
+/// carrying into the paywall.
+class _ScoreBeat extends _Beat {
+  final String kicker, headline, footerTitle, footer;
+  final List<String> axes;
+  final String _cta;
+  const _ScoreBeat({
+    required this.kicker,
+    required this.headline,
+    required this.axes,
+    required this.footerTitle,
+    required this.footer,
+    required String cta,
+  }) : _cta = cta;
+  @override
+  String get cta => _cta;
+}
+
+/// Live voice, sold on the one thing text can't do.
+class _VoiceBeat extends _Beat {
+  final String kicker, headline, body, footer;
+  final String _cta;
+  const _VoiceBeat({
+    required this.kicker,
+    required this.headline,
+    required this.body,
+    required this.footer,
+    required String cta,
+  }) : _cta = cta;
+  @override
+  String get cta => _cta;
+}
+
+/// The difficulty ladder. Rungs with an empty blurb render as a name
+/// only — the point is the climb, not ten character descriptions.
+class _ClimbBeat extends _Beat {
+  final String kicker, headline, footer;
+  final List<(String, String)> rungs;
+  final String _cta;
+  const _ClimbBeat({
+    required this.kicker,
+    required this.headline,
+    required this.rungs,
+    required this.footer,
+    required String cta,
+  }) : _cta = cta;
+  @override
+  String get cta => _cta;
+}
+
+/// Day 1 -> Day 60, with Day 1 unknown. The question marks are the
+/// close; the retention mechanics get one line and no more.
+class _TransformBeat extends _Beat {
+  final String kicker, headline, extras, closer;
+  final String _cta;
+  const _TransformBeat({
+    required this.kicker,
+    required this.headline,
+    required this.extras,
+    required this.closer,
+    required String cta,
+  }) : _cta = cta;
+  @override
+  String get cta => _cta;
+}
+
 class _FinaleBeat extends _Beat {
   final String headline, body;
   final String _cta;
@@ -491,6 +590,11 @@ class _BeatView extends StatelessWidget {
     if (b is _HowBeat) return _scroll(_howBeat(b), top: true);
     if (b is _DashboardBeat) return _scroll(_dashboardBeat(b), top: true);
     if (b is _BarsBeat) return _scroll(_barsBeat(b), top: true);
+    if (b is _LoopBeat) return _scroll(_loopBeat(b), top: true);
+    if (b is _ScoreBeat) return _scroll(_scoreBeat(b), top: true);
+    if (b is _VoiceBeat) return _scroll(_voiceBeat(b), top: true);
+    if (b is _ClimbBeat) return _scroll(_climbBeat(b), top: true);
+    if (b is _TransformBeat) return _scroll(_transformBeat(b), top: true);
     if (b is _FinaleBeat) return _scroll(_finaleBeat(b), center: true);
     return const SizedBox();
   }
@@ -779,6 +883,263 @@ class _BeatView extends StatelessWidget {
   }
 
   // ── Shared type ───────────────────────────────────────────────────────
+  // ── THE LOOP: four named steps, a rule between each ───────────────────
+  Widget _loopBeat(_LoopBeat b) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _kicker(b.kicker),
+        const SizedBox(height: 18),
+        _headline(b.headline, size: 34),
+        const SizedBox(height: 26),
+        for (final (i, step) in b.steps.indexed) ...[
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(
+              width: 26,
+              child: Text('0${i + 1}',
+                  style: GoogleFonts.inter(
+                    color: AppColors.red,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(step.$1,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 15.5,
+                        letterSpacing: 1.6,
+                        fontWeight: FontWeight.w900,
+                      )),
+                  const SizedBox(height: 4),
+                  Text(step.$2,
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withValues(alpha: 0.72),
+                        fontSize: 14.5,
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
+                      )),
+                ],
+              ),
+            ),
+          ])
+              .animate()
+              .fadeIn(delay: (160 + i * 130).ms, duration: 420.ms)
+              .slideX(begin: -0.04, end: 0),
+          if (i != b.steps.length - 1)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 0, 12),
+              child: Container(
+                  width: 1.4,
+                  height: 18,
+                  color: AppColors.red.withValues(alpha: 0.45)),
+            ),
+        ],
+      ],
+    );
+  }
+
+  // ── THE MEASURE: the five axes, values withheld ───────────────────────
+  //
+  // Every bar reads "?" on purpose. A worked example here would answer
+  // the exact question we want him to still have at the paywall, and
+  // the question IS the close.
+  Widget _scoreBeat(_ScoreBeat b) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _kicker(b.kicker),
+        const SizedBox(height: 18),
+        _headline(b.headline, size: 34),
+        const SizedBox(height: 28),
+        for (final (i, axis) in b.axes.indexed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 15),
+            child: Row(children: [
+              SizedBox(
+                width: 108,
+                child: Text(axis,
+                    style: GoogleFonts.inter(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontSize: 12,
+                      letterSpacing: 1.4,
+                      fontWeight: FontWeight.w800,
+                    )),
+              ),
+              Expanded(
+                child: Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text('?',
+                  style: GoogleFonts.inter(
+                    color: AppColors.red,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ])
+                .animate()
+                .fadeIn(delay: (180 + i * 110).ms, duration: 400.ms),
+          ),
+        const SizedBox(height: 16),
+        Text(b.footerTitle,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            )).animate().fadeIn(delay: 760.ms, duration: 420.ms),
+        const SizedBox(height: 8),
+        _body(b.footer, size: 15.5),
+      ],
+    );
+  }
+
+  // ── LIVE VOICE ────────────────────────────────────────────────────────
+  Widget _voiceBeat(_VoiceBeat b) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _kicker(b.kicker),
+        const SizedBox(height: 18),
+        _headline(b.headline, size: 34),
+        const SizedBox(height: 24),
+        const _VoiceWave(),
+        const SizedBox(height: 24),
+        _body(b.body, size: 16),
+        const SizedBox(height: 18),
+        Text(b.footer,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 16,
+              height: 1.4,
+              fontWeight: FontWeight.w800,
+            )).animate().fadeIn(delay: 520.ms, duration: 420.ms),
+      ],
+    );
+  }
+
+  // ── THE CLIMB: five rungs, hardest last ───────────────────────────────
+  Widget _climbBeat(_ClimbBeat b) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _kicker(b.kicker),
+        const SizedBox(height: 18),
+        _headline(b.headline, size: 34),
+        const SizedBox(height: 26),
+        for (final (i, rung) in b.rungs.indexed) ...[
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 9,
+              height: 9,
+              margin: const EdgeInsets.only(top: 5),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                // The ladder darkens as it climbs — the last rung is the
+                // one he can't reach yet, and it should look like it.
+                color: Color.lerp(AppColors.red,
+                    Colors.white.withValues(alpha: 0.25), i / b.rungs.length),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(rung.$1,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 15,
+                        letterSpacing: 1.8,
+                        fontWeight: FontWeight.w900,
+                      )),
+                  if (rung.$2.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(rung.$2,
+                        style: GoogleFonts.inter(
+                          color: Colors.white.withValues(alpha: 0.66),
+                          fontSize: 14,
+                          height: 1.4,
+                          fontWeight: FontWeight.w500,
+                        )),
+                  ],
+                ],
+              ),
+            ),
+          ])
+              .animate()
+              .fadeIn(delay: (150 + i * 110).ms, duration: 400.ms),
+          if (i != b.rungs.length - 1)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 6, 0, 6),
+              child: Container(
+                  width: 1.4,
+                  height: 16,
+                  color: Colors.white.withValues(alpha: 0.16)),
+            ),
+        ],
+        const SizedBox(height: 18),
+        _body(b.footer, size: 15.5),
+      ],
+    );
+  }
+
+  // ── 60 DAYS. Day 1 is unknown, and that is the close ──────────────────
+  Widget _transformBeat(_TransformBeat b) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _kicker(b.kicker),
+        const SizedBox(height: 18),
+        _headline(b.headline, size: 32),
+        const SizedBox(height: 26),
+        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          const Expanded(child: _DayCard(day: 'DAY 1', unknown: true)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Icon(Icons.arrow_forward_rounded,
+                size: 18, color: AppColors.red.withValues(alpha: 0.8)),
+          ),
+          const Expanded(child: _DayCard(day: 'DAY 60', unknown: false)),
+        ]).animate().fadeIn(delay: 200.ms, duration: 480.ms),
+        const SizedBox(height: 14),
+        Center(
+          child: Text('TRAIN.  GET SCORED.  IMPROVE.',
+              style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.55),
+                fontSize: 11,
+                letterSpacing: 2.4,
+                fontWeight: FontWeight.w800,
+              )),
+        ).animate().fadeIn(delay: 420.ms, duration: 420.ms),
+        const SizedBox(height: 26),
+        _body(b.extras, size: 14.5),
+        const SizedBox(height: 20),
+        Text(b.closer,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 17,
+              height: 1.35,
+              fontWeight: FontWeight.w900,
+            )).animate().fadeIn(delay: 640.ms, duration: 440.ms),
+      ],
+    );
+  }
+
   Widget _kicker(String text) => Text(text,
       style: GoogleFonts.inter(
         color: AppColors.red,
@@ -808,6 +1169,129 @@ class _BeatView extends StatelessWidget {
         height: 1.5,
         fontWeight: FontWeight.w500,
       )).animate().fadeIn(delay: 180.ms, duration: 480.ms);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  VOICE WAVE — the live-call visual, standing in for a screenshot
+// ══════════════════════════════════════════════════════════════════════
+class _VoiceWave extends StatefulWidget {
+  const _VoiceWave();
+  @override
+  State<_VoiceWave> createState() => _VoiceWaveState();
+}
+
+class _VoiceWaveState extends State<_VoiceWave>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1400))
+    ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const bars = 34;
+    return SizedBox(
+      height: 84,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (_, __) => Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            for (var i = 0; i < bars; i++)
+              () {
+                final t = i / (bars - 1);
+                // A speech-shaped envelope: loud in the middle, quiet at
+                // the edges, wobbling on the controller.
+                final env = math.sin(t * math.pi);
+                final wob = math.sin((t * 9) + _c.value * math.pi * 2);
+                final h = 6 + (env * (0.55 + 0.45 * wob.abs())) * 66;
+                final live = t > 0.3 && t < 0.7;
+                return Container(
+                  width: 3.4,
+                  height: h.clamp(5.0, 78.0),
+                  decoration: BoxDecoration(
+                    color: live
+                        ? AppColors.red
+                        : Colors.white.withValues(alpha: 0.28),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                );
+              }(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  DAY CARD — Day 1 unknown, Day 60 unwritten. Both on purpose.
+// ══════════════════════════════════════════════════════════════════════
+class _DayCard extends StatelessWidget {
+  final String day;
+  final bool unknown;
+  const _DayCard({required this.day, required this.unknown});
+
+  @override
+  Widget build(BuildContext context) {
+    // Day 1 shows "?" because he has not been tested. Day 60 shows a
+    // dash because we will not invent a number he might not reach —
+    // a fabricated "82" is a promise the product cannot keep.
+    final mark = unknown ? '?' : '—';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.045),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: unknown
+                ? AppColors.red.withValues(alpha: 0.35)
+                : Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(day,
+              style: GoogleFonts.inter(
+                color: unknown ? AppColors.red : Colors.white54,
+                fontSize: 10.5,
+                letterSpacing: 2.2,
+                fontWeight: FontWeight.w900,
+              )),
+          const SizedBox(height: 10),
+          for (final label in const ['GAME', 'CONFIDENCE', 'WIT'])
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(label,
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withValues(alpha: 0.55),
+                        fontSize: 10,
+                        letterSpacing: 0.8,
+                        fontWeight: FontWeight.w700,
+                      )),
+                  Text(mark,
+                      style: GoogleFonts.inter(
+                        color: unknown ? AppColors.red : Colors.white70,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
