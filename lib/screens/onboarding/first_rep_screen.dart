@@ -156,7 +156,9 @@ class _FirstRepScreenState extends State<FirstRepScreen> {
     // seven-beat story sells, he pays to find out his number, and this
     // screen is the first thing he gets for the money. So it ends at
     // home, with his score behind him.
-    context.go('/home');
+    // Now the account. He has a score, and "claim it" is a far better
+    // reason to sign in than "sign in to continue" ever was.
+    context.go('/onboarding/consent');
   }
 
   /// THE WAY OUT, AND IT STILL ENDS AT THE PRICE.
@@ -171,7 +173,9 @@ class _FirstRepScreenState extends State<FirstRepScreen> {
     HapticFeedback.selectionClick();
     // He has already paid by the time he sees this. Skipping the test
     // must not send him back to a price he has settled.
-    context.go('/home');
+    // Now the account. He has a score, and "claim it" is a far better
+    // reason to sign in than "sign in to continue" ever was.
+    context.go('/onboarding/consent');
   }
 
   @override
