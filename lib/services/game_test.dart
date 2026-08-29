@@ -70,6 +70,29 @@ class GameTest {
       ),
     );
     if (!context.mounted) return null;
+    return reveal(context, kicker: kicker);
+  }
+
+  /// Show the number for the rep that just finished, and bank it.
+  ///
+  /// Split out of [run] so the DAILY AI REPS can use it too. Those
+  /// missions were being graded and then never shown: the chat ends, the
+  /// girl-verdict ceremony plays, the screen pops, and the /100 the
+  /// grader produced was left sitting in ChatScoreService.lastResult
+  /// with nothing on screen to draw it. From the man's side he did the
+  /// rep and was never scored — which is exactly what he reported.
+  ///
+  /// Returns his score, or null if he bailed or the grade never landed.
+  static Future<int?> reveal(
+    BuildContext context, {
+    required String kicker,
+    GirlBrief? girl,
+  }) async {
+    // WHOSE CONVERSATION IT WAS. The reveal names her and wears her
+    // accent, so a Daisy rep that said "Sofia" would read as the wrong
+    // card for the wrong woman. Defaults to the onboarding woman
+    // because that is the only caller with no one else to name.
+    final g = girl ?? girlById('into_you');
 
     // ── THE NUMBER ────────────────────────────────────────────────────
     //
