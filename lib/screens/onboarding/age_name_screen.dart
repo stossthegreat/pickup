@@ -94,7 +94,13 @@ class _AgeNameScreenState extends State<AgeNameScreen> {
     // and handle screens instead. Nobody leaves the funnel accountless.
     final pro = await PaywallGate.isPro();
     if (!mounted) return;
-    context.go(pro ? '/onboarding/first-rep' : '/onboarding/consent');
+    // THE VOICE TEST COMES FIRST, AND ONLY NOW. It could not run before
+    // this screen — she uses his name, his age band and his language,
+    // and all three are set on the line above. A man who paid on the
+    // voice test screen gets sent straight back to it, live this time,
+    // and the chat test follows. A man who closed the price skips both
+    // (they are the paid good) and goes to sign-in.
+    context.go(pro ? '/onboarding/voice-test' : '/onboarding/consent');
   }
 
   @override

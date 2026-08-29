@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/local_store_service.dart';
 import '../../services/analytics_service.dart';
+import '../../services/paywall_gate.dart';
+import '../game/freeflow/free_flow_screen.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
 
@@ -51,6 +53,10 @@ class _VoiceTestScreenState extends State<VoiceTestScreen>
 
   static const _axes = ['Confidence', 'Flow', 'Wit', 'Recovery', 'Close'];
 
+  /// Has he paid? The screen has two lives either side of that answer.
+  bool _live = false;
+  bool _busy = false;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +64,13 @@ class _VoiceTestScreenState extends State<VoiceTestScreen>
     LocalStoreService.setOnbStep('/onboarding/voice-test');
     // ignore: discarded_futures
     AnalyticsService.onbStoryBeat(100); // 100 = the voice test beat
+    // ignore: discarded_futures
+    _resolveLive();
+  }
+
+  Future<void> _resolveLive() async {
+    final pro = await PaywallGate.isPro();
+    if (mounted) setState(() => _live = pro);
   }
 
   @override
@@ -66,14 +79,50 @@ class _VoiceTestScreenState extends State<VoiceTestScreen>
     super.dispose();
   }
 
-  void _start() {
+  /// ONE BUTTON, TWO LIVES.
+  ///
+  /// Before he pays, the reach IS the paywall — talk is never free and
+  /// pressing the mic is the intent the price answers.
+  ///
+  /// After he pays it has to do the thing it said. This screen promises
+  /// sixty seconds with her and a number; landing him on a name form
+  /// instead is the app taking his money and then not delivering the one
+  /// demonstration it sold him. So on the paid pass the same button
+  /// opens the real voice session — the actual live screen, her actual
+  /// voice, the actual scoring path — and the chat test follows it.
+  Future<void> _start() async {
+    if (_busy) return;
     HapticFeedback.mediumImpact();
-    // ignore: discarded_futures
-    AnalyticsService.onbFinished();
-    context.go('/paywall', extra: const {
-      'source': 'onboarding_voice',
-      'afterPurchase': '/onboarding/profile',
-    });
+
+    if (!_live) {
+      // ignore: discarded_futures
+      AnalyticsService.onbFinished();
+      context.go('/paywall', extra: const {
+        'source': 'onboarding_voice',
+        'afterPurchase': '/onboarding/profile',
+      });
+      return;
+    }
+
+    setState(() => _busy = true);
+    await Navigator.of(context, rootNavigator: true).push<void>(
+      MaterialPageRoute(
+        builder: (_) => FreeFlowScreen(
+          initialVibeKey: _her.vibeKey,
+          // SHE WAS ASSIGNED, NOT CHOSEN — the day-lock is a Practice
+          // mechanic and this is a set test, not a pick.
+          assigned: true,
+          // No coach in a test, exactly as on the text side. A score
+          // with a ghostwriter behind it measures nothing.
+          coachAllowed: false,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    // Voice done, text next. He has been scored on how he sounds; the
+    // chat test scores how he writes, and they are not the same man.
+    context.go('/onboarding/first-rep');
   }
 
   @override
@@ -139,6 +188,31 @@ class _VoiceTestScreenState extends State<VoiceTestScreen>
                                 height: 1.35,
                                 fontWeight: FontWeight.w600,
                               )),
+                          // THE WAY PAST, ONCE HE HAS PAID. Before the
+                          // price the paywall's own X is the exit; after
+                          // it, this screen would be the only one in the
+                          // app with no way forward but a live call — and
+                          // a man who cannot leave a screen does not buy
+                          // again, he uninstalls. Deliberately quiet, and
+                          // it goes exactly where the test goes.
+                          if (_live) ...[
+                            SizedBox(height: 4 * s),
+                            TextButton(
+                              onPressed: _busy
+                                  ? null
+                                  : () {
+                                      HapticFeedback.selectionClick();
+                                      context.go('/onboarding/first-rep');
+                                    },
+                              child: Text('NOT RIGHT NOW',
+                                  style: GoogleFonts.inter(
+                                    color: AppColors.textTertiary,
+                                    fontSize: 11 * s,
+                                    letterSpacing: 2.2,
+                                    fontWeight: FontWeight.w800,
+                                  )),
+                            ),
+                          ],
                         ]),
                       ]),
                 ),
@@ -290,7 +364,8 @@ class _VoiceTestScreenState extends State<VoiceTestScreen>
   /// The reach. A live-looking record ring — pressing it is the intent
   /// signal, and the price answers it.
   Widget _mic(double s) => GestureDetector(
-        onTap: _start,
+        // ignore: discarded_futures
+        onTap: _busy ? null : _start,
         behavior: HitTestBehavior.opaque,
         child: Column(children: [
           SizedBox(

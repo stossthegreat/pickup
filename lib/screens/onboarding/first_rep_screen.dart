@@ -146,9 +146,11 @@ class _FirstRepScreenState extends State<FirstRepScreen> {
                   .fadeIn(delay: 320.ms, duration: 480.ms)
                   .slideY(begin: 0.06, end: 0),
               const SizedBox(height: 16),
-              Text('Five messages. She is into you already, so this is the '
-                      'easy one — and you still get scored on it.\n\n'
-                      'Stuck? Tap Lucien. He will hand you the line.',
+              Text('Five messages. She is into you already, so this is '
+                      'the easy one — and you still get scored on it.\n\n'
+                      'No coach on a test. Nobody is going to hand you a '
+                      'line in here — get your number first, then take it '
+                      'to Train and Lucien will work on it with you.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
                         color: Colors.white.withValues(alpha: 0.74),

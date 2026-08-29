@@ -28,6 +28,7 @@ import '../../widgets/academy/daily_card.dart' show girlForVibe;
 import '../../widgets/academy/game_button.dart';
 import '../../widgets/academy/rank_emblem.dart';
 import '../../widgets/academy/rizz_off_reveal.dart';
+import '../../widgets/academy/squad_strip.dart';
 import '../../widgets/share/rizz_card.dart';
 import '../../widgets/share/duel_card.dart';
 import '../game/freeflow/free_flow_screen.dart';
@@ -1209,6 +1210,14 @@ class _BattlesScreenState extends State<BattlesScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 18),
+
+                  // ── YOUR SQUAD ──────────────────────────────────────
+                  // Moved off the Reps screen. The squad is other men,
+                  // and this is the tab where other men live — sitting
+                  // it above the rank hero puts the people you answer to
+                  // ahead of the number you answer with.
+                  const SquadStrip(),
                   const SizedBox(height: 18),
 
                   // ── THE HERO ────────────────────────────────────────
