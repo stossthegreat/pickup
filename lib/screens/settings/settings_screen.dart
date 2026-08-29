@@ -13,6 +13,7 @@ import '../../services/creator_mode_store.dart';
 import '../../services/language_service.dart';
 import '../../services/face_asset_service.dart';
 import '../../services/local_store_service.dart';
+import '../../services/trial_service.dart';
 import '../../services/purchase_service.dart';
 import '../../services/rizz_memory_service.dart';
 import '../../services/win_back_service.dart';
@@ -615,6 +616,8 @@ class _VoiceCapTile extends StatefulWidget {
 class _VoiceCapTileState extends State<_VoiceCapTile> {
   int _usedMs = 0;
   bool _pro   = false;
+  /// Inside the store's free trial — a different, much smaller budget.
+  bool _trial = false;
   bool _loaded = false;
   /// v279 — wall-clock date when the user's rolling cap window
   /// next resets. Surfaced in the tile copy so over-cap users see
@@ -630,11 +633,26 @@ class _VoiceCapTileState extends State<_VoiceCapTile> {
   }
 
   Future<void> _load() async {
-    final ms  = await LocalStoreService.voiceMsThisWeek();
+    // ── THIS TILE WAS TRIAL-BLIND, AND IT READ AS A LEAK ──────────────
+    //
+    // It showed the weekly bucket against the 14-minute Pro ceiling for
+    // EVERYONE, so a man inside the 3-day trial — who has exactly one
+    // 2-minute test — opened Settings and was told "14:00 left of
+    // 14:00". Whatever the ledger was actually doing, the app was
+    // telling him he had a fortnight of voice.
+    //
+    // In trial it now reports the trial budget, because that is the
+    // number that is actually being enforced at the gate
+    // (LocalStoreService.voiceMsRemaining takes the same branch).
+    final trial = await TrialService.isTrial();
+    final ms  = trial
+        ? await TrialService.usedMs()
+        : await LocalStoreService.voiceMsThisWeek();
     final pro = await LocalStoreService.isSubscribed();
     final at  = await LocalStoreService.nextCapResetAt();
     if (!mounted) return;
     setState(() {
+      _trial  = trial;
       _usedMs = ms;
       _pro    = pro;
       _loaded = true;
@@ -669,7 +687,14 @@ class _VoiceCapTileState extends State<_VoiceCapTile> {
 
   @override
   Widget build(BuildContext context) {
-    final capMs = LocalStoreService.kVoiceMinutesPerWeek * 60 * 1000;
+    // THE CAP THIS MAN IS ACTUALLY UNDER, not the one the paid tier
+    // gets. In trial that is the single test; otherwise the weekly Pro
+    // ceiling.
+    final capMinutes = _trial
+        ? TrialService.trialVoiceMinutes
+        : LocalStoreService.kVoiceMinutesPerWeek;
+    final capMs = capMinutes * 60 * 1000;
+    final capLabel = '$capMinutes:00';
     final remainingMs = (capMs - _usedMs).clamp(0, capMs);
     final pct = _loaded ? (_usedMs / capMs).clamp(0.0, 1.0) : 0.0;
     final overCap = _usedMs >= capMs;
@@ -677,25 +702,28 @@ class _VoiceCapTileState extends State<_VoiceCapTile> {
 
     return _SettingTile(
       icon: Icons.mic_rounded,
-      title: 'Roleplay voice — this week',
+      title: _trial ? 'Roleplay voice — free trial' : 'Roleplay voice — this week',
       subtitle: !_loaded
           ? 'Loading…'
-          : _pro
+          : _trial
               ? (overCap
-                  ? 'Capped — resets ${_resetCopy()}'
-                  : '${_fmt(remainingMs)} left of '
-                    '${LocalStoreService.kVoiceMinutesPerWeek}:00')
-              : 'Pro unlocks ${LocalStoreService.kVoiceMinutesPerWeek}'
-                ' minutes a week',
+                  ? 'Trial test used. Full minutes start when your '
+                    'subscription does.'
+                  : '${_fmt(remainingMs)} left — your one trial test')
+              : _pro
+                  ? (overCap
+                      ? 'Capped — resets ${_resetCopy()}'
+                      : '${_fmt(remainingMs)} left of $capLabel')
+                  : 'Pro unlocks ${LocalStoreService.kVoiceMinutesPerWeek}'
+                    ' minutes a week',
       trailing: SizedBox(
         width: 70,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(_pro
-                    ? '${_fmt(_usedMs)} / '
-                      '${LocalStoreService.kVoiceMinutesPerWeek}:00'
-                    : '0 / ${LocalStoreService.kVoiceMinutesPerWeek}:00',
+            Text(_pro || _trial
+                    ? '${_fmt(_usedMs)} / $capLabel'
+                    : '0 / $capLabel',
                 style: AppTypography.label.copyWith(
                   color: color,
                   fontSize: 11, letterSpacing: 0.6,
