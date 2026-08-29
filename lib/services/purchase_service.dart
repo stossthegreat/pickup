@@ -204,10 +204,23 @@ class PurchaseService {
       }
       // Mirror trial state on every push too, not just at launch. This
       // listener is what fires the moment a trial converts to paid, and
-      // without it a man who converted kept the one-minute trial cap
-      // until he next cold-started the app.
+      // without it a man who converted kept the trial cap until he next
+      // cold-started the app.
+      //
+      // AND WHEN HE IS NOT PRO AT ALL, CLEAR THE STAMP. Writing `false`
+      // here used to record "confirmed full-price subscriber" for a man
+      // with no subscription whatsoever — so a free or lapsed account
+      // carried a paid stamp, and the moment he started a trial the
+      // fail-closed default could not protect him because the state was
+      // no longer absent. Cancelled, lapsed and never-subscribed all
+      // reset to unresolved instead.
+      final entActive = info
+              .entitlements.all[PurchaseConfig.proEntitlementId]?.isActive ??
+          false;
       // ignore: discarded_futures
-      TrialService.setTrial(_isTrialFrom(info));
+      entActive
+          ? TrialService.setTrial(_isTrialFrom(info))
+          : TrialService.clearResolved();
     });
 
     // Mirror current entitlement state into the local cache so a
@@ -607,10 +620,32 @@ class PurchaseService {
   /// comes straight off RevenueCat: `trial` for a free trial, `intro`
   /// for a discounted introductory period (which IS paid, so it gets
   /// the full allowance), `normal` for an ordinary renewal.
+  /// Is this man inside an introductory period rather than paying full
+  /// price for a full period?
+  ///
+  /// THIS TESTED FOR PeriodType.trial ALONE, AND THAT WAS THE SECOND
+  /// LEAK. A 3-day introductory offer does NOT always come back as
+  /// `trial` — RevenueCat reports `intro` for introductory pricing, and
+  /// `unknown` whenever it cannot classify the period at all. Both fell
+  /// through this function as `false`, which the caller read as "full
+  /// paying subscriber" and handed him the paid weekly fourteen
+  /// minutes. A man who had paid us nothing yet.
+  ///
+  /// The question is inverted now, which is the only safe way to ask
+  /// it: he is on the full allowance ONLY when the store positively
+  /// says the period is NORMAL or PREPAID. trial, intro, unknown and
+  /// anything a future SDK adds all resolve to restricted.
   static bool _isTrialFrom(CustomerInfo info) {
     final ent = info.entitlements.all[PurchaseConfig.proEntitlementId];
-    if (ent == null || !ent.isActive) return false;
-    return ent.periodType == PeriodType.trial;
+    if (ent == null || !ent.isActive) {
+      // Not entitled at all. Not a trial user — a free one — and the
+      // voice gate stops him long before the minute ledger matters.
+      return false;
+    }
+    final p = ent.periodType;
+    final fullPrice =
+        p == PeriodType.normal || p == PeriodType.prepaid;
+    return !fullPrice;
   }
 
   static Future<void> _refreshEntitlementCache() async {
@@ -631,7 +666,14 @@ class PurchaseService {
         return;
       }
       await LocalStoreService.setSubscribed(isPro);
-      await TrialService.setTrial(isPro && _isTrialFrom(info));
+      // Same rule as the listener: only an ACTIVE entitlement gets a
+      // stamp at all. Not-pro clears it back to unresolved so the
+      // restrictive default applies again.
+      if (isPro) {
+        await TrialService.setTrial(_isTrialFrom(info));
+      } else {
+        await TrialService.clearResolved();
+      }
     } catch (_) {
       // Network fail on launch is not fatal — the cached flag stands.
     }
