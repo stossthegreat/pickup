@@ -668,15 +668,44 @@ class PurchaseService {
   /// anything a future SDK adds all resolve to restricted.
   static bool _isTrialFrom(CustomerInfo info) {
     final ent = info.entitlements.all[PurchaseConfig.proEntitlementId];
-    if (ent == null || !ent.isActive) {
-      // Not entitled at all. Not a trial user — a free one — and the
-      // voice gate stops him long before the minute ledger matters.
-      return false;
-    }
+
+    // ── THE LEAK, AND IT WAS THIS LINE ────────────────────────────────
+    //
+    // This returned FALSE when the entitlement was missing or inactive,
+    // and false means "confirmed full-price subscriber — give him the
+    // fourteen minutes".
+    //
+    // But look at the ONE caller that matters,
+    // _refreshEntitlementCache. It decides `isPro` leniently:
+    //
+    //     entActive || entitlements.active.isNotEmpty
+    //                || activeSubscriptions.isNotEmpty
+    //
+    // — deliberately, so a real payer is never locked out while
+    // RevenueCat is lagging or an entitlement mapping is wrong. So
+    // isPro can be TRUE while the `pro` entitlement is absent or
+    // inactive: the man has bought something, RevenueCat can see the
+    // subscription, but the entitlement is not wired to that product
+    // yet or has not propagated.
+    //
+    // That is precisely the state a brand-new SKU is in. And in that
+    // state this function said "not a trial", the caller stamped him
+    // `paid`, and a man three seconds into a free trial was handed the
+    // full paid weekly allowance. Watched happening on a real phone.
+    //
+    // It is now impossible to answer "full price" without PROOF of it.
+    // No entitlement, inactive entitlement, unrecognised period — every
+    // one of them returns true and he is capped at the trial budget.
+    // Only an ACTIVE entitlement that positively reports NORMAL or
+    // PREPAID opens the fourteen minutes.
+    //
+    // The asymmetry is the whole point: capping a real subscriber for
+    // the seconds until the next refresh corrects it costs nothing, and
+    // it self-heals. Handing a trial user a paid week cannot be undone.
+    if (ent == null || !ent.isActive) return true;
+
     final p = ent.periodType;
-    final fullPrice =
-        p == PeriodType.normal || p == PeriodType.prepaid;
-    return !fullPrice;
+    return !(p == PeriodType.normal || p == PeriodType.prepaid);
   }
 
   static Future<void> _refreshEntitlementCache() async {
