@@ -533,7 +533,21 @@ class _PaywallScreenState extends State<PaywallScreen> {
   /// of the room actually available, and this is the denominator. It is
   /// measured from the laid-out design, not guessed — if the block below
   /// grows, this number grows with it.
-  static const double _contentDesignHeight = 540;
+  /// THE DENOMINATOR MUST NOT BE OPTIMISTIC.
+  ///
+  /// s = available / this, capped at 1.0. If this number is SMALLER
+  /// than the block's true height, s comes back as 1.0 on a phone where
+  /// the content does not actually fit — nothing scales, and the screen
+  /// scrolls. That is exactly what happened: 540 was a guess, the real
+  /// block is nearer 520 with two-line titles and wrapped axes, and on
+  /// a mid-size phone the ratio cleared 1.0 while the content still
+  /// overflowed.
+  ///
+  /// Over-estimating is safe (the block shrinks slightly more than it
+  /// had to). Under-estimating is a scrolling paywall. So this is set
+  /// ABOVE the measured height, and the copy below is cut to hold it
+  /// there: one line of body per step, no title long enough to wrap.
+  static const double _contentDesignHeight = 560;
 
   @override
   Widget build(BuildContext context) {
@@ -587,37 +601,36 @@ class _PaywallScreenState extends State<PaywallScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           _headline(s),
-          SizedBox(height: 6 * s),
+          SizedBox(height: 5 * s),
           Text('Stop guessing. Start training.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 color: AppColors.textSecondary,
-                fontSize: 15.5 * s,
+                fontSize: 14.5 * s,
                 fontWeight: FontWeight.w500,
               )),
-          SizedBox(height: 14 * s),
+          SizedBox(height: 12 * s),
+          // EVERY TITLE FITS ONE LINE AND EVERY BODY FITS ONE LINE.
+          // A wrapped line is 18 more points, three steps is three
+          // chances to wrap, and 54 points is the difference between a
+          // paywall and a scrolling paywall. The copy is cut to the
+          // width, not written and hoped for.
           _Step(
             n: '1',
-            title: 'GET TESTED ACROSS KEY METRICS',
-            body: 'Get your score across 5 key skills:',
-            // THE REAL FIVE — the dimensions the grader returns and
-            // the Progress tab keeps. Naming a rubric he never sees
-            // was a promise the app could not show him afterwards.
-            axes: 'Confidence · Presence · Game · Humour · Listening',
+            title: 'GET TESTED ON 5 KEY SKILLS',
+            body: 'Confidence · Presence · Game · Humour · Listening',
             scale: s,
           ),
           _Step(
             n: '2',
-            title: 'TRAIN WITH AI & GET PERSONAL ADVICE',
-            body: 'Practice real conversations, get scored, and get told '
-                'exactly what to fix next.',
+            title: 'TRAIN WITH REAL COACHING',
+            body: 'Get told exactly what to fix next.',
             scale: s,
           ),
           _Step(
             n: '3',
-            title: 'COMPLETE REAL WORLD MISSIONS',
-            body: 'Take it into the real world with daily missions and '
-                'watch your game level up.',
+            title: 'DO REAL WORLD MISSIONS',
+            body: 'Take it out there and watch the number move.',
             last: true,
             scale: s,
           ),
@@ -681,7 +694,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         Text('LEVEL UP',
             style: GoogleFonts.inter(
               color: Colors.white,
-              fontSize: 46 * s,
+              fontSize: 42 * s,
               height: 0.98,
               letterSpacing: -2,
               fontWeight: FontWeight.w900,
@@ -690,7 +703,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         Text('YOUR GAME.',
             style: GoogleFonts.inter(
               color: AppColors.red,
-              fontSize: 46 * s,
+              fontSize: 42 * s,
               height: 1.0,
               letterSpacing: -2,
               fontWeight: FontWeight.w900,
@@ -1055,34 +1068,55 @@ class _Step extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('$n. $title',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 15 * s,
-                      height: 1.15,
-                      letterSpacing: 0.2,
-                      fontWeight: FontWeight.w900,
-                    )),
-                SizedBox(height: 3 * s),
-                Text(body,
-                    style: GoogleFonts.inter(
-                      color: AppColors.textSecondary,
-                      fontSize: 13.5 * s,
-                      height: 1.32,
-                      fontWeight: FontWeight.w500,
-                    )),
-                if (axes != null) ...[
-                  SizedBox(height: 2 * s),
-                  // Named, because the five axes ARE the product. A man
-                  // who can name what he is being marked on believes the
-                  // mark more than one who is told he gets "a score".
-                  Text(axes!,
+                // ONE LINE, GUARANTEED — SHRUNK, NOT WRAPPED.
+                //
+                // maxLines alone would ellipsise the copy; wrapping
+                // would silently add 18 points per step and put the
+                // screen back into a scroll. FittedBox scaleDown gives
+                // up a fraction of a point of type instead, so the
+                // height of a step is a CONSTANT no matter what copy is
+                // put in it. That is what makes the design height below
+                // trustworthy rather than a guess.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text('$n. $title',
+                      maxLines: 1,
                       style: GoogleFonts.inter(
                         color: Colors.white,
-                        fontSize: 13 * s,
-                        height: 1.32,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 15 * s,
+                        height: 1.15,
+                        letterSpacing: 0.2,
+                        fontWeight: FontWeight.w900,
                       )),
+                ),
+                SizedBox(height: 3 * s),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(body,
+                      maxLines: 1,
+                      style: GoogleFonts.inter(
+                        color: AppColors.textSecondary,
+                        fontSize: 13.5 * s,
+                        height: 1.32,
+                        fontWeight: FontWeight.w500,
+                      )),
+                ),
+                if (axes != null) ...[
+                  SizedBox(height: 2 * s),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(axes!,
+                        maxLines: 1,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 13 * s,
+                          height: 1.32,
+                          fontWeight: FontWeight.w600,
+                        )),
+                  ),
                 ],
               ],
             ),
