@@ -164,6 +164,14 @@ abstract final class TrialService {
     return prefs.getInt(_kUsedMs) ?? 0;
   }
 
+  /// TEST ONLY — reset the lifetime counter so the trial rig can run
+  /// the cap again without a reinstall. Reachable only from the
+  /// creator-mode tile in Settings, which takes the creator password.
+  static Future<void> resetUsedForTesting() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kUsedMs, 0);
+  }
+
   /// Trial voice left, in ms. Never negative.
   static Future<int> remainingMs() async {
     final used = await usedMs();

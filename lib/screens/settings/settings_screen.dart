@@ -246,6 +246,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // out of settings, that's my main feature add it back."
               const _CreatorTile(),
 
+              // ── TRIAL RIG — creator only, never visible to a user ──────
+              // Testing the trial cap through the real store is slow and
+              // unreliable: sandbox Apple IDs remember intro-offer
+              // eligibility, so the second run through is often a
+              // FULL-PRICE purchase reporting periodType.normal, and 14
+              // minutes is then correct behaviour that looks exactly like
+              // the bug. This forces the app's own trial state so the
+              // ledger, the cap, the wall and the Settings tile can all
+              // be verified in a minute with no purchase at all.
+              const _TrialRigTile(),
+
               // ── Delete all data — destructive, sits low ────────────────
               _SettingTile(
                 icon: Icons.close_rounded,
@@ -1088,6 +1099,106 @@ class _CreatorTileState extends State<_CreatorTile> {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+/// THE TRIAL RIG. Creator-mode only, and it does not exist for anyone
+/// else — the tile renders as a zero-size box unless creator mode is on,
+/// which takes the creator password to enable.
+///
+/// It writes the app's own trial state directly, which is the ONLY thing
+/// the voice cap reads. So it exercises the real gate, the real ledger,
+/// the real wall and the real Settings tile, without a purchase and
+/// without waiting on a store.
+///
+/// What it cannot test is whether RevenueCat correctly REPORTS a trial —
+/// that is a store question and the build row's diagnostic answers it.
+/// Between the two there is nothing left to guess at.
+class _TrialRigTile extends StatefulWidget {
+  const _TrialRigTile();
+  @override
+  State<_TrialRigTile> createState() => _TrialRigTileState();
+}
+
+class _TrialRigTileState extends State<_TrialRigTile> {
+  bool _creator = false;
+  bool _trial = false;
+  int _usedMs = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // ignore: discarded_futures
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final c = await CreatorModeStore.isActive();
+    final t = await TrialService.isTrial();
+    final u = await TrialService.usedMs();
+    if (!mounted) return;
+    setState(() {
+      _creator = c;
+      _trial = t;
+      _usedMs = u;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_creator) return const SizedBox.shrink();
+    final left = (TrialService.trialVoiceMs - _usedMs).clamp(0, 1 << 30);
+    return _SettingTile(
+      icon: Icons.science_outlined,
+      iconColor: AppColors.signalAmber,
+      title: 'Trial rig — ${_trial ? "IN TRIAL" : "full price"}',
+      subtitle: 'Trial voice left: ${left ~/ 1000}s of '
+          '${TrialService.trialVoiceMs ~/ 1000}s · tap to switch',
+      onTap: () async {
+        HapticFeedback.mediumImpact();
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: AppColors.surface1,
+            title: const Text('Trial rig',
+                style: TextStyle(color: Colors.white)),
+            content: const Text(
+                'Forces the app-side trial state so the cap can be '
+                'tested without a purchase.\n\n'
+                'FORCE TRIAL then open voice: it must allow one session '
+                'of the trial length, then show the trial wall and never '
+                'the weekly allowance.',
+                style: TextStyle(color: Color(0xFFA8A8B2), fontSize: 13)),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  await TrialService.setTrial(true);
+                  await TrialService.resetUsedForTesting();
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                },
+                child: const Text('FORCE TRIAL'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await TrialService.setTrial(false);
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                },
+                child: const Text('FORCE PAID'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await TrialService.clearResolved();
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                },
+                child: const Text('CLEAR'),
+              ),
+            ],
+          ),
+        );
+        await _refresh();
+      },
     );
   }
 }
