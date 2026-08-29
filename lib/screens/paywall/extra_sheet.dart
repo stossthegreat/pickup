@@ -327,7 +327,11 @@ class _ExtraSheetState extends State<_ExtraSheet> {
           // Required honesty, and it's also reassuring: a one-off is a
           // smaller decision than a subscription and saying so out loud
           // removes the main hesitation.
-          Text('One-off payment. Not a subscription. Minutes never expire.',
+          // THIS LINE SAID "MINUTES NEVER EXPIRE". They now last 30
+          // days, so the old copy was a promise the app had stopped
+          // keeping — the single most refundable sentence we could
+          // have left on a payment screen.
+          Text('One-off payment. Not a subscription. Minutes last 30 days.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 color: AppColors.textMuted,

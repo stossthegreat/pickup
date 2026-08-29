@@ -322,7 +322,10 @@ class _MinutesPaywallState extends State<_MinutesPaywall> {
           ),
         ),
         const SizedBox(height: 10),
-        Text('One-time purchase · minutes never expire · not a subscription',
+        // Was "minutes never expire" — see extra_sheet.dart. They
+        // last 30 days now and the man buying has to be told so here,
+        // before he pays, not after they lapse.
+        Text('One-time purchase · minutes last 30 days · not a subscription',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               color: AppColors.textTertiary,
