@@ -7,7 +7,9 @@ import 'trial_service.dart';
 /// v279 — active Pro subscription type. Lives here (not in
 /// PurchaseService) so LocalStoreService can read it for cap-window
 /// decisions without creating a circular import.
-enum ProTier { none, weekly, annual }
+/// Persisted BY NAME (see setCachedTier), so new values can be appended
+/// safely — an unknown stored name falls back to `none`.
+enum ProTier { none, weekly, monthly, annual }
 
 /// Single source of truth for everything persisted on-device.
 ///
@@ -510,9 +512,18 @@ class LocalStoreService {
     return anchor;
   }
 
-  /// v279 — window length for the current Pro tier. Annual subs reset
-  /// every 30 days, everyone else (weekly + free) every 7. Reads the
-  /// cached tier so this stays synchronous.
+  /// Window length for the current Pro tier.
+  ///
+  /// ANNUAL resets every 30 days. EVERYONE ELSE — monthly, weekly and
+  /// free — resets every 7, and monthly is on the weekly window
+  /// deliberately rather than by omission.
+  ///
+  /// A 30-day window for a monthly sub would hand him the whole budget
+  /// on day one, which is worse for him and worse for us: he burns it
+  /// in a weekend, has nothing for three weeks, and churns. The seven-
+  /// day reset paces the spend and gives him a reason to come back next
+  /// week, which is the entire retention mechanic. Same total minutes
+  /// either way — about 60 a month — just spread so they keep working.
   static Future<int> _windowMs(SharedPreferences prefs) async {
     final tier = await cachedTier();
     return tier == ProTier.annual ? _kMonthMs : _kWeekMs;
