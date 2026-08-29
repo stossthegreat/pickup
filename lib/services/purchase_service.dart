@@ -134,6 +134,37 @@ class PurchaseService {
     } catch (err) {
       lines.add('getOfferings threw: $err');
     }
+    // ── THE TRIAL VERDICT, SPELLED OUT ────────────────────────────────
+    //
+    // Every argument about the voice cap has been about a value nobody
+    // could see. This prints it: what the store says the period is, and
+    // what the app concluded from it. If those two disagree the bug is
+    // in _isTrialFrom; if they agree and the cap is still wrong the bug
+    // is in the ledger. Without it we were guessing at both.
+    try {
+      final ci = await Purchases.getCustomerInfo();
+      final ent = ci.entitlements.all[PurchaseConfig.proEntitlementId];
+      lines.add('');
+      lines.add('── VOICE ALLOWANCE ──');
+      lines.add('Active subs: ${ci.activeSubscriptions.toList()}');
+      lines.add('"pro" entitlement: ${ent == null ? "ABSENT" : (ent.isActive ? "active" : "inactive")}');
+      lines.add('periodType: ${ent?.periodType}');
+      lines.add('App says in-trial: ${await TrialService.isTrial()}');
+      lines.add('Trial voice used: '
+          '${(await TrialService.usedMs()) ~/ 1000}s of '
+          '${TrialService.trialVoiceMinutes * 60}s');
+      lines.add('Voice ms remaining: '
+          '${(await LocalStoreService.voiceMsRemaining()) ~/ 1000}s');
+      if (ent != null && ent.isActive && ent.periodType == PeriodType.normal) {
+        lines.add('→ FULL-PRICE period. 14 min/week is CORRECT here. A '
+                  'trial only exists on ${PurchaseConfig.productIds.monthly}, '
+                  'so if that product is not live nobody can start one and '
+                  'every purchase is full price.');
+      }
+    } catch (err) {
+      lines.add('trial probe threw: $err');
+    }
+
     try {
       final info = await Purchases.getCustomerInfo();
       lines.add('Active entitlements: '
