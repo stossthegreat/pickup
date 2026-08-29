@@ -515,11 +515,26 @@ class _GirlChatScreenState extends State<GirlChatScreen> {
       await BattleService.submit(battle, transcript);
       return;
     }
-    await ChatScoreService.score(
+    final result = await ChatScoreService.score(
       transcript: transcript,
       surface: widget.config.scoreSurface,
       scenario: widget.config.name,
     );
+
+    // ── ONLY AN UNHELPED REP MOVES THE GAME SCORE ─────────────────────
+    //
+    // Same rule as the voice side. CHAT on the Reps card is fed by the
+    // daily AI reps and the onboarding test — the conversations he ran
+    // with nobody feeding him lines — and by nothing else. Train chats
+    // run with coachAllowed true and are deliberately excluded: a score
+    // earned with Lucien in the room measures Lucien.
+    //
+    // This is also why CHAT read as a dash on a man who had done reps:
+    // nothing outside onboarding had ever written it. Now every
+    // unhelped chat does.
+    if (result != null && !widget.config.coachAllowed) {
+      await LocalStoreService.setChatScore(result.score);
+    }
   }
 
   void _scrollToBottom() {
