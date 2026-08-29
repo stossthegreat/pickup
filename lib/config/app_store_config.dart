@@ -35,5 +35,5 @@ const String kAppStoreId = '6798386010';
 /// and adding one to solve a two-line problem is not worth the
 /// dependency — but it does mean this is hand-maintained, so it is
 /// bumped in the same commit as the pubspec, every time.
-const String kBuildNumber = '255';
+const String kBuildNumber = '256';
 const String kBuildVersion = '1.2.0';

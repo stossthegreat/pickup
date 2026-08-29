@@ -108,16 +108,28 @@ abstract final class TrialService {
     final state = prefs.getString(_kTrialState);
     if (state != null) return state != _paid;
 
-    // MIGRATION off the old bool. An existing install that has already
-    // been told `false` by the store is a confirmed payer and keeps the
-    // full allowance — the fail-closed default is for devices we have
-    // genuinely never resolved, which is exactly the population at risk.
-    if (prefs.containsKey(_kInTrial)) {
-      final legacy = prefs.getBool(_kInTrial) ?? false;
-      await prefs.setString(_kTrialState, legacy ? _trial : _paid);
-      return legacy;
+    // ── THE LEGACY BOOL IS ONLY TRUSTED IN ONE DIRECTION ──────────────
+    //
+    // A `true` on the old key means the old code positively identified
+    // a trial, and that is still true. Carry it.
+    //
+    // A `false` CANNOT BE TRUSTED, and migrating it to `paid` was about
+    // to make this whole fix useless. The old code wrote `false` for
+    // every trial user it failed to recognise — which was all of them
+    // on an introductory offer — so the leaked devices are carrying
+    // exactly that value. Honouring it would stamp them "confirmed
+    // payer" permanently and hand them the fourteen minutes again, on
+    // the build that was supposed to stop it.
+    //
+    // So a legacy false is treated as UNRESOLVED: restrictive until the
+    // store says otherwise. A genuine subscriber is capped for the few
+    // seconds it takes _refreshEntitlementCache to run on that same
+    // launch, then gets everything back. A leaked device is caught.
+    if (prefs.getBool(_kInTrial) == true) {
+      await prefs.setString(_kTrialState, _trial);
+      return true;
     }
-    return true; // never resolved → treat as trial
+    return true; // unresolved, or an untrustworthy legacy false
   }
 
   /// Mirror of the store's truth. Called from the entitlement refresh
