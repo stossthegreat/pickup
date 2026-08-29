@@ -38,7 +38,37 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// his first paid week starts at a full 14 minutes.
 abstract final class TrialService {
   /// Live voice minutes for the whole trial. Not per week — per trial.
-  static const trialVoiceMinutes = 1;
+  ///
+  /// THIS NUMBER IS THE COST DIAL. It is the only place a man who never
+  /// intends to pay can spend money we do not get back, so it is worth
+  /// stating exactly what it buys.
+  ///
+  /// Voice runs on gpt-realtime-mini (routes/realtime.js — the full
+  /// model is creator-only and stays that way). Working from OpenAI's
+  /// own per-minute approximations for the realtime family, a minute of
+  /// two-way conversation on mini lands around 2-3 cents once the
+  /// session prompt and the end-of-call grade are counted in. Check it
+  /// against the first real bill rather than trusting this comment.
+  ///
+  /// TWO — EXACTLY ONE TEST, AND NOT A SECOND MORE.
+  ///
+  /// This is deliberately the length of one session
+  /// (_FreeFlowScreenState._sessionSeconds) and not a minute over. The
+  /// trial buys him the demonstration and nothing else: he takes the
+  /// two-minute test, gets his number, and the next time he reaches for
+  /// the orb he is told — plainly, not sold at — that the full weekly
+  /// allowance starts when the trial converts.
+  ///
+  /// One was worse than two, not cheaper: the test itself was cut off
+  /// at sixty seconds and he was scored on half a conversation. Three
+  /// was worse than two the other way: a spare minute is a second demo,
+  /// and the man who has had two demos has less reason to pay for the
+  /// third than the man left standing at the end of his first.
+  ///
+  /// The exposure: a trial user who burns it and cancels costs roughly
+  /// 5p of voice plus pennies of text. One conversion at £19.99 covers
+  /// about four hundred of them.
+  static const trialVoiceMinutes = 2;
 
   static const _kInTrial = 'trial.active.v1';
   static const _kUsedMs  = 'trial.voice_used_ms.v1';
