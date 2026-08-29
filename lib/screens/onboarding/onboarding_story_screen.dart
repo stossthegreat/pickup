@@ -149,8 +149,19 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
   //  answers it, which is why there is no free test any more.
   // ══════════════════════════════════════════════════════════════════
   List<_Beat> _buildBeats() => const [
-        // 01 — THE HOOK. Names the problem in his words, then reframes
-        // it as trainable in the same breath.
+        // ══════════════════════════════════════════════════════════════
+        //  EIGHT BEATS. The strongest of the old funnel and the
+        //  strongest of the new, in the order bro set — not a redesign
+        //  and not one screen more.
+        //
+        //  1-4 are the emotional case: the promise, the pattern, his
+        //  own admission, then the reframe that says the pattern is
+        //  trainable. 5-8 are the product: how it works, what gets
+        //  measured, why voice is the honest test, and where sixty days
+        //  of it ends. Every one of them exits into the voice test.
+        // ══════════════════════════════════════════════════════════════
+
+        // 01 — THE HOOK (new). The promise and the problem in one line.
         _HeroBeat(
           headline: 'You don\'t need better\nlines. You need\nbetter game.',
           body: 'When it matters, you hesitate. You think of the right '
@@ -161,77 +172,78 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
           cta: 'SHOW ME HOW',
         ),
 
-        // 02 — THE DIAGNOSIS. The hardest screen in the funnel: it
-        // names the LOOP rather than the feeling, so the way out reads
-        // as mechanical rather than motivational. "Untrained, not shy"
-        // is the whole product thesis in five words.
+        // 02 — THE PATTERN (old style). Full-bleed art melting to black,
+        // which is what the old funnel did better than the new one: the
+        // first pain beat lands harder with a face on it than with type.
+        _ImageBeat(
+          kicker: '01 — THE PATTERN',
+          asset: 'assets/onboarding/hesitation.png',
+          headline: 'You already know\nhow this ends.',
+          body: 'You see the moment. You hesitate. Someone else takes '
+              'it.\n\nAnd you spend the rest of the night knowing '
+              'exactly what you should have said.',
+        ),
+
+        // 03 — BE HONEST (old). The pick-to-continue question. Nothing
+        // in the funnel does what this does: he stops being read at and
+        // has to name the thing himself, in his own words, before he is
+        // allowed forward.
+        _QuestionBeat(
+          kicker: '02 — BE HONEST',
+          question: 'Which one hurts\nbecause it\'s true?',
+          options: [
+            'I don\'t know what to say.',
+            'I overthink the approach.',
+            'I\'m afraid of rejection.',
+            'I wait until it\'s too late.',
+          ],
+          note: 'We\'re going to train that out of you.',
+        ),
+
+        // 04 — IT WAS NEVER YOUR LOOKS (old, brought back). The turn.
+        // Everything before this is the problem; this is the sentence
+        // that says the problem is not him. Trimmed to fit ONE screen —
+        // it was scrolling, and a man does not scroll through the line
+        // the whole funnel pivots on.
         _DiagnosisBeat(
           headline: 'It was never\nyour looks.',
           body: 'Every man you envy learned this. None of them were born '
-              'knowing what to say to a woman who gives him nothing back.',
+              'knowing what to say.',
           loop: [
             'You freeze, so you never get the reps.',
-            'No reps, so the game never gets better.',
-            'Game never gets better, so you keep freezing.',
+            'No reps, so the game never improves.',
+            'No improvement, so you keep freezing.',
           ],
-          verdict: 'You are not shy. You are untrained. Those are '
-              'completely different problems — and only one of them '
-              'is permanent.',
-          closer: 'Sixty days from now you are either still guessing, or '
-              'you are the man who always knows what to say.',
+          verdict: 'You are not shy. You are untrained. '
+              'Only one of those is permanent.',
           cta: 'I WANT THAT',
         ),
 
-        // 03 — THE REFRAME.
-        _StatementBeat(
-          kicker: '01 — THE REFRAME',
-          headline: 'This isn\'t your\npersonality.\nIt\'s a skill.',
-          body: 'Nobody gets confident by thinking about being confident. '
-              'They get there through reps.\n\n'
-              'The more situations you\'ve handled before, the less there '
-              'is to freeze over.',
-        ),
-
-        // 04 — THE SYSTEM. Not "conversation → score → feedback →
-        // repeat", which is what the old copy said and undersold by a
-        // mile. Four stages with four DIFFERENT jobs — and the one that
-        // was missing entirely is TRAIN WITH HELP. Telling a man he is
-        // weak on wit is a diagnosis; sitting with him while he fixes it
-        // is the product, and the funnel never mentioned it.
-        //
-        // The order is also the order he lives it: tested, coached,
-        // tested again without the coach, then ranked.
+        // 05 — THE METHOD (new). The loop, stated so plainly it cannot
+        // be misread — and with the one distinction that matters:
+        // COACHING HAPPENS IN TRAIN, NEVER DURING A SCORED REP. That is
+        // not just copy, it is enforced (GameTest passes coachAllowed
+        // false), so the screen is describing the app, not flattering it.
         _LoopBeat(
-          kicker: '02 — THE SYSTEM',
-          headline: 'Test. Train.\nRep. Level up.',
+          kicker: '03 — THE METHOD',
+          headline: 'Train your game\nlike you\'d train\nanything else.',
           steps: [
-            ('GET TESTED', 'Find out exactly where your game stands '
-                'across five key skills.'),
-            ('TRAIN WITH HELP', 'Practice real conversations. Get '
-                'coaching, suggested answers and feedback whenever you '
-                'need it.'),
-            ('DO YOUR REPS', 'Put what you\'ve learned to the test — '
-                'without help — in AI challenges and real-world '
-                'missions.'),
-            ('LEVEL UP', 'Get scored, beat your Game Score, build XP '
-                'and climb the ranks.'),
+            ('PRACTICE', 'Real conversations by voice or text.'),
+            ('GET SCORED', 'See exactly where your game is weak.'),
+            ('GET HELP', 'Use Train to work on those weaknesses and get '
+                'coaching and advice.'),
+            ('RETEST', 'Run another rep and beat your score.'),
           ],
           cta: 'HOW AM I SCORED?',
         ),
 
-        // 05 — THE SCORE. The axes are shown with their values HIDDEN.
-        // A filled-in example would answer the question we want him
-        // carrying to the paywall.
-        //
-        // THESE ARE THE REAL FIVE. They are the dimensions the voice
-        // grader actually returns, the five on the Progress tab and the
-        // five on the share card — so the number he is promised here is
-        // the number he is given, on the same axes, for the next sixty
-        // days. The old list (Flow / Wit / Recovery / Close) named a
-        // rubric he never sees, on a screen whose entire job is to make
-        // the score feel real.
+        // 06 — THE MEASURE (new). Values withheld on purpose: a worked
+        // example answers the exact question we want him carrying into
+        // the price. The five names are the REAL five — what the grader
+        // returns and what the Progress tab keeps for the next sixty
+        // days — so the promise here is the number he actually gets.
         _ScoreBeat(
-          kicker: '03 — THE MEASURE',
+          kicker: '04 — THE MEASURE',
           headline: 'Five parts of\nyour game.\nOne score.',
           axes: ['CONFIDENCE', 'PRESENCE', 'GAME', 'HUMOUR', 'LISTENING'],
           footerTitle: 'What\'s costing you points?',
@@ -240,44 +252,28 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
           cta: 'FIND MY WEAKNESS',
         ),
 
-        // 05 — VOICE. The differentiator, and the reason the score is
-        // honest: typing lets him draft, talking does not.
+        // 07 — LIVE VOICE (new). The differentiator, and the reason the
+        // score is honest: typing lets him draft, talking does not.
         _VoiceBeat(
-          kicker: '04 — LIVE VOICE',
+          kicker: '05 — LIVE VOICE',
           headline: 'Typing gives you\ntime. Talking\ndoesn\'t.',
-          body: 'Talk to her in real time. She hears the pauses. The '
-              'hesitation. The confidence. The moment you lose your '
-              'flow.\n\nAnd she responds immediately.',
-          footer: 'This is where you find out how good your game actually is.',
+          body: 'Talk to her in real time. She hears the hesitation, the '
+              'delivery, the moment you lose your flow — and she answers '
+              'immediately, the way a real conversation does.',
+          footer: 'This is where you find out how good your game actually '
+              'is.',
           cta: 'I WANT MY SCORE',
         ),
 
-        // 06 — THE CLIMB. Progression, not a roster. Five rungs, not
-        // ten profiles — the point is that they get harder, not who
-        // they are.
-        _ClimbBeat(
-          kicker: '05 — THE CLIMB',
-          headline: 'They get harder\nas you get better.',
-          rungs: [
-            ('INTO YOU', 'Easy. She\'s already interested.'),
-            ('SWEET', ''),
-            ('CHAOS', ''),
-            ('TESTING YOU', ''),
-            ('ICE QUEEN', 'Gives you nothing. Earn every inch.'),
-          ],
-          footer: 'Your scores decide what you need to work on. Your '
-              'progress takes you further up the climb.',
-          cta: 'HOW FAR CAN I GET?',
-        ),
-
-        // 07 — THE TRANSFORMATION. Day 1 is deliberately unknown — the
-        // question marks are the close. The retention mechanics get one
-        // line each here and nowhere else; they are not why he buys.
+        // 08 — 60 DAYS (new). Day 1 is deliberately unknown; the
+        // question marks are the close. The loop is restated here as
+        // the thing he will be DOING, not the thing he was promised.
         _TransformBeat(
           kicker: '06 — 60 DAYS',
           headline: 'Your first score is\nonly the beginning.',
-          extras: 'Practice with AI. Take real-world missions. Get coached. '
-              'Battle other players. Build your streak.',
+          extras: 'Test your game. Train the weak parts with help. Take '
+              'real-world missions. Then retest and watch the number '
+              'move.',
           closer: 'First, let\'s find out where you actually stand.',
           cta: 'TAKE MY FIRST TEST',
         ),
@@ -531,7 +527,10 @@ class _LoopBeat extends _Beat {
 /// actually stuck in, the line that reframes it, and the promise. It is
 /// the hardest-hitting screen in the funnel and it earns its own shape.
 class _DiagnosisBeat extends _Beat {
-  final String headline, body, verdict, closer;
+  // NO CLOSER LINE. It had one, and with it the screen scrolled — which
+  // is the one thing the pivot beat of the funnel must not do. The
+  // verdict IS the close; anything under it was competing with it.
+  final String headline, body, verdict;
   final List<String> loop;
   final String _cta;
   const _DiagnosisBeat({
@@ -539,7 +538,6 @@ class _DiagnosisBeat extends _Beat {
     required this.body,
     required this.loop,
     required this.verdict,
-    required this.closer,
     required String cta,
   }) : _cta = cta;
   @override
@@ -953,14 +951,20 @@ class _BeatView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(height: 6),
-        _headline(b.headline, size: 40),
-        const SizedBox(height: 18),
-        _body(b.body, size: 16.5),
-        const SizedBox(height: 22),
+        // ONE SCREEN, NO SCROLL. This is the beat the whole funnel
+        // pivots on and it was running past the fold — a man does not
+        // scroll to reach the sentence that changes his mind about
+        // himself. Copy trimmed in the beat, sizes trimmed here, closer
+        // line dropped entirely. Everything now sits above the CTA on
+        // the smallest phone we ship to.
+        const SizedBox(height: 2),
+        _headline(b.headline, size: 38),
+        const SizedBox(height: 14),
+        _body(b.body, size: 15.5),
+        const SizedBox(height: 20),
         for (final (i, line) in b.loop.indexed)
           Padding(
-            padding: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.only(bottom: 11),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Container(
                 width: 7,
@@ -973,8 +977,8 @@ class _BeatView extends StatelessWidget {
                 child: Text(line,
                     style: GoogleFonts.inter(
                       color: Colors.white,
-                      fontSize: 17,
-                      height: 1.35,
+                      fontSize: 16,
+                      height: 1.3,
                       fontWeight: FontWeight.w800,
                     )),
               ),
@@ -983,10 +987,10 @@ class _BeatView extends StatelessWidget {
                 .fadeIn(delay: (200 + i * 150).ms, duration: 420.ms)
                 .slideX(begin: -0.04, end: 0),
           ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: AppColors.red.withValues(alpha: 0.75)),
@@ -994,13 +998,11 @@ class _BeatView extends StatelessWidget {
           child: Text(b.verdict,
               style: GoogleFonts.inter(
                 color: Colors.white,
-                fontSize: 19,
-                height: 1.42,
+                fontSize: 18,
+                height: 1.38,
                 fontWeight: FontWeight.w800,
               )),
         ).animate().fadeIn(delay: 740.ms, duration: 460.ms),
-        const SizedBox(height: 22),
-        _body(b.closer, size: 16.5),
       ],
     );
   }
