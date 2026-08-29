@@ -161,8 +161,28 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
           cta: 'SHOW ME HOW',
         ),
 
-        // 02 — THE REFRAME. One screen. This replaces four separate
-        // regret/rejection beats that all made the same point.
+        // 02 — THE DIAGNOSIS. The hardest screen in the funnel: it
+        // names the LOOP rather than the feeling, so the way out reads
+        // as mechanical rather than motivational. "Untrained, not shy"
+        // is the whole product thesis in five words.
+        _DiagnosisBeat(
+          headline: 'It was never\nyour looks.',
+          body: 'Every man you envy learned this. None of them were born '
+              'knowing what to say to a woman who gives him nothing back.',
+          loop: [
+            'You freeze, so you never get the reps.',
+            'No reps, so the game never gets better.',
+            'Game never gets better, so you keep freezing.',
+          ],
+          verdict: 'You are not shy. You are untrained. Those are '
+              'completely different problems — and only one of them '
+              'is permanent.',
+          closer: 'Sixty days from now you are either still guessing, or '
+              'you are the man who always knows what to say.',
+          cta: 'I WANT THAT',
+        ),
+
+        // 03 — THE REFRAME.
         _StatementBeat(
           kicker: '01 — THE REFRAME',
           headline: 'This isn\'t your\npersonality.\nIt\'s a skill.',
@@ -172,29 +192,48 @@ class _OnboardingStoryScreenState extends State<OnboardingStoryScreen> {
               'is to freeze over.',
         ),
 
-        // 03 — THE PRODUCT. The whole loop on one screen. This is the
-        // clarity beat: if he only reads one, it should be this.
+        // 04 — THE SYSTEM. Not "conversation → score → feedback →
+        // repeat", which is what the old copy said and undersold by a
+        // mile. Four stages with four DIFFERENT jobs — and the one that
+        // was missing entirely is TRAIN WITH HELP. Telling a man he is
+        // weak on wit is a diagnosis; sitting with him while he fixes it
+        // is the product, and the funnel never mentioned it.
+        //
+        // The order is also the order he lives it: tested, coached,
+        // tested again without the coach, then ranked.
         _LoopBeat(
-          kicker: '02 — THE METHOD',
-          headline: 'Train your game\nlike you\'d train\nanything else.',
+          kicker: '02 — THE SYSTEM',
+          headline: 'Test. Train.\nRep. Level up.',
           steps: [
-            ('PRACTICE', 'Real AI conversations by voice or text.'),
-            ('GET SCORED', 'See exactly where your game is strong and '
-                'where it breaks.'),
-            ('GET COACHED', 'Learn what went wrong and what to do '
-                'differently.'),
-            ('REPEAT', 'Run another rep and watch the numbers move.'),
+            ('GET TESTED', 'Find out exactly where your game stands '
+                'across five key skills.'),
+            ('TRAIN WITH HELP', 'Practice real conversations. Get '
+                'coaching, suggested answers and feedback whenever you '
+                'need it.'),
+            ('DO YOUR REPS', 'Put what you\'ve learned to the test — '
+                'without help — in AI challenges and real-world '
+                'missions.'),
+            ('LEVEL UP', 'Get scored, beat your Game Score, build XP '
+                'and climb the ranks.'),
           ],
           cta: 'HOW AM I SCORED?',
         ),
 
-        // 04 — THE SCORE. The axes are shown with their values HIDDEN.
+        // 05 — THE SCORE. The axes are shown with their values HIDDEN.
         // A filled-in example would answer the question we want him
         // carrying to the paywall.
+        //
+        // THESE ARE THE REAL FIVE. They are the dimensions the voice
+        // grader actually returns, the five on the Progress tab and the
+        // five on the share card — so the number he is promised here is
+        // the number he is given, on the same axes, for the next sixty
+        // days. The old list (Flow / Wit / Recovery / Close) named a
+        // rubric he never sees, on a screen whose entire job is to make
+        // the score feel real.
         _ScoreBeat(
           kicker: '03 — THE MEASURE',
           headline: 'Five parts of\nyour game.\nOne score.',
-          axes: ['CONFIDENCE', 'FLOW', 'WIT', 'RECOVERY', 'CLOSE'],
+          axes: ['CONFIDENCE', 'PRESENCE', 'GAME', 'HUMOUR', 'LISTENING'],
           footerTitle: 'What\'s costing you points?',
           footer: 'Your first test finds the weakest part of your game and '
               'gives you something specific to train.',
@@ -488,6 +527,25 @@ class _LoopBeat extends _Beat {
   String get cta => _cta;
 }
 
+/// THE DIAGNOSIS. A headline, a short read, the three-step loop he is
+/// actually stuck in, the line that reframes it, and the promise. It is
+/// the hardest-hitting screen in the funnel and it earns its own shape.
+class _DiagnosisBeat extends _Beat {
+  final String headline, body, verdict, closer;
+  final List<String> loop;
+  final String _cta;
+  const _DiagnosisBeat({
+    required this.headline,
+    required this.body,
+    required this.loop,
+    required this.verdict,
+    required this.closer,
+    required String cta,
+  }) : _cta = cta;
+  @override
+  String get cta => _cta;
+}
+
 /// The five axes with their values DELIBERATELY hidden. Showing a
 /// worked example here would answer the one question we want him
 /// carrying into the paywall.
@@ -585,6 +643,7 @@ class _BeatView extends StatelessWidget {
     if (b is _HeroBeat) return _scroll(_heroBeat(b), center: true);
     if (b is _ImageBeat) return _imageBeat(b);
     if (b is _QuestionBeat) return _scroll(_questionBeat(b), top: true);
+    if (b is _DiagnosisBeat) return _scroll(_diagnosisBeat(b), top: true);
     if (b is _StatementBeat) return _scroll(_statementBeat(b), center: true);
     if (b is _HowBeat) return _scroll(_howBeat(b), top: true);
     if (b is _DashboardBeat) return _scroll(_dashboardBeat(b), top: true);
@@ -883,6 +942,69 @@ class _BeatView extends StatelessWidget {
 
   // ── Shared type ───────────────────────────────────────────────────────
   // ── THE LOOP: four named steps, a rule between each ───────────────────
+  // ── THE DIAGNOSIS ─────────────────────────────────────────────────────
+  //
+  // The one screen that names the loop rather than the feeling. The
+  // three lines are a closed circle on purpose — freeze, no reps, no
+  // improvement, freeze — so the boxed verdict lands as the way out of
+  // something he can see the shape of, not as reassurance.
+  Widget _diagnosisBeat(_DiagnosisBeat b) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 6),
+        _headline(b.headline, size: 40),
+        const SizedBox(height: 18),
+        _body(b.body, size: 16.5),
+        const SizedBox(height: 22),
+        for (final (i, line) in b.loop.indexed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(
+                width: 7,
+                height: 7,
+                margin: const EdgeInsets.only(top: 8, right: 14),
+                decoration: const BoxDecoration(
+                    color: AppColors.red, shape: BoxShape.circle),
+              ),
+              Expanded(
+                child: Text(line,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 17,
+                      height: 1.35,
+                      fontWeight: FontWeight.w800,
+                    )),
+              ),
+            ])
+                .animate()
+                .fadeIn(delay: (200 + i * 150).ms, duration: 420.ms)
+                .slideX(begin: -0.04, end: 0),
+          ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.red.withValues(alpha: 0.75)),
+          ),
+          child: Text(b.verdict,
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 19,
+                height: 1.42,
+                fontWeight: FontWeight.w800,
+              )),
+        ).animate().fadeIn(delay: 740.ms, duration: 460.ms),
+        const SizedBox(height: 22),
+        _body(b.closer, size: 16.5),
+      ],
+    );
+  }
+
   Widget _loopBeat(_LoopBeat b) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -956,7 +1078,50 @@ class _BeatView extends StatelessWidget {
         _kicker(b.kicker),
         const SizedBox(height: 18),
         _headline(b.headline, size: 34),
-        const SizedBox(height: 28),
+        const SizedBox(height: 22),
+        // ── THE HERO SCORE ────────────────────────────────────────────
+        //
+        // The five bars are the breakdown; THIS is the thing he is
+        // buying. It sits above them at four times the size, still
+        // unanswered, so the shape of the screen says "one number, and
+        // here is what it is made of" instead of listing five equal
+        // rows and hoping he assembles the headline himself.
+        Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text('?',
+                      style: GoogleFonts.inter(
+                        color: AppColors.red,
+                        fontSize: 76,
+                        height: 1.0,
+                        letterSpacing: -3,
+                        fontWeight: FontWeight.w900,
+                        fontStyle: FontStyle.italic,
+                      )),
+                  Text('/100',
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withValues(alpha: 0.55),
+                        fontSize: 26,
+                        height: 1.0,
+                        fontWeight: FontWeight.w900,
+                        fontStyle: FontStyle.italic,
+                      )),
+                ]),
+            const SizedBox(height: 4),
+            Text('YOUR GAME SCORE',
+                style: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 10.5,
+                  letterSpacing: 2.6,
+                  fontWeight: FontWeight.w900,
+                )),
+          ]),
+        ).animate().fadeIn(delay: 120.ms, duration: 460.ms),
+        const SizedBox(height: 24),
         for (final (i, axis) in b.axes.indexed)
           Padding(
             padding: const EdgeInsets.only(bottom: 15),
@@ -1265,7 +1430,10 @@ class _DayCard extends StatelessWidget {
                 fontWeight: FontWeight.w900,
               )),
           const SizedBox(height: 10),
-          for (final label in const ['GAME', 'CONFIDENCE', 'WIT'])
+          // Three OF THE REAL FIVE, never a sixth invented one. Every
+          // axis word anywhere in this funnel is a dimension the
+          // grader actually returns.
+          for (final label in const ['GAME', 'CONFIDENCE', 'PRESENCE'])
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(

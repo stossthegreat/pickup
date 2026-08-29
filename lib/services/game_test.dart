@@ -49,7 +49,12 @@ class GameTest {
             taskMode: true,
             taskGoal: 5,
             scoreSurface: surface,
-            coachAllowed: true,
+            // NO COACH IN A TEST. Ask Lucien is off here and only here.
+            // A score with a ghostwriter behind it measures nothing, and
+            // he would be told he scores what Lucien scores — which is
+            // the one number in this app that has to be his. The coach
+            // is waiting on the other side of it, in Train.
+            coachAllowed: false,
             // This flow owns the ending: the /100 with the five axes,
             // not the girl-verdict ceremony. A man being sold on the
             // score has to actually SEE a score.
@@ -91,7 +96,7 @@ class GameTest {
     // a compile error, not a runtime one. This exact trap failed an iOS
     // archive earlier.
     final res = r;
-    await LocalStoreService.setGameScore(res.score);
+    await LocalStoreService.setChatScore(res.score);
 
     await showGeneralDialog<void>(
       context: context,

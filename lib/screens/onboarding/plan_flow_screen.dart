@@ -602,12 +602,14 @@ class _VoiceState extends State<_Voice> with SingleTickerProviderStateMixin {
 class _TheGame extends StatelessWidget {
   const _TheGame();
 
+  // THE REAL FIVE, same as everywhere else. Flow / Wit / Recovery /
+  // Close named a rubric the user is never shown.
   static const _axes = [
     ('CONFIDENCE', 78, kNeon),
-    ('FLOW', 71, kNeon),
-    ('WIT', 34, AppColors.red),
-    ('RECOVERY', 62, AppColors.signalAmber),
-    ('CLOSE', 45, AppColors.signalAmber),
+    ('PRESENCE', 71, kNeon),
+    ('GAME', 34, AppColors.red),
+    ('HUMOUR', 62, AppColors.signalAmber),
+    ('LISTENING', 45, AppColors.signalAmber),
   ];
 
   @override

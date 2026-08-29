@@ -27,7 +27,9 @@ class LocalStoreService {
   static const _kSubscribed   = 'subscription.active.v1';
   static const _kOnboarded    = 'onboarded.v1';
   static const _kOnbStep      = 'onboarding.step.v1';
-  static const _kGameScore    = 'game.score.v1';
+  static const _kChatScore    = 'game.score.v1';
+  /// Written by the voice screen's _persistGame, out of 100.
+  static const _kVoiceScore   = 'game_score';
   /// AI third-party data sharing consent (App Store guideline 5.1.2(i)).
   /// User must explicitly tap ALLOW in [AiConsentDialog] before the
   /// scan flow transmits the selfie photo to OpenAI / Replicate.
@@ -769,20 +771,33 @@ class LocalStoreService {
     await prefs.setString(_kOnbStep, route);
   }
 
-  // ── THE GAME SCORE ──────────────────────────────────────────────────────
+  // ── THE TWO SCORES ──────────────────────────────────────────────────────
   //
-  // His last scored rep, out of 100. Kept because a score he saw once and
-  // can never look at again is a fact about a conversation; a score that
-  // sits on his screen is a number he wants to beat. Null until he has
-  // taken the test, which is also how we know whether he has.
-  static Future<int?> gameScore() async {
+  // His last scored rep on each surface, out of 100. Kept because a score
+  // he saw once and can never look at again is a fact about a
+  // conversation; a score that sits on his screen is a number he wants to
+  // beat. Null until he has been scored there, which is also how we know
+  // whether he has.
+  //
+  // The VOICE key is the one the voice screen has always written from
+  // _persistGame — not a new one. Two keys for the same number is how a
+  // scoreboard ends up disagreeing with the screen that produced it.
+  static Future<int?> chatScore() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_kGameScore);
+    return prefs.getInt(_kChatScore);
   }
 
-  static Future<void> setGameScore(int v) async {
+  static Future<void> setChatScore(int v) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_kGameScore, v);
+    await prefs.setInt(_kChatScore, v);
+  }
+
+  static Future<int?> voiceScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getInt(_kVoiceScore);
+    // The voice screen seeds 0 before a real session exists; zero is "not
+    // scored yet" here, not a score of nought.
+    return (v == null || v <= 0) ? null : v;
   }
 
   // ── AI third-party data sharing consent ─────────────────────────────────
