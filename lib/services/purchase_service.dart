@@ -72,6 +72,30 @@ class PurchaseService {
       final offerings = await Purchases.getOfferings();
       final cur = offerings.current;
       lines.add('Offerings.all keys: ${offerings.all.keys.toList()}');
+
+      // EVERY OFFERING, NOT JUST THE CURRENT ONE.
+      //
+      // The two causes of "I added it and it isn't showing" look
+      // identical from inside the app, and this is what separates them:
+      //
+      //   · the package appears under a NON-current offering → it is
+      //     attached to the wrong offering in the RevenueCat dashboard,
+      //     which is a two-click fix.
+      //   · the package appears NOWHERE, including its own offering →
+      //     RevenueCat asked StoreKit for the product and StoreKit
+      //     returned nothing, so RC dropped the package silently. That
+      //     is App Store Connect: Missing Metadata, not cleared for
+      //     sale, or the Paid Applications agreement is not active.
+      //
+      // Without this dump both look like "monthly is just missing".
+      for (final entry in offerings.all.entries) {
+        final tag = entry.key == cur?.identifier ? '  ← CURRENT' : '';
+        lines.add('Offering "${entry.key}"'
+            ' (${entry.value.availablePackages.length} pkgs)$tag');
+        for (final p in entry.value.availablePackages) {
+          lines.add('    · ${p.identifier} → ${p.storeProduct.identifier}');
+        }
+      }
       if (cur == null) {
         lines.add('→ No CURRENT offering. Publish a Default Offering in '
                   'RevenueCat dashboard and mark it Current.');
@@ -86,6 +110,25 @@ class PurchaseService {
         if (cur.availablePackages.isEmpty) {
           lines.add('→ Offering exists but has 0 packages. Attach products '
                     'in dashboard → Offerings → Default Offering.');
+        }
+        // WHAT THE APP IS LOOKING FOR, printed next to what it got.
+        // A subscription that "isn't showing" is nearly always one
+        // character out, or attached to an offering that isn't Current —
+        // and neither is visible without seeing both lists side by side.
+        lines.add('');
+        lines.add('App expects (exact match, case-sensitive):');
+        lines.add('  monthly → ${PurchaseConfig.productIds.monthly}');
+        lines.add('  weekly  → ${PurchaseConfig.productIds.weekly}');
+        lines.add('  annual  → ${PurchaseConfig.productIds.annual}');
+        final ids =
+            cur.availablePackages.map((p) => p.storeProduct.identifier);
+        if (!ids.contains(PurchaseConfig.productIds.monthly)) {
+          lines.add('→ MONTHLY NOT IN THIS OFFERING. Either the product id '
+                    'differs from the line above, or it is not attached to '
+                    'the CURRENT offering as a package, or the store has '
+                    'not released it yet (App Store Connect must show it '
+                    '"Ready to Submit" or better, and the Paid Apps '
+                    'agreement must be active).');
         }
       }
     } catch (err) {

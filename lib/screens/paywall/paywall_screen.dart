@@ -708,12 +708,23 @@ class _PaywallScreenState extends State<PaywallScreen> {
     return Opacity(
       opacity: live ? 1 : 0.4,
       child: GestureDetector(
-        onTap: live
-            ? () {
-                HapticFeedback.selectionClick();
-                setState(() => _picked = tier);
-              }
-            : null,
+        // A DEAD CARD THAT EXPLAINS ITSELF. "Not on this store yet" is
+        // true but useless — it cannot say WHY, and the diagnostic that
+        // can was only reachable by pressing a CTA that has no package,
+        // which is impossible while any other tier still sells. Tapping
+        // the broken tier now prints exactly what the store returned
+        // next to exactly what the app was looking for.
+        onTap: () {
+          HapticFeedback.selectionClick();
+          if (live) {
+            setState(() => _picked = tier);
+            return;
+          }
+          // ignore: discarded_futures
+          PurchaseService.diagnose().then((d) {
+            if (mounted) _showDiagnostic(d);
+          });
+        },
         behavior: HitTestBehavior.opaque,
         child: Container(
           padding: EdgeInsets.fromLTRB(13 * s, 10 * s, 13 * s, 10 * s),
