@@ -72,6 +72,30 @@ class PurchaseService {
       final offerings = await Purchases.getOfferings();
       final cur = offerings.current;
       lines.add('Offerings.all keys: ${offerings.all.keys.toList()}');
+
+      // EVERY OFFERING, NOT JUST THE CURRENT ONE.
+      //
+      // The two causes of "I added it and it isn't showing" look
+      // identical from inside the app, and this is what separates them:
+      //
+      //   · the package appears under a NON-current offering → it is
+      //     attached to the wrong offering in the RevenueCat dashboard,
+      //     which is a two-click fix.
+      //   · the package appears NOWHERE, including its own offering →
+      //     RevenueCat asked StoreKit for the product and StoreKit
+      //     returned nothing, so RC dropped the package silently. That
+      //     is App Store Connect: Missing Metadata, not cleared for
+      //     sale, or the Paid Applications agreement is not active.
+      //
+      // Without this dump both look like "monthly is just missing".
+      for (final entry in offerings.all.entries) {
+        final tag = entry.key == cur?.identifier ? '  ← CURRENT' : '';
+        lines.add('Offering "${entry.key}"'
+            ' (${entry.value.availablePackages.length} pkgs)$tag');
+        for (final p in entry.value.availablePackages) {
+          lines.add('    · ${p.identifier} → ${p.storeProduct.identifier}');
+        }
+      }
       if (cur == null) {
         lines.add('→ No CURRENT offering. Publish a Default Offering in '
                   'RevenueCat dashboard and mark it Current.');
