@@ -624,6 +624,17 @@ class PurchaseService {
           await LocalStoreService.setCachedTier(ProTier.annual);
           return ProTier.annual;
         }
+        // MONTHLY WAS MISSING, AND IT IS THE MAIN SKU NOW.
+        // imhim_pro_monthly matched neither branch, fell out of the
+        // loop, and got cached as ProTier.none — "no subscription" —
+        // for a man who is paying us every month. It happened to behave
+        // (none takes the 7-day window, which is what monthly should
+        // have) but it was false on disk and one `if (tier == none)`
+        // away from locking a paying customer out.
+        if (lower.contains('monthly') || lower.contains('month')) {
+          await LocalStoreService.setCachedTier(ProTier.monthly);
+          return ProTier.monthly;
+        }
         if (lower.contains('weekly') || lower.contains('week')) {
           await LocalStoreService.setCachedTier(ProTier.weekly);
           return ProTier.weekly;
@@ -664,6 +675,10 @@ class PurchaseService {
               lower.contains('yearly') ||
               lower.contains('year')) {
             tier = ProTier.annual;
+            break;
+          }
+          if (lower.contains('monthly') || lower.contains('month')) {
+            tier = ProTier.monthly;
             break;
           }
           if (lower.contains('weekly') || lower.contains('week')) {

@@ -2185,11 +2185,27 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
   Future<void> _persistGame(int scoreOutOfTen) async {
     final prefs = await SharedPreferences.getInstance();
     final next = (scoreOutOfTen * 10).clamp(0, 100);
-    // Always write the LATEST score so the home pillar reflects this
-    // session — not the user\'s all-time best, which made the home
-    // page feel stuck. Best is kept under a separate key for any
-    // future share / progress surface.
-    await prefs.setInt('game_score', next);
+
+    // ── ONLY AN UNHELPED REP MOVES THE GAME SCORE ─────────────────────
+    //
+    // YOUR GAME on the Reps screen is a measure of him, so it can only
+    // be fed by conversations he had on his own. Train is where Lucien
+    // hands him lines — a number earned with a ghostwriter measures the
+    // ghostwriter, and once it is in there he can never tell which of
+    // his scores were his.
+    //
+    // coachAllowed is the exact question, and it is already correct
+    // everywhere: the daily AI reps and both onboarding tests run with
+    // it false, Practice runs with it true, and the chat-to-voice
+    // hand-off inherits it so hopping out of a coached chat can't
+    // launder a score.
+    //
+    // The session still lands in the timeline and the personal best
+    // below — a coached rep is real practice and belongs in his
+    // history. It is only the headline number that stays clean.
+    if (!widget.coachAllowed) {
+      await prefs.setInt('game_score', next);
+    }
     final prev = prefs.getInt('game_score_best') ?? 0;
     if (next > prev) await prefs.setInt('game_score_best', next);
     final now = DateTime.now();
