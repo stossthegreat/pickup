@@ -174,6 +174,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // ── Usage tile — voice minutes this week ────────────────────
               const _VoiceCapTile(),
 
+              // ── THE BUILD STAMP ─────────────────────────────────────────
+              // Sits directly under the voice tile ON PURPOSE: the two
+              // things you need in the same screenshot are what the cap
+              // says and which binary said it. Without this we spent a
+              // day arguing about a fix that was not on the phone yet.
+              _SettingTile(
+                icon: Icons.tag_rounded,
+                title: 'Build $kBuildVersion ($kBuildNumber)',
+                subtitle: 'Check this before reporting anything',
+                // Tapping it dumps the whole store + voice-allowance
+                // state. This is the screen to send when the cap looks
+                // wrong: it shows what the store says the period is and
+                // what the app concluded from it, side by side, so the
+                // answer stops being a guess.
+                onTap: () async {
+                  final diag = await PurchaseService.diagnose();
+                  if (!context.mounted) return;
+                  await showDialog<void>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: Colors.black,
+                      title: Text('Build $kBuildVersion ($kBuildNumber)',
+                          style: const TextStyle(color: Colors.white)),
+                      content: SingleChildScrollView(
+                        child: SelectableText(diag,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontFamily: 'monospace',
+                                height: 1.4)),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(
+                                text: 'build $kBuildNumber\n$diag'));
+                            Navigator.of(ctx).pop();
+                          },
+                          child: const Text('COPY'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('CLOSE'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+
               // ── Privacy / AI consent ────────────────────────────────────
               _SettingTile(
                 icon: Icons.cloud_off_outlined,
