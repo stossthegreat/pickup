@@ -70,7 +70,11 @@ abstract final class TrialService {
   /// about four hundred of them.
   static const trialVoiceMinutes = 2;
 
-  static const _kInTrial = 'trial.active.v1';
+  static const _kInTrial = 'trial.active.v1'; // legacy bool
+  /// Tri-state: 'paid', 'trial', or absent (= never resolved).
+  static const _kTrialState = 'trial.state.v2';
+  static const _paid = 'paid';
+  static const _trial = 'trial';
   static const _kUsedMs  = 'trial.voice_used_ms.v1';
   static const _kEverHad = 'trial.ever_started.v1';
 
@@ -82,7 +86,38 @@ abstract final class TrialService {
   /// PurchaseService and read back from there.
   static Future<bool> isTrial() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_kInTrial) ?? false;
+
+    // ── FAIL CLOSED. THIS DEFAULTED TO FALSE AND IT COST US ───────────
+    //
+    // `?? false` meant "we have not heard from the store yet, so give
+    // him the FULL PAID ALLOWANCE." A man who had just started the
+    // trial reached the orb before RevenueCat's listener had written
+    // anything, read as a full subscriber, and spent the paid weekly
+    // fourteen minutes. That is the leak that was reported, and it is
+    // the single most expensive default in the app.
+    //
+    // The state is a tri-state now: 'paid', 'trial', or ABSENT. Absent
+    // means we do not know, and not knowing must resolve to the
+    // restrictive answer. Only a positively confirmed NORMAL period
+    // opens the full allowance.
+    //
+    // Cost of being wrong each way, which is the whole argument: a real
+    // subscriber briefly capped at two minutes sees the wall for a few
+    // seconds until the next store refresh corrects it. A trial user
+    // wrongly read as paid costs real money and cannot be taken back.
+    final state = prefs.getString(_kTrialState);
+    if (state != null) return state != _paid;
+
+    // MIGRATION off the old bool. An existing install that has already
+    // been told `false` by the store is a confirmed payer and keeps the
+    // full allowance — the fail-closed default is for devices we have
+    // genuinely never resolved, which is exactly the population at risk.
+    if (prefs.containsKey(_kInTrial)) {
+      final legacy = prefs.getBool(_kInTrial) ?? false;
+      await prefs.setString(_kTrialState, legacy ? _trial : _paid);
+      return legacy;
+    }
+    return true; // never resolved → treat as trial
   }
 
   /// Mirror of the store's truth. Called from the entitlement refresh
@@ -90,8 +125,19 @@ abstract final class TrialService {
   /// unlocks the full allowance without an app restart.
   static Future<void> setTrial(bool active) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kInTrial, active);
+    await prefs.setString(_kTrialState, active ? _trial : _paid);
+    await prefs.setBool(_kInTrial, active); // legacy mirror
     if (active) await prefs.setBool(_kEverHad, true);
+  }
+
+  /// Wipe the resolved state so the next read falls back to the
+  /// restrictive default. Used when the store says the man is not Pro
+  /// at all — a lapsed or cancelled account must not keep a stale
+  /// "confirmed paid" stamp sitting on disk.
+  static Future<void> clearResolved() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kTrialState);
+    await prefs.remove(_kInTrial);
   }
 
   /// Has this device ever been in a trial? Used only for copy — the
