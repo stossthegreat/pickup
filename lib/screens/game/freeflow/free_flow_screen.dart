@@ -838,6 +838,43 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       }
     }
 
+    // ── THE MINUTES GATE, AT THE SAME CHOKEPOINT ────────────────────────
+    //
+    // THE HOLE THIS CLOSES. The paywall backstop above asks "has he
+    // paid" and nothing else, and the billable meter only arms on the
+    // first push-to-talk — so a man who has spent every minute he owns
+    // could still open this screen and we would open an OpenAI realtime
+    // socket for him. Our ledger charged him nothing, because he never
+    // held the button; OpenAI charged US for the session prompt and for
+    // whatever she said on connect. And it was repeatable: leave, come
+    // back, another socket. A trial user with a two-minute budget could
+    // do it fifty times.
+    //
+    // So the cap is enforced HERE, before the connect, at the one place
+    // every voice session passes through — not on the hold, which is
+    // already too late to matter.
+    if (await LocalStoreService.voiceCapReached()) {
+      if (!mounted) return;
+      // In trial: an explanation, never a second checkout. See
+      // _trialWallIfNeeded.
+      if (await _trialWallIfNeeded()) {
+        if (mounted) _resetToPicker();
+        return;
+      }
+      if (!mounted) return;
+      // ignore: discarded_futures
+      AnalyticsService.freeflowVoiceCapHit();
+      final bought = await MinutesPaywall.show(context,
+          girlId: girlForVibe(vibe.key).id);
+      if (!mounted) return;
+      if (!bought) {
+        _capNotice('Weekly roleplay minutes used. They renew at the '
+            'start of your next billing week.');
+        _resetToPicker();
+        return;
+      }
+    }
+
     // v225 leak fix — REAL root cause of "had to hard close the app".
     //
     // _pcmWatchdog is a Timer.periodic created on EVERY _goLive call
