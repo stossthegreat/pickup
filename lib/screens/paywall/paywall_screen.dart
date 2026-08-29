@@ -600,7 +600,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
             n: '1',
             title: 'GET TESTED ACROSS KEY METRICS',
             body: 'Get your score across 5 key skills:',
-            axes: 'Confidence · Flow · Wit · Recovery · Close',
+            // THE REAL FIVE — the dimensions the grader returns and
+            // the Progress tab keeps. Naming a rubric he never sees
+            // was a promise the app could not show him afterwards.
+            axes: 'Confidence · Presence · Game · Humour · Listening',
             scale: s,
           ),
           _Step(

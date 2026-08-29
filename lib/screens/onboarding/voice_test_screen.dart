@@ -51,7 +51,10 @@ class _VoiceTestScreenState extends State<VoiceTestScreen>
     orElse: () => kRoster.first,
   );
 
-  static const _axes = ['Confidence', 'Flow', 'Wit', 'Recovery', 'Close'];
+  /// THE REAL FIVE. What the voice grader returns, what the Progress
+  /// tab keeps, and what the share card posts — one set of words for
+  /// the whole app, so the promise and the result never disagree.
+  static const _axes = ['Confidence', 'Presence', 'Game', 'Humour', 'Listening'];
 
   /// Has he paid? The screen has two lives either side of that answer.
   bool _live = false;
