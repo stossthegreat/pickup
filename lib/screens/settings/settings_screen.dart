@@ -174,6 +174,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // ── Usage tile — voice minutes this week ────────────────────
               const _VoiceCapTile(),
 
+              // ── THE BUILD STAMP ─────────────────────────────────────────
+              // Sits directly under the voice tile ON PURPOSE: the two
+              // things you need in the same screenshot are what the cap
+              // says and which binary said it. Without this we spent a
+              // day arguing about a fix that was not on the phone yet.
+              _SettingTile(
+                icon: Icons.tag_rounded,
+                title: 'Build $kBuildVersion ($kBuildNumber)',
+                subtitle: 'Check this before reporting anything',
+                onTap: () {
+                  Clipboard.setData(ClipboardData(
+                      text: 'ImHim $kBuildVersion build $kBuildNumber'));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Build number copied.'),
+                    behavior: SnackBarBehavior.floating,
+                  ));
+                },
+              ),
+
               // ── Privacy / AI consent ────────────────────────────────────
               _SettingTile(
                 icon: Icons.cloud_off_outlined,
