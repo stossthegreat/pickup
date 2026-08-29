@@ -5,8 +5,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// EXTRA — the voice-minute bank.
 ///
 /// Minutes bought as a one-off consumable, on top of the weekly Pro
-/// allowance. They do NOT expire and they do NOT reset with the week:
-/// he paid for them, they're his until he speaks them.
+/// allowance. They do NOT reset with the week — the weekly allowance is
+/// spent first and only then is the bank drawn down.
+///
+/// THEY LAST 30 DAYS FROM PURCHASE. Each purchase is its own dated lot,
+/// so buying a second pack never extends the life of the first, and
+/// spending always draws from the lot that expires SOONEST — nothing is
+/// wasted while something older is sitting there about to lapse.
+///
+/// This has to be said out loud wherever they are sold. An expiry a man
+/// was not told about is a refund, a one-star and a review rejection,
+/// and it is the kind of thing that is only ever discovered by the
+/// person it happened to. Both surfaces that sell minutes carry the
+/// line.
 ///
 /// ──────────────────────────────────────────────────────────────────
 /// THE THREE WAYS A CONSUMABLE GOES WRONG, AND WHAT STOPS EACH
@@ -41,7 +52,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// store later and the app must never offer to. The grant is local,
 /// immediate and permanent — which is exactly why (2) matters.
 class ExtraService {
+  /// Legacy flat bank. Read once, migrated into a dated lot, then left
+  /// at zero — minutes a man already owns are never destroyed by a
+  /// change to how we store them.
   static const _kBankMs = 'extra.bank_ms.v1';
+  /// The dated lots: a JSON list of {"ms": int, "exp": epochMillis}.
+  static const _kLots = 'extra.lots.v2';
+
+  /// How long a bought minute lives. Bought minutes are a top-up for a
+  /// month he is already short in, not a stockpile.
+  static const lotLifetime = Duration(days: 30);
   static const _kSeenTxns = 'extra.txns.v1';
   static const _kLifetime = 'extra.lifetime_minutes.v1';
   static const _kNudged = 'extra.nudged_ymd.v1';
@@ -51,10 +71,78 @@ class ExtraService {
   /// without limit on a heavy buyer.
   static const _txnMemory = 60;
 
-  /// Minutes he's got left in the bank.
+  /// Read the lots, dropping anything that has lapsed and migrating the
+  /// legacy flat bank on first touch. Writes back only when something
+  /// actually changed, so a read stays cheap.
+  static Future<List<Map<String, int>>> _liveLots(
+      SharedPreferences prefs) async {
+    var lots = <Map<String, int>>[];
+    final raw = prefs.getString(_kLots);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final list = jsonDecode(raw);
+        if (list is List) {
+          for (final e in list) {
+            if (e is Map && e['ms'] is int && e['exp'] is int) {
+              lots.add({'ms': e['ms'] as int, 'exp': e['exp'] as int});
+            }
+          }
+        }
+      } catch (_) {/* corrupt pref → treat as empty, never as a crash */}
+    }
+
+    var changed = false;
+
+    // MIGRATION. Minutes bought before lots existed were sold with no
+    // expiry, so they are given a full fresh 30 days rather than being
+    // back-dated out of existence — he bought them under the old terms
+    // and losing them silently would be theft.
+    final legacy = prefs.getInt(_kBankMs) ?? 0;
+    if (legacy > 0) {
+      lots.add({
+        'ms': legacy,
+        'exp': DateTime.now().add(lotLifetime).millisecondsSinceEpoch,
+      });
+      await prefs.setInt(_kBankMs, 0);
+      changed = true;
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final before = lots.length;
+    lots = [for (final l in lots) if (l['exp']! > now && l['ms']! > 0) l];
+    if (lots.length != before) changed = true;
+
+    // Soonest to expire first — spending order, so nothing lapses while
+    // a later pack is being drawn down.
+    lots.sort((a, b) => a['exp']!.compareTo(b['exp']!));
+    if (changed) await _writeLots(prefs, lots);
+    return lots;
+  }
+
+  static Future<void> _writeLots(
+      SharedPreferences prefs, List<Map<String, int>> lots) async {
+    await prefs.setString(_kLots, jsonEncode(lots));
+  }
+
+  /// Minutes he's got left in the bank, expired packs already excluded.
   static Future<int> bankedMs() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_kBankMs) ?? 0;
+    final lots = await _liveLots(prefs);
+    var total = 0;
+    for (final l in lots) {
+      total += l['ms']!;
+    }
+    return total;
+  }
+
+  /// When the next pack lapses, or null when he has nothing banked.
+  /// The sheets show this so the expiry is a fact he can see rather
+  /// than a surprise he discovers.
+  static Future<DateTime?> nextExpiry() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lots = await _liveLots(prefs);
+    if (lots.isEmpty) return null;
+    return DateTime.fromMillisecondsSinceEpoch(lots.first['exp']!);
   }
 
   static Future<int> bankedMinutes() async => (await bankedMs()) ~/ 60000;
@@ -90,8 +178,16 @@ class ExtraService {
     }
     await prefs.setString(_kSeenTxns, jsonEncode(seen));
 
-    final add = minutes * 60000;
-    await prefs.setInt(_kBankMs, (prefs.getInt(_kBankMs) ?? 0) + add);
+    // ITS OWN DATED LOT. Appending to a shared total would quietly
+    // extend every older minute's life every time he bought again,
+    // which is not what he was sold.
+    final lots = await _liveLots(prefs);
+    lots.add({
+      'ms': minutes * 60000,
+      'exp': DateTime.now().add(lotLifetime).millisecondsSinceEpoch,
+    });
+    lots.sort((a, b) => a['exp']!.compareTo(b['exp']!));
+    await _writeLots(prefs, lots);
     await prefs.setInt(
         _kLifetime, (prefs.getInt(_kLifetime) ?? 0) + minutes);
     return true;
@@ -102,11 +198,22 @@ class ExtraService {
   static Future<int> spend(int ms) async {
     if (ms <= 0) return 0;
     final prefs = await SharedPreferences.getInstance();
-    final have = prefs.getInt(_kBankMs) ?? 0;
-    if (have <= 0) return 0;
-    final take = ms > have ? have : ms;
-    await prefs.setInt(_kBankMs, have - take);
-    return take;
+    final lots = await _liveLots(prefs);
+    if (lots.isEmpty) return 0;
+    // SOONEST-EXPIRING FIRST. Spending the newest pack first would let
+    // an older one lapse under him while he still had minutes to use.
+    var want = ms, took = 0;
+    for (final l in lots) {
+      if (want <= 0) break;
+      final have = l['ms']!;
+      final take = want > have ? have : want;
+      l['ms'] = have - take;
+      took += take;
+      want -= take;
+    }
+    await _writeLots(
+        prefs, [for (final l in lots) if (l['ms']! > 0) l]);
+    return took;
   }
 
   /// Total minutes ever bought — for the receipt line on the sheet.
