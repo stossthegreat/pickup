@@ -183,7 +183,7 @@ class _VoiceTestScreenState extends State<VoiceTestScreen>
                           _mic(s),
                           SizedBox(height: 12 * s),
                           Text(
-                              '60 seconds with her. Then you get your number.',
+                              'Two minutes with her. Then you get your number.',
                               textAlign: TextAlign.center,
                               style: GoogleFonts.inter(
                                 color: AppColors.textSecondary,

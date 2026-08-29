@@ -922,8 +922,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
             )),
         if (t != null)
           Text(
-              'Trial includes ${TrialService.trialVoiceMinutes} minute of live '
-              'voice. Texting is unlimited.',
+              'Trial includes ${TrialService.trialVoiceMinutes} minutes of '
+              'live voice. Texting is unlimited.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 color: AppColors.textTertiary,

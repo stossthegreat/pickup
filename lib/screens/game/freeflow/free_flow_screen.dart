@@ -452,11 +452,22 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
   /// The gain actually applied, smoothed so it never pumps audibly.
   double _agcGain = 1.0;
 
-  // Session length.
-  /// Default session length for Pro users — 3 minutes per session.
-  // 2-minute voice sessions. At 14 voice minutes/week (see
-  // LocalStoreService.kVoiceMinutesPerWeek) that's 7 sessions a week — the
-  // model bro locked: short, repeatable calls that keep them coming back.
+  // ── SESSION LENGTH — the second cost dial ─────────────────────────
+  //
+  // Two minutes. At 14 voice minutes a week
+  // (LocalStoreService.kVoiceMinutesPerWeek) that is 7 sessions a week:
+  // short, repeatable calls that keep him coming back rather than one
+  // long one that exhausts him.
+  //
+  // WHAT IT COSTS, so nobody has to guess again. Voice is
+  // gpt-realtime-mini; a minute of two-way conversation lands around
+  // 2-3 cents all-in. So a full session is roughly 5p, a subscriber
+  // running his whole weekly allowance is about 35p a week — call it
+  // £1.50 a month against £19.99. The spend is bounded three ways and
+  // cannot run away: this per-session ceiling, the rolling weekly
+  // allowance, and the trial budget in TrialService. The clock below
+  // also re-checks voiceCapReached() EVERY SECOND and ends the call the
+  // instant a man hits his limit, so no single session can overrun.
   static const int _sessionSeconds = 120;
   /// Bro v6: "we want the free roleplay to be one minute then after
   /// one response add a brutal pop up tap Lucien for your legendary

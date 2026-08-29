@@ -38,7 +38,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// his first paid week starts at a full 14 minutes.
 abstract final class TrialService {
   /// Live voice minutes for the whole trial. Not per week — per trial.
-  static const trialVoiceMinutes = 1;
+  ///
+  /// THIS NUMBER IS THE COST DIAL. It is the only place a man who never
+  /// intends to pay can spend money we do not get back, so it is worth
+  /// stating exactly what it buys.
+  ///
+  /// Voice runs on gpt-realtime-mini (routes/realtime.js — the full
+  /// model is creator-only and stays that way). Working from OpenAI's
+  /// own per-minute approximations for the realtime family, a minute of
+  /// two-way conversation on mini lands around 2-3 cents once the
+  /// session prompt and the end-of-call grade are counted in. Check it
+  /// against the first real bill rather than trusting this comment.
+  ///
+  /// THREE, not one. One meant the onboarding voice test — a two-minute
+  /// session — got cut off at sixty seconds for exactly the man it has
+  /// to convince: the one who just started the trial. Three lets the
+  /// test run its full length and leaves him a minute of his own
+  /// afterwards, which is the minute that sells the subscription.
+  ///
+  /// The exposure: a trial user who burns it all and cancels costs
+  /// roughly 7p of voice plus pennies of text. A thousand of them is a
+  /// pub lunch. One conversion at £19.99 pays for about 260 of them.
+  static const trialVoiceMinutes = 3;
 
   static const _kInTrial = 'trial.active.v1';
   static const _kUsedMs  = 'trial.voice_used_ms.v1';
