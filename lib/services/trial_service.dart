@@ -50,16 +50,25 @@ abstract final class TrialService {
   /// session prompt and the end-of-call grade are counted in. Check it
   /// against the first real bill rather than trusting this comment.
   ///
-  /// THREE, not one. One meant the onboarding voice test — a two-minute
-  /// session — got cut off at sixty seconds for exactly the man it has
-  /// to convince: the one who just started the trial. Three lets the
-  /// test run its full length and leaves him a minute of his own
-  /// afterwards, which is the minute that sells the subscription.
+  /// TWO — EXACTLY ONE TEST, AND NOT A SECOND MORE.
   ///
-  /// The exposure: a trial user who burns it all and cancels costs
-  /// roughly 7p of voice plus pennies of text. A thousand of them is a
-  /// pub lunch. One conversion at £19.99 pays for about 260 of them.
-  static const trialVoiceMinutes = 3;
+  /// This is deliberately the length of one session
+  /// (_FreeFlowScreenState._sessionSeconds) and not a minute over. The
+  /// trial buys him the demonstration and nothing else: he takes the
+  /// two-minute test, gets his number, and the next time he reaches for
+  /// the orb he is told — plainly, not sold at — that the full weekly
+  /// allowance starts when the trial converts.
+  ///
+  /// One was worse than two, not cheaper: the test itself was cut off
+  /// at sixty seconds and he was scored on half a conversation. Three
+  /// was worse than two the other way: a spare minute is a second demo,
+  /// and the man who has had two demos has less reason to pay for the
+  /// third than the man left standing at the end of his first.
+  ///
+  /// The exposure: a trial user who burns it and cancels costs roughly
+  /// 5p of voice plus pennies of text. One conversion at £19.99 covers
+  /// about four hundred of them.
+  static const trialVoiceMinutes = 2;
 
   static const _kInTrial = 'trial.active.v1';
   static const _kUsedMs  = 'trial.voice_used_ms.v1';

@@ -30,6 +30,7 @@ import '../../../services/paywall_gate.dart';
 import '../../../services/extra_service.dart';
 import '../../paywall/extra_sheet.dart';
 import '../../paywall/minutes_paywall.dart';
+import '../../../services/trial_service.dart';
 import '../../../services/realtime_session.dart';
 import '../../../services/daily_nudge_service.dart';
 import '../../../services/review_prompt_service.dart';
@@ -1647,6 +1648,10 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         // Pro path — rolling weekly minute cap.
         if (await LocalStoreService.voiceCapReached()) {
           if (!mounted) return;
+          // TRIAL FIRST. He is inside the free trial, so there is no
+          // billing week to renew and nothing honest to sell him.
+          if (await _trialWallIfNeeded()) return;
+          if (!mounted) return;
           // ignore: discarded_futures
           AnalyticsService.freeflowVoiceCapHit();
           HapticFeedback.mediumImpact();
@@ -1791,6 +1796,8 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
     final pro = await PaywallGate.isPro();
     if (pro) {
       if (await LocalStoreService.voiceCapReached()) {
+        if (!mounted) return;
+        if (await _trialWallIfNeeded()) return;
         if (!mounted) return;
         // ignore: discarded_futures
         AnalyticsService.freeflowVoiceCapHit();
@@ -2168,6 +2175,64 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
 
   /// Weekly-cap notice — EXPLICIT white text so it can never render
   /// black-on-black (the invisible strip bro hit when credits ran out).
+  /// THE TRIAL WALL — an explanation, not a sale.
+  ///
+  /// A man in the free trial has had his one two-minute test and reached
+  /// for the orb again. That is the best possible signal, and the worst
+  /// possible moment to hand him a minute-pack checkout: he has already
+  /// agreed to pay us in three days, and selling him something now says
+  /// the subscription he just started is not enough. It also reads as a
+  /// bait — trial, then a second till.
+  ///
+  /// So he gets told the truth and nothing else: the test was the trial,
+  /// the full allowance starts when the subscription does. Returns true
+  /// when it handled the situation, so the callers can stop.
+  Future<bool> _trialWallIfNeeded() async {
+    if (!await TrialService.isTrial()) return false;
+    if (!mounted) return true;
+    // ignore: discarded_futures
+    AnalyticsService.freeflowVoiceCapHit();
+    HapticFeedback.mediumImpact();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface1,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: Text('That was your trial test',
+            style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.w900)),
+        content: Text(
+            'Your free trial includes one '
+            '${TrialService.trialVoiceMinutes}-minute voice test — you have '
+            'taken it, and your score is yours to keep.\n\n'
+            'Live voice opens properly the moment your trial ends and your '
+            'subscription starts: '
+            '${LocalStoreService.kVoiceMinutesPerWeek} minutes every week, '
+            'every woman on the roster.\n\n'
+            'Texting stays unlimited in the meantime — go and train.',
+            style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.5,
+                fontWeight: FontWeight.w500)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('GOT IT',
+                style: GoogleFonts.inter(
+                    color: AppColors.red,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2)),
+          ),
+        ],
+      ),
+    );
+    return true;
+  }
+
   void _capNotice(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();

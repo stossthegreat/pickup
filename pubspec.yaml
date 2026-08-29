@@ -23,7 +23,7 @@ publish_to: 'none'
 #
 # If a build fails at Publishing with those two codes and nothing else,
 # this line is the whole fix — there is nothing wrong with the code.
-version: 1.2.0+242
+version: 1.2.0+243
 
 environment:
   sdk: ^3.8.0
