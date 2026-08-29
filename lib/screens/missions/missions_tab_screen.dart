@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/analytics_service.dart';
 import '../../services/backend/catch_up_service.dart';
 import '../../services/backend/squad_broadcast.dart';
+import '../../services/game_test.dart';
 import '../../services/local_store_service.dart';
 import '../../services/mission_catalog.dart';
 import '../../services/mission_engine.dart';
@@ -293,6 +294,23 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
       ),
     ));
     if (done == true) {
+      // ── SHOW HIM THE NUMBER ─────────────────────────────────────────
+      //
+      // THE REP WAS ALWAYS GRADED. It was never SHOWN. The chat ends,
+      // the girl-verdict ceremony plays, the screen pops — and the /100
+      // the text grader produced sat in ChatScoreService.lastResult with
+      // nothing on screen to draw it. From his side he did the rep and
+      // was never scored, which is exactly what he reported.
+      //
+      // Same reveal as the onboarding test, by the same code path, so
+      // the number he gets here and the number he got there mean the
+      // same thing. It also banks the score, which is what tops up CHAT
+      // on the card above — and _complete below reloads that card, so
+      // the top-up is on screen by the time he lands back here.
+      if (!mounted) return;
+      await GameTest.reveal(context,
+          kicker: 'YOUR REP', girl: girlById(m.girlId!));
+      if (!mounted) return;
       await _complete(m);
     } else {
       _notDone('Not completed — you have to actually run the conversation.');
