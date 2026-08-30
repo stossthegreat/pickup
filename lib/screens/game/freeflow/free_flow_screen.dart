@@ -2076,7 +2076,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       // tears the screen down. Awaited rather than fire-and-forget —
       // a fast back-tap was beating the SharedPreferences write and
       // the Ascend GAME pillar stayed at zero.
-      await _persistGame(score.score);
+      await _persistGame(score.outOf100);
       // Academy: hand the SAME transcript to the server-side rubric
       // grader so this real session moves the user's ELO, the Board and
       // the squad Pulse. Fire-and-forget — Lucien's scorecard stays the
@@ -2177,14 +2177,18 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
     }
   }
 
-  /// Best-of update of the GAME pillar score + stamp today as the
-  /// last GAME completion day. FreeFlowScore is 0..10 — multiply by
-  /// 10 to match the 0..100 storage band used by the LOOKS + AURA
-  /// pillars. Today\'s YMD stamp powers the Today\'s Ascension card
-  /// tick on the Ascend tab.
-  Future<void> _persistGame(int scoreOutOfTen) async {
+  /// Best-of update of the GAME pillar score + stamp today as the last
+  /// GAME completion day, matching the 0..100 storage band the LOOKS and
+  /// AURA pillars use. Today's YMD stamp powers the Today's Ascension
+  /// card tick on the Ascend tab.
+  ///
+  /// TAKES 0-100 NOW. It used to take the backend's 0-10 and multiply,
+  /// which was right while the card also showed /10. The card shows
+  /// /100, the caller passes outOf100, and multiplying again would have
+  /// written 600.
+  Future<void> _persistGame(int scoreOutOf100) async {
     final prefs = await SharedPreferences.getInstance();
-    final next = (scoreOutOfTen * 10).clamp(0, 100);
+    final next = scoreOutOf100.clamp(0, 100);
 
     // ── ONLY AN UNHELPED REP MOVES THE GAME SCORE ─────────────────────
     //
@@ -3056,10 +3060,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
     );
   }
 
+  /// OUT OF 100 NOW, like everything else the man sees. The bands are
+  /// the same bands — 9/10 was LETHAL and 90 is LETHAL — just read
+  /// against the scale the card actually prints.
   String _freeflowBadge(int score) {
-    if (score >= 9) return 'LETHAL';
-    if (score >= 7) return 'REAL GAME';
-    if (score >= 4) return 'FORGETTABLE';
+    if (score >= 90) return 'LETHAL';
+    if (score >= 70) return 'REAL GAME';
+    if (score >= 40) return 'FORGETTABLE';
     return 'SHE LEFT';
   }
 
@@ -3083,9 +3090,9 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
   }
 
   Widget _buildScorecard(FreeFlowScore s) {
-    final color = s.score >= 7
+    final color = s.outOf100 >= 70
         ? AppColors.signalGreen
-        : (s.score <= 3 ? AppColors.signalRed : AppColors.accent);
+        : (s.outOf100 <= 30 ? AppColors.signalRed : AppColors.accent);
     return Stack(
       children: [
         Positioned.fill(
@@ -3144,7 +3151,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('${s.score}',
+                  Text('${s.outOf100}',
                       style: AppTypography.display.copyWith(
                         color: color,
                         fontSize: 130,
@@ -3242,8 +3249,8 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
                   context:   context,
                   kindLabel: 'FREE FLOW',
                   subLabel:  _vibe?.label ?? '',
-                  score:     s.score,
-                  badge:     _freeflowBadge(s.score),
+                  score:     s.outOf100,
+                  badge:     _freeflowBadge(s.outOf100),
                   verdict:   s.verdict,
                   stats:     _freeflowShareStats(s.dimensions),
                 ),
