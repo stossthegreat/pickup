@@ -354,6 +354,12 @@ class VillainHistoryEntry {
 
 /// Lucien's end-of-free-flow scorecard.
 class FreeFlowScore {
+  /// THE BACKEND'S OWN SCALE, AND IT IS NOT THE ONE WE SHOW.
+  ///
+  /// freeflowScorePrompt asks for `"score": <integer 0-10>` while asking
+  /// for its five dimensions 0-100 in the same breath. That is the
+  /// backend's contract and it is left alone — see [outOf100] for the
+  /// number the app actually displays.
   final int score;            // 0..10
   final String verdict;       // the deadly one-liner
   final String landed;        // what worked
@@ -365,6 +371,43 @@ class FreeFlowScore {
   /// Short Lucien breakdown across the five dimensions.
   final String breakdown;
   final Uint8List? audioBytes;
+  /// ── THE NUMBER THE APP SHOWS, OUT OF 100 ─────────────────────────
+  ///
+  /// The scorecard was changed to read "/ 100" and the raw 0-10 was
+  /// left underneath it, so a 6 rendered as "6 / 100" when it meant 60.
+  /// Frontend bug, not the grader.
+  ///
+  /// Fixed by DERIVING the total from the five dimensions rather than
+  /// multiplying the coarse one by ten. They are already 0-100, they are
+  /// what the Progress tab keeps, and weighting them is exactly how the
+  /// chat side builds its number (see supabase/_shared/grade-chat.ts) —
+  /// so voice and text are now the same number built the same way, and
+  /// a man gets 63 instead of a rounded 60.
+  ///
+  /// Falls back to score * 10 when the grader returned no dimensions,
+  /// which is the old behaviour and never wrong, only coarser.
+  int get outOf100 {
+    final d = dimensions;
+    if (d == null || d.isEmpty) return (score * 10).clamp(0, 100);
+    const weights = <String, double>{
+      'confidence': 0.26,
+      'presence': 0.20,
+      'game': 0.24,
+      'humor': 0.16,
+      'listening': 0.14,
+    };
+    var sum = 0.0, used = 0.0;
+    weights.forEach((axis, w) {
+      final v = d[axis];
+      if (v != null) {
+        sum += v * w;
+        used += w;
+      }
+    });
+    if (used == 0) return (score * 10).clamp(0, 100);
+    return (sum / used).round().clamp(0, 100);
+  }
+
   const FreeFlowScore({
     required this.score,
     required this.verdict,
