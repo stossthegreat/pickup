@@ -152,6 +152,7 @@ class PurchaseService {
       lines.add('latestPurchase: ${ent?.latestPurchaseDate}');
       lines.add('expires: ${ent?.expirationDate}');
       lines.add('willRenew: ${ent?.willRenew}');
+      lines.add('isSandbox: ${ent?.isSandbox}  (sandbox skips the period-length test — Apple compresses durations)');
       if (ent != null) {
         final b = DateTime.tryParse(ent.latestPurchaseDate);
         final e = ent.expirationDate == null
@@ -743,6 +744,20 @@ class PurchaseService {
     // Unparseable or absent dates fall through to "trial" for the same
     // reason as everything else in this function: we do not hand out
     // paid minutes on a guess.
+    // ── AND IT IS USELESS IN SANDBOX, WHICH BROKE WEEKLY ──────────────
+    //
+    // Apple COMPRESSES subscription durations for testing: a real
+    // 7-day weekly renews in about three MINUTES on a sandbox account.
+    // So the period-length test saw 0.002 days, called a full-price
+    // weekly subscriber an introductory period, and locked voice for
+    // everyone on every test build. Which is exactly what happened.
+    //
+    // The heuristic only means anything against real calendar
+    // durations, so it only runs against them. In sandbox the enum is
+    // all there is, and the Trial Rig in Settings is how the restricted
+    // path gets tested instead.
+    if (ent.isSandbox) return false;
+
     final bought = DateTime.tryParse(ent.latestPurchaseDate);
     final expires = ent.expirationDate == null
         ? null
