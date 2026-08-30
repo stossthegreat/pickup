@@ -64,6 +64,19 @@ import '../../widgets/academy/rank_emblem.dart';
 ///     after. Ceremony that can't be dismissed is a cutscene, and every
 ///     man who's seen it fifty times comes to hate it.
 class MatchmakingScreen extends StatefulWidget {
+  /// True when the last search ended on the ceiling rather than on a
+  /// pair or a deliberate exit. Read by the Battles screen so it can
+  /// offer the thing that always works — a friend — instead of leaving
+  /// him on a screen that just said no. Static because `find` returns a
+  /// Battle? and a timeout is still null; widening that return type
+  /// would change a signature the duel flow depends on.
+  ///
+  /// ON THE WIDGET, NOT THE STATE. It was on _MatchmakingScreenState,
+  /// where the name MatchmakingScreen.lastTimedOut does not resolve —
+  /// a private class cannot be reached from another file either. Three
+  /// compile errors and a failed archive.
+  static bool lastTimedOut = false;
+
   /// 'chat' | 'voice'. The queue keeps a separate line per medium — a
   /// spoken attempt and a typed one can't be scored against each other,
   /// so they are never paired. See migration 0016.
@@ -117,13 +130,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen>
   /// works is touched; this only decides when to stop asking.
   static const _searchCeiling = Duration(seconds: 45);
 
-  /// True when the last search ended on the ceiling rather than on a
-  /// pair or a deliberate exit. Read by the Battles screen so it can
-  /// offer the thing that always works — a friend — instead of leaving
-  /// him on a screen that just said no. Static because `find` returns a
-  /// Battle? and a timeout is still null; widening that return type
-  /// would change a signature the duel flow depends on.
-  static bool lastTimedOut = false;
+
   int _seconds = 0;
   int _count = 3;
 
