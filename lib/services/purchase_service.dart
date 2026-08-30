@@ -149,6 +149,21 @@ class PurchaseService {
       lines.add('Active subs: ${ci.activeSubscriptions.toList()}');
       lines.add('"pro" entitlement: ${ent == null ? "ABSENT" : (ent.isActive ? "active" : "inactive")}');
       lines.add('periodType: ${ent?.periodType}');
+      lines.add('latestPurchase: ${ent?.latestPurchaseDate}');
+      lines.add('expires: ${ent?.expirationDate}');
+      lines.add('willRenew: ${ent?.willRenew}');
+      if (ent != null) {
+        final b = DateTime.tryParse(ent.latestPurchaseDate);
+        final e = ent.expirationDate == null
+            ? null
+            : DateTime.tryParse(ent.expirationDate!);
+        if (b != null && e != null) {
+          lines.add('period length: '
+              '${(e.difference(b).inHours / 24.0).toStringAsFixed(2)} days '
+              '(<= 5 ⇒ treated as trial)');
+        }
+      }
+      lines.add('_isTrialFrom says: ${_isTrialFrom(ci)}');
       lines.add('App says in-trial: ${await TrialService.isTrial()}');
       lines.add('Trial voice used: '
           '${(await TrialService.usedMs()) ~/ 1000}s of '
@@ -705,7 +720,43 @@ class PurchaseService {
     if (ent == null || !ent.isActive) return true;
 
     final p = ent.periodType;
-    return !(p == PeriodType.normal || p == PeriodType.prepaid);
+    if (p != PeriodType.normal && p != PeriodType.prepaid) return true;
+
+    // ── DO NOT TRUST periodType ON ITS OWN ────────────────────────────
+    //
+    // periodType has now told us "normal" for a man who was three
+    // seconds into a free trial, repeatedly, on a real device. Whether
+    // that is the store, RevenueCat, or an offer that silently did not
+    // apply, the app cannot keep betting money on one enum.
+    //
+    // So there is a second, independent test that cannot be misreported,
+    // because it is arithmetic on two real timestamps: HOW LONG IS THIS
+    // PERIOD? A 3-day introductory offer expires about three days after
+    // it was bought. A month expires in about thirty. A week in seven.
+    //
+    // Anything that expires within FIVE DAYS of its own purchase is an
+    // introductory period being described as a full one, and it gets the
+    // trial budget no matter what the enum says. Five sits cleanly
+    // between the 3-day offer and the 7-day weekly, so a genuine weekly
+    // subscriber is never caught by it.
+    //
+    // Unparseable or absent dates fall through to "trial" for the same
+    // reason as everything else in this function: we do not hand out
+    // paid minutes on a guess.
+    final bought = DateTime.tryParse(ent.latestPurchaseDate);
+    final expires = ent.expirationDate == null
+        ? null
+        : DateTime.tryParse(ent.expirationDate!);
+    if (bought == null || expires == null) {
+      // A lifetime / non-expiring entitlement legitimately has no
+      // expiry. Those are never introductory, so only treat a MISSING
+      // date as suspicious when the entitlement will renew.
+      return ent.willRenew;
+    }
+    final periodDays = expires.difference(bought).inHours / 24.0;
+    if (periodDays <= 5) return true;
+
+    return false;
   }
 
   static Future<void> _refreshEntitlementCache() async {
