@@ -102,6 +102,28 @@ class _MatchmakingScreenState extends State<MatchmakingScreen>
   int _flicker = 1000;
 
   bool _bailed = false;
+
+  /// ── THE QUEUE HAD NO END ──────────────────────────────────────────
+  ///
+  /// This loop polled until it found someone or the man gave up, with
+  /// no ceiling. With nobody else in the line — a new app, a quiet
+  /// hour, a thin medium — he sat in the scanning animation
+  /// indefinitely, and an animation that never resolves does not read
+  /// as "nobody is here", it reads as broken.
+  ///
+  /// After this long with no pair we leave the line the same way the
+  /// man would, THROUGH _bail — same state flag, same
+  /// BattleService.leaveQueue call, same pop. Nothing about how pairing
+  /// works is touched; this only decides when to stop asking.
+  static const _searchCeiling = Duration(seconds: 45);
+
+  /// True when the last search ended on the ceiling rather than on a
+  /// pair or a deliberate exit. Read by the Battles screen so it can
+  /// offer the thing that always works — a friend — instead of leaving
+  /// him on a screen that just said no. Static because `find` returns a
+  /// Battle? and a timeout is still null; widening that return type
+  /// would change a signature the duel flow depends on.
+  static bool lastTimedOut = false;
   int _seconds = 0;
   int _count = 3;
 
@@ -179,7 +201,13 @@ class _MatchmakingScreenState extends State<MatchmakingScreen>
   /// server; this just asks again.
   Future<void> _search() async {
     final began = DateTime.now();
+    MatchmakingScreen.lastTimedOut = false;
     while (mounted && !_bailed && _battle == null) {
+      if (DateTime.now().difference(began) >= _searchCeiling) {
+        MatchmakingScreen.lastTimedOut = true;
+        await _bail();
+        return;
+      }
       final b = await BattleService.findOpponent(medium: widget.medium);
       if (!mounted || _bailed) return;
       if (b != null) {

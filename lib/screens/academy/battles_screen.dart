@@ -333,11 +333,67 @@ class _BattlesScreenState extends State<BattlesScreen> {
     final battle = await MatchmakingScreen.find(context, medium: medium);
     if (!mounted) return;
     if (battle == null) {
+      // TIMED OUT vs WALKED AWAY. A man who pressed LEAVE THE LINE has
+      // said what he wants and gets nothing further. A man the ceiling
+      // returned is standing in an empty room, and the worst thing to
+      // do is put him back on the same screen with the same button.
+      // Offer the one thing that works with nobody else online.
+      if (MatchmakingScreen.lastTimedOut) {
+        MatchmakingScreen.lastTimedOut = false;
+        await _offerFriendInstead();
+        if (!mounted) return;
+      }
       await _load();
       return;
     }
     // Paired and counted in — straight into the fight, no second tap.
     await _run(battle);
+  }
+
+  /// Nobody in the line. Say so plainly and hand him the door that is
+  /// open — a friend, who is a guaranteed opponent at any hour and on
+  /// day one. Declining just returns him to the screen.
+  Future<void> _offerFriendInstead() async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface1,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: Text('Nobody in the line right now',
+            style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w900)),
+        content: Text(
+            'Open matchmaking pairs you with whoever else is searching, '
+            'and it is quiet at the moment.\n\n'
+            'Challenge a friend instead — you both get the same woman, '
+            'both blind, and the better conversation takes the rating. '
+            'It works whether anyone else is online or not.',
+            style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.5,
+                fontWeight: FontWeight.w500)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('NOT NOW',
+                style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontWeight: FontWeight.w800)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('CHALLENGE A FRIEND',
+                style: GoogleFonts.inter(
+                    color: AppColors.red, fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+    if (go == true && mounted) await _challenge();
   }
 
   /// Bin an open challenge. Confirmed, because a code he's already sent
@@ -1225,8 +1281,22 @@ class _BattlesScreenState extends State<BattlesScreen> {
                   const SizedBox(height: 20),
 
                   // ── THE BUTTON ──────────────────────────────────────
+                  //
+                  // CHALLENGE A FRIEND LEADS, AND ONLY BECAUSE OF WHO IS
+                  // ONLINE. Open matchmaking needs a second man searching
+                  // at the same moment; a friend challenge needs nobody
+                  // but the two of them, so it works on day one, in a
+                  // quiet hour, and at every scale after. Leading with
+                  // the door that is always open is not a downgrade —
+                  // it is also the only one of these that brings a new
+                  // player with it.
+                  //
+                  // NOTHING BEHIND EITHER BUTTON CHANGED. Same handlers,
+                  // same queue, same Edge Functions. This is which one is
+                  // big.
                   _RivalButton(
-                    onTap: _findRival,
+                    onTap: _challenge,
+                    label: 'CHALLENGE A FRIEND',
                     stakeLine: onTheLine,
                   ),
                   const SizedBox(height: 12),
@@ -1235,12 +1305,13 @@ class _BattlesScreenState extends State<BattlesScreen> {
                   Row(children: [
                     Expanded(
                       child: _Quiet(
-                        icon: Icons.link_rounded,
-                        // FRIEND, not MATE. "Mate" is British and
-                        // reads as odd or wrong to an American ear,
-                        // and most of the store is American.
-                        label: 'CHALLENGE A FRIEND',
-                        onTap: _challenge,
+                        icon: Icons.travel_explore_rounded,
+                        // HONEST, not "coming soon". Matchmaking is
+                        // built and it works — it is waiting for people,
+                        // which is a different thing and becomes untrue
+                        // on its own the moment there are some.
+                        label: 'FIND A RIVAL',
+                        onTap: _findRival,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1460,7 +1531,15 @@ class _BattlesScreenState extends State<BattlesScreen> {
 class _RivalButton extends StatefulWidget {
   final VoidCallback onTap;
   final String? stakeLine;
-  const _RivalButton({required this.onTap, this.stakeLine});
+  /// The hero action is no longer always FIND A RIVAL, so the label is
+  /// passed in rather than baked into the paint. Defaults to the old
+  /// text so nothing that does not pass one changes.
+  final String label;
+  const _RivalButton({
+    required this.onTap,
+    this.stakeLine,
+    this.label = 'FIND A RIVAL',
+  });
 
   @override
   State<_RivalButton> createState() => _RivalButtonState();
@@ -1583,14 +1662,21 @@ class _RivalButtonState extends State<_RivalButton>
                           const Icon(Icons.radar_rounded,
                               size: 30, color: Colors.white),
                           const SizedBox(height: 8),
-                          Text('FIND A RIVAL',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 25,
-                                height: 1,
-                                letterSpacing: 3,
-                                fontWeight: FontWeight.w900,
-                              )),
+                          // scaleDown, because CHALLENGE A FRIEND is a
+                          // good deal longer than FIND A RIVAL and this
+                          // button is a fixed shape.
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(widget.label,
+                                maxLines: 1,
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 25,
+                                  height: 1,
+                                  letterSpacing: 3,
+                                  fontWeight: FontWeight.w900,
+                                )),
+                          ),
                           const SizedBox(height: 6),
                           Text(
                               stake ??
