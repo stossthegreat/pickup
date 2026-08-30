@@ -700,6 +700,17 @@ class LocalStoreService {
     if (fromBank > 0) await ExtraService.spend(fromBank);
   }
 
+  /// TEST ONLY — clear the weekly voice bucket so the cap can be
+  /// exercised again without waiting seven days for the window to roll.
+  /// Reachable only from the creator-mode Trial Rig in Settings, which
+  /// takes the creator password. Testing a cap repeatedly is how it gets
+  /// verified, and there was no way to do it but wait.
+  static Future<void> resetVoiceWeekForTesting() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kVoiceWeekBucket);
+    await prefs.remove(_kVoiceWeekMs);
+  }
+
   /// Every millisecond he can still speak — free allowance plus bank.
   static Future<int> voiceMsRemaining() async {
     if (await isCreatorActive()) return 1 << 30;

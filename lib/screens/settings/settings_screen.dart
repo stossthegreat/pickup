@@ -1204,6 +1204,18 @@ class _TrialRigTileState extends State<_TrialRigTile> {
                 },
                 child: const Text('CLEAR'),
               ),
+              // THE WEEKLY BUCKET, WIPED. Verifying a cap means hitting
+              // it, and hitting it used to mean waiting seven days for
+              // the window to roll before you could hit it again. A day
+              // of testing burns the allowance and then looks exactly
+              // like a broken subscription.
+              TextButton(
+                onPressed: () async {
+                  await LocalStoreService.resetVoiceWeekForTesting();
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                },
+                child: const Text('RESET WEEKLY MINUTES'),
+              ),
             ],
           ),
         );
