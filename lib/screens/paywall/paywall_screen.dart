@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
 import '../../config/dev_flags.dart';
+import '../../config/purchase_config.dart';
 import '../../services/analytics_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/purchase_service.dart';
@@ -199,6 +200,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
   /// terms before he confirms, and bill him correctly. This copy is
   /// best-effort; the sheet after it is not.
   IntroductoryPrice? get _trial {
+    // THE OFFER IS OFF. Even if a stale introductory price is still
+    // attached to the product in the store, the app must not sell it —
+    // one switch has to turn the whole thing off or the copy and the
+    // behaviour drift apart. See PurchaseConfig.freeTrialEnabled.
+    if (!PurchaseConfig.freeTrialEnabled) return null;
     if (!_trialEligible) return null;
     // The SELECTED tier's offer, not weekly's. The trial lives on
     // monthly; reading weekly's would advertise a trial on the tier that
@@ -874,11 +880,16 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 ),
                 SizedBox(width: 7 * s),
                 Expanded(
-                  child: Text(trial != null ? 'Most Popular' : 'No free trial',
+                  // "No free trial" read as a taunt on every card once
+                  // trials came off — nobody has one, so saying it of
+                  // one tier implies the other has it. Monthly is simply
+                  // the recommendation; weekly is the flexible option.
+                  child: Text(
+                      tier == _Tier.monthly ? 'Best value' : 'Cancel anytime',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
-                        color: trial != null
+                        color: tier == _Tier.monthly
                             ? AppColors.red
                             : AppColors.textTertiary,
                         fontSize: 12 * s,
@@ -970,16 +981,19 @@ class _PaywallScreenState extends State<PaywallScreen> {
               height: 1.3,
               fontWeight: FontWeight.w600,
             )),
-        if (t != null)
-          Text(
-              'Texting is unlimited during the trial. Live voice unlocks '
-              'when your first payment goes through.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                color: AppColors.textTertiary,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              )),
+        // The trial footnote lived here. With no trial there is nothing
+        // to qualify: everything is included the moment he pays, and a
+        // line explaining what he does NOT get would be inventing a
+        // restriction that no longer exists.
+        Text('Unlimited texting · '
+            '${LocalStoreService.kVoiceMinutesPerWeek} minutes of live '
+            'voice a week',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: AppColors.textTertiary,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            )),
         const SizedBox(height: 2),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           _LinkButton(label: 'Restore Purchases', onTap: _restore),

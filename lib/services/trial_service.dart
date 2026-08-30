@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/purchase_config.dart';
+
 /// THE FREE TRIAL — full access to everything except the expensive part.
 ///
 /// WHAT THE STORE DOES AND WHAT THE APP HAS TO DO.
@@ -86,6 +88,13 @@ abstract final class TrialService {
   /// is a network-derived fact), so it is mirrored into prefs by
   /// PurchaseService and read back from there.
   static Future<bool> isTrial() async {
+    // NO TRIAL EXISTS, SO NOBODY IS IN ONE. With the offer switched off
+    // this must answer a flat false rather than fall through to the
+    // fail-closed default below — that default is there to protect a
+    // trial user, and with no trial to protect it would only lock a
+    // paying man out of the voice he just bought.
+    if (!PurchaseConfig.freeTrialEnabled) return false;
+
     final prefs = await SharedPreferences.getInstance();
 
     // ── FAIL CLOSED. THIS DEFAULTED TO FALSE AND IT COST US ───────────

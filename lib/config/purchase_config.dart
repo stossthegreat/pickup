@@ -62,6 +62,31 @@ class PurchaseConfig {
   /// The entitlement identifier that grants Mirrorly Pro. Configured
   /// in RevenueCat dashboard → Entitlements. Both weekly and annual
   /// subscriptions attach to this entitlement.
+  /// ══════════════════════════════════════════════════════════════════
+  ///  THE FREE TRIAL, OFF
+  /// ══════════════════════════════════════════════════════════════════
+  ///
+  /// One switch, and it turns the whole thing off together: the copy
+  /// that promises a trial, the trial voice budget, the "voice unlocks
+  /// when you pay" wall, and the fail-closed trial detection that goes
+  /// with them.
+  ///
+  /// WHY IT IS OFF. Every failure in the subscription layer traced back
+  /// to one question — is this entitlement a trial or a full period —
+  /// and the stores answer it inconsistently: periodType came back
+  /// `normal` for a man three seconds into a trial, and sandbox
+  /// compresses durations so hard that a 7-day weekly measures as
+  /// minutes. With no trial there is no question. The gate is "has he
+  /// paid", which is the one thing that has never been wrong.
+  ///
+  /// The weekly tier already does the job a trial was there to do: it
+  /// is cheap enough to be the low-commitment way in, and it pays.
+  ///
+  /// TO TURN IT BACK ON: set this true AND add the introductory offer
+  /// back in App Store Connect. Both, or the app promises something the
+  /// store will not honour. Everything else re-arms itself.
+  static const bool freeTrialEnabled = false;
+
   static const proEntitlementId = 'pro';
 
   /// Product identifiers — MUST match exactly what's in App Store
