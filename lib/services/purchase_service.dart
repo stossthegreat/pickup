@@ -8,6 +8,7 @@ import '../config/purchase_config.dart';
 import 'analytics_service.dart';
 import 'extra_service.dart';
 import 'local_store_service.dart' show LocalStoreService, ProTier;
+import 'trial_service.dart';
 
 /// Single front-door for all billing operations.
 ///
@@ -71,6 +72,30 @@ class PurchaseService {
       final offerings = await Purchases.getOfferings();
       final cur = offerings.current;
       lines.add('Offerings.all keys: ${offerings.all.keys.toList()}');
+
+      // EVERY OFFERING, NOT JUST THE CURRENT ONE.
+      //
+      // The two causes of "I added it and it isn't showing" look
+      // identical from inside the app, and this is what separates them:
+      //
+      //   · the package appears under a NON-current offering → it is
+      //     attached to the wrong offering in the RevenueCat dashboard,
+      //     which is a two-click fix.
+      //   · the package appears NOWHERE, including its own offering →
+      //     RevenueCat asked StoreKit for the product and StoreKit
+      //     returned nothing, so RC dropped the package silently. That
+      //     is App Store Connect: Missing Metadata, not cleared for
+      //     sale, or the Paid Applications agreement is not active.
+      //
+      // Without this dump both look like "monthly is just missing".
+      for (final entry in offerings.all.entries) {
+        final tag = entry.key == cur?.identifier ? '  ← CURRENT' : '';
+        lines.add('Offering "${entry.key}"'
+            ' (${entry.value.availablePackages.length} pkgs)$tag');
+        for (final p in entry.value.availablePackages) {
+          lines.add('    · ${p.identifier} → ${p.storeProduct.identifier}');
+        }
+      }
       if (cur == null) {
         lines.add('→ No CURRENT offering. Publish a Default Offering in '
                   'RevenueCat dashboard and mark it Current.');
@@ -86,10 +111,76 @@ class PurchaseService {
           lines.add('→ Offering exists but has 0 packages. Attach products '
                     'in dashboard → Offerings → Default Offering.');
         }
+        // WHAT THE APP IS LOOKING FOR, printed next to what it got.
+        // A subscription that "isn't showing" is nearly always one
+        // character out, or attached to an offering that isn't Current —
+        // and neither is visible without seeing both lists side by side.
+        lines.add('');
+        lines.add('App expects (exact match, case-sensitive):');
+        lines.add('  monthly → ${PurchaseConfig.productIds.monthly}');
+        lines.add('  weekly  → ${PurchaseConfig.productIds.weekly}');
+        lines.add('  annual  → ${PurchaseConfig.productIds.annual}');
+        final ids =
+            cur.availablePackages.map((p) => p.storeProduct.identifier);
+        if (!ids.contains(PurchaseConfig.productIds.monthly)) {
+          lines.add('→ MONTHLY NOT IN THIS OFFERING. Either the product id '
+                    'differs from the line above, or it is not attached to '
+                    'the CURRENT offering as a package, or the store has '
+                    'not released it yet (App Store Connect must show it '
+                    '"Ready to Submit" or better, and the Paid Apps '
+                    'agreement must be active).');
+        }
       }
     } catch (err) {
       lines.add('getOfferings threw: $err');
     }
+    // ── THE TRIAL VERDICT, SPELLED OUT ────────────────────────────────
+    //
+    // Every argument about the voice cap has been about a value nobody
+    // could see. This prints it: what the store says the period is, and
+    // what the app concluded from it. If those two disagree the bug is
+    // in _isTrialFrom; if they agree and the cap is still wrong the bug
+    // is in the ledger. Without it we were guessing at both.
+    try {
+      final ci = await Purchases.getCustomerInfo();
+      final ent = ci.entitlements.all[PurchaseConfig.proEntitlementId];
+      lines.add('');
+      lines.add('── VOICE ALLOWANCE ──');
+      lines.add('Active subs: ${ci.activeSubscriptions.toList()}');
+      lines.add('"pro" entitlement: ${ent == null ? "ABSENT" : (ent.isActive ? "active" : "inactive")}');
+      lines.add('periodType: ${ent?.periodType}');
+      lines.add('latestPurchase: ${ent?.latestPurchaseDate}');
+      lines.add('expires: ${ent?.expirationDate}');
+      lines.add('willRenew: ${ent?.willRenew}');
+      lines.add('isSandbox: ${ent?.isSandbox}  (sandbox skips the period-length test — Apple compresses durations)');
+      if (ent != null) {
+        final b = DateTime.tryParse(ent.latestPurchaseDate);
+        final e = ent.expirationDate == null
+            ? null
+            : DateTime.tryParse(ent.expirationDate!);
+        if (b != null && e != null) {
+          lines.add('period length: '
+              '${(e.difference(b).inHours / 24.0).toStringAsFixed(2)} days '
+              '(<= 5 ⇒ treated as trial)');
+        }
+      }
+      lines.add('_isTrialFrom says: ${_isTrialFrom(ci)}');
+      lines.add('App says in-trial: ${await TrialService.isTrial()}');
+      lines.add('Trial voice used: '
+          '${(await TrialService.usedMs()) ~/ 1000}s of '
+          '${TrialService.trialVoiceMinutes * 60}s');
+      lines.add('Voice ms remaining: '
+          '${(await LocalStoreService.voiceMsRemaining()) ~/ 1000}s');
+      if (ent != null && ent.isActive && ent.periodType == PeriodType.normal) {
+        lines.add('→ FULL-PRICE period. 14 min/week is CORRECT here. A '
+                  'trial only exists on ${PurchaseConfig.productIds.monthly}, '
+                  'so if that product is not live nobody can start one and '
+                  'every purchase is full price.');
+      }
+    } catch (err) {
+      lines.add('trial probe threw: $err');
+    }
+
     try {
       final info = await Purchases.getCustomerInfo();
       lines.add('Active entitlements: '
@@ -158,6 +249,25 @@ class PurchaseService {
         // ignore: discarded_futures
         LocalStoreService.setSubscribed(true);
       }
+      // Mirror trial state on every push too, not just at launch. This
+      // listener is what fires the moment a trial converts to paid, and
+      // without it a man who converted kept the trial cap until he next
+      // cold-started the app.
+      //
+      // AND WHEN HE IS NOT PRO AT ALL, CLEAR THE STAMP. Writing `false`
+      // here used to record "confirmed full-price subscriber" for a man
+      // with no subscription whatsoever — so a free or lapsed account
+      // carried a paid stamp, and the moment he started a trial the
+      // fail-closed default could not protect him because the state was
+      // no longer absent. Cancelled, lapsed and never-subscribed all
+      // reset to unresolved instead.
+      final entActive = info
+              .entitlements.all[PurchaseConfig.proEntitlementId]?.isActive ??
+          false;
+      // ignore: discarded_futures
+      entActive
+          ? TrialService.setTrial(_isTrialFrom(info))
+          : TrialService.clearResolved();
     });
 
     // Mirror current entitlement state into the local cache so a
@@ -201,9 +311,16 @@ class PurchaseService {
       }
 
       Package? weekly;
+      Package? monthly;
+      Package? annual;
       Package? rescue;
-      Package? extra10;
-      Package? extra20;
+      // A LIST, NOT TWO SLOTS. The old code bucketed packs as
+      // `mins <= 10 → extra10` / `mins > 10 → extra20`, first one wins.
+      // Adding a third pack meant 20 and 60 minutes fought for the same
+      // slot and whichever the store listed first silently won. The
+      // packs are now collected and sorted by size, so any number of
+      // them can exist.
+      final extras = <Package>[];
 
       // v285 — WEEKLY ONLY. The app sells exactly ONE subscription:
       // mirrorly_pro_weekly. The legacy monthly/yearly SKUs still
@@ -245,12 +362,28 @@ class PurchaseService {
         // someone for.
         final rawProd = pkg.storeProduct.identifier;
         if (PurchaseConfig.isExtra(rawProd)) {
-          final mins = PurchaseConfig.minutesFor(rawProd);
-          if (mins <= 10 && extra10 == null) {
-            extra10 = pkg;
-          } else if (mins > 10 && extra20 == null) {
-            extra20 = pkg;
-          }
+          extras.add(pkg);
+          continue;
+        }
+
+        // MONTHLY — whole product id only. The dead-SKU guard above
+        // rejects anything containing "month" because the legacy
+        // mirrorly monthly is still live for old subscribers; an exact
+        // comparison is the only way to sell the new one without ever
+        // being able to sell the old one by accident.
+        if (monthly == null && rawProd == PurchaseConfig.productIds.monthly) {
+          monthly = pkg;
+          continue;
+        }
+
+        // ANNUAL — matched on the WHOLE product id, never a substring.
+        // The dead-SKU guard above deliberately rejects anything with
+        // "year"/"annual" in it because the legacy mirrorly_pro_yearly
+        // is still live in both stores for existing subscribers. An
+        // exact comparison is the only way to sell the new tier without
+        // ever being able to sell the old one by accident.
+        if (annual == null && rawProd == PurchaseConfig.productIds.annual) {
+          annual = pkg;
           continue;
         }
 
@@ -263,12 +396,14 @@ class PurchaseService {
         // dropped on the floor.
       }
 
+      extras.sort((a, b) => PurchaseConfig.minutesFor(a.storeProduct.identifier)
+          .compareTo(PurchaseConfig.minutesFor(b.storeProduct.identifier)));
       _cached = PurchaseOfferings(
         weekly: weekly,
-        annual: null, // voided — never populated, never purchasable
+        monthly: monthly,
+        annual: annual,
         rescue: rescue,
-        extra10: extra10,
-        extra20: extra20,
+        extras: extras,
       );
       return _cached!;
     } catch (err) {
@@ -303,10 +438,19 @@ class PurchaseService {
     // defence: no code path may ever charge a user for them again.
     final blockPkg  = pkg.identifier.toLowerCase();
     final blockProd = pkg.storeProduct.identifier.toLowerCase();
-    final isDeadSku =
+    // THE LIVE ANNUAL IS NOT A DEAD SKU. This guard matches on the
+    // substring "annual", so the new `imhim_pro_annual` tripped it and
+    // came back "This plan is no longer available" — a product that
+    // could be listed, selected and never bought. The exemption is an
+    // EXACT id comparison, so the legacy mirrorly_pro_yearly it was
+    // written to stop is still stopped.
+    final isLiveAnnual =
+        pkg.storeProduct.identifier == PurchaseConfig.productIds.annual ||
+        pkg.storeProduct.identifier == PurchaseConfig.productIds.monthly;
+    final isDeadSku = !isLiveAnnual && (
            blockPkg.contains('month')  || blockProd.contains('month')
         || blockPkg.contains('annual') || blockProd.contains('annual')
-        || blockPkg.contains('year')   || blockProd.contains('year');
+        || blockPkg.contains('year')   || blockProd.contains('year'));
     if (isDeadSku) {
       lastErrorMessage = 'This plan is no longer available.';
       AnalyticsService.purchaseFailed(pkg.identifier, 'dead_sku_blocked');
@@ -516,6 +660,120 @@ class PurchaseService {
     await _refreshEntitlementCache();
   }
 
+  /// Is the `pro` entitlement currently running as a free trial?
+  ///
+  /// The store gives one bit for access — active or not — so this is
+  /// the only way to tell a trial apart from a paid week. PeriodType
+  /// comes straight off RevenueCat: `trial` for a free trial, `intro`
+  /// for a discounted introductory period (which IS paid, so it gets
+  /// the full allowance), `normal` for an ordinary renewal.
+  /// Is this man inside an introductory period rather than paying full
+  /// price for a full period?
+  ///
+  /// THIS TESTED FOR PeriodType.trial ALONE, AND THAT WAS THE SECOND
+  /// LEAK. A 3-day introductory offer does NOT always come back as
+  /// `trial` — RevenueCat reports `intro` for introductory pricing, and
+  /// `unknown` whenever it cannot classify the period at all. Both fell
+  /// through this function as `false`, which the caller read as "full
+  /// paying subscriber" and handed him the paid weekly fourteen
+  /// minutes. A man who had paid us nothing yet.
+  ///
+  /// The question is inverted now, which is the only safe way to ask
+  /// it: he is on the full allowance ONLY when the store positively
+  /// says the period is NORMAL or PREPAID. trial, intro, unknown and
+  /// anything a future SDK adds all resolve to restricted.
+  static bool _isTrialFrom(CustomerInfo info) {
+    final ent = info.entitlements.all[PurchaseConfig.proEntitlementId];
+
+    // ── THE LEAK, AND IT WAS THIS LINE ────────────────────────────────
+    //
+    // This returned FALSE when the entitlement was missing or inactive,
+    // and false means "confirmed full-price subscriber — give him the
+    // fourteen minutes".
+    //
+    // But look at the ONE caller that matters,
+    // _refreshEntitlementCache. It decides `isPro` leniently:
+    //
+    //     entActive || entitlements.active.isNotEmpty
+    //                || activeSubscriptions.isNotEmpty
+    //
+    // — deliberately, so a real payer is never locked out while
+    // RevenueCat is lagging or an entitlement mapping is wrong. So
+    // isPro can be TRUE while the `pro` entitlement is absent or
+    // inactive: the man has bought something, RevenueCat can see the
+    // subscription, but the entitlement is not wired to that product
+    // yet or has not propagated.
+    //
+    // That is precisely the state a brand-new SKU is in. And in that
+    // state this function said "not a trial", the caller stamped him
+    // `paid`, and a man three seconds into a free trial was handed the
+    // full paid weekly allowance. Watched happening on a real phone.
+    //
+    // It is now impossible to answer "full price" without PROOF of it.
+    // No entitlement, inactive entitlement, unrecognised period — every
+    // one of them returns true and he is capped at the trial budget.
+    // Only an ACTIVE entitlement that positively reports NORMAL or
+    // PREPAID opens the fourteen minutes.
+    //
+    // The asymmetry is the whole point: capping a real subscriber for
+    // the seconds until the next refresh corrects it costs nothing, and
+    // it self-heals. Handing a trial user a paid week cannot be undone.
+    if (ent == null || !ent.isActive) return true;
+
+    final p = ent.periodType;
+    if (p != PeriodType.normal && p != PeriodType.prepaid) return true;
+
+    // ── DO NOT TRUST periodType ON ITS OWN ────────────────────────────
+    //
+    // periodType has now told us "normal" for a man who was three
+    // seconds into a free trial, repeatedly, on a real device. Whether
+    // that is the store, RevenueCat, or an offer that silently did not
+    // apply, the app cannot keep betting money on one enum.
+    //
+    // So there is a second, independent test that cannot be misreported,
+    // because it is arithmetic on two real timestamps: HOW LONG IS THIS
+    // PERIOD? A 3-day introductory offer expires about three days after
+    // it was bought. A month expires in about thirty. A week in seven.
+    //
+    // Anything that expires within FIVE DAYS of its own purchase is an
+    // introductory period being described as a full one, and it gets the
+    // trial budget no matter what the enum says. Five sits cleanly
+    // between the 3-day offer and the 7-day weekly, so a genuine weekly
+    // subscriber is never caught by it.
+    //
+    // Unparseable or absent dates fall through to "trial" for the same
+    // reason as everything else in this function: we do not hand out
+    // paid minutes on a guess.
+    // ── AND IT IS USELESS IN SANDBOX, WHICH BROKE WEEKLY ──────────────
+    //
+    // Apple COMPRESSES subscription durations for testing: a real
+    // 7-day weekly renews in about three MINUTES on a sandbox account.
+    // So the period-length test saw 0.002 days, called a full-price
+    // weekly subscriber an introductory period, and locked voice for
+    // everyone on every test build. Which is exactly what happened.
+    //
+    // The heuristic only means anything against real calendar
+    // durations, so it only runs against them. In sandbox the enum is
+    // all there is, and the Trial Rig in Settings is how the restricted
+    // path gets tested instead.
+    if (ent.isSandbox) return false;
+
+    final bought = DateTime.tryParse(ent.latestPurchaseDate);
+    final expires = ent.expirationDate == null
+        ? null
+        : DateTime.tryParse(ent.expirationDate!);
+    if (bought == null || expires == null) {
+      // A lifetime / non-expiring entitlement legitimately has no
+      // expiry. Those are never introductory, so only treat a MISSING
+      // date as suspicious when the entitlement will renew.
+      return ent.willRenew;
+    }
+    final periodDays = expires.difference(bought).inHours / 24.0;
+    if (periodDays <= 5) return true;
+
+    return false;
+  }
+
   static Future<void> _refreshEntitlementCache() async {
     try {
       final info = await Purchases.getCustomerInfo();
@@ -534,6 +792,14 @@ class PurchaseService {
         return;
       }
       await LocalStoreService.setSubscribed(isPro);
+      // Same rule as the listener: only an ACTIVE entitlement gets a
+      // stamp at all. Not-pro clears it back to unresolved so the
+      // restrictive default applies again.
+      if (isPro) {
+        await TrialService.setTrial(_isTrialFrom(info));
+      } else {
+        await TrialService.clearResolved();
+      }
     } catch (_) {
       // Network fail on launch is not fatal — the cached flag stands.
     }
@@ -568,6 +834,17 @@ class PurchaseService {
             lower.contains('year')) {
           await LocalStoreService.setCachedTier(ProTier.annual);
           return ProTier.annual;
+        }
+        // MONTHLY WAS MISSING, AND IT IS THE MAIN SKU NOW.
+        // imhim_pro_monthly matched neither branch, fell out of the
+        // loop, and got cached as ProTier.none — "no subscription" —
+        // for a man who is paying us every month. It happened to behave
+        // (none takes the 7-day window, which is what monthly should
+        // have) but it was false on disk and one `if (tier == none)`
+        // away from locking a paying customer out.
+        if (lower.contains('monthly') || lower.contains('month')) {
+          await LocalStoreService.setCachedTier(ProTier.monthly);
+          return ProTier.monthly;
         }
         if (lower.contains('weekly') || lower.contains('week')) {
           await LocalStoreService.setCachedTier(ProTier.weekly);
@@ -609,6 +886,10 @@ class PurchaseService {
               lower.contains('yearly') ||
               lower.contains('year')) {
             tier = ProTier.annual;
+            break;
+          }
+          if (lower.contains('monthly') || lower.contains('month')) {
+            tier = ProTier.monthly;
             break;
           }
           if (lower.contains('weekly') || lower.contains('week')) {
@@ -707,28 +988,34 @@ enum PurchaseOutcome { success, cancelled, error, noPriorPurchases, notConfigure
 /// shows a dash for that slot until RC delivers it.
 class PurchaseOfferings {
   final Package? weekly;
+  final Package? monthly;
   final Package? annual;
   final Package? rescue;
 
-  /// EXTRA voice-minute packs. Null when the store hasn't published
-  /// them yet — on iOS that's the normal state until the consumables
-  /// are created in App Store Connect, and the sheet must say so
-  /// rather than render a button that can't transact.
-  final Package? extra10;
-  final Package? extra20;
+  /// EXTRA voice-minute packs, smallest first. Empty when the store
+  /// hasn't published them — on iOS that's the normal state until the
+  /// consumables are created in App Store Connect, and every surface
+  /// must say so rather than render a button that can't transact.
+  final List<Package> extras;
 
   const PurchaseOfferings({
     required this.weekly,
+    this.monthly,
     required this.annual,
     required this.rescue,
-    this.extra10,
-    this.extra20,
+    this.extras = const [],
   });
 
   factory PurchaseOfferings.empty() => const PurchaseOfferings(
     weekly: null, annual: null, rescue: null,
   );
 
+  /// Back-compat accessors for the two-pack surfaces written before
+  /// there could be three. Smallest and largest, so they keep meaning
+  /// "the cheap one" and "the good-value one" however many exist.
+  Package? get extra10 => extras.isEmpty ? null : extras.first;
+  Package? get extra20 => extras.length < 2 ? null : extras.last;
+
   /// True when at least one pack can actually be bought right now.
-  bool get hasExtra => extra10 != null || extra20 != null;
+  bool get hasExtra => extras.isNotEmpty;
 }

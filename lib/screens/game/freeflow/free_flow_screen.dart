@@ -29,6 +29,8 @@ import '../../../services/local_store_service.dart';
 import '../../../services/paywall_gate.dart';
 import '../../../services/extra_service.dart';
 import '../../paywall/extra_sheet.dart';
+import '../../paywall/minutes_paywall.dart';
+import '../../../services/trial_service.dart';
 import '../../../services/realtime_session.dart';
 import '../../../services/daily_nudge_service.dart';
 import '../../../services/review_prompt_service.dart';
@@ -451,11 +453,22 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
   /// The gain actually applied, smoothed so it never pumps audibly.
   double _agcGain = 1.0;
 
-  // Session length.
-  /// Default session length for Pro users — 3 minutes per session.
-  // 2-minute voice sessions. At 14 voice minutes/week (see
-  // LocalStoreService.kVoiceMinutesPerWeek) that's 7 sessions a week — the
-  // model bro locked: short, repeatable calls that keep them coming back.
+  // ── SESSION LENGTH — the second cost dial ─────────────────────────
+  //
+  // Two minutes. At 14 voice minutes a week
+  // (LocalStoreService.kVoiceMinutesPerWeek) that is 7 sessions a week:
+  // short, repeatable calls that keep him coming back rather than one
+  // long one that exhausts him.
+  //
+  // WHAT IT COSTS, so nobody has to guess again. Voice is
+  // gpt-realtime-mini; a minute of two-way conversation lands around
+  // 2-3 cents all-in. So a full session is roughly 5p, a subscriber
+  // running his whole weekly allowance is about 35p a week — call it
+  // £1.50 a month against £19.99. The spend is bounded three ways and
+  // cannot run away: this per-session ceiling, the rolling weekly
+  // allowance, and the trial budget in TrialService. The clock below
+  // also re-checks voiceCapReached() EVERY SECOND and ends the call the
+  // instant a man hits his limit, so no single session can overrun.
   static const int _sessionSeconds = 120;
   /// Bro v6: "we want the free roleplay to be one minute then after
   /// one response add a brutal pop up tap Lucien for your legendary
@@ -820,6 +833,43 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       await PaywallGate.open(context, source: 'freeflow_open');
       if (!mounted) return;
       if (!await PaywallGate.isPro()) {
+        _resetToPicker();
+        return;
+      }
+    }
+
+    // ── THE MINUTES GATE, AT THE SAME CHOKEPOINT ────────────────────────
+    //
+    // THE HOLE THIS CLOSES. The paywall backstop above asks "has he
+    // paid" and nothing else, and the billable meter only arms on the
+    // first push-to-talk — so a man who has spent every minute he owns
+    // could still open this screen and we would open an OpenAI realtime
+    // socket for him. Our ledger charged him nothing, because he never
+    // held the button; OpenAI charged US for the session prompt and for
+    // whatever she said on connect. And it was repeatable: leave, come
+    // back, another socket. A trial user with a two-minute budget could
+    // do it fifty times.
+    //
+    // So the cap is enforced HERE, before the connect, at the one place
+    // every voice session passes through — not on the hold, which is
+    // already too late to matter.
+    if (await LocalStoreService.voiceCapReached()) {
+      if (!mounted) return;
+      // In trial: an explanation, never a second checkout. See
+      // _trialWallIfNeeded.
+      if (await _trialWallIfNeeded()) {
+        if (mounted) _resetToPicker();
+        return;
+      }
+      if (!mounted) return;
+      // ignore: discarded_futures
+      AnalyticsService.freeflowVoiceCapHit();
+      final bought = await MinutesPaywall.show(context,
+          girlId: girlForVibe(vibe.key).id);
+      if (!mounted) return;
+      if (!bought) {
+        _capNotice('Weekly roleplay minutes used. They renew at the '
+            'start of your next billing week.');
         _resetToPicker();
         return;
       }
@@ -1635,6 +1685,10 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         // Pro path — rolling weekly minute cap.
         if (await LocalStoreService.voiceCapReached()) {
           if (!mounted) return;
+          // TRIAL FIRST. He is inside the free trial, so there is no
+          // billing week to renew and nothing honest to sell him.
+          if (await _trialWallIfNeeded()) return;
+          if (!mounted) return;
           // ignore: discarded_futures
           AnalyticsService.freeflowVoiceCapHit();
           HapticFeedback.mediumImpact();
@@ -1644,7 +1698,14 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
           // more — and it was being spent on an apology. Now there's
           // something to sell, and if he declines he still gets the
           // honest renewal notice.
-          final bought = await ExtraSheet.show(context, remainingMinutes: 0);
+          // THE WALL gets the full-screen moment, not a sheet. He is
+          // mid-conversation and what he is buying is the rest of it,
+          // so it opens on HER. The SOFT NUDGE below deliberately stays
+          // a bottom sheet — a man with minutes left is still enjoying
+          // himself and a takeover there is the interruption the nudge
+          // exists to avoid.
+          final bought = await MinutesPaywall.show(context,
+              girlId: _vibe == null ? null : girlForVibe(_vibe!.key).id);
           if (!mounted) return;
           if (bought) {
             _beginHold();
@@ -1773,10 +1834,13 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
     if (pro) {
       if (await LocalStoreService.voiceCapReached()) {
         if (!mounted) return;
+        if (await _trialWallIfNeeded()) return;
+        if (!mounted) return;
         // ignore: discarded_futures
         AnalyticsService.freeflowVoiceCapHit();
         HapticFeedback.mediumImpact();
-        final bought = await ExtraSheet.show(context, remainingMinutes: 0);
+        final bought = await MinutesPaywall.show(context,
+            girlId: _vibe == null ? null : girlForVibe(_vibe!.key).id);
         if (!mounted) return;
         if (!bought) {
           _capNotice('Weekly roleplay minutes used. They renew at the '
@@ -2121,11 +2185,27 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
   Future<void> _persistGame(int scoreOutOfTen) async {
     final prefs = await SharedPreferences.getInstance();
     final next = (scoreOutOfTen * 10).clamp(0, 100);
-    // Always write the LATEST score so the home pillar reflects this
-    // session — not the user\'s all-time best, which made the home
-    // page feel stuck. Best is kept under a separate key for any
-    // future share / progress surface.
-    await prefs.setInt('game_score', next);
+
+    // ── ONLY AN UNHELPED REP MOVES THE GAME SCORE ─────────────────────
+    //
+    // YOUR GAME on the Reps screen is a measure of him, so it can only
+    // be fed by conversations he had on his own. Train is where Lucien
+    // hands him lines — a number earned with a ghostwriter measures the
+    // ghostwriter, and once it is in there he can never tell which of
+    // his scores were his.
+    //
+    // coachAllowed is the exact question, and it is already correct
+    // everywhere: the daily AI reps and both onboarding tests run with
+    // it false, Practice runs with it true, and the chat-to-voice
+    // hand-off inherits it so hopping out of a coached chat can't
+    // launder a score.
+    //
+    // The session still lands in the timeline and the personal best
+    // below — a coached rep is real practice and belongs in his
+    // history. It is only the headline number that stays clean.
+    if (!widget.coachAllowed) {
+      await prefs.setInt('game_score', next);
+    }
     final prev = prefs.getInt('game_score_best') ?? 0;
     if (next > prev) await prefs.setInt('game_score_best', next);
     final now = DateTime.now();
@@ -2148,6 +2228,63 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
 
   /// Weekly-cap notice — EXPLICIT white text so it can never render
   /// black-on-black (the invisible strip bro hit when credits ran out).
+  /// THE TRIAL WALL — an explanation, not a sale.
+  ///
+  /// A man in the free trial has had his one two-minute test and reached
+  /// for the orb again. That is the best possible signal, and the worst
+  /// possible moment to hand him a minute-pack checkout: he has already
+  /// agreed to pay us in three days, and selling him something now says
+  /// the subscription he just started is not enough. It also reads as a
+  /// bait — trial, then a second till.
+  ///
+  /// So he gets told the truth and nothing else: the test was the trial,
+  /// the full allowance starts when the subscription does. Returns true
+  /// when it handled the situation, so the callers can stop.
+  Future<bool> _trialWallIfNeeded() async {
+    if (!await TrialService.isTrial()) return false;
+    if (!mounted) return true;
+    // ignore: discarded_futures
+    AnalyticsService.freeflowVoiceCapHit();
+    HapticFeedback.mediumImpact();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface1,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: Text('Live voice is a paid feature',
+            style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.w900)),
+        content: Text(
+            'Talking to her in real time is not part of the free trial.\n\n'
+            'It unlocks the moment your first payment actually goes '
+            'through — not when the trial runs out. Once you are charged '
+            'you get ${LocalStoreService.kVoiceMinutesPerWeek} minutes of '
+            'live voice every week, with every woman on the roster.\n\n'
+            'Everything else is yours right now: unlimited texting, your '
+            'daily reps, your score and your missions. Go and train.',
+            style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.5,
+                fontWeight: FontWeight.w500)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('GOT IT',
+                style: GoogleFonts.inter(
+                    color: AppColors.red,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2)),
+          ),
+        ],
+      ),
+    );
+    return true;
+  }
+
   void _capNotice(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();

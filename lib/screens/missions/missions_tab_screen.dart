@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/analytics_service.dart';
 import '../../services/backend/catch_up_service.dart';
 import '../../services/backend/squad_broadcast.dart';
+import '../../services/game_test.dart';
 import '../../services/local_store_service.dart';
 import '../../services/mission_catalog.dart';
 import '../../services/mission_engine.dart';
@@ -28,7 +29,6 @@ import '../../widgets/academy/callout.dart';
 import '../../widgets/academy/rescue_sheet.dart';
 import '../../widgets/academy/shield_sheet.dart';
 import '../../widgets/academy/game_button.dart' show Burst;
-import '../../widgets/academy/squad_strip.dart';
 import '../../widgets/common/imhim_wordmark.dart';
 import '../../widgets/common/streak_badge.dart';
 import '../game/freeflow/free_flow_screen.dart';
@@ -58,6 +58,8 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
   Map<String, bool> _done = const {};
   int _xp = 0;
   int _streak = 0;
+  int? _voiceScore;
+  int? _chatScore;
   bool _loading = true;
 
   @override
@@ -130,6 +132,8 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
     }
     final xp = await LocalStoreService.xpTotal();
     final streak = await StreakService.current();
+    final voice = await LocalStoreService.voiceScore();
+    final chat = await LocalStoreService.chatScore();
     // Protection accrues from the exact behaviour it protects: one
     // shield per five consecutive days, capped at two.
     await ShieldService.accrue(streak);
@@ -139,6 +143,8 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
       _done = done;
       _xp = xp;
       _streak = streak;
+      _voiceScore = voice;
+      _chatScore = chat;
       _loading = false;
     });
   }
@@ -288,6 +294,23 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
       ),
     ));
     if (done == true) {
+      // ── SHOW HIM THE NUMBER ─────────────────────────────────────────
+      //
+      // THE REP WAS ALWAYS GRADED. It was never SHOWN. The chat ends,
+      // the girl-verdict ceremony plays, the screen pops — and the /100
+      // the text grader produced sat in ChatScoreService.lastResult with
+      // nothing on screen to draw it. From his side he did the rep and
+      // was never scored, which is exactly what he reported.
+      //
+      // Same reveal as the onboarding test, by the same code path, so
+      // the number he gets here and the number he got there mean the
+      // same thing. It also banks the score, which is what tops up CHAT
+      // on the card above — and _complete below reloads that card, so
+      // the top-up is on screen by the time he lands back here.
+      if (!mounted) return;
+      await GameTest.reveal(context,
+          kicker: 'YOUR REP', girl: girlById(m.girlId!));
+      if (!mounted) return;
       await _complete(m);
     } else {
       _notDone('Not completed — you have to actually run the conversation.');
@@ -423,10 +446,22 @@ class _MissionsTabScreenState extends State<MissionsTabScreen> {
           // home screen becomes a list. The squad is a crest on a flat
           // panel; battles is full-bleed photography gone almost black.
           // Same footprint, opposite texture.
+          // ── THE TWO SCORES, ABOVE EVERYTHING ───────────────────
+          //
+          // The squad crest stood here and has gone to Battles, where
+          // the other men are. What takes its place is the only thing
+          // on this screen that is purely HIS: what he scores on voice
+          // and what he scores on text, side by side in one frame.
+          //
+          // NO RETEST BUTTON. It is a scoreboard, not a launcher —
+          // every voice session and every chat already writes to it, so
+          // a button here would be a second door to something he does
+          // ten times a day anyway. The number is the hero; the way to
+          // change it is to go and talk to someone.
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.lg, 0),
-              child: const SquadStrip(),
+              child: _ScoreCard(voice: _voiceScore, chat: _chatScore),
             ),
           ),
           // BATTLES CAME OFF HOME when it took the third tab. A card
@@ -748,7 +783,7 @@ class _HeadingState extends State<_Heading> {
             textBaseline: TextBaseline.alphabetic,
             children: [
           Flexible(
-            child: Text('TODAY\'S MISSIONS', style: AppTypography.masthead),
+            child: Text('TODAY\'S REPS', style: AppTypography.masthead),
           ),
           if (total > 0) ...[
             const SizedBox(width: 12),
@@ -1041,5 +1076,101 @@ class _RealSheet extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+
+/// THE TWO SCORES. One rectangle, two numbers, no buttons.
+///
+/// Voice and text are graded on different rubrics and a man is rarely
+/// the same on both — which is the point of showing them together. A
+/// dash means he has not been scored on that surface yet; it is a gap in
+/// the record, not a zero, and it should read like one.
+class _ScoreCard extends StatelessWidget {
+  final int? voice;
+  final int? chat;
+  const _ScoreCard({required this.voice, required this.chat});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E0E12),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('YOUR GAME',
+            style: AppTypography.label.copyWith(
+              color: AppColors.textTertiary,
+              fontSize: 10,
+              letterSpacing: 2,
+            )),
+        const SizedBox(height: 12),
+        IntrinsicHeight(
+          child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                    child: _Half(
+                        label: 'VOICE',
+                        icon: Icons.graphic_eq_rounded,
+                        score: voice)),
+                Container(width: 1, color: Colors.white12),
+                Expanded(
+                    child: _Half(
+                        label: 'CHAT',
+                        icon: Icons.chat_bubble_rounded,
+                        score: chat)),
+              ]),
+        ),
+      ]),
+    );
+  }
+}
+
+class _Half extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final int? score;
+  const _Half({required this.label, required this.icon, required this.score});
+
+  @override
+  Widget build(BuildContext context) {
+    final has = score != null;
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(icon, size: 12, color: AppColors.textTertiary),
+        const SizedBox(width: 5),
+        Text(label,
+            style: AppTypography.label.copyWith(
+              color: AppColors.textTertiary,
+              fontSize: 10,
+              letterSpacing: 1.6,
+            )),
+      ]),
+      const SizedBox(height: 4),
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(has ? '$score' : '—',
+                  style: AppTypography.masthead.copyWith(
+                    color: has ? AppColors.red : AppColors.textTertiary,
+                    fontSize: 42,
+                    height: 1.0,
+                  )),
+              const SizedBox(width: 2),
+              Text('/100',
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textTertiary,
+                    fontSize: 11,
+                  )),
+            ]),
+      ),
+    ]);
   }
 }

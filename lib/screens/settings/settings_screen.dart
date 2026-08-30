@@ -13,6 +13,7 @@ import '../../services/creator_mode_store.dart';
 import '../../services/language_service.dart';
 import '../../services/face_asset_service.dart';
 import '../../services/local_store_service.dart';
+import '../../services/trial_service.dart';
 import '../../services/purchase_service.dart';
 import '../../services/rizz_memory_service.dart';
 import '../../services/win_back_service.dart';
@@ -173,6 +174,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // ── Usage tile — voice minutes this week ────────────────────
               const _VoiceCapTile(),
 
+              // ── THE BUILD STAMP ─────────────────────────────────────────
+              // Sits directly under the voice tile ON PURPOSE: the two
+              // things you need in the same screenshot are what the cap
+              // says and which binary said it. Without this we spent a
+              // day arguing about a fix that was not on the phone yet.
+              _SettingTile(
+                icon: Icons.tag_rounded,
+                title: 'Build $kBuildVersion ($kBuildNumber)',
+                subtitle: 'Check this before reporting anything',
+                // Tapping it dumps the whole store + voice-allowance
+                // state. This is the screen to send when the cap looks
+                // wrong: it shows what the store says the period is and
+                // what the app concluded from it, side by side, so the
+                // answer stops being a guess.
+                onTap: () async {
+                  final diag = await PurchaseService.diagnose();
+                  if (!context.mounted) return;
+                  await showDialog<void>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: Colors.black,
+                      title: Text('Build $kBuildVersion ($kBuildNumber)',
+                          style: const TextStyle(color: Colors.white)),
+                      content: SingleChildScrollView(
+                        child: SelectableText(diag,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontFamily: 'monospace',
+                                height: 1.4)),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(
+                                text: 'build $kBuildNumber\n$diag'));
+                            Navigator.of(ctx).pop();
+                          },
+                          child: const Text('COPY'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('CLOSE'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+
               // ── Privacy / AI consent ────────────────────────────────────
               _SettingTile(
                 icon: Icons.cloud_off_outlined,
@@ -194,6 +245,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // disappeared from the UI. Bro: "where did creator mode go
               // out of settings, that's my main feature add it back."
               const _CreatorTile(),
+
+              // ── TRIAL RIG — creator only, never visible to a user ──────
+              // Testing the trial cap through the real store is slow and
+              // unreliable: sandbox Apple IDs remember intro-offer
+              // eligibility, so the second run through is often a
+              // FULL-PRICE purchase reporting periodType.normal, and 14
+              // minutes is then correct behaviour that looks exactly like
+              // the bug. This forces the app's own trial state so the
+              // ledger, the cap, the wall and the Settings tile can all
+              // be verified in a minute with no purchase at all.
+              const _TrialRigTile(),
 
               // ── Delete all data — destructive, sits low ────────────────
               _SettingTile(
@@ -615,6 +677,8 @@ class _VoiceCapTile extends StatefulWidget {
 class _VoiceCapTileState extends State<_VoiceCapTile> {
   int _usedMs = 0;
   bool _pro   = false;
+  /// Inside the store's free trial — a different, much smaller budget.
+  bool _trial = false;
   bool _loaded = false;
   /// v279 — wall-clock date when the user's rolling cap window
   /// next resets. Surfaced in the tile copy so over-cap users see
@@ -630,11 +694,26 @@ class _VoiceCapTileState extends State<_VoiceCapTile> {
   }
 
   Future<void> _load() async {
-    final ms  = await LocalStoreService.voiceMsThisWeek();
+    // ── THIS TILE WAS TRIAL-BLIND, AND IT READ AS A LEAK ──────────────
+    //
+    // It showed the weekly bucket against the 14-minute Pro ceiling for
+    // EVERYONE, so a man inside the 3-day trial — who has exactly one
+    // 2-minute test — opened Settings and was told "14:00 left of
+    // 14:00". Whatever the ledger was actually doing, the app was
+    // telling him he had a fortnight of voice.
+    //
+    // In trial it now reports the trial budget, because that is the
+    // number that is actually being enforced at the gate
+    // (LocalStoreService.voiceMsRemaining takes the same branch).
+    final trial = await TrialService.isTrial();
+    final ms  = trial
+        ? await TrialService.usedMs()
+        : await LocalStoreService.voiceMsThisWeek();
     final pro = await LocalStoreService.isSubscribed();
     final at  = await LocalStoreService.nextCapResetAt();
     if (!mounted) return;
     setState(() {
+      _trial  = trial;
       _usedMs = ms;
       _pro    = pro;
       _loaded = true;
@@ -669,33 +748,53 @@ class _VoiceCapTileState extends State<_VoiceCapTile> {
 
   @override
   Widget build(BuildContext context) {
-    final capMs = LocalStoreService.kVoiceMinutesPerWeek * 60 * 1000;
+    // THE CAP THIS MAN IS ACTUALLY UNDER, not the one the paid tier
+    // gets. In trial that is the single test; otherwise the weekly Pro
+    // ceiling.
+    final capMinutes = _trial
+        ? TrialService.trialVoiceMinutes
+        : LocalStoreService.kVoiceMinutesPerWeek;
+    final capMs = capMinutes * 60 * 1000;
+    final capLabel = '$capMinutes:00';
     final remainingMs = (capMs - _usedMs).clamp(0, capMs);
-    final pct = _loaded ? (_usedMs / capMs).clamp(0.0, 1.0) : 0.0;
+    // GUARD THE DIVISION. The trial budget is zero now, and 0/0 is NaN —
+    // which is not a crash but a bar that renders as nothing and a
+    // clamp that silently misbehaves. Zero cap means locked, and locked
+    // draws as a full bar.
+    final pct = !_loaded
+        ? 0.0
+        : capMs == 0
+            ? 1.0
+            : (_usedMs / capMs).clamp(0.0, 1.0);
     final overCap = _usedMs >= capMs;
     final color = overCap ? AppColors.signalRed : AppColors.accent;
 
     return _SettingTile(
       icon: Icons.mic_rounded,
-      title: 'Roleplay voice — this week',
+      title: _trial
+          ? 'Live voice — paid feature'
+          : 'Roleplay voice — this week',
       subtitle: !_loaded
           ? 'Loading…'
-          : _pro
-              ? (overCap
-                  ? 'Capped — resets ${_resetCopy()}'
-                  : '${_fmt(remainingMs)} left of '
-                    '${LocalStoreService.kVoiceMinutesPerWeek}:00')
-              : 'Pro unlocks ${LocalStoreService.kVoiceMinutesPerWeek}'
-                ' minutes a week',
+          : _trial
+              ? 'Locked during the trial — unlocks when your first '
+                'payment goes through'
+              : _pro
+                  ? (overCap
+                      ? 'Capped — resets ${_resetCopy()}'
+                      : '${_fmt(remainingMs)} left of $capLabel')
+                  : 'Pro unlocks ${LocalStoreService.kVoiceMinutesPerWeek}'
+                    ' minutes a week',
       trailing: SizedBox(
         width: 70,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(_pro
-                    ? '${_fmt(_usedMs)} / '
-                      '${LocalStoreService.kVoiceMinutesPerWeek}:00'
-                    : '0 / ${LocalStoreService.kVoiceMinutesPerWeek}:00',
+            Text(_trial
+                    ? 'LOCKED'
+                    : _pro
+                        ? '${_fmt(_usedMs)} / $capLabel'
+                        : '0 / $capLabel',
                 style: AppTypography.label.copyWith(
                   color: color,
                   fontSize: 11, letterSpacing: 0.6,
@@ -1010,6 +1109,106 @@ class _CreatorTileState extends State<_CreatorTile> {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+/// THE TRIAL RIG. Creator-mode only, and it does not exist for anyone
+/// else — the tile renders as a zero-size box unless creator mode is on,
+/// which takes the creator password to enable.
+///
+/// It writes the app's own trial state directly, which is the ONLY thing
+/// the voice cap reads. So it exercises the real gate, the real ledger,
+/// the real wall and the real Settings tile, without a purchase and
+/// without waiting on a store.
+///
+/// What it cannot test is whether RevenueCat correctly REPORTS a trial —
+/// that is a store question and the build row's diagnostic answers it.
+/// Between the two there is nothing left to guess at.
+class _TrialRigTile extends StatefulWidget {
+  const _TrialRigTile();
+  @override
+  State<_TrialRigTile> createState() => _TrialRigTileState();
+}
+
+class _TrialRigTileState extends State<_TrialRigTile> {
+  bool _creator = false;
+  bool _trial = false;
+  int _usedMs = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // ignore: discarded_futures
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final c = await CreatorModeStore.isActive();
+    final t = await TrialService.isTrial();
+    final u = await TrialService.usedMs();
+    if (!mounted) return;
+    setState(() {
+      _creator = c;
+      _trial = t;
+      _usedMs = u;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_creator) return const SizedBox.shrink();
+    final left = (TrialService.trialVoiceMs - _usedMs).clamp(0, 1 << 30);
+    return _SettingTile(
+      icon: Icons.science_outlined,
+      iconColor: AppColors.signalAmber,
+      title: 'Trial rig — ${_trial ? "IN TRIAL" : "full price"}',
+      subtitle: 'Trial voice left: ${left ~/ 1000}s of '
+          '${TrialService.trialVoiceMs ~/ 1000}s · tap to switch',
+      onTap: () async {
+        HapticFeedback.mediumImpact();
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: AppColors.surface1,
+            title: const Text('Trial rig',
+                style: TextStyle(color: Colors.white)),
+            content: const Text(
+                'Forces the app-side trial state so the cap can be '
+                'tested without a purchase.\n\n'
+                'FORCE TRIAL then open voice: it must allow one session '
+                'of the trial length, then show the trial wall and never '
+                'the weekly allowance.',
+                style: TextStyle(color: Color(0xFFA8A8B2), fontSize: 13)),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  await TrialService.setTrial(true);
+                  await TrialService.resetUsedForTesting();
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                },
+                child: const Text('FORCE TRIAL'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await TrialService.setTrial(false);
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                },
+                child: const Text('FORCE PAID'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await TrialService.clearResolved();
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                },
+                child: const Text('CLEAR'),
+              ),
+            ],
+          ),
+        );
+        await _refresh();
+      },
     );
   }
 }

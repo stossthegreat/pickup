@@ -173,7 +173,7 @@ class _PracticeTabScreenState extends State<PracticeTabScreen> {
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
-                        child: Text('PRACTICE',
+                        child: Text('TRAIN',
                             maxLines: 1,
                             style: AppTypography.masthead),
                       ),

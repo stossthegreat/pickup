@@ -62,6 +62,31 @@ class PurchaseConfig {
   /// The entitlement identifier that grants Mirrorly Pro. Configured
   /// in RevenueCat dashboard → Entitlements. Both weekly and annual
   /// subscriptions attach to this entitlement.
+  /// ══════════════════════════════════════════════════════════════════
+  ///  THE FREE TRIAL, OFF
+  /// ══════════════════════════════════════════════════════════════════
+  ///
+  /// One switch, and it turns the whole thing off together: the copy
+  /// that promises a trial, the trial voice budget, the "voice unlocks
+  /// when you pay" wall, and the fail-closed trial detection that goes
+  /// with them.
+  ///
+  /// WHY IT IS OFF. Every failure in the subscription layer traced back
+  /// to one question — is this entitlement a trial or a full period —
+  /// and the stores answer it inconsistently: periodType came back
+  /// `normal` for a man three seconds into a trial, and sandbox
+  /// compresses durations so hard that a 7-day weekly measures as
+  /// minutes. With no trial there is no question. The gate is "has he
+  /// paid", which is the one thing that has never been wrong.
+  ///
+  /// The weekly tier already does the job a trial was there to do: it
+  /// is cheap enough to be the low-commitment way in, and it pays.
+  ///
+  /// TO TURN IT BACK ON: set this true AND add the introductory offer
+  /// back in App Store Connect. Both, or the app promises something the
+  /// store will not honour. Everything else re-arms itself.
+  static const bool freeTrialEnabled = false;
+
   static const proEntitlementId = 'pro';
 
   /// Product identifiers — MUST match exactly what's in App Store
@@ -77,10 +102,24 @@ class PurchaseConfig {
   ///                             approved on App Store Connect)
   static const productIds = (
     weekly:  'imhim_pro_weekly',   // ImHim weekly sub (primary)
+    // NEW — the annual tier. Matched on this EXACT id and nothing else.
+    // The stores still carry the legacy `mirrorly_pro_yearly`, which
+    // long-standing subscribers keep access through but which must
+    // never be sold again; a `contains('year')` match would pick it up
+    // and charge someone for the wrong product, so the matcher in
+    // PurchaseService compares the whole string.
+    // THE TRIAL LIVES ON MONTHLY, NOT WEEKLY. A 3-day free trial in
+    // front of a WEEKLY sub gives away nearly half the first billing
+    // period; in front of a monthly it is a tenth of it. It is also the
+    // tier we actually want him on — 34% cheaper per week than weekly,
+    // and it survives the first Sunday he forgets to open the app.
+    monthly: 'imhim_pro_monthly',
+    annual:  'imhim_pro_annual',
     yearly:  'mirrorly_pro_yearly',
     rescue:  'mirrorly_pro_rescue',
     extra10: 'imhim_extra_10',     // 10 voice minutes, consumable
     extra20: 'imhim_extra_20',     // 20 voice minutes, consumable
+    extra60: 'imhim_extra_60',     // 60 voice minutes, consumable
   );
 
   // ── EXTRA — voice-minute packs ──────────────────────────────────────
@@ -105,6 +144,10 @@ class PurchaseConfig {
   static const extraMinutes = <String, int>{
     'imhim_extra_10': 10,
     'imhim_extra_20': 20,
+    // The pack for the man who has already run out twice. He is the
+    // highest-intent buyer the app will ever have and 20 minutes was
+    // the ceiling on what he could give us.
+    'imhim_extra_60': 60,
     'mirrorly_pro_rescue': 20,
   };
 
@@ -122,10 +165,12 @@ class PurchaseConfig {
   /// row shows `mirrorly_pro_rescue:rescue`).
   static const offering = (
     weeklyPackage:  '\$rc_weekly',
+    monthlyPackage: '\$rc_monthly',
     annualPackage:  '\$rc_annual',
     rescuePackage:  'rescue',
     extra10Package: 'extra10',
     extra20Package: 'extra20',
+    extra60Package: 'extra60',
   );
 
   /// Convenience — true only when RevenueCat is [enabled] AND keys are

@@ -6,17 +6,24 @@ publish_to: 'none'
 # this one line and nothing else — there is no codemagic.yaml, the build
 # is configured in the Codemagic UI.
 #
-# 1.0.0 was APPROVED on the App Store, which permanently CLOSES that
-# train: Apple then rejects every further upload against it, whatever the
-# build number, with 90186 "train version is closed for new build
-# submissions" and 90062 "must contain a higher version than the
-# previously approved version". Build 226 compiled and archived fine and
-# still failed at upload for exactly this.
+# APPROVAL CLOSES A TRAIN, PERMANENTLY. Once a version is approved,
+# Apple rejects every further upload against it whatever the build
+# number, with 90186 "train version is closed for new build submissions"
+# and 90062 "must contain a higher version than the previously approved
+# version". Both 1.0.0 (build 226) and 1.1.0 (build 235) compiled and
+# archived perfectly and still failed at UPLOAD for exactly this.
 #
-# So the LEFT side has to move for any new TestFlight or release build.
-# The build number only has to be unique within its own train, so it just
-# keeps climbing.
-version: 1.1.0+227
+# So this is not a one-off fix, it is the rhythm: every time a version
+# gets approved, the LEFT side moves once and the build number keeps
+# climbing from wherever it is. The build number only has to be unique
+# within its own train.
+#
+#   1.0.0  approved -> closed   (opened 1.1.0 at build 226)
+#   1.1.0  approved -> closed   (opened 1.2.0 at build 235)
+#
+# If a build fails at Publishing with those two codes and nothing else,
+# this line is the whole fix — there is nothing wrong with the code.
+version: 1.2.0+265
 
 environment:
   sdk: ^3.8.0

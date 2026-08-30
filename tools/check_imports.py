@@ -27,6 +27,16 @@ for total trust in what it does report.
 """
 import re, os, sys, glob, collections
 
+# Top-level FUNCTIONS, e.g. `GirlBrief girlForVibe(String k) =>`.
+# Only matters for bare calls — `girlForVibe(...)` has no dot, so the
+# `Symbol.` scan below is blind to it. That blindness let a call to an
+# unimported top-level function into free_flow_screen; the analyzer
+# would have caught it, but the analyzer is Codemagic, five minutes and
+# one failed archive away.
+FUNC_RE = re.compile(
+    r'^(?!import|export|part|return|if|for|while|switch|catch)'
+    r'[A-Za-z_][\w<>,?\[\] ]*?\s+([a-z]\w*)\s*\(', re.M)
+
 DEF_RE = re.compile(
     r'^(?:abstract\s+final\s+|abstract\s+|final\s+|sealed\s+|base\s+'
     r'|interface\s+|mixin\s+)*'
@@ -120,6 +130,28 @@ def main() -> int:
             defs[m.group(1)].add(f)
     uniq = {k: next(iter(v)) for k, v in defs.items() if len(v) == 1}
 
+    # Same collection for top-level functions, kept in its own map so a
+    # name that is also a method somewhere can be excluded without
+    # weakening the type scan.
+    funcs = collections.defaultdict(set)
+    for f in files:
+        for m in FUNC_RE.finditer(open(f).read()):
+            funcs[m.group(1)].add(f)
+    ufuncs = {k: next(iter(v)) for k, v in funcs.items() if len(v) == 1}
+
+    # RE-EXPORTS. `export 'x.dart' show foo;` makes foo visible to
+    # anyone importing THIS file, so importing the re-exporter is a
+    # legitimate way to reach the symbol. Without following these the
+    # scan reports files that compile perfectly well — and a checker
+    # that cries wolf is one nobody reads.
+    reexport = collections.defaultdict(set)
+    for f in files:
+        for m in re.finditer(r"^export\s+'([^']+)'", open(f).read(), re.M):
+            t = m.group(1)
+            if t.startswith(('package:', 'dart:')):
+                continue
+            reexport[f].add(os.path.normpath(os.path.join(os.path.dirname(f), t)))
+
     seen, bad = set(), 0
     for f in files:
         src = open(f).read()
@@ -132,6 +164,25 @@ def main() -> int:
             if p.startswith(('package:', 'dart:')):
                 continue
             imported.add(os.path.normpath(os.path.join(os.path.dirname(f), p)))
+        # …plus whatever those imports re-export, one level deep, which
+        # is as far as this pattern is ever used here.
+        for direct in list(imported):
+            imported |= reexport.get(direct, set())
+
+        # Bare calls to top-level functions. `(?<![.\w$])` keeps method
+        # calls (`x.foo()`), named args (`foo: bar`) and declarations
+        # out of it.
+        for m in re.finditer(r'(?<![.\w$])([a-z]\w*)\s*\(', body):
+            fn = m.group(1)
+            home = ufuncs.get(fn)
+            if home is None or home == f or home in imported:
+                continue
+            if (f, fn) in seen:
+                continue
+            seen.add((f, fn))
+            bad += 1
+            print(f'MISSING IMPORT  {f}\n'
+                  f'                calls {fn}() → add {home}')
 
         for m in re.finditer(r'\b([A-Z]\w+)\s*\.', body):
             sym = m.group(1)

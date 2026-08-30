@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/local_store_service.dart';
 import '../../services/backend/auth_service.dart';
 import '../../services/backend/tiers.dart';
 import '../../theme/app_colors.dart';
@@ -48,6 +49,8 @@ class _HandleScreenState extends State<HandleScreen> {
   @override
   void initState() {
     super.initState();
+    // ignore: discarded_futures
+    LocalStoreService.setOnbStep('/onboarding/handle');
     _prefill();
     _ctrl.addListener(_onChanged);
   }
@@ -131,16 +134,19 @@ class _HandleScreenState extends State<HandleScreen> {
       }
       return;
     }
+    // ignore: discarded_futures
     _done();
   }
 
-  void _done() {
+  Future<void> _done() async {
     if (widget.onboarding) {
-      // Straight to the squad pitch, not home. He has to know squads
-      // exist before he starts or the whole social layer may as well not
-      // ship — nobody hunts through a menu for something they were never
-      // told about. It's one page and the skip is real.
-      context.go('/onboarding/plan');
+      // THE END OF THE FUNNEL, AND THE ONLY PLACE IT IS STAMPED.
+      // He has an account and a name, which is the minimum this app needs
+      // to work. Setting the flag here (and clearing the resume marker
+      // with it) is what stops the next launch reopening the story.
+      await LocalStoreService.setOnboarded(true);
+      if (!mounted) return;
+      context.go('/home');
     } else {
       context.pop();
     }
@@ -291,6 +297,7 @@ class _HandleScreenState extends State<HandleScreen> {
               TextButton(
                 onPressed: () {
                   HapticFeedback.selectionClick();
+                  // ignore: discarded_futures
                   _done();
                 },
                 child: Text(

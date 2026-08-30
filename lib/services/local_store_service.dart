@@ -2,11 +2,14 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'extra_service.dart';
 import '../models/scan_record.dart';
+import 'trial_service.dart';
 
 /// v279 — active Pro subscription type. Lives here (not in
 /// PurchaseService) so LocalStoreService can read it for cap-window
 /// decisions without creating a circular import.
-enum ProTier { none, weekly, annual }
+/// Persisted BY NAME (see setCachedTier), so new values can be appended
+/// safely — an unknown stored name falls back to `none`.
+enum ProTier { none, weekly, monthly, annual }
 
 /// Single source of truth for everything persisted on-device.
 ///
@@ -25,6 +28,10 @@ class LocalStoreService {
   static const _kActiveProto  = 'protocol.active.v1';
   static const _kSubscribed   = 'subscription.active.v1';
   static const _kOnboarded    = 'onboarded.v1';
+  static const _kOnbStep      = 'onboarding.step.v1';
+  static const _kChatScore    = 'game.score.v1';
+  /// Written by the voice screen's _persistGame, out of 100.
+  static const _kVoiceScore   = 'game_score';
   /// AI third-party data sharing consent (App Store guideline 5.1.2(i)).
   /// User must explicitly tap ALLOW in [AiConsentDialog] before the
   /// scan flow transmits the selfie photo to OpenAI / Replicate.
@@ -505,9 +512,18 @@ class LocalStoreService {
     return anchor;
   }
 
-  /// v279 — window length for the current Pro tier. Annual subs reset
-  /// every 30 days, everyone else (weekly + free) every 7. Reads the
-  /// cached tier so this stays synchronous.
+  /// Window length for the current Pro tier.
+  ///
+  /// ANNUAL resets every 30 days. EVERYONE ELSE — monthly, weekly and
+  /// free — resets every 7, and monthly is on the weekly window
+  /// deliberately rather than by omission.
+  ///
+  /// A 30-day window for a monthly sub would hand him the whole budget
+  /// on day one, which is worse for him and worse for us: he burns it
+  /// in a weekend, has nothing for three weeks, and churns. The seven-
+  /// day reset paces the spend and gives him a reason to come back next
+  /// week, which is the entire retention mechanic. Same total minutes
+  /// either way — about 60 a month — just spread so they keep working.
   static Future<int> _windowMs(SharedPreferences prefs) async {
     final tier = await cachedTier();
     return tier == ProTier.annual ? _kMonthMs : _kWeekMs;
@@ -648,6 +664,25 @@ class LocalStoreService {
   /// someone in the direction of "you got less than you thought".
   static Future<void> addVoiceMs(int deltaMs) async {
     if (deltaMs <= 0) return;
+    // TRIAL SPENDS ITS OWN BUDGET FIRST. During the store's free trial
+    // the `pro` entitlement is active, so without this branch a trial
+    // user would spend the full paid weekly allowance — a free week of
+    // the only expensive feature in the app. TrialService.spend returns
+    // whatever it could not cover, which falls through to the paid
+    // paths below so a man who BOUGHT an EXTRA pack mid-trial can still
+    // speak the minutes he paid for.
+    if (await TrialService.isTrial()) {
+      final leftover = await TrialService.spend(deltaMs);
+      // ANYTHING BEYOND THE TRIAL MINUTE COMES OUT OF MINUTES HE BOUGHT,
+      // AND NOTHING ELSE. Falling through to the paid weekly allowance —
+      // which the first version of this did — handed a trial user one
+      // trial minute PLUS the full fourteen, i.e. a free week of the
+      // only expensive feature in the app, to everyone who never
+      // intended to pay. The bank is the one pool a trial user can
+      // legitimately draw on, because he paid cash for it.
+      if (leftover > 0) await ExtraService.spend(leftover);
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     final bucket = _rollingBucket(await _capAnchor(prefs), await _windowMs(prefs));
     final stored = prefs.getInt(_kVoiceWeekBucket) ?? 0;
@@ -668,6 +703,11 @@ class LocalStoreService {
   /// Every millisecond he can still speak — free allowance plus bank.
   static Future<int> voiceMsRemaining() async {
     if (await isCreatorActive()) return 1 << 30;
+    // In trial: the one trial minute, plus anything he actually bought.
+    // Deliberately NOT the weekly allowance — see TrialService.
+    if (await TrialService.isTrial()) {
+      return await TrialService.remainingMs() + await ExtraService.bankedMs();
+    }
     final used = await voiceMsThisWeek();
     final weeklyCapMs = kVoiceMinutesPerWeek * 60 * 1000;
     final weeklyLeft = (weeklyCapMs - used).clamp(0, weeklyCapMs);
@@ -710,6 +750,65 @@ class LocalStoreService {
   static Future<void> setOnboarded(bool v) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kOnboarded, v);
+    // Finishing clears the resume marker. Leaving it behind would send a
+    // finished user back into the funnel on his next launch.
+    if (v) await prefs.remove(_kOnbStep);
+  }
+
+  // ── Onboarding resume point ─────────────────────────────────────────────
+  //
+  // WHY THIS EXISTS. `onboarded` is a single bool, and it was only ever
+  // set at the far end of the funnel. Anyone who closed the app partway
+  // through — which is everyone who read the paywall and thought about
+  // it — relaunched to beat one of the story and had to walk the whole
+  // thing again. That is the "it always goes back to page one" bug, and
+  // it also meant a man could never reach the sign-in and handle screens
+  // that live AFTER the price.
+  //
+  // Each onboarding screen stamps its own route here as it opens, so a
+  // relaunch resumes exactly where he stopped. The splash validates the
+  // value against a whitelist before it routes anywhere, so a renamed or
+  // stale route can never dead-end the app.
+  static Future<String?> onbStep() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getString(_kOnbStep);
+    return (v == null || v.isEmpty) ? null : v;
+  }
+
+  static Future<void> setOnbStep(String route) async {
+    final prefs = await SharedPreferences.getInstance();
+    // Never re-arm the funnel for someone who has already finished it.
+    if (prefs.getBool(_kOnboarded) == true) return;
+    await prefs.setString(_kOnbStep, route);
+  }
+
+  // ── THE TWO SCORES ──────────────────────────────────────────────────────
+  //
+  // His last scored rep on each surface, out of 100. Kept because a score
+  // he saw once and can never look at again is a fact about a
+  // conversation; a score that sits on his screen is a number he wants to
+  // beat. Null until he has been scored there, which is also how we know
+  // whether he has.
+  //
+  // The VOICE key is the one the voice screen has always written from
+  // _persistGame — not a new one. Two keys for the same number is how a
+  // scoreboard ends up disagreeing with the screen that produced it.
+  static Future<int?> chatScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_kChatScore);
+  }
+
+  static Future<void> setChatScore(int v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kChatScore, v);
+  }
+
+  static Future<int?> voiceScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getInt(_kVoiceScore);
+    // The voice screen seeds 0 before a real session exists; zero is "not
+    // scored yet" here, not a score of nought.
+    return (v == null || v <= 0) ? null : v;
   }
 
   // ── AI third-party data sharing consent ─────────────────────────────────

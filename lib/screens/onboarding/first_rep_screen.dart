@@ -4,11 +4,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../services/backend/chat_score_service.dart';
+import '../../services/game_test.dart';
+import '../../services/local_store_service.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/academy/rizz_off_reveal.dart';
-import '../roleplay/girl_chat_screen.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
 ///  THE FIRST REP — the last screen before the app stops talking.
@@ -41,118 +40,26 @@ class _FirstRepScreenState extends State<FirstRepScreen> {
   /// stops working the moment the rep is under way.
   bool _busy = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // ignore: discarded_futures
+    LocalStoreService.setOnbStep('/onboarding/first-rep');
+  }
+
   Future<void> _start(BuildContext context) async {
     if (_busy) return;
     _busy = true;
     HapticFeedback.mediumImpact();
-    final g = girlById('into_you');
-    await Navigator.of(context, rootNavigator: true).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => GirlChatScreen(
-          config: GirlChatConfig(
-            characterId: g.id,
-            vibeKey: g.vibeKey,
-            name: g.name,
-            archetype: g.archetype,
-            portraitAsset: g.asset,
-            accent: g.accent,
-            opener: g.opener,
-            // A REP, NOT A DEMO. taskMode gives the completion bar and
-            // the real ending.
-            taskMode: true,
-            taskGoal: 5,
-            scoreSurface: 'first_rep',
-            // ASK LUCIEN, ON. This defaults to FALSE and the first build
-            // of this screen never set it — so the one beat the whole
-            // funnel promises ("stuck? tap Lucien") was missing from the
-            // only place it had to appear.
-            coachAllowed: true,
-            // This screen owns the ending: the /100 with the five axes,
-            // not the girl-verdict ceremony. A man being sold on the
-            // score has to actually SEE a score.
-            verdictOnFinish: false,
-            // THE REP MUST REACH ITS SCORE. Five messages against a
-            // three-message allowance meant the paywall landed on
-            // message four, mid-conversation — the funnel closing on a
-            // man who was interrupted instead of convinced. Exempt at
-            // the call site only; the gate itself is untouched.
-            bypassTextCap: true,
-          ),
-        ),
-      ),
-    );
+    // ONE SCORING PATH FOR THE WHOLE APP. Everything that used to live
+    // inline here — the rep config, the wait on the parked grade, the
+    // reveal with the chat axes — is GameTest.run now, so the test he
+    // takes on the Train screen is byte-for-byte the one he took here.
+    await GameTest.run(context, surface: 'first_rep', kicker: 'YOUR FIRST REP');
     if (!mounted) return;
-
-    // ── SHOW HIM THE NUMBER ───────────────────────────────────────────
-    //
-    // The grade is fired without await from the chat's teardown, so the
-    // result is often still in the air the instant this screen comes
-    // back. Reading it now and shrugging is how a man who ran the whole
-    // rep gets no score — the single most valuable screen in the funnel,
-    // lost to a race. So we wait for the parked future, capped, and only
-    // then give up.
-    var r = ChatScoreService.lastResult;
-    if (r == null && ChatScoreService.grading != null) {
-      // No setState — nothing on this screen renders off _busy, and a
-      // rebuild while a route is mid-transition buys only risk.
-      try {
-        await ChatScoreService.grading!.timeout(const Duration(seconds: 20));
-      } catch (_) {/* slow or dead network — fall through to the price */}
-      r = ChatScoreService.lastResult;
-    }
-    if (!mounted) return;
-
-    if (r != null) {
-      ChatScoreService.lastResult = null;
-      // A FINAL binding before the closure. `r` is reassignable (the
-      // wait above rewrites it), and Dart refuses to null-promote an
-      // assigned local inside a closure — so r.score in the dialog's
-      // pageBuilder would be a compile error, not a runtime one. This
-      // exact trap failed an iOS archive earlier in the week.
-      final res = r;
-      final g = girlById('into_you');
-      await showGeneralDialog<void>(
-        context: context,
-        barrierColor: Colors.black,
-        barrierDismissible: false,
-        barrierLabel: 'first-rep',
-        transitionDuration: const Duration(milliseconds: 320),
-        pageBuilder: (_, __, ___) => RizzOffReveal(
-          score: res.score,
-          // The grade bands are cut against the 0..9999 rubric, so the
-          // 0..100 chat score is put back on that band for the LETTER
-          // only. The number on screen stays out of 100.
-          gradeScore: (res.score * 99.99).round(),
-          rubric: res.rubric,
-          rankToday: 0,
-          worldAvg: res.average,
-          girlName: g.name,
-          girlAccent: g.accent,
-          divisor: 1,
-          decimals: 0,
-          suffix: '/ 100',
-          kicker: 'YOUR FIRST REP',
-          // THE FIVE BARS THAT ALL READ ZERO.
-          //
-          // RizzOffReveal defaults to the VOICE axes. This is a TEXT
-          // score, graded on a different five entirely, so without
-          // these the reveal looked up confidence/flow/wit/recovery/
-          // close, found none of them, and animated five bars to 0 —
-          // then showed him a real number out of 100 underneath. On the
-          // first rep in onboarding, which is the screen the whole
-          // funnel is built to reach.
-          axes: kChatAxes,
-          axisLabels: kChatAxisLabels,
-        ),
-        transitionBuilder: (_, a, __, child) =>
-            FadeTransition(opacity: a, child: child),
-      );
-    }
-    if (!mounted) return;
-    // Scored or bailed, the funnel ends the same way: at the price. A
-    // man who quit his first rep after two lines is not a man to send
-    // to a home screen he has no reason to open again.
-    context.go('/paywall');
+    // Now the account. He has a score, and "claim it" is a far better
+    // reason to sign in than "sign in to continue" ever was.
+    context.go('/onboarding/consent');
   }
 
   /// THE WAY OUT, AND IT STILL ENDS AT THE PRICE.
@@ -165,7 +72,11 @@ class _FirstRepScreenState extends State<FirstRepScreen> {
   void _skip() {
     if (_busy) return;
     HapticFeedback.selectionClick();
-    context.go('/paywall');
+    // He has already paid by the time he sees this. Skipping the test
+    // must not send him back to a price he has settled.
+    // Now the account. He has a score, and "claim it" is a far better
+    // reason to sign in than "sign in to continue" ever was.
+    context.go('/onboarding/consent');
   }
 
   @override
@@ -235,9 +146,11 @@ class _FirstRepScreenState extends State<FirstRepScreen> {
                   .fadeIn(delay: 320.ms, duration: 480.ms)
                   .slideY(begin: 0.06, end: 0),
               const SizedBox(height: 16),
-              Text('Five messages. She is into you already, so this is the '
-                      'easy one — and you still get scored on it.\n\n'
-                      'Stuck? Tap Lucien. He will hand you the line.',
+              Text('Five messages. She is into you already, so this is '
+                      'the easy one — and you still get scored on it.\n\n'
+                      'No coach on a test. Nobody is going to hand you a '
+                      'line in here — get your number first, then take it '
+                      'to Train and Lucien will work on it with you.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
                         color: Colors.white.withValues(alpha: 0.74),

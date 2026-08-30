@@ -2,18 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
 import '../../config/dev_flags.dart';
+import '../../config/purchase_config.dart';
 import '../../services/analytics_service.dart';
 import '../../services/local_store_service.dart';
 import '../../services/purchase_service.dart';
 import '../../services/review_prompt_service.dart';
 import '../../services/win_back_service.dart';
 import '../../theme/app_colors.dart';
+import '../../services/trial_service.dart';
 
 /// ImHim paywall — "paywall-final" carousel.
 ///
@@ -55,7 +56,7 @@ class PaywallScreen extends StatefulWidget {
 // Weekly is the only sellable tier now. Annual + rescue remain in the
 // enum so the offerings plumbing / analytics stay intact, but the UI
 // only ever surfaces and purchases weekly.
-enum _Tier { weekly, annual, rescue }
+enum _Tier { weekly, monthly, annual, rescue }
 
 // Per-panel header copy — (headline, subhead). 1:1 with the mock.
 const List<(String, String)> _copy = [
@@ -75,19 +76,20 @@ const Color _tile = Color(0xFF111113);
 class _PaywallScreenState extends State<PaywallScreen> {
   PurchaseOfferings _offerings = PurchaseOfferings.empty();
   bool _purchasing = false;
+  /// Defaults FALSE, deliberately. Until we've read the flag we show
+  /// the paid copy — over-promising a trial reads as a bait; under-
+  /// promising is a slightly duller headline for half a second.
+  bool _trialEligible = false;
+  /// Monthly by default — it is the tier the trial is attached to and
+  /// the one we want him on. Falls back to weekly in _pickDefault() if
+  /// the store never delivered a monthly package.
+  _Tier _picked = _Tier.monthly;
 
-  final PageController _pager = PageController();
-  static const int _panelCount = 3;
-  int _page = 0;
-  final Set<int> _visited = {0};
 
   // Auto-tour state.
-  Timer? _tourTimer;
-  bool _interacted = false;
 
   // Drives the ladder climb on panel 5 — bumped each time that panel
   // becomes visible so the sub-widget restarts its animation.
-  int _ladderRun = 0;
 
   @override
   void initState() {
@@ -122,8 +124,23 @@ class _PaywallScreenState extends State<PaywallScreen> {
     AnalyticsService.paywallShown(
         (widget.context?['afterPurchase'] as String?) ?? 'standalone');
     _loadOfferings();
-    _startTour();
     _autoUnlockIfAlreadyPro();
+  }
+
+  Future<void> _loadOfferings() async {
+    final off = await PurchaseService.loadOfferings();
+    // Both stores allow one intro offer per subscription group, ever. A
+    // device that has already been in a trial is not getting another, so
+    // do not advertise one to it.
+    final eligible = !(await TrialService.everStarted());
+    if (!mounted) return;
+    setState(() {
+      _offerings = off;
+      _trialEligible = eligible;
+      // Never sit on a tier the store did not deliver — the CTA would be
+      // a button that cannot transact.
+      if (off.monthly == null && off.weekly != null) _picked = _Tier.weekly;
+    });
   }
 
   /// SELF-HEALING GATE. If this user ALREADY has an active subscription
@@ -142,7 +159,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
       // isProLive already repainted the local cache to true. Forward
       // exactly like a fresh purchase so scan-gated / unlock-in-place
       // context is honoured.
-      await LocalStoreService.setOnboarded(true);
+      await _markOnboarded();
       if (!mounted) return;
       _snack('Subscription active — unlocked.');
       _forwardOnSuccess();
@@ -151,65 +168,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _tourTimer?.cancel();
-    _pager.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadOfferings() async {
-    final off = await PurchaseService.loadOfferings();
-    if (!mounted) return;
-    setState(() => _offerings = off);
-  }
-
-  // ── Auto-tour ─────────────────────────────────────────────────────
-  //
-  // Advance one panel every 6 s. Play through all panels, wrap back to
-  // panel 0, then stop — from there it's swipe-only. Any manual touch
-  // cancels the tour early (see the Listener in build()).
-  void _startTour() {
-    _tourTimer = Timer.periodic(const Duration(seconds: 6), (t) {
-      if (_interacted || !mounted) {
-        t.cancel();
-        return;
-      }
-      final next = _page + 1;
-      if (next >= _panelCount) {
-        // One full loop done → return to the photo and stop.
-        _pager.animateToPage(0,
-            duration: const Duration(milliseconds: 450),
-            curve: Curves.easeOutCubic);
-        t.cancel();
-      } else {
-        _pager.animateToPage(next,
-            duration: const Duration(milliseconds: 450),
-            curve: Curves.easeOutCubic);
-      }
-    });
-  }
-
-  void _stopTour() {
-    if (_interacted) return;
-    _interacted = true;
-    _tourTimer?.cancel();
-  }
-
-  void _onPageChanged(int i) {
-    setState(() {
-      _page = i;
-      _visited.add(i);
-      if (i == 2) _ladderRun++; // ladder panel is now the 3rd (last)
-    });
-    // Only buzz on manual swipes — the auto-tour should stay silent.
-    if (_interacted) HapticFeedback.selectionClick();
-  }
-
   // ── Purchase actions (weekly only) ────────────────────────────────
 
   Package? _packageFor(_Tier t) => switch (t) {
         _Tier.weekly => _offerings.weekly,
+        _Tier.monthly => _offerings.monthly,
         _Tier.annual => _offerings.annual,
         _Tier.rescue => _offerings.rescue,
       };
@@ -222,9 +185,55 @@ class _PaywallScreenState extends State<PaywallScreen> {
     return _placeholderDash;
   }
 
+  /// The free trial attached to the weekly product, if the store is
+  /// offering one and this device has not already used one.
+  ///
+  /// WHY NOT checkTrialOrIntroductoryPriceEligibility(): its return type
+  /// is not exported from purchases_flutter, and RevenueCat's own docs
+  /// say "Android always returns introEligibilityStatusUnknown" — so it
+  /// answers on one platform out of two and cannot be named on either.
+  /// The local "has this device ever been in a trial" flag is the same
+  /// answer in the overwhelming case and works everywhere.
+  ///
+  /// THE STORE REMAINS THE AUTHORITY. If he reinstalls and we get this
+  /// wrong, Apple's and Google's own purchase sheets still show the real
+  /// terms before he confirms, and bill him correctly. This copy is
+  /// best-effort; the sheet after it is not.
+  IntroductoryPrice? get _trial {
+    // THE OFFER IS OFF. Even if a stale introductory price is still
+    // attached to the product in the store, the app must not sell it —
+    // one switch has to turn the whole thing off or the copy and the
+    // behaviour drift apart. See PurchaseConfig.freeTrialEnabled.
+    if (!PurchaseConfig.freeTrialEnabled) return null;
+    if (!_trialEligible) return null;
+    // The SELECTED tier's offer, not weekly's. The trial lives on
+    // monthly; reading weekly's would advertise a trial on the tier that
+    // does not have one and hide the one that does.
+    final intro = _packageFor(_picked)?.storeProduct.introductoryPrice;
+    if (intro == null) return null;
+    // A discounted intro period is NOT a free trial. Only a zero price
+    // may be called free.
+    if (intro.price > 0) return null;
+    return intro;
+  }
+
+  /// "3 days" / "1 week" — built from the store's own numbers so it can
+  /// never contradict what Apple actually charges.
+  String _trialLength(IntroductoryPrice t) {
+    final n = t.periodNumberOfUnits;
+    final unit = switch (t.periodUnit) {
+      PeriodUnit.day   => 'day',
+      PeriodUnit.week  => 'week',
+      PeriodUnit.month => 'month',
+      PeriodUnit.year  => 'year',
+      _                => 'day',
+    };
+    return '$n $unit${n == 1 ? '' : 's'}';
+  }
+
   Future<void> _buy() async {
     if (_purchasing) return;
-    final pkg = _packageFor(_Tier.weekly);
+    final pkg = _packageFor(_picked);
     if (pkg == null) {
       // NO PACKAGE = the store never handed us a purchasable product, so
       // there is nothing to charge. This branch used to end at a vague
@@ -266,7 +275,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
           t.cancel();
           if (settled || !mounted) return;
           settled = true;
-          await LocalStoreService.setOnboarded(true);
+          await _markOnboarded();
           if (!mounted) return;
           setState(() => _purchasing = false);
           _forwardOnSuccess();
@@ -287,7 +296,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         // too (purchase() already does, but this guarantees it's on disk
         // before _forwardOnSuccess pops and the report re-reads isPro).
         await LocalStoreService.setSubscribed(true);
-        await LocalStoreService.setOnboarded(true);
+        await _markOnboarded();
         if (!mounted) return;
         _forwardOnSuccess();
         break;
@@ -316,7 +325,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         // transaction even though the purchase call errored. If the
         // flag flipped, the user PAID — forward, don't scare them.
         if (await LocalStoreService.isSubscribed()) {
-          await LocalStoreService.setOnboarded(true);
+          await _markOnboarded();
           if (mounted) _forwardOnSuccess();
           break;
         }
@@ -355,6 +364,21 @@ class _PaywallScreenState extends State<PaywallScreen> {
     }
   }
 
+  /// Onboarding is finished on the HANDLE screen, not here.
+  ///
+  /// Paying is not the same as being set up: sign-in and handle both sit
+  /// after this screen, so stamping "onboarded" on a purchase meant a man
+  /// who paid and then closed the app came back to /home with no account
+  /// and no name, and was never asked again. Inside the funnel we leave
+  /// the flag alone and let the resume marker carry him; everywhere else
+  /// (the scan gate, the locked report, a mid-app upsell) he is already
+  /// onboarded and this is the harmless no-op it always was.
+  Future<void> _markOnboarded() async {
+    final after = widget.context?['afterPurchase'] as String?;
+    if (after == '/onboarding/profile') return;
+    await LocalStoreService.setOnboarded(true);
+  }
+
   void _forwardOnSuccess() {
     // He paid — the ladder stops immediately and permanently. Nothing
     // reads worse than being sold something you already bought.
@@ -367,6 +391,12 @@ class _PaywallScreenState extends State<PaywallScreen> {
         'geometry': ctx['geometry'],
         'extraImages': ctx['extraImages'] ?? const <dynamic>[],
       });
+    } else if (ctx != null && ctx['afterPurchase'] == '/onboarding/profile') {
+      // Straight on to the test, via the one screen that asks his name
+      // and age — both feed the woman he is about to be scored against,
+      // so it earns its place. Nothing else stands between the payment
+      // and the number he paid for.
+      context.go('/onboarding/profile');
     } else if (ctx != null && ctx['unlockInPlace'] == true) {
       if (context.canPop()) {
         context.pop();
@@ -396,6 +426,22 @@ class _PaywallScreenState extends State<PaywallScreen> {
       await LocalStoreService.setSubscribed(true);
     }
     if (!mounted) return;
+    // CLOSING THE PRICE IS NOT LEAVING THE FUNNEL.
+    //
+    // This used to pop, or fall through to /home. Inside onboarding that
+    // meant one tap on the X dropped him at the home screen having never
+    // signed in and never picked a handle — both of those screens live
+    // AFTER the paywall. He looked like a user with no account, because
+    // he was one, and nothing ever asked him again.
+    //
+    // He does not get the product by closing this — every voice session
+    // and every mission is still gated on PaywallGate. He gets the rest
+    // of his setup, which was never the thing being sold.
+    final after = widget.context?['afterPurchase'] as String?;
+    if (after == '/onboarding/profile') {
+      context.go('/onboarding/profile');
+      return;
+    }
     if (context.canPop()) {
       context.pop();
     } else {
@@ -453,877 +499,518 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   // ── Build ─────────────────────────────────────────────────────────
 
+  /// The per-day cost of a package, in the store's own currency.
+  ///
+  /// Derived from the LOCALISED priceString rather than formatted from
+  /// the raw double: there is no intl package here, and hand-formatting
+  /// a currency puts the symbol on the wrong side in half of Europe and
+  /// the decimal separator on the wrong character in the other half.
+  /// Swapping the number inside the string the store already gave us
+  /// keeps the symbol, its position and the separator exactly right.
+  ///
+  /// Returns null rather than guessing — a wrong price is a review
+  /// issue; a missing line is a gap.
+  String? _perDay(_Tier t, int days) {
+    final p = _packageFor(t)?.storeProduct;
+    if (p == null || p.price <= 0) return null;
+    final m = RegExp(r'\d[\d.,  ]*\d|\d').firstMatch(p.priceString);
+    if (m == null) return null;
+    final numeric = p.priceString.substring(m.start, m.end);
+    // The LAST separator is the decimal one, so "1.234,56" and
+    // "1,234.56" both resolve correctly.
+    final cut = numeric.lastIndexOf(',') > numeric.lastIndexOf('.')
+        ? numeric.lastIndexOf(',')
+        : numeric.lastIndexOf('.');
+    // …unless it is followed by exactly THREE digits, in which case it
+    // is a thousands separator and this currency has no minor unit.
+    // "¥2,999" was becoming "¥99,97" — a yen price with pence in it.
+    final tail = cut < 0 ? 0 : numeric.length - cut - 1;
+    final zeroDecimal = cut < 0 || tail == 3;
+    final sep = cut < 0 ? '.' : numeric[cut];
+    final raw = p.price / days;
+    final per = zeroDecimal
+        ? raw.round().toString()
+        : raw.toStringAsFixed(2).replaceAll('.', sep);
+    return p.priceString.replaceRange(m.start, m.end, per);
+  }
+
+  /// Natural (unscaled) height of the pitch block, in logical pixels.
+  /// Everything between the top bar and the CTA is sized as a fraction
+  /// of the room actually available, and this is the denominator. It is
+  /// measured from the laid-out design, not guessed — if the block below
+  /// grows, this number grows with it.
+  /// THE DENOMINATOR MUST NOT BE OPTIMISTIC.
+  ///
+  /// s = available / this, capped at 1.0. If this number is SMALLER
+  /// than the block's true height, s comes back as 1.0 on a phone where
+  /// the content does not actually fit — nothing scales, and the screen
+  /// scrolls. That is exactly what happened: 540 was a guess, the real
+  /// block is nearer 520 with two-line titles and wrapped axes, and on
+  /// a mid-size phone the ratio cleared 1.0 while the content still
+  /// overflowed.
+  ///
+  /// Over-estimating is safe (the block shrinks slightly more than it
+  /// had to). Under-estimating is a scrolling paywall. So this is set
+  /// ABOVE the measured height, and the copy below is cut to hold it
+  /// there: one line of body per step, no title long enough to wrap.
+  /// Measured for the WORST case — every title and body wrapped —
+  /// then given headroom on top, because the failure is asymmetric:
+  ///
+  ///   too high → the block shrinks slightly more than it needed to,
+  ///              and nobody can tell.
+  ///   too low  → s comes back as 1.0 on a phone where the content does
+  ///              not fit, nothing scales, and the paywall scrolls.
+  ///
+  /// The block laid out:
+  ///
+  ///   headline 83 · subhead 18 · gaps 17
+  ///   step 1   77   (1-line title, 2-line body)
+  ///   step 2   94   (2-line title, 2-line body)
+  ///   step 3   56   (1-line title, 2-line body, no rule)
+  ///   score strip 56 · tier cards 118 · gaps 20
+  ///   ─────
+  ///   ≈ 539
+  ///
+  /// 580 leaves ~40pt for font-metric variance and any copy that runs a
+  /// line longer than the current text. Nothing here is shrunk
+  /// individually any more — the whole block scales as one, so the
+  /// proportions are identical on every device and only the size
+  /// changes.
+  static const double _contentDesignHeight = 580;
+
   @override
   Widget build(BuildContext context) {
+    final t = _trial;
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        top: true,
-        bottom: true,
-        child: Column(
-          children: [
-            // Close X — top-left.
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 6, 0, 0),
-                child: _CloseX(onTap: _close),
-              ),
-            ),
+        child: Column(children: [
+          _topBar(),
 
-            // Header copy — cross-fades on panel change.
-            _Header(page: _page),
-
-            // Carousel — takes all remaining vertical space.
-            Expanded(
-              child: Listener(
-                // Any finger-down on the carousel ends the auto-tour,
-                // exactly like the mock's touchstart handler.
-                onPointerDown: (_) => _stopTour(),
-                child: PageView(
-                  controller: _pager,
-                  onPageChanged: _onPageChanged,
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    const _GirlsPanel(),
-                    const _OrbPanel(),
-                    _LadderPanel(runToken: _page == 2 ? _ladderRun : -1),
-                  ],
-                ),
-              ),
-            ),
-
-            // Classified progress tracker.
-            _Brief(page: _page, visited: _visited),
-
-            // CTA + price + legal.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 2, 20, 4),
-              child: Column(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 62,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.red.withValues(alpha: 0.45),
-                            blurRadius: 30,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.red,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                          elevation: 0,
-                        ),
-                        onPressed: _purchasing ? null : _buy,
-                        child: _purchasing
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor:
-                                        AlwaysStoppedAnimation(Colors.white)),
-                              )
-                            : Text(
-                                'BECOME HIM',
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 16,
-                                  letterSpacing: 2.6,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _priceLine(),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _LinkButton(
-                          label: 'Terms of Use',
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            context.push('/terms');
-                          }),
-                      _LinkButton(label: 'Restore Purchase', onTap: _restore),
-                      _LinkButton(
-                          label: 'Privacy Policy',
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            context.push('/privacy');
-                          }),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Single price line under the CTA. Carries the three Apple-required
-  /// essentials in one glance — real store price, weekly cadence, and
-  /// the auto-renew / cancel notice. Full disclosure lives in Terms.
-  /// (The on-device build tag was removed for launch — check the build
-  /// number in Settings → TestFlight instead.)
-  Widget _priceLine() {
-    final price = _priceFor(_Tier.weekly);
-    return Text(
-      '$price per week · auto-renews · cancel anytime',
-      textAlign: TextAlign.center,
-      style: GoogleFonts.inter(
-        color: AppColors.textSecondary,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════
-//  HEADER
-// ══════════════════════════════════════════════════════════════════════
-
-class _Header extends StatelessWidget {
-  final int page;
-  const _Header({required this.page});
-
-  @override
-  Widget build(BuildContext context) {
-    final (headline, sub) = _copy[page];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 96),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 350),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
-          transitionBuilder: (child, anim) => FadeTransition(
-            opacity: anim,
-            child: SlideTransition(
-              position: Tween(
-                begin: const Offset(0, 0.06),
-                end: Offset.zero,
-              ).animate(anim),
-              child: child,
-            ),
-          ),
-          child: Column(
-            key: ValueKey(page),
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                headline,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 27,
-                  height: 1.15,
-                  letterSpacing: -0.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                sub,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  color: AppColors.textSecondary,
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════
-//  PANEL 1 — THE AI GIRLS (roleplay showcase)
-// ══════════════════════════════════════════════════════════════════════
-
-class _GirlsPanel extends StatelessWidget {
-  const _GirlsPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: Center(
-        child: AspectRatio(
-          // The roleplay-cast grid is portrait — its own ratio so the
-          // whole grid shows, framed like the other panels' hero image.
-          // 1125×1572 = the clean neck-up 2×2 (regenerated from the cropped
-          // portraits; no cleavage, App-Store safe for Guideline 1.1.4).
-          aspectRatio: 1125 / 1572,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Image.asset(
-              'assets/marketing/girls_grid.png',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const ColoredBox(color: _tile),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════
-//  PANEL (legacy) — PHOTO + SCORE  ·  no longer in the carousel
-// ══════════════════════════════════════════════════════════════════════
-
-// ignore: unused_element
-class _PhotoPanel extends StatelessWidget {
-  const _PhotoPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      // Center the whole [numbers + image] group as ONE unit so the
-      // numbers hug the image's top ledge instead of floating away from it.
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // NUMBERS sit on the black ledge directly above the image, one
-            // centered over each half (54 over current, 84 over projected).
-            // A tiny 3px gap keeps the digits right on the top ledge —
-            // close, but never overlapping under the image edge.
-            Row(
-              children: const [
-                Expanded(
-                    child: _ScoreNum(n: '54', color: Color(0xFFC4C4CB))),
-                Expanded(
-                    child: _ScoreNum(n: '84', color: _neon, glow: true)),
-              ],
-            ),
-            const SizedBox(height: 3),
-            // Aspect ratio matches the cropped before/after asset (914×778)
-            // so the baked-in NOW / FIXED labels never get clipped. Width-
-            // constrained, so its height is fixed — no Flexible/Center gap.
-            AspectRatio(
-              aspectRatio: 914 / 778,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.asset(
-                      'assets/marketing/beforeafter.jpg',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const ColoredBox(color: _tile),
-                    ),
-                    // LABELS ride ON the image at the very top, centered
-                    // over each half, on a subtle scrim for legibility.
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.only(top: 8, bottom: 16),
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Color(0xB3000000), Color(0x00000000)],
-                          ),
-                        ),
-                        child: Row(
-                          children: const [
-                            Expanded(
-                                child: _ScoreLabel(
-                                    'CURRENT', Color(0xFFC4C4CB))),
-                            Expanded(
-                                child:
-                                    _ScoreLabel('PROJECTED', Colors.white)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// One big score number, centered in its half. Sits on the black ledge
-/// directly above the before/after image.
-class _ScoreNum extends StatelessWidget {
-  final String n;
-  final Color color;
-  final bool glow;
-  const _ScoreNum({required this.n, required this.color, this.glow = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      n,
-      textAlign: TextAlign.center,
-      style: GoogleFonts.inter(
-        color: color,
-        fontSize: 46,
-        height: 1,
-        fontWeight: FontWeight.w900,
-        shadows: glow
-            ? [Shadow(color: _neon.withValues(alpha: 0.6), blurRadius: 30)]
-            : null,
-      ),
-    );
-  }
-}
-
-/// One score label (CURRENT / PROJECTED), centered in its half, overlaid
-/// on the top edge of the image.
-class _ScoreLabel extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _ScoreLabel(this.label, this.color);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      textAlign: TextAlign.center,
-      style: GoogleFonts.inter(
-        color: color,
-        fontSize: 11,
-        letterSpacing: 3,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════
-//  PANEL (legacy) — PROTOCOL LIST  ·  no longer in the carousel
-// ══════════════════════════════════════════════════════════════════════
-
-// ignore: unused_element
-class _ProtoPanel extends StatelessWidget {
-  const _ProtoPanel();
-
-  static const _rows = <(String, String, String)>[
-    ('🔥', 'Debloat', 'Less puffiness. Visible changes can begin within days.'),
-    ('🗿', 'Jaw', 'Build a sharper, more defined profile.'),
-    ('👁', 'Eye Area', 'Look more awake, healthier and more attractive.'),
-    ('✨', 'Skin', 'Clearer skin. Better texture. Better first impressions.'),
-    ('💇', 'Hair', 'The right cut, style and long-term hair plan.'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: Center(
-        child: AspectRatio(
-          aspectRatio: 680 / 538,
-          child: Column(
-            children: [
-              for (var i = 0; i < _rows.length; i++) ...[
-                if (i > 0) const SizedBox(height: 7),
-                Expanded(child: _ProtoRow(row: _rows[i])),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ProtoRow extends StatelessWidget {
-  final (String, String, String) row;
-  const _ProtoRow({required this.row});
-
-  @override
-  Widget build(BuildContext context) {
-    final (emoji, title, body) = row;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-      decoration: BoxDecoration(
-        color: _tile,
-        borderRadius: BorderRadius.circular(13),
-      ),
-      child: Row(
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 17)),
-          const SizedBox(width: 11),
+          // ONE SCREEN, ALWAYS — and never a blank one.
+          //
+          // b235 did this with FittedBox(scaleDown), which hands its
+          // child UNBOUNDED height. The tier row inside used
+          // CrossAxisAlignment.stretch, which requires a bounded cross
+          // axis, so the subtree threw during layout and painted
+          // NOTHING: top bar, black void, CTA. That is the screenshot.
+          //
+          // This measures instead of scaling. LayoutBuilder reports the
+          // real room left between the bar and the CTA, every size below
+          // is a fraction of it, and a scroll view sits underneath as a
+          // safety valve — so a font fallback or a large accessibility
+          // setting overflows harmlessly instead of blanking the screen.
+          // Nothing in here is ever handed an unbounded constraint.
           Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700)),
-                const SizedBox(height: 1),
-                Text(body,
-                    style: GoogleFonts.inter(
-                        color: AppColors.textSecondary,
-                        fontSize: 10.5,
-                        height: 1.25,
-                        fontWeight: FontWeight.w500)),
-              ],
-            ),
+            child: LayoutBuilder(builder: (context, box) {
+              final s =
+                  (box.maxHeight / _contentDesignHeight).clamp(0.70, 1.0).toDouble();
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: box.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: _pitch(s, t),
+                  ),
+                ),
+              );
+            }),
+          ),
+
+          _cta(t),
+        ]),
+      ),
+    );
+  }
+
+  /// The pitch: promise, the loop, the withheld number, the price.
+  /// `s` is the density factor — 1.0 on a big phone, ~0.8 on an SE.
+  Widget _pitch(double s, IntroductoryPrice? t) => Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _headline(s),
+          SizedBox(height: 5 * s),
+          Text('Stop guessing. Start training.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 14.5 * s,
+                fontWeight: FontWeight.w500,
+              )),
+          SizedBox(height: 12 * s),
+          // EVERY TITLE FITS ONE LINE AND EVERY BODY FITS ONE LINE.
+          // A wrapped line is 18 more points, three steps is three
+          // chances to wrap, and 54 points is the difference between a
+          // paywall and a scrolling paywall. The copy is cut to the
+          // width, not written and hoped for.
+          _Step(
+            n: '1',
+            title: 'DISCOVER YOUR REAL GAME SCORE',
+            body: 'Get tested across Confidence, Presence, Game, Humour '
+                'and Listening.',
+            scale: s,
+          ),
+          _Step(
+            n: '2',
+            title: 'PRACTICE REAL CONVERSATIONS BY VOICE & TEXT',
+            body: 'Train realistic situations without pressure or '
+                'rejection.',
+            scale: s,
+          ),
+          _Step(
+            n: '3',
+            title: 'ALWAYS KNOW WHAT TO SAY',
+            body: 'Get instant coaching on exactly what worked and what '
+                'to improve.',
+            last: true,
+            scale: s,
+          ),
+          SizedBox(height: 10 * s),
+          _ScoreStrip(scale: s),
+          SizedBox(height: 10 * s),
+          // IntrinsicHeight is what makes `stretch` legal here: it
+          // measures the taller card and passes a TIGHT height down, so
+          // the Row's cross axis is bounded and both cards match. The
+          // b235 version had the stretch without it.
+          IntrinsicHeight(
+            child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                      child: _tierCard(_Tier.monthly, 'MONTH', t, 30, s)),
+                  SizedBox(width: 10 * s),
+                  Expanded(
+                      child: _tierCard(_Tier.weekly, 'WEEK', null, 7, s)),
+                ]),
           ),
         ],
+      );
+
+  Widget _topBar() => Padding(
+        padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
+        child: Row(children: [
+          _CloseX(onTap: _close),
+          Expanded(
+            child: Text('IMHIM PRO',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: AppColors.red,
+                  fontSize: 15,
+                  letterSpacing: 3,
+                  fontWeight: FontWeight.w900,
+                )),
+          ),
+          GestureDetector(
+            onTap: _restore,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Text('Restore',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  )),
+            ),
+          ),
+        ]),
+      );
+
+  Widget _headline(double s) => Column(children: [
+        Text('LEVEL UP',
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 42 * s,
+              height: 0.98,
+              letterSpacing: -2,
+              fontWeight: FontWeight.w900,
+              fontStyle: FontStyle.italic,
+            )),
+        Text('YOUR GAME.',
+            style: GoogleFonts.inter(
+              color: AppColors.red,
+              fontSize: 42 * s,
+              height: 1.0,
+              letterSpacing: -2,
+              fontWeight: FontWeight.w900,
+              fontStyle: FontStyle.italic,
+            )),
+      ]);
+
+  /// One price card. Every figure on it comes from the store.
+  Widget _tierCard(_Tier tier, String period, IntroductoryPrice? trial,
+      int daysInPeriod, double s) {
+    final pkg = _packageFor(tier);
+    final live = pkg != null;
+    final sel = _picked == tier;
+    final perDay = _perDay(tier, daysInPeriod);
+    return Opacity(
+      opacity: live ? 1 : 0.4,
+      child: GestureDetector(
+        // A DEAD CARD THAT EXPLAINS ITSELF. "Not on this store yet" is
+        // true but useless — it cannot say WHY, and the diagnostic that
+        // can was only reachable by pressing a CTA that has no package,
+        // which is impossible while any other tier still sells. Tapping
+        // the broken tier now prints exactly what the store returned
+        // next to exactly what the app was looking for.
+        onTap: () {
+          HapticFeedback.selectionClick();
+          if (live) {
+            setState(() => _picked = tier);
+            return;
+          }
+          // ignore: discarded_futures
+          PurchaseService.diagnose().then((d) {
+            if (mounted) _showDiagnostic(d);
+          });
+        },
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: EdgeInsets.fromLTRB(13 * s, 10 * s, 13 * s, 10 * s),
+          decoration: BoxDecoration(
+            color: sel
+                ? AppColors.red.withValues(alpha: 0.10)
+                : const Color(0xFF121216),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+                color: sel ? AppColors.red : Colors.white12,
+                width: sel ? 2 : 1),
+            boxShadow: sel
+                ? [
+                    BoxShadow(
+                        color: AppColors.red.withValues(alpha: 0.30),
+                        blurRadius: 22)
+                  ]
+                : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // The badge and its absence take the same height, so the
+              // two cards stay level whichever one carries the trial.
+              SizedBox(
+                height: 18 * s,
+                child: trial == null
+                    ? null
+                    : FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.red,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                              '${_trialLength(trial).toUpperCase()} FREE',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                letterSpacing: 0.5,
+                                fontWeight: FontWeight.w900,
+                              )),
+                        ),
+                      ),
+              ),
+              SizedBox(height: 6 * s),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(_priceFor(tier),
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 26 * s,
+                            fontWeight: FontWeight.w900,
+                          )),
+                      const SizedBox(width: 4),
+                      Text('/ $period',
+                          style: GoogleFonts.inter(
+                            color: Colors.white70,
+                            fontSize: 13 * s,
+                            fontWeight: FontWeight.w700,
+                          )),
+                    ]),
+              ),
+              SizedBox(height: 3 * s),
+              // THE PER-DAY LINE. The monthly price is a decision; the
+              // same money said per day is a rounding error, and it is
+              // the unit he already thinks about spending in.
+              Text(
+                  !live
+                      ? 'Not on this store yet'
+                      : perDay != null
+                          ? 'Just $perDay a day'
+                          : '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: perDay != null
+                        ? AppColors.red
+                        : AppColors.textTertiary,
+                    fontSize: 12 * s,
+                    fontWeight: FontWeight.w800,
+                  )),
+              SizedBox(height: 7 * s),
+              Row(children: [
+                Container(
+                  width: 18 * s,
+                  height: 18 * s,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                        color: sel ? AppColors.red : Colors.white30, width: 2),
+                    color: sel ? AppColors.red : Colors.transparent,
+                  ),
+                  child: sel
+                      ? Icon(Icons.check_rounded,
+                          size: 12 * s, color: Colors.white)
+                      : null,
+                ),
+                SizedBox(width: 7 * s),
+                Expanded(
+                  // "No free trial" read as a taunt on every card once
+                  // trials came off — nobody has one, so saying it of
+                  // one tier implies the other has it. Monthly is simply
+                  // the recommendation; weekly is the flexible option.
+                  child: Text(
+                      tier == _Tier.monthly ? 'Best value' : 'Cancel anytime',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        color: tier == _Tier.monthly
+                            ? AppColors.red
+                            : AppColors.textTertiary,
+                        fontSize: 12 * s,
+                        fontWeight: FontWeight.w700,
+                      )),
+                ),
+              ]),
+            ],
+          ),
+        ),
       ),
     );
   }
-}
 
-// ══════════════════════════════════════════════════════════════════════
-//  PANEL 3 — ORB / HOLD TO SPEAK
-// ══════════════════════════════════════════════════════════════════════
-
-class _OrbPanel extends StatefulWidget {
-  const _OrbPanel();
-
-  @override
-  State<_OrbPanel> createState() => _OrbPanelState();
-}
-
-class _OrbPanelState extends State<_OrbPanel> {
-  static const _lines = <(String, bool)>[
-    ('Girl interrupts.', false),
-    ('Girl rejects.', false),
-    ('Girl flirts.', false),
-    ('Girl goes cold.', false),
-    ('You adapt.', true),
-    ('You improve.', true),
-  ];
-
-  Timer? _timer;
-  int _i = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 1600), (_) {
-      if (!mounted) return;
-      setState(() => _i = (_i + 1) % _lines.length);
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final (text, you) = _lines[_i];
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 118,
-            height: 118,
+  /// Pinned. Never inside anything that can scroll or scale away.
+  Widget _cta(IntroductoryPrice? t) {
+    final price = _priceFor(_picked);
+    final period = _picked == _Tier.monthly ? 'month' : 'week';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 6, 18, 2),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        SizedBox(
+          width: double.infinity,
+          height: 64,
+          child: DecoratedBox(
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const RadialGradient(
-                center: Alignment(-0.24, -0.36),
-                radius: 0.9,
-                colors: [Color(0xFFFF5A5F), AppColors.red, Color(0xFF8F1015)],
-                stops: [0.0, 0.55, 1.0],
-              ),
+              borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
                     color: AppColors.red.withValues(alpha: 0.5),
-                    blurRadius: 60),
+                    blurRadius: 30,
+                    spreadRadius: 1),
               ],
             ),
-          )
-              .animate(onPlay: (c) => c.repeat(reverse: true))
-              .scale(
-                begin: const Offset(1, 1),
-                end: const Offset(1.05, 1.05),
-                duration: 1100.ms,
-                curve: Curves.easeInOut,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.red,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
               ),
-          const SizedBox(height: 18),
-          Text(
-            '🎙  HOLD TO SPEAK',
-            style: GoogleFonts.inter(
-              color: const Color(0xFFD9D9DE),
-              fontSize: 12,
-              letterSpacing: 5,
-              fontWeight: FontWeight.w700,
+              onPressed: _purchasing ? null : _buy,
+              child: _purchasing
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(Colors.white)))
+                  : Column(mainAxisSize: MainAxisSize.min, children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                            t == null
+                                ? 'START TRAINING'
+                                : 'START MY ${_trialLength(t).toUpperCase()} FREE TRIAL',
+                            maxLines: 1,
+                            style: GoogleFonts.inter(
+                              fontSize: 19,
+                              letterSpacing: 0.2,
+                              fontWeight: FontWeight.w900,
+                            )),
+                      ),
+                      const SizedBox(height: 2),
+                      Text('Take your first voice test now',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withValues(alpha: 0.85),
+                          )),
+                    ]),
             ),
-          ),
-          const SizedBox(height: 14),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            transitionBuilder: (child, anim) => FadeTransition(
-              opacity: anim,
-              child: SlideTransition(
-                position: Tween(
-                        begin: const Offset(0, 0.3), end: Offset.zero)
-                    .animate(anim),
-                child: child,
-              ),
-            ),
-            child: Text(
-              text,
-              key: ValueKey(_i),
-              style: GoogleFonts.inter(
-                color: you ? AppColors.red : Colors.white,
-                fontSize: 23,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════
-//  PANEL (legacy) — RIZZ ACTIONS  ·  no longer in the carousel
-// ══════════════════════════════════════════════════════════════════════
-
-// ignore: unused_element
-class _RizzPanel extends StatelessWidget {
-  const _RizzPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const _RizzBtn(
-              title: 'Upload a screenshot',
-              sub: 'Get rizz on how to respond',
-            ),
-            const SizedBox(height: 12),
-            const _RizzBtn(
-              title: 'Pickup line',
-              sub: 'One at a time. Regenerate. Done.',
-            ),
-            const SizedBox(height: 12),
-            const _RizzBtn(
-              title: 'Rizz Chat',
-              sub: 'Ask anything. We coach.',
-              ghost: true,
-              badge: 'NEW',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ignore: unused_element
-class _RizzBtn extends StatelessWidget {
-  final String title, sub;
-  final bool ghost;
-  final String? badge;
-  const _RizzBtn(
-      {required this.title, required this.sub, this.ghost = false, this.badge});
-
-  @override
-  Widget build(BuildContext context) {
-    final card = Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: ghost ? _tile : AppColors.red,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(title,
-              style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800)),
-          const SizedBox(height: 2),
-          Text(sub,
-              style: GoogleFonts.inter(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-
-    if (badge == null) return card;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        card,
-        Positioned(
-          top: -8,
-          left: 4,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(badge!,
-                style: GoogleFonts.inter(
-                    color: AppColors.red,
-                    fontSize: 8,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.w800)),
           ),
         ),
-      ],
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════
-//  PANEL 5 — ASCENSION LADDER
-// ══════════════════════════════════════════════════════════════════════
-
-class _LadderPanel extends StatefulWidget {
-  /// Bumped whenever this panel becomes visible so the climb restarts.
-  /// -1 while the panel is off-screen.
-  final int runToken;
-  const _LadderPanel({required this.runToken});
-
-  @override
-  State<_LadderPanel> createState() => _LadderPanelState();
-}
-
-class _LadderPanelState extends State<_LadderPanel> {
-  static const _rungs = [
-    'OBSERVER',
-    'INITIATE',
-    'CONTENDER',
-    'DANGEROUS',
-    'HIM'
-  ];
-
-  int _lit = 0; // number of rungs currently lit
-  bool _pulse = false;
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.runToken >= 0) _climb();
-  }
-
-  @override
-  void didUpdateWidget(covariant _LadderPanel old) {
-    super.didUpdateWidget(old);
-    if (widget.runToken != old.runToken && widget.runToken >= 0) {
-      _climb();
-    }
-  }
-
-  void _climb() {
-    _timer?.cancel();
-    setState(() {
-      _lit = 1;
-      _pulse = false;
-    });
-    _timer = Timer.periodic(const Duration(milliseconds: 650), (t) {
-      if (!mounted) return;
-      if (_lit >= _rungs.length) {
-        t.cancel();
-        return;
-      }
-      setState(() => _lit++);
-      if (_lit >= _rungs.length) {
-        t.cancel();
-        Future.delayed(const Duration(milliseconds: 400), () {
-          if (mounted) setState(() => _pulse = true);
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final children = <Widget>[];
-    for (var i = 0; i < _rungs.length; i++) {
-      final on = i < _lit;
-      final isHim = i == _rungs.length - 1;
-      children.add(_rung(_rungs[i], on: on, isHim: isHim));
-      if (i != _rungs.length - 1) {
-        // Arrow i (between rung i and i+1) lights once rung i+1 is lit.
-        children.add(_arrow(on: i < _lit - 1));
-      }
-    }
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: children,
-      ),
-    );
-  }
-
-  Widget _rung(String label, {required bool on, required bool isHim}) {
-    Color color;
-    double size;
-    List<Shadow>? shadows;
-    if (isHim && on && _pulse) {
-      color = _neon;
-      size = 22;
-      shadows = [Shadow(color: _neon.withValues(alpha: 0.9), blurRadius: 40)];
-    } else if (isHim && on) {
-      color = AppColors.red;
-      size = 22;
-      shadows = [
-        Shadow(color: AppColors.red.withValues(alpha: 0.8), blurRadius: 24)
-      ];
-    } else if (on) {
-      color = Colors.white;
-      size = 16;
-    } else {
-      color = const Color(0xFF3A3A40);
-      size = 16;
-    }
-
-    Widget text = AnimatedDefaultTextStyle(
-      duration: const Duration(milliseconds: 400),
-      style: GoogleFonts.inter(
-        color: color,
-        fontSize: size,
-        letterSpacing: 3,
-        fontWeight: FontWeight.w800,
-        shadows: shadows,
-      ),
-      child: Text(label),
-    );
-
-    Widget scaled = AnimatedScale(
-      duration: const Duration(milliseconds: 400),
-      scale: on ? 1.06 : 1.0,
-      child: text,
-    );
-
-    if (isHim && on && _pulse) {
-      scaled = scaled
-          .animate(onPlay: (c) => c.repeat(reverse: true))
-          .scaleXY(begin: 1.0, end: 1.18, duration: 700.ms, curve: Curves.easeInOut);
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: scaled,
-    );
-  }
-
-  Widget _arrow({required bool on}) {
-    return AnimatedDefaultTextStyle(
-      duration: const Duration(milliseconds: 400),
-      style: TextStyle(
-        color: on ? AppColors.red : const Color(0xFF3A3A40),
-        fontSize: 12,
-        height: 1,
-      ),
-      child: const Text('↓'),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════
-//  CLASSIFIED PROGRESS TRACKER
-// ══════════════════════════════════════════════════════════════════════
-
-class _Brief extends StatelessWidget {
-  final int page;
-  final Set<int> visited;
-  const _Brief({required this.page, required this.visited});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          for (var k = 0; k < _sections.length; k++) ...[
-            if (k > 0) const SizedBox(width: 8),
-            _briefItem(k),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _briefItem(int k) {
-    final no = '0${k + 1}';
-    const noStyleBase = TextStyle(fontSize: 10, fontWeight: FontWeight.w800);
-    if (k == page) {
-      // Current: red number + white expanded section name.
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(no,
-              style: GoogleFonts.inter(
-                  textStyle: noStyleBase, color: AppColors.red)),
-          const SizedBox(width: 5),
-          Text(_sections[k],
-              style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 10,
-                  letterSpacing: 1.5,
-                  fontWeight: FontWeight.w800)),
-        ],
-      );
-    }
-    final done = visited.contains(k);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(no,
+        const SizedBox(height: 6),
+        Text(
+            t == null
+                ? '$price per $period · auto-renews · cancel anytime'
+                : '${_trialLength(t)} free, then $price/$period. '
+                    'Auto-renews. Cancel anytime.',
+            textAlign: TextAlign.center,
             style: GoogleFonts.inter(
-                textStyle: noStyleBase,
-                color: done ? AppColors.textSecondary : const Color(0xFF3F3F45))),
-        const SizedBox(width: 5),
-        done
-            ? const Icon(Icons.check_rounded, size: 12, color: _neon)
-            : const Icon(Icons.lock, size: 10, color: Color(0xFF3F3F45)),
-      ],
+              color: AppColors.textSecondary,
+              fontSize: 11,
+              height: 1.3,
+              fontWeight: FontWeight.w600,
+            )),
+        // The trial footnote lived here. With no trial there is nothing
+        // to qualify: everything is included the moment he pays, and a
+        // line explaining what he does NOT get would be inventing a
+        // restriction that no longer exists.
+        Text('Unlimited texting · '
+            '${LocalStoreService.kVoiceMinutesPerWeek} minutes of live '
+            'voice a week',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: AppColors.textTertiary,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            )),
+        const SizedBox(height: 2),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          _LinkButton(label: 'Restore Purchases', onTap: _restore),
+          _LinkButton(
+              label: 'Terms of Use',
+              onTap: () {
+                HapticFeedback.selectionClick();
+                context.push('/terms');
+              }),
+          _LinkButton(
+              label: 'Privacy Policy',
+              onTap: () {
+                HapticFeedback.selectionClick();
+                context.push('/privacy');
+              }),
+        ]),
+      ]),
     );
   }
 }
@@ -1379,6 +1066,182 @@ class _LinkButton extends StatelessWidget {
             fontSize: 11.5,
             fontWeight: FontWeight.w600,
           )),
+    );
+  }
+}
+
+/// One numbered promise. Three of these ARE the pitch — the whole
+/// product loop stated once, in order, with nothing between them.
+class _Step extends StatelessWidget {
+  final String n, title, body;
+  final String? axes;
+  final bool last;
+  final double scale;
+  const _Step({
+    required this.n,
+    required this.title,
+    required this.body,
+    required this.scale,
+    this.axes,
+    this.last = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final s = scale;
+    return Padding(
+      padding: EdgeInsets.only(bottom: last ? 0 : 10 * s),
+      child: Column(children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 28 * s,
+            height: 28 * s,
+            margin: EdgeInsets.only(top: 1 * s),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.red, width: 2),
+            ),
+            child: Icon(Icons.check_rounded, size: 16 * s, color: AppColors.red),
+          ),
+          SizedBox(width: 11 * s),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // WRAPS. NEVER SHRINKS.
+                //
+                // This was a FittedBox for a while, to keep every step
+                // exactly one line tall. It worked and it looked wrong:
+                // a long title came out visibly smaller than its
+                // neighbours, so three points that should read as one
+                // set read as three different sizes.
+                //
+                // Type size is part of the design and is not something
+                // to trade away per-line. Every title is the same size
+                // as every other title and wraps if it needs to; the
+                // BLOCK is what scales, uniformly, so proportions hold
+                // at every size. The design height below carries the
+                // headroom for the wrap.
+                Text('$n. $title',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 15 * s,
+                      height: 1.15,
+                      letterSpacing: 0.2,
+                      fontWeight: FontWeight.w900,
+                    )),
+                SizedBox(height: 3 * s),
+                // Wraps naturally, like the title. A reserved two-line
+                // box was steadier but left dead air under the short
+                // ones, and even spacing beats even boxes on a screen
+                // this short.
+                Text(body,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontSize: 13.5 * s,
+                      height: 1.32,
+                      fontWeight: FontWeight.w500,
+                    )),
+                if (axes != null) ...[
+                  SizedBox(height: 2 * s),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(axes!,
+                        maxLines: 1,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 13 * s,
+                          height: 1.32,
+                          fontWeight: FontWeight.w600,
+                        )),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ]),
+        if (!last) ...[
+          SizedBox(height: 10 * s),
+          Container(
+              height: 1,
+              margin: EdgeInsets.only(left: 39 * s),
+              color: Colors.white.withValues(alpha: 0.08)),
+        ],
+      ]),
+    );
+  }
+}
+
+/// The withheld number, as a strip rather than a hero — the same object
+/// as onboarding beat 4, but this screen has a price to get to and the
+/// question only needs restating, not re-asking.
+class _ScoreStrip extends StatelessWidget {
+  final double scale;
+  const _ScoreStrip({required this.scale});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = scale;
+    return Container(
+      padding: EdgeInsets.fromLTRB(15 * s, 11 * s, 15 * s, 11 * s),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E0E12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('YOUR FIRST GAME TEST IS READY',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 10 * s,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.w800,
+                  )),
+              SizedBox(height: 2 * s),
+              Text('YOUR SCORE',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 17 * s,
+                    letterSpacing: 0.4,
+                    fontWeight: FontWeight.w900,
+                  )),
+            ],
+          ),
+        ),
+        Container(width: 1, height: 32 * s, color: Colors.white12),
+        SizedBox(width: 13 * s),
+        Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text('?',
+                  style: GoogleFonts.inter(
+                    color: AppColors.red,
+                    fontSize: 36 * s,
+                    height: 1.0,
+                    fontWeight: FontWeight.w900,
+                    fontStyle: FontStyle.italic,
+                  )),
+              Text('/100',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 28 * s,
+                    height: 1.0,
+                    fontWeight: FontWeight.w900,
+                    fontStyle: FontStyle.italic,
+                  )),
+            ]),
+      ]),
     );
   }
 }

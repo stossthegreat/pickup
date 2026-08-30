@@ -115,6 +115,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    // THE BACKSTOP. Reaching home means the funnel is behind him, by
+    // whatever path. Without this, any route into the app that skips the
+    // handle screen leaves `onboarded` false forever and every relaunch
+    // reopens the story — which is precisely the loop this build fixes.
+    // No-op for the overwhelming majority, who arrive here already
+    // stamped; it also clears the resume marker.
+    // ignore: discarded_futures
+    LocalStoreService.setOnboarded(true);
     // v281 — FOUR tabs: LOOKS / GAME / RIZZ / ASCEND. Ascend
     // restored from the v281 retention rebuild — the daily-ritual
     // flame + missions + rank surface lives at index 3 so existing
@@ -1424,8 +1432,8 @@ class _NavBar extends StatelessWidget {
       // THREE THINGS YOU DO. Progress was a third of the navigation for
       // a screen you look at once a week; battles is a live competitive
       // system that was two taps deep. They swapped.
-      (label: 'Missions', icon: Icons.bolt_rounded),
-      (label: 'Practice', icon: Icons.graphic_eq_rounded),
+      (label: 'Reps', icon: Icons.bolt_rounded),
+      (label: 'Train', icon: Icons.graphic_eq_rounded),
       (label: 'Battles', icon: Icons.sports_mma_rounded),
     ];
     // Modern floating segmented pill (the reference bro sent). A dark
