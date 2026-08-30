@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/local_store_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/paywall_gate.dart';
+import '../../services/trial_service.dart';
 import '../game/freeflow/free_flow_screen.dart';
 import '../../services/roster.dart';
 import '../../theme/app_colors.dart';
@@ -72,8 +73,13 @@ class _VoiceTestScreenState extends State<VoiceTestScreen>
   }
 
   Future<void> _resolveLive() async {
+    // PAID, AND NOT MERELY ENTITLED. A man inside the free trial IS pro
+    // — the entitlement is live — but voice is not part of the trial, so
+    // isPro alone would drop him into a session the gate is about to
+    // refuse. He has to have actually been charged.
     final pro = await PaywallGate.isPro();
-    if (mounted) setState(() => _live = pro);
+    final trial = await TrialService.isTrial();
+    if (mounted) setState(() => _live = pro && !trial);
   }
 
   @override
@@ -98,8 +104,20 @@ class _VoiceTestScreenState extends State<VoiceTestScreen>
     HapticFeedback.mediumImpact();
 
     if (!_live) {
+      // ALREADY PAYING, JUST NOT CHARGED YET. He is inside the trial, so
+      // the price screen is the wrong answer — he has already said yes.
+      // Tell him plainly what voice costs and hand him the text test,
+      // which he DOES have.
+      if (await PaywallGate.isPro()) {
+        if (!mounted) return;
+        await _showVoiceLocked();
+        if (!mounted) return;
+        context.go('/onboarding/first-rep');
+        return;
+      }
       // ignore: discarded_futures
       AnalyticsService.onbFinished();
+      if (!mounted) return;
       context.go('/paywall', extra: const {
         'source': 'onboarding_voice',
         'afterPurchase': '/onboarding/profile',
@@ -126,6 +144,42 @@ class _VoiceTestScreenState extends State<VoiceTestScreen>
     // Voice done, text next. He has been scored on how he sounds; the
     // chat test scores how he writes, and they are not the same man.
     context.go('/onboarding/first-rep');
+  }
+
+  Future<void> _showVoiceLocked() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF121216),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Live voice is a paid feature',
+            style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.w900)),
+        content: Text(
+            'Talking to her in real time is not part of the free trial.\n\n'
+            'It unlocks the moment your first payment actually goes '
+            'through — not when the trial runs out.\n\n'
+            'Your test is still happening: you are about to be scored on '
+            'text instead, and that number is yours to keep.',
+            style: GoogleFonts.inter(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.5,
+                fontWeight: FontWeight.w500)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('TAKE THE TEXT TEST',
+                style: GoogleFonts.inter(
+                    color: AppColors.red,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.1)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -183,7 +237,11 @@ class _VoiceTestScreenState extends State<VoiceTestScreen>
                           _mic(s),
                           SizedBox(height: 12 * s),
                           Text(
-                              'Two minutes with her. Then you get your number.',
+                              _live
+                                  ? 'Two minutes with her. Then you get '
+                                      'your number.'
+                                  : 'Live voice unlocks when your first '
+                                      'payment goes through.',
                               textAlign: TextAlign.center,
                               style: GoogleFonts.inter(
                                 color: AppColors.textSecondary,

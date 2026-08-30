@@ -2252,20 +2252,19 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
         backgroundColor: AppColors.surface1,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20)),
-        title: Text('That was your trial test',
+        title: Text('Live voice is a paid feature',
             style: GoogleFonts.inter(
                 color: Colors.white,
                 fontSize: 19,
                 fontWeight: FontWeight.w900)),
         content: Text(
-            'Your free trial includes one '
-            '${TrialService.trialVoiceMinutes}-minute voice test — you have '
-            'taken it, and your score is yours to keep.\n\n'
-            'Live voice opens properly the moment your trial ends and your '
-            'subscription starts: '
-            '${LocalStoreService.kVoiceMinutesPerWeek} minutes every week, '
-            'every woman on the roster.\n\n'
-            'Texting stays unlimited in the meantime — go and train.',
+            'Talking to her in real time is not part of the free trial.\n\n'
+            'It unlocks the moment your first payment actually goes '
+            'through — not when the trial runs out. Once you are charged '
+            'you get ${LocalStoreService.kVoiceMinutesPerWeek} minutes of '
+            'live voice every week, with every woman on the roster.\n\n'
+            'Everything else is yours right now: unlimited texting, your '
+            'daily reps, your score and your missions. Go and train.',
             style: GoogleFonts.inter(
                 color: AppColors.textSecondary,
                 fontSize: 14,

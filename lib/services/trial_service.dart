@@ -50,25 +50,26 @@ abstract final class TrialService {
   /// session prompt and the end-of-call grade are counted in. Check it
   /// against the first real bill rather than trusting this comment.
   ///
-  /// TWO — EXACTLY ONE TEST, AND NOT A SECOND MORE.
+  /// ZERO. LIVE VOICE IS NOT IN THE TRIAL, AT ALL.
   ///
-  /// This is deliberately the length of one session
-  /// (_FreeFlowScreenState._sessionSeconds) and not a minute over. The
-  /// trial buys him the demonstration and nothing else: he takes the
-  /// two-minute test, gets his number, and the next time he reaches for
-  /// the orb he is told — plainly, not sold at — that the full weekly
-  /// allowance starts when the trial converts.
+  /// Not "capped at one test" — none. There is no budget to leak, no
+  /// counter to get wrong, and no field from any store whose
+  /// misreporting can cost money, because a man who has not been
+  /// charged cannot open a voice socket under any circumstance.
   ///
-  /// One was worse than two, not cheaper: the test itself was cut off
-  /// at sixty seconds and he was scored on half a conversation. Three
-  /// was worse than two the other way: a spare minute is a second demo,
-  /// and the man who has had two demos has less reason to pay for the
-  /// third than the man left standing at the end of his first.
+  /// AND THE UNLOCK IS THE PAYMENT, NOT THE CALENDAR. Voice opens when
+  /// money has actually changed hands — a confirmed full-price period —
+  /// not when the trial's three days happen to elapse. Those are not the
+  /// same event: a man can cancel on day two and still be entitled until
+  /// day three, and he must not get voice in that window. `isTrial()`
+  /// answers exactly this, because it returns false ONLY on a positively
+  /// confirmed paid period and true for everything else including "we
+  /// are not sure".
   ///
-  /// The exposure: a trial user who burns it and cancels costs roughly
-  /// 5p of voice plus pennies of text. One conversion at £19.99 covers
-  /// about four hundred of them.
-  static const trialVoiceMinutes = 2;
+  /// The trial still carries the whole product otherwise: unlimited
+  /// texting, the reps, the score, the missions. Voice is what the
+  /// subscription buys, and it is sold rather than sampled.
+  static const trialVoiceMinutes = 0;
 
   static const _kInTrial = 'trial.active.v1'; // legacy bool
   /// Tri-state: 'paid', 'trial', or absent (= never resolved).

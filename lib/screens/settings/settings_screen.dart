@@ -757,20 +757,28 @@ class _VoiceCapTileState extends State<_VoiceCapTile> {
     final capMs = capMinutes * 60 * 1000;
     final capLabel = '$capMinutes:00';
     final remainingMs = (capMs - _usedMs).clamp(0, capMs);
-    final pct = _loaded ? (_usedMs / capMs).clamp(0.0, 1.0) : 0.0;
+    // GUARD THE DIVISION. The trial budget is zero now, and 0/0 is NaN —
+    // which is not a crash but a bar that renders as nothing and a
+    // clamp that silently misbehaves. Zero cap means locked, and locked
+    // draws as a full bar.
+    final pct = !_loaded
+        ? 0.0
+        : capMs == 0
+            ? 1.0
+            : (_usedMs / capMs).clamp(0.0, 1.0);
     final overCap = _usedMs >= capMs;
     final color = overCap ? AppColors.signalRed : AppColors.accent;
 
     return _SettingTile(
       icon: Icons.mic_rounded,
-      title: _trial ? 'Roleplay voice — free trial' : 'Roleplay voice — this week',
+      title: _trial
+          ? 'Live voice — paid feature'
+          : 'Roleplay voice — this week',
       subtitle: !_loaded
           ? 'Loading…'
           : _trial
-              ? (overCap
-                  ? 'Trial test used. Full minutes start when your '
-                    'subscription does.'
-                  : '${_fmt(remainingMs)} left — your one trial test')
+              ? 'Locked during the trial — unlocks when your first '
+                'payment goes through'
               : _pro
                   ? (overCap
                       ? 'Capped — resets ${_resetCopy()}'
@@ -782,9 +790,11 @@ class _VoiceCapTileState extends State<_VoiceCapTile> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(_pro || _trial
-                    ? '${_fmt(_usedMs)} / $capLabel'
-                    : '0 / $capLabel',
+            Text(_trial
+                    ? 'LOCKED'
+                    : _pro
+                        ? '${_fmt(_usedMs)} / $capLabel'
+                        : '0 / $capLabel',
                 style: AppTypography.label.copyWith(
                   color: color,
                   fontSize: 11, letterSpacing: 0.6,
