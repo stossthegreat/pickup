@@ -617,20 +617,23 @@ class _PaywallScreenState extends State<PaywallScreen> {
           // width, not written and hoped for.
           _Step(
             n: '1',
-            title: 'GET TESTED ON 5 KEY SKILLS',
-            body: 'Confidence · Presence · Game · Humour · Listening',
+            title: 'DISCOVER YOUR REAL GAME SCORE',
+            body: 'Get tested across Confidence, Presence, Game, Humour '
+                'and Listening.',
             scale: s,
           ),
           _Step(
             n: '2',
-            title: 'TRAIN WITH REAL COACHING',
-            body: 'Get told exactly what to fix next.',
+            title: 'PRACTICE REAL CONVERSATIONS BY VOICE & TEXT',
+            body: 'Train realistic situations without pressure or '
+                'rejection.',
             scale: s,
           ),
           _Step(
             n: '3',
-            title: 'DO REAL WORLD MISSIONS',
-            body: 'Take it out there and watch the number move.',
+            title: 'ALWAYS KNOW WHAT TO SAY',
+            body: 'Get instant coaching on exactly what worked and what '
+                'to improve.',
             last: true,
             scale: s,
           ),
@@ -1091,11 +1094,24 @@ class _Step extends StatelessWidget {
                       )),
                 ),
                 SizedBox(height: 3 * s),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
+                // TWO LINES, ALWAYS — RESERVED, NOT DISCOVERED.
+                //
+                // The bodies are real sentences now and every one of
+                // them wraps. Shrinking a wrapped sentence onto one line
+                // would leave it at about nine points, and letting it
+                // wrap freely puts the height back at the mercy of the
+                // copy, which is what made this screen scroll.
+                //
+                // So the box is exactly two lines tall whatever is in
+                // it. A one-line body leaves a little air; a two-line
+                // body fits; nothing can push the block taller than the
+                // design height below assumes.
+                SizedBox(
+                  height: 13.5 * 1.32 * 2 * s,
+                  width: double.infinity,
                   child: Text(body,
-                      maxLines: 1,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         color: AppColors.textSecondary,
                         fontSize: 13.5 * s,
