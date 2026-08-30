@@ -547,7 +547,30 @@ class _PaywallScreenState extends State<PaywallScreen> {
   /// had to). Under-estimating is a scrolling paywall. So this is set
   /// ABOVE the measured height, and the copy below is cut to hold it
   /// there: one line of body per step, no title long enough to wrap.
-  static const double _contentDesignHeight = 560;
+  /// Measured for the WORST case — every title and body wrapped —
+  /// then given headroom on top, because the failure is asymmetric:
+  ///
+  ///   too high → the block shrinks slightly more than it needed to,
+  ///              and nobody can tell.
+  ///   too low  → s comes back as 1.0 on a phone where the content does
+  ///              not fit, nothing scales, and the paywall scrolls.
+  ///
+  /// The block laid out:
+  ///
+  ///   headline 83 · subhead 18 · gaps 17
+  ///   step 1   77   (1-line title, 2-line body)
+  ///   step 2   94   (2-line title, 2-line body)
+  ///   step 3   56   (1-line title, 2-line body, no rule)
+  ///   score strip 56 · tier cards 118 · gaps 20
+  ///   ─────
+  ///   ≈ 539
+  ///
+  /// 580 leaves ~40pt for font-metric variance and any copy that runs a
+  /// line longer than the current text. Nothing here is shrunk
+  /// individually any more — the whole block scales as one, so the
+  /// proportions are identical on every device and only the size
+  /// changes.
+  static const double _contentDesignHeight = 580;
 
   @override
   Widget build(BuildContext context) {
@@ -1071,54 +1094,40 @@ class _Step extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ONE LINE, GUARANTEED — SHRUNK, NOT WRAPPED.
+                // WRAPS. NEVER SHRINKS.
                 //
-                // maxLines alone would ellipsise the copy; wrapping
-                // would silently add 18 points per step and put the
-                // screen back into a scroll. FittedBox scaleDown gives
-                // up a fraction of a point of type instead, so the
-                // height of a step is a CONSTANT no matter what copy is
-                // put in it. That is what makes the design height below
-                // trustworthy rather than a guess.
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text('$n. $title',
-                      maxLines: 1,
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 15 * s,
-                        height: 1.15,
-                        letterSpacing: 0.2,
-                        fontWeight: FontWeight.w900,
-                      )),
-                ),
+                // This was a FittedBox for a while, to keep every step
+                // exactly one line tall. It worked and it looked wrong:
+                // a long title came out visibly smaller than its
+                // neighbours, so three points that should read as one
+                // set read as three different sizes.
+                //
+                // Type size is part of the design and is not something
+                // to trade away per-line. Every title is the same size
+                // as every other title and wraps if it needs to; the
+                // BLOCK is what scales, uniformly, so proportions hold
+                // at every size. The design height below carries the
+                // headroom for the wrap.
+                Text('$n. $title',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 15 * s,
+                      height: 1.15,
+                      letterSpacing: 0.2,
+                      fontWeight: FontWeight.w900,
+                    )),
                 SizedBox(height: 3 * s),
-                // TWO LINES, ALWAYS — RESERVED, NOT DISCOVERED.
-                //
-                // The bodies are real sentences now and every one of
-                // them wraps. Shrinking a wrapped sentence onto one line
-                // would leave it at about nine points, and letting it
-                // wrap freely puts the height back at the mercy of the
-                // copy, which is what made this screen scroll.
-                //
-                // So the box is exactly two lines tall whatever is in
-                // it. A one-line body leaves a little air; a two-line
-                // body fits; nothing can push the block taller than the
-                // design height below assumes.
-                SizedBox(
-                  height: 13.5 * 1.32 * 2 * s,
-                  width: double.infinity,
-                  child: Text(body,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        color: AppColors.textSecondary,
-                        fontSize: 13.5 * s,
-                        height: 1.32,
-                        fontWeight: FontWeight.w500,
-                      )),
-                ),
+                // Wraps naturally, like the title. A reserved two-line
+                // box was steadier but left dead air under the short
+                // ones, and even spacing beats even boxes on a screen
+                // this short.
+                Text(body,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontSize: 13.5 * s,
+                      height: 1.32,
+                      fontWeight: FontWeight.w500,
+                    )),
                 if (axes != null) ...[
                   SizedBox(height: 2 * s),
                   FittedBox(
