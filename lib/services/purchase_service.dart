@@ -103,9 +103,23 @@ class PurchaseService {
         lines.add('Current offering: "${cur.identifier}"');
         lines.add('Packages: ${cur.availablePackages.length}');
         for (final p in cur.availablePackages) {
+          // THE INTRODUCTORY OFFER, STRAIGHT FROM THE STORE.
+          //
+          // This is the only trustworthy answer to "is a free trial
+          // still attached to this product". App Store Connect is a
+          // long page on a phone and the offer section is easy to miss;
+          // StoreKit either hands us an introductoryPrice or it does
+          // not, and that is exactly what a customer's purchase sheet
+          // will show him.
+          final intro = p.storeProduct.introductoryPrice;
+          final offer = intro == null
+              ? 'no intro offer'
+              : 'INTRO OFFER: ${intro.priceString} for '
+                  '${intro.periodNumberOfUnits} ${intro.periodUnit}'
+                  '${intro.price == 0 ? "  ← FREE TRIAL, STILL LIVE" : ""}';
           lines.add('  · pkg "${p.identifier}" → '
                     '${p.storeProduct.identifier} '
-                    '(${p.storeProduct.priceString})');
+                    '(${p.storeProduct.priceString})  $offer');
         }
         if (cur.availablePackages.isEmpty) {
           lines.add('→ Offering exists but has 0 packages. Attach products '
