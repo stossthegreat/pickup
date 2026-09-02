@@ -139,7 +139,31 @@ class _PaywallScreenState extends State<PaywallScreen> {
       _trialEligible = eligible;
       // Never sit on a tier the store did not deliver — the CTA would be
       // a button that cannot transact.
-      if (off.monthly == null && off.weekly != null) _picked = _Tier.weekly;
+      // START ON THE TIER WITH THE OFFER. The CTA reads the selected
+      // tier, so defaulting to monthly while the intro week sits on
+      // weekly would open the paywall on "START FOR $19.99" with the
+      // 99p offer sitting unselected beside it.
+      // A plain loop, deliberately: firstOrNull on Iterable comes from
+      // package:collection, not dart:core, and there is no compiler in
+      // this environment to find out the hard way.
+      _Tier? introTier;
+      for (final t in const [_Tier.weekly, _Tier.monthly, _Tier.annual]) {
+        final pkg = switch (t) {
+          _Tier.weekly => off.weekly,
+          _Tier.monthly => off.monthly,
+          _Tier.annual => off.annual,
+          _Tier.rescue => off.rescue,
+        };
+        if (pkg?.storeProduct.introductoryPrice != null) {
+          introTier = t;
+          break;
+        }
+      }
+      if (introTier != null) {
+        _picked = introTier;
+      } else if (off.monthly == null && off.weekly != null) {
+        _picked = _Tier.weekly;
+      }
     });
   }
 
@@ -200,21 +224,65 @@ class _PaywallScreenState extends State<PaywallScreen> {
   /// terms before he confirms, and bill him correctly. This copy is
   /// best-effort; the sheet after it is not.
   IntroductoryPrice? get _trial {
-    // THE OFFER IS OFF. Even if a stale introductory price is still
-    // attached to the product in the store, the app must not sell it —
-    // one switch has to turn the whole thing off or the copy and the
-    // behaviour drift apart. See PurchaseConfig.freeTrialEnabled.
-    if (!PurchaseConfig.freeTrialEnabled) return null;
+    if (!PurchaseConfig.introOfferEnabled) return null;
     if (!_trialEligible) return null;
-    // The SELECTED tier's offer, not weekly's. The trial lives on
-    // monthly; reading weekly's would advertise a trial on the tier that
-    // does not have one and hide the one that does.
-    final intro = _packageFor(_picked)?.storeProduct.introductoryPrice;
-    if (intro == null) return null;
-    // A discounted intro period is NOT a free trial. Only a zero price
-    // may be called free.
-    if (intro.price > 0) return null;
-    return intro;
+    // The SELECTED tier's offer, not weekly's. The offer lives on
+    // monthly; reading weekly's would advertise it on the tier that does
+    // not have one and hide it on the one that does.
+    //
+    // A PRICED OFFER IS NOW SOLD, NOT REJECTED. This used to return null
+    // for anything above zero, on the reasoning that only a free period
+    // may be called free. That was right about the word and wrong about
+    // the offer: a 99p first week is the strongest thing on this screen
+    // and the app was refusing to mention it. The copy below never says
+    // "free" unless the price actually is zero.
+    return _packageFor(_picked)?.storeProduct.introductoryPrice;
+  }
+
+  /// True when the store's offer costs nothing. Everything user-facing
+  /// branches on this rather than on a config flag, so the words can
+  /// never promise something the store will not honour.
+  bool get _introIsFree => (_trial?.price ?? 0) <= 0;
+
+  /// The offer attached to a SPECIFIC tier, whichever tier is selected.
+  ///
+  /// The cards used to be handed the SELECTED tier's offer, so weekly
+  /// was passed a hard null and could never show a badge at all — a
+  /// hangover from when the offer lived on monthly. The intro week is on
+  /// WEEKLY now, and a card that cannot advertise its own offer is the
+  /// exact opposite of clear.
+  IntroductoryPrice? _introFor(_Tier tier) {
+    if (!PurchaseConfig.introOfferEnabled) return null;
+    if (!_trialEligible) return null;
+    return _packageFor(tier)?.storeProduct.introductoryPrice;
+  }
+
+  /// "99p for your first week" / "3 days free" — built entirely from the
+  /// store's own numbers, so it cannot contradict the purchase sheet
+  /// that appears one tap later.
+  String _introHeadline(IntroductoryPrice t) {
+    if (t.price <= 0) return '${_trialLength(t)} free';
+    // "for your first 1 week" is what the generic version produced, and
+    // it reads like a typo. A single-unit offer gets named: WEEK 1.
+    if (t.periodNumberOfUnits == 1) {
+      final unit = switch (t.periodUnit) {
+        PeriodUnit.day => 'day 1',
+        PeriodUnit.week => 'week 1',
+        PeriodUnit.month => 'month 1',
+        PeriodUnit.year => 'year 1',
+        _ => 'your first period',
+      };
+      return '${t.priceString} for $unit';
+    }
+    return '${t.priceString} for your first ${_trialLength(t)}';
+  }
+
+  /// "WEEK 1" — the label beside the big number on a card that carries
+  /// an offer. Short enough to sit on the price line without shrinking
+  /// it, and it says WHICH week rather than leaving him to work it out.
+  String _introPeriodLabel(IntroductoryPrice t, String period) {
+    if (t.periodNumberOfUnits == 1) return '$period 1';
+    return '${t.periodNumberOfUnits} ${period}S';
   }
 
   /// "3 days" / "1 week" — built from the store's own numbers so it can
@@ -678,10 +746,12 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
-                      child: _tierCard(_Tier.monthly, 'MONTH', t, 30, s)),
+                      child: _tierCard(_Tier.monthly, 'MONTH',
+                          _introFor(_Tier.monthly), 30, s)),
                   SizedBox(width: 10 * s),
                   Expanded(
-                      child: _tierCard(_Tier.weekly, 'WEEK', null, 7, s)),
+                      child: _tierCard(_Tier.weekly, 'WEEK',
+                          _introFor(_Tier.weekly), 7, s)),
                 ]),
           ),
         ],
@@ -810,7 +880,13 @@ class _PaywallScreenState extends State<PaywallScreen> {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                              '${_trialLength(trial).toUpperCase()} FREE',
+                              // The price is already the biggest thing
+                              // on this card, so the badge adds the one
+                              // fact the number cannot: you get this
+                              // once.
+                              trial.price <= 0
+                                  ? '${_trialLength(trial).toUpperCase()} FREE'
+                                  : 'ONE-TIME OFFER',
                               style: GoogleFonts.inter(
                                 color: Colors.white,
                                 fontSize: 9.5,
@@ -828,14 +904,22 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     crossAxisAlignment: CrossAxisAlignment.baseline,
                     textBaseline: TextBaseline.alphabetic,
                     children: [
-                      Text(_priceFor(tier),
+                      // THE BIG NUMBER IS WHAT HE PAYS TODAY. With an
+                      // offer on this tier that is the intro price, not
+                      // the standing one — showing $6.99 large on a card
+                      // that charges $0.99 today is the wrong number in
+                      // the biggest type on the screen.
+                      Text(trial != null ? trial.priceString : _priceFor(tier),
                           style: GoogleFonts.inter(
                             color: Colors.white,
                             fontSize: 26 * s,
                             fontWeight: FontWeight.w900,
                           )),
                       const SizedBox(width: 4),
-                      Text('/ $period',
+                      Text(
+                          trial != null
+                              ? _introPeriodLabel(trial, period)
+                              : '/ $period',
                           style: GoogleFonts.inter(
                             color: Colors.white70,
                             fontSize: 13 * s,
@@ -844,23 +928,34 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     ]),
               ),
               SizedBox(height: 3 * s),
-              // THE PER-DAY LINE. The monthly price is a decision; the
-              // same money said per day is a rounding error, and it is
-              // the unit he already thinks about spending in.
+              // AND WHAT HE PAYS AFTER, on the same card, in the same
+              // breath. A man who finds out the real price on Apple's
+              // sheet feels tricked, and he is right to — this is the
+              // line that stops that happening. Where there is no offer
+              // it stays the per-day line: the price said in the unit he
+              // already thinks about spending in.
               Text(
                   !live
                       ? 'Not on this store yet'
-                      : perDay != null
-                          ? 'Just $perDay a day'
-                          : '',
+                      : trial != null
+                          ? 'then ${_priceFor(tier)} per '
+                              '${period.toLowerCase()}'
+                          : perDay != null
+                              ? 'Just $perDay a day'
+                              : '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
-                    color: perDay != null
+                    color: (trial != null || perDay != null)
                         ? AppColors.red
                         : AppColors.textTertiary,
-                    fontSize: 12 * s,
-                    fontWeight: FontWeight.w800,
+                    // A POINT LARGER THAN THE PER-DAY LINE IT REPLACES.
+                    // This is the number he has to leave the screen
+                    // knowing, and the one a man feels tricked by if he
+                    // meets it first on Apple's sheet. It is not a
+                    // footnote.
+                    fontSize: trial != null ? 13 * s : 12 * s,
+                    fontWeight: FontWeight.w900,
                   )),
               SizedBox(height: 7 * s),
               Row(children: [
@@ -885,11 +980,15 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   // one tier implies the other has it. Monthly is simply
                   // the recommendation; weekly is the flexible option.
                   child: Text(
-                      tier == _Tier.monthly ? 'Best value' : 'Cancel anytime',
+                      trial != null
+                          ? 'Best way to start'
+                          : tier == _Tier.monthly
+                              ? 'Best value'
+                              : 'Cancel anytime',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
-                        color: tier == _Tier.monthly
+                        color: (trial != null || tier == _Tier.monthly)
                             ? AppColors.red
                             : AppColors.textTertiary,
                         fontSize: 12 * s,
@@ -947,7 +1046,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
                         child: Text(
                             t == null
                                 ? 'START TRAINING'
-                                : 'START MY ${_trialLength(t).toUpperCase()} FREE TRIAL',
+                                : _introIsFree
+                                    ? 'START MY ${_trialLength(t).toUpperCase()} FREE'
+                                    : 'START FOR ${t.priceString}',
                             maxLines: 1,
                             style: GoogleFonts.inter(
                               fontSize: 19,
@@ -970,9 +1071,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
         ),
         const SizedBox(height: 6),
         Text(
+            // EXACTLY WHAT APPLE'S SHEET SAYS ONE TAP LATER. Every
+            // figure comes from the store, so the paywall and the
+            // purchase sheet cannot disagree — which is an App Store
+            // 3.1.2 requirement and also the difference between a man
+            // feeling sold to and a man feeling caught out.
             t == null
                 ? '$price per $period · auto-renews · cancel anytime'
-                : '${_trialLength(t)} free, then $price/$period. '
+                : '${_introHeadline(t)}, then $price per $period. '
                     'Auto-renews. Cancel anytime.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
@@ -985,9 +1091,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
         // to qualify: everything is included the moment he pays, and a
         // line explaining what he does NOT get would be inventing a
         // restriction that no longer exists.
-        Text('Unlimited texting · '
-            '${LocalStoreService.kVoiceMinutesPerWeek} minutes of live '
-            'voice a week',
+        Text(
+            t == null || _introIsFree
+                ? 'Unlimited texting · '
+                    '${LocalStoreService.kVoiceMinutesPerWeek} minutes of '
+                    'live voice a week'
+                : 'One-time offer · everything unlocked from day one · '
+                    '${LocalStoreService.kVoiceMinutesPerWeek} voice '
+                    'minutes a week',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               color: AppColors.textTertiary,

@@ -87,6 +87,38 @@ class PurchaseConfig {
   /// store will not honour. Everything else re-arms itself.
   static const bool freeTrialEnabled = false;
 
+  /// ══════════════════════════════════════════════════════════════════
+  ///  THE PAID INTRODUCTORY WEEK
+  /// ══════════════════════════════════════════════════════════════════
+  ///
+  /// Separate from [freeTrialEnabled] ON PURPOSE, and the distinction is
+  /// the whole point:
+  ///
+  ///   freeTrialEnabled  — is there a period where a man has ACCESS
+  ///                       WITHOUT HAVING PAID? That is the flag that
+  ///                       arms the restriction machinery, and it is
+  ///                       false. Every failure in this layer came from
+  ///                       having to answer "is this a trial or a real
+  ///                       subscription" before deciding what he gets.
+  ///
+  ///   introOfferEnabled — may the paywall ADVERTISE the introductory
+  ///                       price the store is offering? A PAID intro is
+  ///                       money changing hands, so it needs no
+  ///                       restriction at all — he is simply a
+  ///                       subscriber whose first week cost less.
+  ///
+  /// With a paid intro those two are independent and the second question
+  /// never gets asked. Nobody has access without paying, so periodType,
+  /// sandbox duration compression and every fail-open default stop
+  /// mattering entirely.
+  ///
+  /// SET THE OFFER IN APP STORE CONNECT to "Pay Up Front · 1 week ·
+  /// £0.99", not "Free Trial". If the store hands back a ZERO-price
+  /// offer while this is on, the paywall says so honestly rather than
+  /// inventing a price — but that combination means the store and the
+  /// intent disagree and the offer should be fixed there.
+  static const bool introOfferEnabled = true;
+
   static const proEntitlementId = 'pro';
 
   /// Product identifiers — MUST match exactly what's in App Store
