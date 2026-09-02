@@ -741,21 +741,59 @@ class _PaywallScreenState extends State<PaywallScreen> {
           // measures the taller card and passes a TIGHT height down, so
           // the Row's cross axis is bounded and both cards match. The
           // b235 version had the stretch without it.
-          IntrinsicHeight(
-            child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                      child: _tierCard(_Tier.monthly, 'MONTH',
-                          _introFor(_Tier.monthly), 30, s)),
-                  SizedBox(width: 10 * s),
-                  Expanded(
-                      child: _tierCard(_Tier.weekly, 'WEEK',
-                          _introFor(_Tier.weekly), 7, s)),
-                ]),
-          ),
+          // ── ONE CARD ──────────────────────────────────────────────
+          //
+          // Two cards stopped making sense the moment the first month
+          // cost less than one week. A paywall where one option beats
+          // the other on every single line is not a choice, it is a
+          // puzzle — and a man who stops to work out the catch does not
+          // press the button.
+          //
+          // So the offer stands alone and weekly moves to a quiet line
+          // underneath, still one tap away for a man who wants to commit
+          // by the week. Nothing is removed; the ladder is just no
+          // longer presented as a decision he has to make first.
+          _tierCard(_picked, _picked == _Tier.weekly ? 'WEEK' : 'MONTH',
+              _introFor(_picked), _picked == _Tier.weekly ? 7 : 30, s),
+          SizedBox(height: 8 * s),
+          _switchTierLink(s),
         ],
       );
+
+
+  /// The other tier, as a sentence rather than a second card.
+  ///
+  /// It has to stay reachable: a man who wants to pay by the week should
+  /// be able to, and one who cancelled monthly may want to come back on
+  /// weekly. It just does not need to compete with the offer for his
+  /// attention on the way in.
+  Widget _switchTierLink(double s) {
+    final other = _picked == _Tier.monthly ? _Tier.weekly : _Tier.monthly;
+    final pkg = _packageFor(other);
+    if (pkg == null) return const SizedBox.shrink();
+    final label = other == _Tier.weekly
+        ? 'Prefer to pay weekly? ${_priceFor(other)} per week'
+        : 'Prefer to pay monthly? ${_priceFor(other)} per month';
+    return TextButton(
+      onPressed: () {
+        HapticFeedback.selectionClick();
+        setState(() => _picked = other);
+      },
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(label,
+          style: GoogleFonts.inter(
+            color: AppColors.textSecondary,
+            fontSize: 12.5 * s,
+            decoration: TextDecoration.underline,
+            decorationColor: AppColors.textTertiary,
+            fontWeight: FontWeight.w600,
+          )),
+    );
+  }
 
   Widget _topBar() => Padding(
         padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),

@@ -868,8 +868,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
           girlId: girlForVibe(vibe.key).id);
       if (!mounted) return;
       if (!bought) {
-        _capNotice('Weekly roleplay minutes used. They renew at the '
-            'start of your next billing week.');
+        await _capResetNotice();
         _resetToPicker();
         return;
       }
@@ -1710,8 +1709,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
           if (bought) {
             _beginHold();
           } else {
-            _capNotice('Weekly roleplay minutes used. They renew at the '
-                'start of your next billing week.');
+            await _capResetNotice();
           }
           return;
         }
@@ -1843,8 +1841,7 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
             girlId: _vibe == null ? null : girlForVibe(_vibe!.key).id);
         if (!mounted) return;
         if (!bought) {
-          _capNotice('Weekly roleplay minutes used. They renew at the '
-              'start of your next billing week.');
+          await _capResetNotice();
           return;
         }
       }
@@ -2287,6 +2284,26 @@ class _FreeFlowScreenState extends State<FreeFlowScreen>
       ),
     );
     return true;
+  }
+
+  /// "Your 14 minutes are back on 6 Sep." — the DATE, not a vague
+  /// promise about a billing week he cannot look up.
+  ///
+  /// The window is anchored per user (see LocalStoreService._capAnchor),
+  /// so "next Monday" would be wrong for almost everyone. This asks for
+  /// the real rollover instant and says it.
+  Future<void> _capResetNotice() async {
+    final at = await LocalStoreService.nextCapResetAt();
+    if (!mounted) return;
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final when = '${at.day} ${months[at.month - 1]}';
+    _capNotice(
+        'That is your ${LocalStoreService.kVoiceMinutesPerWeek} voice '
+        'minutes for this week. They reset on $when — texting stays '
+        'unlimited until then.');
   }
 
   void _capNotice(String msg) {
