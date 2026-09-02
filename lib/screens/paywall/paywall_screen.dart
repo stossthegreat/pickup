@@ -260,9 +260,30 @@ class _PaywallScreenState extends State<PaywallScreen> {
   /// "99p for your first week" / "3 days free" — built entirely from the
   /// store's own numbers, so it cannot contradict the purchase sheet
   /// that appears one tap later.
-  String _introHeadline(IntroductoryPrice t) => t.price <= 0
-      ? '${_trialLength(t)} free'
-      : '${t.priceString} for your first ${_trialLength(t)}';
+  String _introHeadline(IntroductoryPrice t) {
+    if (t.price <= 0) return '${_trialLength(t)} free';
+    // "for your first 1 week" is what the generic version produced, and
+    // it reads like a typo. A single-unit offer gets named: WEEK 1.
+    if (t.periodNumberOfUnits == 1) {
+      final unit = switch (t.periodUnit) {
+        PeriodUnit.day => 'day 1',
+        PeriodUnit.week => 'week 1',
+        PeriodUnit.month => 'month 1',
+        PeriodUnit.year => 'year 1',
+        _ => 'your first period',
+      };
+      return '${t.priceString} for $unit';
+    }
+    return '${t.priceString} for your first ${_trialLength(t)}';
+  }
+
+  /// "WEEK 1" — the label beside the big number on a card that carries
+  /// an offer. Short enough to sit on the price line without shrinking
+  /// it, and it says WHICH week rather than leaving him to work it out.
+  String _introPeriodLabel(IntroductoryPrice t, String period) {
+    if (t.periodNumberOfUnits == 1) return '$period 1';
+    return '${t.periodNumberOfUnits} ${period}S';
+  }
 
   /// "3 days" / "1 week" — built from the store's own numbers so it can
   /// never contradict what Apple actually charges.
@@ -895,7 +916,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
                             fontWeight: FontWeight.w900,
                           )),
                       const SizedBox(width: 4),
-                      Text(trial != null ? '/ 1st $period' : '/ $period',
+                      Text(
+                          trial != null
+                              ? _introPeriodLabel(trial, period)
+                              : '/ $period',
                           style: GoogleFonts.inter(
                             color: Colors.white70,
                             fontSize: 13 * s,
@@ -914,7 +938,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   !live
                       ? 'Not on this store yet'
                       : trial != null
-                          ? 'then ${_priceFor(tier)} / $period'
+                          ? 'then ${_priceFor(tier)} per '
+                              '${period.toLowerCase()}'
                           : perDay != null
                               ? 'Just $perDay a day'
                               : '',
@@ -924,8 +949,13 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     color: (trial != null || perDay != null)
                         ? AppColors.red
                         : AppColors.textTertiary,
-                    fontSize: 12 * s,
-                    fontWeight: FontWeight.w800,
+                    // A POINT LARGER THAN THE PER-DAY LINE IT REPLACES.
+                    // This is the number he has to leave the screen
+                    // knowing, and the one a man feels tricked by if he
+                    // meets it first on Apple's sheet. It is not a
+                    // footnote.
+                    fontSize: trial != null ? 13 * s : 12 * s,
+                    fontWeight: FontWeight.w900,
                   )),
               SizedBox(height: 7 * s),
               Row(children: [
@@ -1048,7 +1078,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
             // feeling sold to and a man feeling caught out.
             t == null
                 ? '$price per $period · auto-renews · cancel anytime'
-                : '${_introHeadline(t)}, then $price/$period. '
+                : '${_introHeadline(t)}, then $price per $period. '
                     'Auto-renews. Cancel anytime.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
