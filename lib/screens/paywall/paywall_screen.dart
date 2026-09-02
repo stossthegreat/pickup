@@ -200,22 +200,32 @@ class _PaywallScreenState extends State<PaywallScreen> {
   /// terms before he confirms, and bill him correctly. This copy is
   /// best-effort; the sheet after it is not.
   IntroductoryPrice? get _trial {
-    // THE OFFER IS OFF. Even if a stale introductory price is still
-    // attached to the product in the store, the app must not sell it —
-    // one switch has to turn the whole thing off or the copy and the
-    // behaviour drift apart. See PurchaseConfig.freeTrialEnabled.
-    if (!PurchaseConfig.freeTrialEnabled) return null;
+    if (!PurchaseConfig.introOfferEnabled) return null;
     if (!_trialEligible) return null;
-    // The SELECTED tier's offer, not weekly's. The trial lives on
-    // monthly; reading weekly's would advertise a trial on the tier that
-    // does not have one and hide the one that does.
-    final intro = _packageFor(_picked)?.storeProduct.introductoryPrice;
-    if (intro == null) return null;
-    // A discounted intro period is NOT a free trial. Only a zero price
-    // may be called free.
-    if (intro.price > 0) return null;
-    return intro;
+    // The SELECTED tier's offer, not weekly's. The offer lives on
+    // monthly; reading weekly's would advertise it on the tier that does
+    // not have one and hide it on the one that does.
+    //
+    // A PRICED OFFER IS NOW SOLD, NOT REJECTED. This used to return null
+    // for anything above zero, on the reasoning that only a free period
+    // may be called free. That was right about the word and wrong about
+    // the offer: a 99p first week is the strongest thing on this screen
+    // and the app was refusing to mention it. The copy below never says
+    // "free" unless the price actually is zero.
+    return _packageFor(_picked)?.storeProduct.introductoryPrice;
   }
+
+  /// True when the store's offer costs nothing. Everything user-facing
+  /// branches on this rather than on a config flag, so the words can
+  /// never promise something the store will not honour.
+  bool get _introIsFree => (_trial?.price ?? 0) <= 0;
+
+  /// "99p for your first week" / "3 days free" — built entirely from the
+  /// store's own numbers, so it cannot contradict the purchase sheet
+  /// that appears one tap later.
+  String _introHeadline(IntroductoryPrice t) => t.price <= 0
+      ? '${_trialLength(t)} free'
+      : '${t.priceString} for your first ${_trialLength(t)}';
 
   /// "3 days" / "1 week" — built from the store's own numbers so it can
   /// never contradict what Apple actually charges.
@@ -810,7 +820,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                              '${_trialLength(trial).toUpperCase()} FREE',
+                              trial.price <= 0
+                                  ? '${_trialLength(trial).toUpperCase()} FREE'
+                                  : '${trial.priceString} FIRST '
+                                      '${_trialLength(trial).toUpperCase()}',
                               style: GoogleFonts.inter(
                                 color: Colors.white,
                                 fontSize: 9.5,
@@ -947,7 +960,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
                         child: Text(
                             t == null
                                 ? 'START TRAINING'
-                                : 'START MY ${_trialLength(t).toUpperCase()} FREE TRIAL',
+                                : _introIsFree
+                                    ? 'START MY ${_trialLength(t).toUpperCase()} FREE'
+                                    : 'START FOR ${t.priceString}',
                             maxLines: 1,
                             style: GoogleFonts.inter(
                               fontSize: 19,
@@ -970,9 +985,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
         ),
         const SizedBox(height: 6),
         Text(
+            // EXACTLY WHAT APPLE'S SHEET SAYS ONE TAP LATER. Every
+            // figure comes from the store, so the paywall and the
+            // purchase sheet cannot disagree — which is an App Store
+            // 3.1.2 requirement and also the difference between a man
+            // feeling sold to and a man feeling caught out.
             t == null
                 ? '$price per $period · auto-renews · cancel anytime'
-                : '${_trialLength(t)} free, then $price/$period. '
+                : '${_introHeadline(t)}, then $price/$period. '
                     'Auto-renews. Cancel anytime.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
@@ -985,9 +1005,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
         // to qualify: everything is included the moment he pays, and a
         // line explaining what he does NOT get would be inventing a
         // restriction that no longer exists.
-        Text('Unlimited texting · '
-            '${LocalStoreService.kVoiceMinutesPerWeek} minutes of live '
-            'voice a week',
+        Text(
+            t == null || _introIsFree
+                ? 'Unlimited texting · '
+                    '${LocalStoreService.kVoiceMinutesPerWeek} minutes of '
+                    'live voice a week'
+                : 'One-time offer · everything unlocked from day one · '
+                    '${LocalStoreService.kVoiceMinutesPerWeek} voice '
+                    'minutes a week',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               color: AppColors.textTertiary,
